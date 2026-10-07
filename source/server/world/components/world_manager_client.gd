@@ -144,7 +144,9 @@ func master_shutdown() -> void:
 	if world_server == null or database == null:
 		return
 	ServerLog.info("Dashboard 'shutdown' triggered — saving + quitting.")
-	database.save_all_connected(world_server.connected_players)
+	if database.save_all_connected(world_server.connected_players) < 0:
+		push_error("Graceful shutdown cancelled: progression checkpoint failed.")
+		return
 	database.backup_database()
 	get_tree().quit.call_deferred()
 

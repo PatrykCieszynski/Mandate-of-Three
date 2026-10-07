@@ -60,6 +60,7 @@ func _send_state(peer_id: int, error: String = "") -> void:
 	if resource == null:
 		return
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
+	WorldServer.curr.update_runtime_equipment(resource.player_id, snapshot)
 	if error != "":
 		snapshot["error"] = error
 	receive_inventory.rpc_id(peer_id, snapshot)

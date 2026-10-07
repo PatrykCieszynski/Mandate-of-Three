@@ -33,8 +33,8 @@ korzysta z mnożnika 1,5, a pozostałe reguły opisuje [Combat Feel Pass](combat
 
 Podgląd wykorzystuje statystyki instancji policzone przez serwer i nie jest
 wysyłany jako polecenie. Equip nadal przyjmuje akcję, UID i revision; serwer
-sprawdza właściciela i zapisuje zamianę atomowo. Combat pobiera aktualny atak
-z SQLite na początku zamachu. Identyczny pierwszy cios może zatem zadać 23
+sprawdza właściciela i zapisuje zamianę atomowo. Po commit aktualizuje też runtime
+equipment/stats. Combat pobiera atak z RAM na początku zamachu. Identyczny pierwszy cios może zatem zadać 23
 obrażenia starterem i 29 obrażeń podniesionym mieczem z bonusem +9.
 
 UID, bonus, położenie i revision podniesionej i założonej broni przetrwają relog.
@@ -49,6 +49,8 @@ rodzajów broni. Dalszy zakres progression wymaga osobnej decyzji.
 
 Po tym etapie użytkownik wybrał [XP i poziomy postaci](character-xp.md).
 Ten kolejny etap dodaje schema v12 dla potwierdzeń nagród, zachowując model itemów.
+Późniejszy refactor do schema v13 usuwa te receiptowe zapisy XP;
+aktualny model opisuje [persistence policy](persistence-policy.md).
 
 ## Weryfikacja
 

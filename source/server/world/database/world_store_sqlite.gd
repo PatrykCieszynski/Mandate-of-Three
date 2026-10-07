@@ -31,38 +31,19 @@ func get_player(player_id: int) -> PlayerResource:
 	return _row_to_player(row)
 
 
-func award_kill_experience(kill_uid: String, owner_id: int, amount: int) -> Dictionary:
-	# Kill receipt and character progression commit together. No client RPC can
-	# supply this amount. Use the existing level curve without legacy stat hooks.
-	if not ItemStoreSqlite.valid_uid(kill_uid) or owner_id <= 0 or amount <= 0 or amount > 1000000:
-		return {"ok": false, "error": "request"}
-	if not db.query("BEGIN IMMEDIATE;"):
-		return {"ok": false, "error": "storage"}
-	if not db.query_with_bindings("SELECT kill_uid FROM kill_xp_rewards WHERE kill_uid=?;", [kill_uid]):
-		return _xp_rollback("storage")
-	if not db.query_result.is_empty(): return _xp_rollback("claimed")
-	if not db.query_with_bindings("SELECT level,experience,available_attributes_points FROM players WHERE player_id=?;", [owner_id]):
-		return _xp_rollback("storage")
-	if db.query_result.is_empty(): return _xp_rollback("owner")
-	var row: Dictionary = db.query_result[0]
-	var progression := PlayerResource.new()
-	progression.level = int(row.level)
-	progression.experience = int(row.experience)
-	progression.available_attributes_points = int(row.available_attributes_points)
-	var result: Dictionary = progression.add_experience(amount)
-	if not db.query_with_bindings("INSERT INTO kill_xp_rewards(kill_uid,owner_character_id,amount) VALUES(?,?,?);", [kill_uid, owner_id, amount]) \
-		or not db.query_with_bindings("UPDATE players SET level=?,experience=?,available_attributes_points=? WHERE player_id=?;",
-		[progression.level, progression.experience, progression.available_attributes_points, owner_id]):
-		return _xp_rollback("storage")
-	if not db.query("COMMIT;"): return _xp_rollback("storage")
-	result["ok"] = true
-	result["available_attributes_points"] = progression.available_attributes_points
-	return result
-
-
-func _xp_rollback(error: String) -> Dictionary:
-	db.query("ROLLBACK;")
-	return {"ok": false, "error": error}
+func save_progression(players: Array[PlayerResource]) -> bool:
+	if players.is_empty(): return true
+	if not db.query("BEGIN IMMEDIATE;"): return false
+	for player: PlayerResource in players:
+		if not db.query_with_bindings("UPDATE players SET level=?,experience=?,available_attributes_points=? WHERE player_id=?;",
+			[player.level, player.experience, player.available_attributes_points, player.player_id]) \
+			or not db.query("SELECT changes() AS n;") or int(db.query_result[0].n) != 1:
+			db.query("ROLLBACK;")
+			return false
+	if not db.query("COMMIT;"):
+		db.query("ROLLBACK;")
+		return false
+	return true
 
 
 func save_player(player: PlayerResource) -> void:

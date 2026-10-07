@@ -45,3 +45,9 @@ Wykorzystujemy pola i krzywą PlayerResource, dodajemy autorytatywną nagrodę z
 zabójstwo, HUD, level-up i trwałość po relogu. Reguła właściciela nagrody jest
 spójna z lootem: największy udział w obrażeniach. Balans pozostaje na później.
 Ręczny test pierwszego item progression i XP nadal czeka na użytkownika.
+
+Po review: combat używa minimalnego runtime equipment/stats, XP i level działają
+w RAM z dirty checkpointem około 60 s. Rezygnujemy z permanentnych kill receiptów.
+Itemy pozostają immediate transactional persistence. Przyszły Yang income ma
+runtime wallet z pending delta i osobnym checkpointem; krytyczny spend ma być
+atomowy razem ze zmianą ekonomii. Pełny podział: [persistence policy](persistence-policy.md).

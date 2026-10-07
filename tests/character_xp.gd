@@ -55,11 +55,11 @@ func run_server() -> void:
 	set_phase("WAIT")
 	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
 	check(combat.dogs[1].contributions[owner_id] == 20 and combat.dogs[1].contributions[other_id] == 15, "actual damage contribution, including clamped final hit")
-	check(store.get_player(owner_id).experience == 20 and store.get_player(other_id).experience == 0, "highest contributor gets XP, not final hitter")
+	check(server.connected_players[hero].experience == 20 and server.connected_players[other].experience == 0, "highest contributor gets runtime XP, not final hitter")
+	check(store.get_player(owner_id).experience == 0, "kill does not write XP to SQLite")
 	drop_uid = combat.ground.keys()[0]
 	combat._die(combat.dogs[1], Time.get_ticks_msec())
-	check(combat.ground.size() == 1 and store.get_player(owner_id).experience == 20, "repeated death callback cannot grant twice")
-	check(store.award_kill_experience(drop_uid, other_id, 20).get("error", "") == "claimed", "durable receipt rejects duplicate with different owner")
+	check(combat.ground.size() == 1 and server.connected_players[hero].experience == 20, "repeated runtime death callback cannot grant twice")
 	set_phase("RECIPIENT", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	set_phase("WAIT")
@@ -71,41 +71,39 @@ func run_server() -> void:
 		dog.ai_state = "IDLE"
 		dog.collision_layer = 4
 		dog.hp = 10
-		if id == 4:
-			check(db.query("CREATE TEMP TRIGGER fail_xp BEFORE UPDATE OF experience ON players BEGIN SELECT RAISE(ABORT,'intentional XP write failure'); END;"), "XP fault injection")
 		set_phase("HIT", hero)
 		await wait_until(func() -> bool: return dog.ai_state == "DEAD")
 		dog.dead_until_ms = Time.get_ticks_msec() + 60000
 		set_phase("WAIT")
-		if id == 4:
-			check(store.get_player(owner_id).experience == 60 and server.connected_players[hero].experience == 60, "failed reward does not advance DB or session cache")
-			check(db.query("SELECT COUNT(*) AS n FROM kill_xp_rewards;") and db.query_result[0].n == 3, "failed transaction rolls back receipt")
-			check(combat._pending_xp.size() == 1, "failed reward retained for retry")
-			check(db.query("DROP TRIGGER fail_xp;"), "remove XP fault")
-			await wait_until(func() -> bool: return combat._pending_xp.is_empty())
-	var player: PlayerResource = store.get_player(owner_id)
+	var player: PlayerResource = server.connected_players[hero]
 	check(player.level == 2 and player.experience == 10 and player.available_attributes_points == starting_points + PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL, "level-up preserves overflow and existing point grant")
-	check(db.query("SELECT COUNT(*) AS n FROM kill_xp_rewards;") and db.query_result[0].n == 4, "one committed receipt per kill")
+	check(store.get_player(owner_id).level == 1 and store.get_player(owner_id).experience == 0, "many kills change RAM without per-kill DB writes")
+	check(server.database.dirty_progression.size() == 1 and server.database.dirty_progression.has(owner_id), "only changed character is dirty")
+	check(db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='kill_xp_rewards';") and db.query_result.is_empty(), "no persistent kill receipt table")
 	await get_tree().create_timer(0.2).timeout
 	set_phase("PICKUP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(replies[hero].ok and store.get_player(owner_id).experience == 10, "pickup gives no additional XP")
+	check(replies[hero].ok and player.experience == 10 and store.get_player(owner_id).experience == 0, "item pickup commits item, without flushing or adding XP")
 	set_phase("WAIT")
-	# Existing disconnect/autosave path must not replace the immediately saved XP
-	# with an old cached level. Check it before reopening and reading again.
-	store.save_player(server.connected_players[hero])
+	server.database._process(WorldDatabase.PROGRESSION_SAVE_SECONDS)
+	check(server.database.dirty_progression.is_empty(), "periodic checkpoint clears dirty state")
 	check(db.close_db() and db.open_db(), "reopen SQLite")
 	player = store.get_player(owner_id)
 	check(player.level == 2 and player.experience == 10 and player.available_attributes_points == starting_points + PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL, "save and reopen preserve character progression")
-	check(store.award_kill_experience(drop_uid, owner_id, 20).get("error", "") == "claimed", "reopen retains duplicate protection")
-	check(store.award_kill_experience("bad", owner_id, 20).get("error", "") == "request", "invalid kill UID rejected")
 	set_phase("INSPECT", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok, "client sees committed level-up and render")
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
+	# Both clients acknowledged the gameplay assertions and will now close their
+	# real WebSocket connections. Leave one fresh dirty gain for the disconnect hook.
+	server.connected_players[hero].add_experience(20)
+	server.database.mark_progression_dirty(server.connected_players[hero])
+	check(store.get_player(owner_id).experience == 10, "fresh dirty gain is not yet persisted")
+	await wait_until(func() -> bool: return world.characters.is_empty())
+	check(store.get_player(owner_id).experience == 30 and server.database.dirty_progression.is_empty(), "real disconnect flushes dirty progression")
 	if not failed:
-		print("XP_SERVER_OK: two attackers, highest contribution, no double reward, rollback/retry, level-up overflow, save/reopen")
+		print("XP_SERVER_OK: two attackers, runtime-only kills, no receipts, checkpoint/reopen and real disconnect flush")
 		peer.close()
 		db.close_db()
 		get_tree().quit()

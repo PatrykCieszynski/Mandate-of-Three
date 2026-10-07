@@ -7,6 +7,27 @@ var db: SQLite
 var store: WorldStoreSqlite
 var mail_store: MailStore
 var item_store: ItemStoreSqlite
+const PROGRESSION_SAVE_SECONDS: float = 60.0
+var dirty_progression: Dictionary[int, PlayerResource] = {}
+var _progression_elapsed: float = 0.0
+
+func mark_progression_dirty(player: PlayerResource) -> void:
+	dirty_progression[player.player_id] = player
+
+func flush_progression(owner_id: int = -1) -> bool:
+	var players: Array[PlayerResource] = []
+	for id: int in dirty_progression:
+		if owner_id < 0 or id == owner_id: players.append(dirty_progression[id])
+	if players.is_empty(): return true
+	if store == null or not store.save_progression(players): return false
+	for player: PlayerResource in players: dirty_progression.erase(player.player_id)
+	return true
+
+func _process(delta: float) -> void:
+	_progression_elapsed += delta
+	if _progression_elapsed < PROGRESSION_SAVE_SECONDS: return
+	_progression_elapsed = fmod(_progression_elapsed, PROGRESSION_SAVE_SECONDS)
+	if not flush_progression(): push_error("Progression checkpoint failed; dirty characters retained for retry.")
 
 
 func start_database(world_info: Dictionary) -> void:
@@ -51,7 +72,7 @@ func open_database() -> void:
 func close_database() -> void:
 	# Plugin doesn’t always expose close explicitly; if it does, call it.
 	# Otherwise let refcount drop; but prefer close if available.
-	pass
+	flush_progression()
 
 
 func _notification(what: int) -> void:
@@ -60,6 +81,7 @@ func _notification(what: int) -> void:
 
 
 func get_player_resource(id: int) -> PlayerResource:
+	if dirty_progression.has(id): return dirty_progression[id]
 	return store.get_player(id)
 
 
@@ -76,6 +98,9 @@ func get_guild(id: int) -> Guild:
 
 
 func save_player(p: PlayerResource) -> void:
+	# A session/profile save has its own legacy payload. XP checkpoints themselves
+	# only use the three-column batch above, never this full serializer.
+	flush_progression(p.player_id)
 	store.save_player(p)
 
 
@@ -88,6 +113,8 @@ func save_guild(g: Guild) -> void:
 ## console called a method that didn't exist, so shutdowns silently lost
 ## anyone who hadn't disconnected yet. Returns the count actually saved.
 func save_all_connected(connected_players: Dictionary) -> int:
+	# Includes dirty characters whose peers have already disconnected.
+	if not flush_progression(): return -1
 	var count: int = 0
 	for peer_id: int in connected_players:
 		var p: PlayerResource = connected_players[peer_id]

@@ -39,8 +39,6 @@ var selected_mob: int = 0
 var autoattack: bool = false
 var state: Dictionary = {}
 var navigation_region: NavigationRegion3D
-var _pending_xp: Dictionary[String, int] = {}
-var _next_xp_retry_ms: int = 0
 var _experience_label: Label
 var _experience_bar: ProgressBar
 var _xp_notice: String = ""
@@ -134,8 +132,8 @@ func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	if _owner(peer_id) <= 0: return false
 	_sequences[peer_id] = sequence
 	if now < _next_attack_ms.get(peer_id, 0): return false
-	var inventory: Dictionary = _store().inventory(_owner(peer_id))
-	if not inventory.ok: return false
+	var attack: int = WorldServer.curr.runtime_attack(_owner(peer_id))
+	if attack < 0: return false
 	var stage: int = 1
 	if now - _last_swing_ms.get(peer_id, -10000) <= COMBO_RESET_MS:
 		stage = _combo.get(peer_id, 0) % 3 + 1
@@ -143,7 +141,7 @@ func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	_last_swing_ms[peer_id] = now
 	_next_attack_ms[peer_id] = now + COMBO_RECOVERY[stage - 1]
 	_pending[peer_id] = {"stage": stage, "yaw": _world.characters[peer_id].rotation.y,
-		"impact": now + COMBO_IMPACT[stage - 1], "attack": int(inventory.stats.attack)}
+		"impact": now + COMBO_IMPACT[stage - 1], "attack": attack}
 	for observer: int in _world.characters:
 		receive_swing.rpc_id(observer, peer_id, stage)
 	return true
@@ -174,6 +172,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 		dog.hp -= damage
 		var owner_id: int = _owner(peer_id)
 		dog.contributions[owner_id] = dog.contributions.get(owner_id, 0) + damage
+		dog.contribution_players[owner_id] = WorldServer.curr.connected_players[peer_id]
 		if dog.hp == 0:
 			_die(dog, now)
 		else:
@@ -201,21 +200,22 @@ func _die(dog: SpikeWildDog3D, now: int) -> void:
 	ground[uid] = {"position": dog.position, "definition_id": "iron_sword", "bonus": randi_range(1, 9),
 		"owner": owner_id, "owner_name": owner_name, "protected_until": now + PROTECTION_MS, "expires": now + LOOT_LIFETIME_MS}
 	if owner_id > 0:
-		_pending_xp[uid] = owner_id
-		_award_experience(uid, owner_id)
+		_award_experience(dog.contribution_players.get(owner_id))
+	dog.contribution_players.clear()
 
-func _award_experience(kill_uid: String, owner_id: int) -> void:
-	var result: Dictionary = WorldServer.curr.database.store.award_kill_experience(kill_uid, owner_id, DOG_XP)
-	if not result.ok:
-		if result.error in ["claimed", "owner", "request"]: _pending_xp.erase(kill_uid)
-		return # Retry a failed commit while this world instance is alive.
-	_pending_xp.erase(kill_uid)
+func _award_experience(resource: PlayerResource) -> void:
+	if resource == null: return
+	# A contributor may have disconnected/relogged before the killing blow.
+	# Always use the current in-process resource rather than an old encounter ref.
+	resource = WorldServer.curr.database.dirty_progression.get(resource.player_id, resource)
+	for current: PlayerResource in WorldServer.curr.connected_players.values():
+		if current.player_id == resource.player_id:
+			resource = current
+			break
+	var result: Dictionary = resource.add_experience(DOG_XP)
+	WorldServer.curr.database.mark_progression_dirty(resource)
 	for peer_id: int in WorldServer.curr.connected_players:
-		var resource: PlayerResource = WorldServer.curr.connected_players[peer_id]
-		if resource.player_id != owner_id: continue
-		resource.level = int(result.level)
-		resource.experience = int(result.experience)
-		resource.available_attributes_points = int(result.available_attributes_points)
+		if WorldServer.curr.connected_players[peer_id] != resource: continue
 		if _world.characters.has(peer_id):
 			receive_experience.rpc_id(peer_id, DOG_XP, int(result.levels_gained), int(result.level))
 
@@ -300,9 +300,6 @@ func receive_feedback(result: Dictionary) -> void:
 func _physics_process(delta: float) -> void:
 	if not GameMode.is_world_server() or _store() == null: return
 	var now: int = Time.get_ticks_msec()
-	if now >= _next_xp_retry_ms:
-		_next_xp_retry_ms = now + 1000
-		for uid: String in _pending_xp.keys(): _award_experience(uid, _pending_xp[uid])
 	for uid: String in ground.keys():
 		if now >= int(ground[uid].expires): ground.erase(uid)
 	for peer_id: int in _respawn_ms.keys():
@@ -378,6 +375,7 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 		if Vector2(dog.position.x - dog.home.x, dog.position.z - dog.home.z).length() < 0.25:
 			dog.hp = MOB_HP
 			dog.contributions.clear()
+			dog.contribution_players.clear()
 			dog.ai_state = "IDLE"
 		else:
 			direction = dog.navigate(dog.home, now)

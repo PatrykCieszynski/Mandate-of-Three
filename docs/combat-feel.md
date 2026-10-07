@@ -13,8 +13,10 @@ PvE, bez zmiany schema SQLite i bez rozbudowy item progression.
 
 Klient wysyła tylko `request_attack(sequence)`; nie podaje ID celu, obrotu,
 obrażeń ani listy trafień. Serwer sprawdza sesję, żywego gracza, monotoniczną
-sekwencję int32 i recovery. Pobiera atak z bieżącego ekwipunku SQLite, zapamiętuje
-serwerowy kierunek postaci i rozpoczyna zamach. Nietrafiony zamach zużywa etap
+sekwencję int32 i recovery. Pobiera atak z runtime equipment/stats, zapamiętuje
+serwerowy kierunek postaci i rozpoczyna zamach. Atak pochodzi teraz z runtime
+statów załadowanych przy wejściu i odświeżanych po commit itemów, bez query przy
+zamachu; patrz [persistence policy](persistence-policy.md). Nietrafiony zamach zużywa etap
 combo i recovery. Ruch gracza jest blokowany na czas recovery.
 
 Trafienie jest rozstrzygane po windupie przez zapytanie fizyki na warstwie mobów:
