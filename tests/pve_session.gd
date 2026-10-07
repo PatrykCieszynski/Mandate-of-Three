@@ -1,6 +1,18 @@
 extends "res://tests/items_session.gd"
 ## One real gateway/master/world login, combat, pickup and relog. This creates a
 ## local guest character; run against an otherwise quiet normal Spike instance.
+var movement_sequence: int = 0
+
+func face_or_approach(point: Vector3, stop_distance: float = 1.7) -> void:
+	var body: SpikeCharacter3D = world.characters[world.local_peer]
+	var offset: Vector3 = point - body.target_position
+	var direction := Vector2(offset.x, offset.z).normalized()
+	if Vector2(offset.x, offset.z).length() <= stop_distance: direction *= 0.05
+	movement_sequence += 1
+	world.submit_input.rpc_id(1, movement_sequence, direction)
+	await get_tree().create_timer(0.1).timeout
+	movement_sequence += 1
+	world.submit_input.rpc_id(1, movement_sequence, Vector2.ZERO)
 
 func capture(file_name: String) -> void:
 	if not CmdlineUtils.get_parsed_args().has("preview"): return
@@ -31,18 +43,39 @@ func run() -> void:
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var attack_sequence: int = 0
 	while combat.state.is_empty() or combat.state.drops.is_empty():
+		var nearest: float = INF
+		var point: Vector3 = Vector3.ZERO
+		for dog: SpikeWildDog3D in combat.dogs.values():
+			if dog.ai_state in ["DEAD", "DISABLED"]: continue
+			var distance: float = world.characters[world.local_peer].target_position.distance_to(dog.target_position)
+			if distance < nearest:
+				nearest = distance
+				point = dog.target_position
+		if is_finite(nearest): await face_or_approach(point)
 		attack_sequence += 1
-		combat.request_attack.rpc_id(1, attack_sequence, 1)
-		await get_tree().create_timer(0.65).timeout
-		if attack_sequence == 3: await capture("pve-combat-preview.png")
-	if combat.mob_state != "DEAD" or combat.state.drops.size() != 1:
-		fail("mob death with one ground item")
+		combat.request_attack.rpc_id(1, attack_sequence)
+		if attack_sequence == 3:
+			await get_tree().create_timer(0.1).timeout
+			await capture("pve-combat-preview.png")
+			await get_tree().create_timer(0.55).timeout
+		else:
+			await get_tree().create_timer(0.65).timeout
+	if combat.state.drops.is_empty():
+		fail("mob death with ground item")
 		return
 	if world.inventory_endpoint.state.items.size() != 2:
 		fail("item granted before pickup")
 		return
 	await capture("pve-loot-preview.png")
-	var uid: String = combat.state.drops.keys()[0]
+	var uid: String = ""
+	var nearest: float = INF
+	for candidate: String in combat.state.drops:
+		var distance: float = world.characters[world.local_peer].target_position.distance_to(combat.state.drops[candidate].position)
+		if distance < nearest:
+			nearest = distance
+			uid = candidate
+	while world.characters[world.local_peer].target_position.distance_to(combat.state.drops[uid].position) > 2.2:
+		await face_or_approach(combat.state.drops[uid].position, 2.2)
 	combat.request_pickup.rpc_id(1, uid)
 	while world.inventory_endpoint.state.items.size() == 2:
 		await get_tree().process_frame

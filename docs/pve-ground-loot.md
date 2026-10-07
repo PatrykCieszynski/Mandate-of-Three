@@ -1,5 +1,10 @@
 # Vertical slice PvE — jeden mob i ground loot
 
+Ten dokument opisuje pierwszy, historyczny etap PvE. Aktualna walka ma cztery
+Wild Dogi, kierunkowe combo i RPC ataku bez ID celu; wartości cooldownu i model
+atakowania poniżej zostały zastąpione przez [Combat Feel Pass](combat-feel.md).
+Zasady rezerwacji, transakcyjnego pickupu i trwałego UID nadal obowiązują.
+
 Stan: 2026-10-07. Minimalny pion na branchu `codex/pve-ground-loot`:
 
 `Player → Mob → Combat → Death → Ground Loot → Pickup → Persistent Item`
