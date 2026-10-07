@@ -24,21 +24,17 @@ polecenia przyznania XP, ilości doświadczenia ani oczekiwanego poziomu.
 
 ## Zapis i idempotencja
 
-WorldSchema v12 dodaje `kill_xp_rewards`: UID zabójstwa, trwałe ID właściciela
-i ilość XP. UID jest generowany na serwerze i odpowiada UID ground lootu tej
-śmierci. Odrodzenie psa rozpoczyna nowe zabójstwo z nowym UID.
+XP i level zmieniają się natychmiast w authoritative PlayerResource w RAM.
+WorldDatabase oznacza progression postaci jako dirty i zapisuje te postacie
+co około 60 s, w jednej transakcji obejmującej tylko level, experience i wolne
+punkty atrybutów. Disconnect/logout, transfer i graceful shutdown wymuszają zapis.
+Niepodniesiony loot nadal jest runtime; checkpoint XP nie zależy od jego claimu.
 
-Potwierdzenie nagrody oraz UPDATE pól level/experience/available_attributes_points
-w `players` są jedną transakcją SQLite. Powtórzony UID jest odrzucany również
-po ponownym otwarciu bazy. Zapis nie nadpisuje ekwipunku, profilu ani innych
-pól postaci. Cache aktywnej sesji jest aktualizowany po udanym COMMIT, żeby
-autosave i disconnect nie cofnęły XP. Właściciel może też otrzymać zapis nagrody
-po odłączeniu, jeśli jego postać nadal istnieje w bazie.
-
-Po błędzie zapisu serwer zachowuje oczekującą nagrodę i próbuje ponownie co
-sekundę. Ta kolejka jest runtime: zamknięcie instancji przed udanym COMMIT może
-utracić oczekującą nagrodę. Już zatwierdzone XP i potwierdzenia są trwałe.
-Niepodniesiony loot nadal jest runtime; zapis XP nie zależy od jego claimu.
+WorldSchema v13 usuwa wcześniejsze `kill_xp_rewards`. Nie zapisujemy historii
+zabójstw ani nie tworzymy trwałego kill ID. Stan DEAD moba zapobiega powtórzeniu
+tej samej śmierci w pojedynczym authoritative World Serverze. Po crashu akceptujemy
+utratę soft progression od ostatniego checkpointu. Szczegóły i rozdzielenie itemów,
+XP oraz przyszłego walleta opisuje [persistence policy](persistence-policy.md).
 
 ## Weryfikacja
 
@@ -53,10 +49,11 @@ test; nie zmienia kodu produkcyjnego ataku ani przyznawania XP.
 
 Potwierdzono największy udział zamiast ostatniego ciosu, rzeczywiste obrażenia
 z uwzględnieniem overkill, brak XP przed śmiercią, podwójny callback śmierci,
-odrzucenie powtórzonego UID, rollback receiptu i XP przy błędzie UPDATE, ponowienie
-zapisu, awans 1 → 2 z nadmiarem 10 XP, prywatność postępu, publiczny poziom,
-HUD, brak dodatkowego XP za pickup oraz trwałość po legacy save i reopen.
-Markery: `XP_SERVER_OK` i dwa `XP_CLIENT_OK`.
+wiele killów bez zapisu XP do DB, awans 1 → 2 z nadmiarem 10 XP, prywatność
+postępu, publiczny poziom, HUD, brak dodatkowego XP za pickup, checkpoint/reopen
+oraz prawdziwy disconnect z dirty progression. Test checkpointów sprawdza batch,
+rollback, wąskie UPDATE, forced save i zaakceptowane crash window bez receiptów.
+Markery: `CHECKPOINT_OK`, `XP_SERVER_OK` i dwa `XP_CLIENT_OK`.
 
 Pełne gateway/master/world w `tests/pve_session.tscn` potwierdza identyczne XP
 i poziom po relogu razem z podniesionym i założonym ItemInstance. Wariant z flagą
@@ -65,6 +62,6 @@ Regresje itemów,
 PvE, combatu, progression i ruchu także przeszły. Render `character-xp-preview.png`
 w `.godot/verification` został wygenerowany i obejrzany.
 
-Test rollbacku celowo wywołuje błąd SQL. W logach pozostają wcześniejsze komunikaty
+Test checkpointu celowo wywołuje błąd SQL. W logach pozostają wcześniejsze komunikaty
 silnika o certyfikatach i zasobach przy zamykaniu. Ręczny test użytkownika tego
 etapu pozostaje otwarty.

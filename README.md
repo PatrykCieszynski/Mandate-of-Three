@@ -17,7 +17,9 @@ Repo zawiera działający techniczny vertical slice; to jeszcze nie alpha gry.
 - Śmierć i respawn gracza oraz mobów, loot na ziemi, rezerwacja i trwały pickup.
   Testy dwóch klientów obejmują walkę, śmierć i rywalizację o ten sam łup.
 - XP za zabicie psa, poziomy, pasek postępu i level-up; trwały zapis po relogu
-  oraz ochrona przed ponownym naliczeniem tej samej nagrody.
+  oraz checkpoint dirty progression co około 60 s i zapis przy końcu sesji.
+- Combat stats aktywnej postaci w RAM; zamach nie odpytuje SQLite o inventory.
+  Item pickup i equip zachowują natychmiastowe transakcje DB.
 
 Sterowanie: **WASD** — ruch, **I** — ekwipunek, **przytrzymaj Spację** — combo
 przed postacią, **E** — podnieś najbliższy łup. **LPM** zaznacza opcjonalny cel,
@@ -79,6 +81,7 @@ z `--no-ff`. Zasady: [AGENTS.md](AGENTS.md).
 - [Combat Feel Pass i aktualne sterowanie](docs/combat-feel.md)
 - [Item Progression Slice: porównanie, equip i obrażenia](docs/item-progression.md)
 - [XP, poziomy i trwałe nagrody za zabójstwa](docs/character-xp.md)
+- [Persistence policy: progression, itemy i przyszły Yang wallet](docs/persistence-policy.md)
 - [Cleanup i pozostałe zależności](docs/repository-cleanup.md)
 - [Analiza Open-MT2 jako referencji](docs/open-mt2-analysis.md)
 - [Pierwotny plan spike'a](docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf)

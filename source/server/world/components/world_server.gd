@@ -22,6 +22,19 @@ var token_list: Dictionary[String, PlayerResource]
 var connected_players: Dictionary[int, PlayerResource]
 ## {player_id: peer_id}
 var player_id_to_peer_id: Dictionary[int, int]
+## Minimal combat view, keyed by persistent character ID. Refreshed only after
+## loading inventory or a committed item operation, never by a combat action.
+var runtime_equipment: Dictionary[int, Dictionary] = {}
+
+func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> void:
+	if not snapshot.get("ok", false):
+		runtime_equipment.erase(owner_id)
+		return
+	runtime_equipment[owner_id] = {"equipment": snapshot.equipment.duplicate(true), "stats": snapshot.stats.duplicate(true)}
+
+func runtime_attack(owner_id: int) -> int:
+	if not runtime_equipment.has(owner_id): return -1
+	return int(runtime_equipment[owner_id].stats.get("attack", 10))
 
 static var curr: WorldServer
 
@@ -145,6 +158,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	player.lb_stats["last_seen_ms"] = int(Time.get_unix_time_from_system() * 1000.0)
 
 	database.save_player(player)
+	runtime_equipment.erase(player.player_id)
 
 	player_id_to_peer_id.erase(player.player_id)
 	BlockList.clear_player(player.player_id)
@@ -169,6 +183,9 @@ func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
 	if is_valid_authentication_token(auth_token):
 		multiplayer.complete_auth(peer_id)
 		connected_players[peer_id] = token_list[auth_token]
+		var owner_id: int = connected_players[peer_id].player_id
+		if database.dirty_progression.has(owner_id):
+			connected_players[peer_id] = database.dirty_progression[owner_id]
 		connected_players[peer_id].current_peer_id = peer_id
 		# Stamp the session start so the played_seconds counter can advance on
 		# disconnect. Reset on every fresh login.

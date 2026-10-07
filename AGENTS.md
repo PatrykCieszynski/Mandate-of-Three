@@ -2,6 +2,8 @@
 
 Gameplay priorities and accepted scope are recorded in `docs/project-direction.md`.
 Follow them when deciding the next implementation; avoid speculative frameworks.
+Persistence policy is in `docs/persistence-policy.md`: progression uses RAM and
+dirty checkpoints; item/economy changes remain immediate atomic transactions.
 
 - Work on a separate `codex/<short-topic>` branch for each coherent change.
 - Keep `main` as the integrated baseline. Do not implement new work directly on it.

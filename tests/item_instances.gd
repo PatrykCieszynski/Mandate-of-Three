@@ -74,7 +74,7 @@ func run() -> void:
 	check(db.query_with_bindings("DELETE FROM item_placements WHERE owner_character_id=?;", [owner_b]), "empty second inventory placements")
 	check(db.query_with_bindings("DELETE FROM item_instances WHERE owner_character_id=?;", [owner_b]), "empty second inventory items")
 	check(store.initialize_character(owner_b).ok and store.inventory(owner_b).items.is_empty(), "empty inventory does not regrant starter kit")
-	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 12, "schema v12")
+	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 13, "schema v13")
 	db.close_db()
 	if not failed:
 		print("ITEM_INSTANCES_OK: distinct UID/rolls, exact equip, ownership, revisions, rollback, database reopen, legacy save isolation")

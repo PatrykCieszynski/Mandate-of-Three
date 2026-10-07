@@ -12,6 +12,7 @@ var ai_state: String = "IDLE"
 var target_peer: int = 0
 var dead_until_ms: int = 0
 var contributions: Dictionary[int, int] = {}
+var contribution_players: Dictionary[int, PlayerResource] = {}
 var last_attack_ms: int = -1000
 var stunned_until_ms: int = 0
 var knockback: Vector3 = Vector3.ZERO
@@ -107,6 +108,7 @@ func respawn() -> void:
 	velocity = Vector3.ZERO
 	hp = MAX_HP
 	contributions.clear()
+	contribution_players.clear()
 	ai_state = "IDLE"
 	target_peer = 0
 	stunned_until_ms = 0

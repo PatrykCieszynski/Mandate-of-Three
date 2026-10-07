@@ -4,6 +4,12 @@ extends "res://tests/pve_network.gd"
 
 var improved: bool = false
 
+class CountingItemStore extends ItemStoreSqlite:
+	var inventory_reads: int = 0
+	func inventory(owner_id: int) -> Dictionary:
+		inventory_reads += 1
+		return super.inventory(owner_id)
+
 @rpc("authority", "call_remote", "reliable", 0)
 func phase(command: String, uid: String) -> void:
 	if GameMode.is_world_server(): return
@@ -29,7 +35,8 @@ func run_server() -> void:
 	var other: int = world.characters.keys()[1]
 	var owner_id: int = server.connected_players[hero].player_id
 	var combat: SpikeCombat3D = world.combat_endpoint
-	var store: ItemStoreSqlite = server.database.item_store
+	var store := CountingItemStore.new(db)
+	server.database.item_store = store
 	for dog: SpikeWildDog3D in combat.dogs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
@@ -43,9 +50,12 @@ func run_server() -> void:
 	set_phase("WEAK", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok and store.inventory(owner_id).stats.attack == 23, "starter sword equipped through RPC")
+	check(server.runtime_attack(owner_id) == 23, "equip updates authoritative runtime attack")
+	store.inventory_reads = 0
 	set_phase("BASELINE", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
 	check(combat.dogs[1].hp == 97, "baseline first-stage damage is 23")
+	check(store.inventory_reads == 0, "swing never reads SQLite inventory")
 	set_phase("WAIT")
 	await get_tree().create_timer(0.5).timeout
 	set_phase("FIGHT", hero)
@@ -65,21 +75,33 @@ func run_server() -> void:
 	set_phase("COMPARE", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok, "UI comparison, pickup marker and immutable snapshot")
+	check(db.query("CREATE TEMP TRIGGER fail_runtime_equip BEFORE INSERT ON item_placements BEGIN SELECT RAISE(ABORT,'intentional runtime equip failure'); END;"), "failed equip fixture")
+	set_phase("FAIL_EQUIP", hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(not replies[hero].ok and server.runtime_attack(owner_id) == 23, "rollback leaves runtime attack unchanged")
+	check(db.query("DROP TRIGGER fail_runtime_equip;"), "remove equip fault")
+	await get_tree().create_timer(0.15).timeout
 	set_phase("BETTER", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	var equipped: Dictionary = store.inventory(owner_id)
 	check(replies[hero].ok and equipped.stats.attack == 29 and equipped.equipment.weapon == drop_uid, "picked weapon raises authoritative attack")
+	check(server.runtime_attack(owner_id) == 29, "committed swap updates runtime stats")
 	check(store.inventory(server.connected_players[other].player_id).items.size() == 2, "other player receives no inventory")
 	await get_tree().create_timer(1.2).timeout
 	combat.dogs[1].respawn()
 	combat.dogs[1].position = Vector3(0, 0, 1.4)
 	await get_tree().create_timer(0.1).timeout
+	store.inventory_reads = 0
 	set_phase("IMPROVED", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
 	check(combat._combo[hero] == 1 and combat.dogs[1].hp == 91, "same first-stage attack now deals 29 instead of 23")
+	check(store.inventory_reads == 0, "improved attack also uses RAM only")
 	set_phase("WAIT")
 	check(db.close_db() and db.open_db(), "reopen SQLite")
 	check(store.initialize_character(owner_id).ok and store.inventory(owner_id) == equipped, "exact UID, roll, placement and revision survive reopen/reinitialization")
+	server.runtime_equipment.erase(owner_id)
+	world.inventory_endpoint.initialize_peer(hero)
+	check(server.runtime_attack(owner_id) == 29 and server.runtime_equipment[owner_id].equipment.weapon == drop_uid, "enter-world restores correct runtime stats from persisted equip")
 	await get_tree().create_timer(0.3).timeout
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
@@ -152,9 +174,9 @@ func _process(delta: float) -> void:
 			if ok: print("PROGRESSION_PREVIEW_OK: item-progression-preview.png")
 			inventory._toggle_panel(false)
 		report.rpc_id(1, {"ok": ok})
-	elif phase_name == "BETTER":
+	elif phase_name in ["BETTER", "FAIL_EQUIP"]:
 		attempted = true
-		improved = true
+		if phase_name == "BETTER": improved = true
 		for item: Dictionary in inventory.state.items:
 			if item.uid == drop_uid:
 				equip_and_report(item)

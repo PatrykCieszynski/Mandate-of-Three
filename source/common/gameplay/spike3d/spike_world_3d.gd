@@ -132,6 +132,10 @@ func join_world() -> void:
 	print("SPIKE3D_JOIN: ", peer_id)
 
 func remove_peer(peer_id: int) -> void:
+	if _server:
+		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+		if resource != null and WorldServer.curr.database != null:
+			WorldServer.curr.database.flush_progression(resource.player_id)
 	combat_endpoint.remove_peer(peer_id)
 	inventory_endpoint.remove_peer(peer_id)
 	intentions.erase(peer_id)

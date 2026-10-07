@@ -11,11 +11,12 @@ New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
 try {
     $env:APPDATA = Join-Path $taskLogs 'appdata'
     $env:LOCALAPPDATA = Join-Path $taskLogs 'localappdata'
-    foreach ($taskRole in @('server', 'client1', 'client2')) {
-        $taskMode = if ($taskRole -eq 'server') { 'world-server' } else { 'client' }
+    foreach ($taskRole in @('checkpoint', 'server', 'client1', 'client2')) {
+        $taskMode = if ($taskRole -in @('checkpoint', 'server')) { 'world-server' } else { 'client' }
         $taskIndex = if ($taskRole -eq 'client1') { 1 } else { 2 }
-        $taskArgs = '--headless --path "' + $taskRoot + '" --mode=' + $taskMode + ' res://tests/character_xp.tscn --test-client=' + $taskIndex
-        if ($Preview -and $taskRole -ne 'server') { $taskArgs = $taskArgs.Replace('--headless ', '') + ' --preview' }
+        $taskScene = if ($taskRole -eq 'checkpoint') { 'progression_checkpoint' } else { 'character_xp' }
+        $taskArgs = '--headless --path "' + $taskRoot + '" --mode=' + $taskMode + ' res://tests/' + $taskScene + '.tscn --test-client=' + $taskIndex
+        if ($Preview -and $taskRole -in @('client1', 'client2')) { $taskArgs = $taskArgs.Replace('--headless ', '') + ' --preview' }
         $taskProcess = Start-Process -FilePath $taskExe -ArgumentList $taskArgs -WorkingDirectory $taskRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $taskLogs "xp-test-$taskRole.out.log") -RedirectStandardError (Join-Path $taskLogs "xp-test-$taskRole.err.log")
         $taskProcesses += [pscustomobject]@{ Role = $taskRole; Process = $taskProcess }
         if ($taskRole -eq 'server') { Start-Sleep -Seconds 1 }
@@ -27,7 +28,7 @@ try {
         $taskEntry.Process.Refresh()
         $taskOutput = Get-Content -LiteralPath (Join-Path $taskLogs "xp-test-$($taskEntry.Role).out.log") -Raw
         if ($taskOutput -match 'XP_PREVIEW_OK') { $taskSawPreview = $true }
-        $taskMarker = if ($taskEntry.Role -eq 'server') { 'XP_SERVER_OK' } else { 'XP_CLIENT_OK' }
+        $taskMarker = if ($taskEntry.Role -eq 'checkpoint') { 'CHECKPOINT_OK' } elseif ($taskEntry.Role -eq 'server') { 'XP_SERVER_OK' } else { 'XP_CLIENT_OK' }
         if ($taskEntry.Process.ExitCode -ne 0 -or $taskOutput -notmatch $taskMarker) {
             throw "Failed: $($taskEntry.Role). Logs: $taskLogs"
         }
