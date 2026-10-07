@@ -14,8 +14,11 @@ var _hit_tween: Tween
 var _swing_tween: Tween
 var _base_tint: Color
 var alive: bool = true
+var _name_label: Label3D
+var _display_name: String = ""
 
 func setup(display_name: String, tint: Color) -> void:
+	_display_name = display_name
 	collision_layer = 2
 	collision_mask = 1
 	var capsule := CapsuleShape3D.new()
@@ -38,6 +41,7 @@ func setup(display_name: String, tint: Color) -> void:
 	visual.material_override = material
 	add_child(visual)
 	var label := Label3D.new()
+	_name_label = label
 	label.text = display_name
 	label.position.y = 2.25
 	label.font_size = 48
@@ -52,6 +56,9 @@ func setup(display_name: String, tint: Color) -> void:
 	marker.mesh = marker_mesh
 	marker.position = Vector3(0, 1.1, -0.4)
 	add_child(marker)
+
+func set_level(level: int) -> void:
+	if _name_label != null: _name_label.text = "Lv %d · %s" % [level, _display_name]
 
 func simulate(delta: float, direction: Vector2) -> void:
 	velocity.x = direction.x * SPEED

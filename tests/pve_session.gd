@@ -42,7 +42,7 @@ func run() -> void:
 	await action("equip", strong)
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var attack_sequence: int = 0
-	while combat.state.is_empty() or combat.state.drops.is_empty():
+	while combat.state.is_empty() or combat.state.drops.is_empty() or (CmdlineUtils.get_parsed_args().has("xp-levelup") and int(combat.state.progression.level) < 2):
 		var nearest: float = INF
 		var point: Vector3 = Vector3.ZERO
 		for dog: SpikeWildDog3D in combat.dogs.values():
@@ -106,6 +106,9 @@ func run() -> void:
 		await capture("pve-item-equipped-preview.png")
 		inventory._toggle_panel(false)
 	var persisted: Dictionary = inventory.state.duplicate(true)
+	while int(combat.state.progression.experience) == 0 and int(combat.state.progression.level) == 1:
+		await get_tree().process_frame
+	var earned_progression: Dictionary = combat.state.progression.duplicate(true)
 	Client.close_connection()
 	Client.instance_manager.teardown()
 	world = null
@@ -120,6 +123,10 @@ func run() -> void:
 	if world.inventory_endpoint.state != persisted:
 		fail("picked item/equip changed after relog")
 		return
-	print("PVE_SESSION_OK: gateway/master/world, combat, ground item, pickup, compare, equip, exact UID after relog")
+	while world.combat_endpoint.state.is_empty(): await get_tree().process_frame
+	if world.combat_endpoint.state.progression != earned_progression:
+		fail("XP and level changed after relog")
+		return
+	print("PVE_SESSION_OK: gateway/master/world, combat, pickup/equip UID, XP and level after relog")
 	Client.close_connection()
 	get_tree().quit()

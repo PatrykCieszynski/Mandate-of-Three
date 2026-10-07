@@ -16,6 +16,8 @@ Repo zawiera działający techniczny vertical slice; to jeszcze nie alpha gry.
   celów, trzyciosowe combo, reakcja na trafienie i odrzut ostatniego ciosu.
 - Śmierć i respawn gracza oraz mobów, loot na ziemi, rezerwacja i trwały pickup.
   Testy dwóch klientów obejmują walkę, śmierć i rywalizację o ten sam łup.
+- XP za zabicie psa, poziomy, pasek postępu i level-up; trwały zapis po relogu
+  oraz ochrona przed ponownym naliczeniem tej samej nagrody.
 
 Sterowanie: **WASD** — ruch, **I** — ekwipunek, **przytrzymaj Spację** — combo
 przed postacią, **E** — podnieś najbliższy łup. **LPM** zaznacza opcjonalny cel,
@@ -59,9 +61,10 @@ Konta i bazy świata są lokalnymi danymi runtime wykluczonymi z Git.
 & .\tests\run-pve.ps1
 & .\tests\run-combat.ps1
 & .\tests\run-progression.ps1
+& .\tests\run-xp.ps1
 ```
 
-Testy używają baz testowych; `run-pve`, `run-combat` i `run-progression` współdzielą port 18098,
+Testy używają baz testowych; `run-pve`, `run-combat`, `run-progression` i `run-xp` współdzielą port 18098,
 więc uruchamiaj je kolejno. Pełne logowanie/relog przez zwykłe serwery
 opisują dokumenty itemów i PvE; te scenariusze tworzą lokalne konta testowe.
 Nowe zmiany robimy na branchach `codex/<temat>`, sprawdzamy i mergujemy lokalnie
@@ -75,6 +78,7 @@ z `--no-ff`. Zasady: [AGENTS.md](AGENTS.md).
 - [PvE, ground loot i pickup](docs/pve-ground-loot.md)
 - [Combat Feel Pass i aktualne sterowanie](docs/combat-feel.md)
 - [Item Progression Slice: porównanie, equip i obrażenia](docs/item-progression.md)
+- [XP, poziomy i trwałe nagrody za zabójstwa](docs/character-xp.md)
 - [Cleanup i pozostałe zależności](docs/repository-cleanup.md)
 - [Analiza Open-MT2 jako referencji](docs/open-mt2-analysis.md)
 - [Pierwotny plan spike'a](docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf)

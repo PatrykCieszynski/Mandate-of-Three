@@ -15,6 +15,7 @@ const COMBO_IMPACT: Array[int] = [120, 140, 180]
 const COMBO_RESET_MS: int = 1100
 const PROTECTION_MS: int = 15000
 const LOOT_LIFETIME_MS: int = 120000
+const DOG_XP: int = 20
 
 signal feedback_received(result: Dictionary)
 var dogs: Dictionary[int, SpikeWildDog3D] = {}
@@ -38,6 +39,12 @@ var selected_mob: int = 0
 var autoattack: bool = false
 var state: Dictionary = {}
 var navigation_region: NavigationRegion3D
+var _pending_xp: Dictionary[String, int] = {}
+var _next_xp_retry_ms: int = 0
+var _experience_label: Label
+var _experience_bar: ProgressBar
+var _xp_notice: String = ""
+var _xp_notice_until_ms: int = 0
 
 func _ready() -> void:
 	_world = get_parent()
@@ -55,13 +62,21 @@ func _ready() -> void:
 		var panel := PanelContainer.new()
 		panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 		panel.offset_left = 20
-		panel.offset_top = -135
+		panel.offset_top = -215
 		panel.offset_right = 440
 		panel.offset_bottom = -20
 		canvas.add_child(panel)
+		var content := VBoxContainer.new()
+		panel.add_child(content)
 		_hud = Label.new()
 		_hud.add_theme_font_size_override("font_size", 16)
-		panel.add_child(_hud)
+		content.add_child(_hud)
+		_experience_label = Label.new()
+		content.add_child(_experience_label)
+		_experience_bar = ProgressBar.new()
+		_experience_bar.custom_minimum_size = Vector2(400, 14)
+		_experience_bar.show_percentage = false
+		content.add_child(_experience_bar)
 		_refresh_hud()
 
 func _build_navigation() -> void:
@@ -171,6 +186,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	return hit_ids
 
 func _die(dog: SpikeWildDog3D, now: int) -> void:
+	if dog.ai_state == "DEAD": return
 	dog.die(now)
 	var owner_id: int = 0
 	var highest: int = -1
@@ -184,6 +200,32 @@ func _die(dog: SpikeWildDog3D, now: int) -> void:
 	var uid: String = Crypto.new().generate_random_bytes(16).hex_encode()
 	ground[uid] = {"position": dog.position, "definition_id": "iron_sword", "bonus": randi_range(1, 9),
 		"owner": owner_id, "owner_name": owner_name, "protected_until": now + PROTECTION_MS, "expires": now + LOOT_LIFETIME_MS}
+	if owner_id > 0:
+		_pending_xp[uid] = owner_id
+		_award_experience(uid, owner_id)
+
+func _award_experience(kill_uid: String, owner_id: int) -> void:
+	var result: Dictionary = WorldServer.curr.database.store.award_kill_experience(kill_uid, owner_id, DOG_XP)
+	if not result.ok:
+		if result.error in ["claimed", "owner", "request"]: _pending_xp.erase(kill_uid)
+		return # Retry a failed commit while this world instance is alive.
+	_pending_xp.erase(kill_uid)
+	for peer_id: int in WorldServer.curr.connected_players:
+		var resource: PlayerResource = WorldServer.curr.connected_players[peer_id]
+		if resource.player_id != owner_id: continue
+		resource.level = int(result.level)
+		resource.experience = int(result.experience)
+		resource.available_attributes_points = int(result.available_attributes_points)
+		if _world.characters.has(peer_id):
+			receive_experience.rpc_id(peer_id, DOG_XP, int(result.levels_gained), int(result.level))
+
+@rpc("authority", "call_remote", "reliable", 0)
+func receive_experience(amount: int, levels_gained: int, level: int) -> void:
+	if not GameMode.is_client(): return
+	_xp_notice = "+%d XP" % amount
+	if levels_gained > 0: _xp_notice += " · Awans! Poziom %d" % level
+	_xp_notice_until_ms = Time.get_ticks_msec() + 5000
+	_refresh_hud()
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_swing(peer_id: int, stage: int) -> void:
@@ -258,6 +300,9 @@ func receive_feedback(result: Dictionary) -> void:
 func _physics_process(delta: float) -> void:
 	if not GameMode.is_world_server() or _store() == null: return
 	var now: int = Time.get_ticks_msec()
+	if now >= _next_xp_retry_ms:
+		_next_xp_retry_ms = now + 1000
+		for uid: String in _pending_xp.keys(): _award_experience(uid, _pending_xp[uid])
 	for uid: String in ground.keys():
 		if now >= int(ground[uid].expires): ground.erase(uid)
 	for peer_id: int in _respawn_ms.keys():
@@ -347,6 +392,9 @@ func _send_snapshot() -> void:
 		var dog: SpikeWildDog3D = dogs[id]
 		mob_snapshots[id] = {"position": dog.position, "yaw": dog.rotation.y, "hp": dog.hp, "state": dog.ai_state}
 	var respawns: Dictionary = {}
+	var levels: Dictionary = {}
+	for id: int in _world.characters:
+		levels[id] = WorldServer.curr.connected_players[id].level
 	for id: int in _respawn_ms: respawns[id] = maxf(0, (_respawn_ms[id] - now) / 1000.0)
 	for peer_id: int in _world.characters:
 		var drops: Dictionary = {}
@@ -357,13 +405,18 @@ func _send_snapshot() -> void:
 				"weapon_attack": int(ItemDefinitions.IRON_SWORD.base_stats[&"attack"]) + int(drop.bonus),
 				"reserved_for": drop.owner_name if now < int(drop.protected_until) else "",
 				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner)}
+		var player: PlayerResource = WorldServer.curr.connected_players[peer_id]
 		receive_state.rpc_id(peer_id, {"dogs": mob_snapshots, "health": health.duplicate(), "drops": drops,
-			"combos": _combo.duplicate(), "respawns": respawns})
+			"combos": _combo.duplicate(), "respawns": respawns, "levels": levels,
+			"progression": {"level": player.level, "experience": player.experience, "next": player.level_xp_to_next()}})
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_state(snapshot: Dictionary) -> void:
 	if GameMode.is_world_server(): return
 	state = snapshot
+	for peer_id: int in snapshot.levels:
+		var player: SpikeCharacter3D = _world.characters.get(peer_id)
+		if player != null: player.set_level(int(snapshot.levels[peer_id]))
 	for id: int in snapshot.dogs:
 		if dogs.has(id): dogs[id].present_snapshot(snapshot.dogs[id])
 	for peer_id: int in snapshot.health:
@@ -414,6 +467,10 @@ func _refresh_hud() -> void:
 	var combo: int = int(state.get("combos", {}).get(_world.local_peer, 0))
 	var status: String = "Odrodzenie za %.1f s" % float(state.get("respawns", {}).get(_world.local_peer, 0)) if hp == 0 else _notice
 	_hud.text = "HP: %d / 100 · Combo: %d / 3\nSpacja — combo · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, combo, "wł." if autoattack else "wył.", target, status]
+	var progression: Dictionary = state.get("progression", {"level": 1, "experience": 0, "next": PlayerResource.LEVEL_XP_BASE})
+	_experience_label.text = "Poziom %d · XP: %d / %d%s" % [int(progression.level), int(progression.experience), int(progression.next), "\n" + _xp_notice if _xp_notice != "" else ""]
+	_experience_bar.max_value = int(progression.next)
+	_experience_bar.value = int(progression.experience)
 
 func select_mob(id: int) -> void:
 	selected_mob = id if dogs.has(id) and dogs[id].ai_state not in ["DEAD", "DISABLED"] else 0
@@ -465,6 +522,9 @@ func assist_direction(manual: Vector2) -> Vector2:
 
 func _process(delta: float) -> void:
 	if not GameMode.is_client(): return
+	if _xp_notice != "" and Time.get_ticks_msec() >= _xp_notice_until_ms:
+		_xp_notice = ""
+		_refresh_hud()
 	for dog: SpikeWildDog3D in dogs.values(): dog.interpolate(delta)
 	if not _world.input_enabled or ClientState.menu_open or not DisplayServer.window_is_focused(): return
 	_client_attack_accum += delta
