@@ -62,8 +62,8 @@ snapshotów. Pierwszy etap jest przeznaczony do małego lokalnego spike'a.
 Godot 4.7.2 z projektowego `.godot`:
 
 - Import edytora: brak błędów parsowania nowych skryptów.
-- Wszystkie 871 skryptów, scen i zasobów źródłowych zostały załadowane
-  po dodaniu modelu egzemplarzy przedmiotów.
+- Wszystkie 872 skrypty, sceny i zasoby źródłowe zostały załadowane
+  po dodaniu modelu egzemplarzy i pionu PvE.
 - Test WebSocket: serwer + dwa headless klienty, wszystkie trzy procesy exit 0.
   Potwierdzono listę dwóch graczy, ruch widziany przez drugiego klienta, ograniczenie
   prędkości mimo dużego kierunku, odrzucenie replay/NaN, zatrzymanie po wygaśnięciu
@@ -91,5 +91,6 @@ nie jest całkowicie wolny od komunikatów silnika.
 
 ## Następny etap
 
-ItemDefinition/ItemInstance, equip po UID i trwały zapis są wdrożone. Następny
-etap: pojedynczy mob PvE, serwerowa walka i loot na ziemi.
+ItemDefinition/ItemInstance, equip po UID i trwały zapis są wdrożone.
+[Pion PvE z mobem i ground loot](pve-ground-loot.md) dodaje pierwszy przepływ
+walki, śmierci i pickupu. Dalsze priorytety opisuje [kierunek projektu](project-direction.md).

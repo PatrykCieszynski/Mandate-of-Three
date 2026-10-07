@@ -56,8 +56,8 @@ egzemplarzy. Nie ma oddzielnego cache wymagającego zapisu przy wylogowaniu.
 
 Pełny ekwipunek trafia tylko do właściciela. Inni gracze dostają ID definicji
 założonej broni i widzą prosty model miecza przy kapsule. Nowy gracz otrzymuje także
-stan broni obecnych graczy. Statystyka ataku jest na razie podstawą dla przyszłej
-walki 3D — nie ma jeszcze mobów ani zadawania obrażeń.
+stan broni obecnych graczy. Statystykę ataku wykorzystuje już
+[serwerowa walka z mobem 3D](pve-ground-loot.md).
 
 ## Weryfikacja
 
@@ -93,6 +93,6 @@ komunikaty silnika o magazynie certyfikatów Windows i zasobach przy zamknięciu
 
 ## Następny krok
 
-Pojedynczy mob PvE, serwerowe zadawanie obrażeń i loot tworzący nowy egzemplarz
-z własnym UID. Handel, drop/pickup, upgrade i reroll powinny później używać tego
-samego modelu oraz atomowych operacji na egzemplarzu.
+Mob PvE, serwerowe obrażenia i pickup nowego egzemplarza są opisane w
+[pionie PvE](pve-ground-loot.md). Handel, upgrade i reroll powinny później używać
+tego samego modelu oraz atomowych operacji na egzemplarzu.

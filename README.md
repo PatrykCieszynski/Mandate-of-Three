@@ -8,6 +8,8 @@ Repo jest w trakcie reworku; aktualny świat to minimalny Spike 3D z serwerowym 
 - [Analiza Open-MT2 i kierunek reworku gameplayu](docs/open-mt2-analysis.md)
 - [Spike 3D: zakres, architektura i testy](docs/spike3d.md)
 - [Egzemplarze przedmiotów: UID, wyposażenie i trwały zapis](docs/item-instances.md)
+- [Vertical slice PvE: mob, walka, ground loot i pickup](docs/pve-ground-loot.md)
+- [Przyjęty kierunek i priorytety projektu](docs/project-direction.md)
 
 Poniżej pozostaje README upstreamu jako referencja infrastruktury i lokalnego uruchamiania.
 Lista funkcji i map upstreamu nie opisuje aktualnego zakresu Mandate of Three.
