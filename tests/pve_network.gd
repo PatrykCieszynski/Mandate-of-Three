@@ -132,43 +132,54 @@ func place_near() -> void:
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
 	var combat: SpikeCombat3D = world.combat_endpoint
+	for id: int in combat.dogs:
+		if id != 1:
+			combat.dogs[id].ai_state = "DISABLED"
+			combat.dogs[id].collision_layer = 0
 	place_far()
-	combat.mob.position = SpikeCombat3D.HOME
-	combat.mob_state = "IDLE"
-	combat.target_peer = 0
+	combat.dogs[1].position = SpikeCombat3D.HOME
+	combat.dogs[1].ai_state = "IDLE"
+	combat.dogs[1].target_peer = 0
 	await get_tree().create_timer(0.3).timeout
-	check(combat.mob_state == "IDLE", "idle outside aggro")
+	check(combat.dogs[1].ai_state == "IDLE", "idle outside aggro")
 	for id: int in world.characters: world.characters[id].position = SpikeCombat3D.HOME + Vector3(0, 0, 5)
-	await wait_until(func() -> bool: return combat.mob_state == "CHASE")
-	await wait_until(func() -> bool: return combat.mob_state == "ATTACK")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "CHASE")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "ATTACK")
 	check(combat.health.values().min() < 100, "server mob attack")
-	combat.mob_hp = 50
+	combat.dogs[1].hp = 50
 	place_far()
-	await wait_until(func() -> bool: return combat.mob_state == "RETURN")
-	await wait_until(func() -> bool: return combat.mob_state == "IDLE")
-	check(combat.mob_hp == SpikeCombat3D.MOB_HP and combat.contributions.is_empty(), "return heals and resets encounter")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "RETURN")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "IDLE")
+	check(combat.dogs[1].hp == SpikeCombat3D.MOB_HP and combat.dogs[1].contributions.is_empty(), "return heals and resets encounter")
 	set_phase("RANGE")
 	await get_tree().create_timer(0.5).timeout
-	check(combat.mob_hp == SpikeCombat3D.MOB_HP, "distant attack/replay flood cannot damage")
+	check(combat.dogs[1].hp == SpikeCombat3D.MOB_HP, "distant attack/replay flood cannot damage")
 	# A fixture position inside the obstacle gives a short, obstructed ray.
 	# Freeze AI only here so RETURN cannot mask the line-of-sight assertion.
-	combat.set_physics_process(false)
-	combat.mob.position = Vector3(-1.5, 0, -3.5)
-	combat.mob_state = "CHASE"
+	combat.dogs[1].ai_enabled = false
+	combat._pending.clear()
+	combat._next_attack_ms.clear()
+	combat.dogs[1].position = Vector3(-1.5, 0, -3.5)
+	combat.dogs[1].ai_state = "CHASE"
 	for id: int in world.characters: world.characters[id].position = Vector3(-1.5, 0, -1.6)
 	await get_tree().create_timer(0.4).timeout
-	check(combat.mob_hp == SpikeCombat3D.MOB_HP, "attack through obstacle denied")
-	combat.mob.position = SpikeCombat3D.HOME
-	combat.mob_state = "IDLE"
-	combat.target_peer = 0
-	combat.set_physics_process(true)
+	check(not combat._pending.has(world.characters.keys()[0]), "obstructed swing reached its impact")
+	check(combat.dogs[1].hp == SpikeCombat3D.MOB_HP, "attack through obstacle denied")
+	combat.dogs[1].position = SpikeCombat3D.HOME
+	combat.dogs[1].ai_state = "IDLE"
+	combat.dogs[1].target_peer = 0
+	combat._pending.clear()
+	combat._combo.clear()
+	combat._last_swing_ms.clear()
+	combat._next_attack_ms.clear()
+	combat.dogs[1].ai_enabled = true
 	place_near()
 	var fight_started_ms: int = Time.get_ticks_msec()
 	set_phase("FIGHT")
-	await wait_until(func() -> bool: return combat.mob_state == "DEAD")
-	check(Time.get_ticks_msec() - fight_started_ms >= 2950, "spam/replay cannot bypass 600ms attack cooldown")
-	combat.dead_until_ms = Time.get_ticks_msec() + 60000
-	check(combat.contributions.size() == 2 and combat.ground.size() == 1, "two attackers, one death and one drop")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
+	check(Time.get_ticks_msec() - fight_started_ms >= 1800, "spam/replay cannot bypass server combo recovery")
+	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
+	check(combat.dogs[1].contributions.size() == 2 and combat.ground.size() == 1, "two attackers, one death and one drop")
 	drop_uid = combat.ground.keys()[0]
 	var drop: Dictionary = combat.ground[drop_uid]
 	var owner_peer: int = 0
@@ -239,16 +250,16 @@ func _process(delta: float) -> void:
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
 	var combat: SpikeCombat3D = world.combat_endpoint
-	saw_damage = saw_damage or combat.mob_hp < SpikeCombat3D.MOB_HP
-	saw_death = saw_death or combat.mob_state == "DEAD"
+	saw_damage = saw_damage or combat.dogs[1].hp < SpikeCombat3D.MOB_HP
+	saw_death = saw_death or combat.dogs[1].ai_state == "DEAD"
 	saw_loot = saw_loot or not combat.state.drops.is_empty()
 	accumulator += delta
 	if accumulator >= 0.05 and phase_name in ["RANGE", "FIGHT"]:
 		accumulator = 0
 		sequence += 1
-		combat.request_attack.rpc_id(1, sequence, 1)
-		combat.request_attack.rpc_id(1, sequence, 1) # same sequence cannot hit twice
-		combat.request_attack.rpc_id(1, sequence, 999) # arbitrary entity ID denied
+		combat.request_attack.rpc_id(1, sequence)
+		combat.request_attack.rpc_id(1, sequence) # same sequence cannot hit twice
+		combat.request_attack.rpc_id(1, -1) # invalid sequence denied
 	if phase_name in ["PICKUP", "RACE", "REPLAY"] and not attempted:
 		attempted = true
 		combat.request_pickup.rpc_id(1, drop_uid)

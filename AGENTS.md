@@ -21,7 +21,10 @@ git diff --check
 & .\tests\run-items.ps1
 & .\tests\run-spike3d.ps1
 & .\tests\run-pve.ps1
+& .\tests\run-combat.ps1
 ```
+
+Run PvE and combat tests sequentially: both use port 18098.
 
 Full item-session integration additionally uses `& .\tests\run-items.ps1 -WithSession`.
 It requires running gateway/master/world roles and creates local

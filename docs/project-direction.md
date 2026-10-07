@@ -22,3 +22,14 @@ Decyzje po review użytkownika, 2026-10-07:
 - README skrócić do Mandate of Three; Tiny MMO zostawić jako upstream/credits
   i referencję infrastruktury.
 - Nowa praca trafia na tematyczne branche i jest integrowana lokalnym merge.
+
+## Kolejność po pionie PvE
+
+Aktualna decyzja użytkownika: najpierw **Combat Feel Pass**, dopiero później
+**Item Progression Slice**. Nie rozwijamy teraz item/crafting frameworka.
+
+Combat Feel Pass obejmuje kierunkowy hitbox melee, wiele trafionych celów,
+trzyciosowe combo z odrzutem finału, kilka Wild Dogów, nawigację mobów,
+reakcję na trafienie oraz śmierć i respawn gracza. Zaznaczenie celu jest pomocą
+dla autoataku i przyszłych skilli; podstawowy atak nie wymaga zaznaczenia.
+Wdrożenie i granice prototypu opisuje [Combat Feel Pass](combat-feel.md).

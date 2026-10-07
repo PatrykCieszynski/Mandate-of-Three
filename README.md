@@ -10,13 +10,16 @@ Repo zawiera działający techniczny vertical slice; to jeszcze nie alpha gry.
 - Spike 3D: serwerowy ruch i fizyka, kolizje, interpolacja zdalnych postaci.
 - ItemDefinition i trwałe ItemInstance: UID, właściciel, bonusy, equip konkretnego
   egzemplarza oraz transakcyjny zapis SQLite.
-- Jeden mob z serwerowym AI i walką, śmierć, loot na ziemi, rezerwacja i pickup.
-  Test dwóch klientów walczących o ten sam łup.
+- Cztery Wild Dogi z nawigacją i serwerowym AI; kierunkowe melee trafiające wiele
+  celów, trzyciosowe combo, reakcja na trafienie i odrzut ostatniego ciosu.
+- Śmierć i respawn gracza oraz mobów, loot na ziemi, rezerwacja i trwały pickup.
+  Testy dwóch klientów obejmują walkę, śmierć i rywalizację o ten sam łup.
 
-Sterowanie: **WASD** — ruch, **I** — ekwipunek, **Spacja** — atak,
-**E** — podnieś najbliższy łup.
+Sterowanie: **WASD** — ruch, **I** — ekwipunek, **przytrzymaj Spację** — combo
+przed postacią, **E** — podnieś najbliższy łup. **LPM** zaznacza opcjonalny cel,
+**F** przełącza autoatak; ręczny ruch przerywa autoatak.
 
-AI ma prosty pościg bez nawigacji wokół przeszkód. Niepodniesiony loot oraz HP
+AI omija przeszkody na navmeshu areny. Niepodniesiony loot oraz HP
 i pozycja są stanem runtime; przedmiot po pickupie jest trwały. AOI, local
 prediction, docelowe modele i animacje pozostają do kolejnych etapów.
 Starsze moduły upstreamu w repo nie oznaczają funkcji dostępnych w naszym 3D.
@@ -52,9 +55,11 @@ Konta i bazy świata są lokalnymi danymi runtime wykluczonymi z Git.
 & .\tests\run-items.ps1
 & .\tests\run-spike3d.ps1
 & .\tests\run-pve.ps1
+& .\tests\run-combat.ps1
 ```
 
-Testy używają osobnych baz i portów. Pełne logowanie/relog przez zwykłe serwery
+Testy używają baz testowych; `run-pve` i `run-combat` współdzielą port 18098,
+więc uruchamiaj je kolejno. Pełne logowanie/relog przez zwykłe serwery
 opisują dokumenty itemów i PvE; te scenariusze tworzą lokalne konta testowe.
 Nowe zmiany robimy na branchach `codex/<temat>`, sprawdzamy i mergujemy lokalnie
 z `--no-ff`. Zasady: [AGENTS.md](AGENTS.md).
@@ -65,6 +70,7 @@ z `--no-ff`. Zasady: [AGENTS.md](AGENTS.md).
 - [Spike 3D i transport ruchu](docs/spike3d.md)
 - [Egzemplarze przedmiotów i trwały zapis](docs/item-instances.md)
 - [PvE, ground loot i pickup](docs/pve-ground-loot.md)
+- [Combat Feel Pass i aktualne sterowanie](docs/combat-feel.md)
 - [Cleanup i pozostałe zależności](docs/repository-cleanup.md)
 - [Analiza Open-MT2 jako referencji](docs/open-mt2-analysis.md)
 - [Pierwotny plan spike'a](docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf)

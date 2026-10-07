@@ -10,6 +10,10 @@ var has_snapshot: bool = false
 var visual: MeshInstance3D
 var weapon_definition_id: String = ""
 var _weapon: Node3D
+var _hit_tween: Tween
+var _swing_tween: Tween
+var _base_tint: Color
+var alive: bool = true
 
 func setup(display_name: String, tint: Color) -> void:
 	collision_layer = 2
@@ -29,6 +33,7 @@ func setup(display_name: String, tint: Color) -> void:
 	visual.position.y = 0.9
 	var material := StandardMaterial3D.new()
 	material.albedo_color = tint
+	_base_tint = tint
 	material.roughness = 0.8
 	visual.material_override = material
 	add_child(visual)
@@ -98,3 +103,55 @@ func _weapon_part(center: Vector3, dimensions: Vector3, tint: Color) -> void:
 	material.albedo_color = tint
 	part.material_override = material
 	_weapon.add_child(part)
+
+func play_hit() -> void:
+	if visual == null: return
+	var material: StandardMaterial3D = visual.material_override
+	if _hit_tween != null: _hit_tween.kill()
+	var original: Color = _base_tint if _base_tint != Color(0, 0, 0, 1) else Color("986943")
+	material.albedo_color = Color("ffdddd")
+	_hit_tween = create_tween()
+	_hit_tween.tween_property(material, "albedo_color", original, 0.18)
+
+func set_alive(value: bool) -> void:
+	if alive == value: return
+	alive = value
+	if visual == null: return
+	visual.rotation.z = 0 if alive else PI * 0.5
+	visual.position.y = 0.9 if alive else 0.4
+	if _weapon != null: _weapon.visible = alive
+
+func play_swing(stage: int) -> void:
+	if _weapon != null:
+		if _swing_tween != null: _swing_tween.kill()
+		_weapon.rotation.z = -1.4 if stage != 2 else 1.4
+		_swing_tween = create_tween()
+		_swing_tween.tween_property(_weapon, "rotation:z", 1.4 if stage != 2 else -1.4, 0.18)
+		_swing_tween.tween_property(_weapon, "rotation:z", 0.0, 0.12)
+	# Brief sweeping ribbon; presentation only, never the damage authority.
+	var vertices := PackedVector3Array()
+	for i: int in 16:
+		var first: float = deg_to_rad(-65.0 + i * 130.0 / 16)
+		var second: float = deg_to_rad(-65.0 + (i + 1) * 130.0 / 16)
+		var a := Vector3(sin(first), 0.65, -cos(first)) * Vector3(1.9, 1, 1.9)
+		var b := Vector3(sin(first), 0.65, -cos(first)) * Vector3(2.3, 1, 2.3)
+		var c := Vector3(sin(second), 0.65, -cos(second)) * Vector3(2.3, 1, 2.3)
+		var d := Vector3(sin(second), 0.65, -cos(second)) * Vector3(1.9, 1, 1.9)
+		vertices.append_array(PackedVector3Array([a, b, c, a, c, d]))
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var slash := MeshInstance3D.new()
+	slash.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = Color(1, 0.8, 0.25, 0.8) if stage == 3 else Color(0.6, 0.9, 1, 0.6)
+	slash.material_override = material
+	add_child(slash)
+	var tween := create_tween()
+	tween.tween_property(material, "albedo_color:a", 0.0, 0.25)
+	tween.tween_callback(slash.queue_free)

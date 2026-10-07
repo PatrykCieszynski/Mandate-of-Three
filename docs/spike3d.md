@@ -62,8 +62,8 @@ snapshotów. Pierwszy etap jest przeznaczony do małego lokalnego spike'a.
 Godot 4.7.2 z projektowego `.godot`:
 
 - Import edytora: brak błędów parsowania nowych skryptów.
-- Wszystkie 872 skrypty, sceny i zasoby źródłowe zostały załadowane
-  po dodaniu modelu egzemplarzy i pionu PvE.
+- Wszystkie 873 skrypty, sceny i zasoby źródłowe zostały załadowane
+  po dodaniu modelu egzemplarzy, pionu PvE i Combat Feel Pass.
 - Test WebSocket: serwer + dwa headless klienty, wszystkie trzy procesy exit 0.
   Potwierdzono listę dwóch graczy, ruch widziany przez drugiego klienta, ograniczenie
   prędkości mimo dużego kierunku, odrzucenie replay/NaN, zatrzymanie po wygaśnięciu
@@ -94,3 +94,5 @@ nie jest całkowicie wolny od komunikatów silnika.
 ItemDefinition/ItemInstance, equip po UID i trwały zapis są wdrożone.
 [Pion PvE z mobem i ground loot](pve-ground-loot.md) dodaje pierwszy przepływ
 walki, śmierci i pickupu. Dalsze priorytety opisuje [kierunek projektu](project-direction.md).
+[Combat Feel Pass](combat-feel.md) rozszerza ten pion o kierunkowe combo,
+cztery Wild Dogi, nawigację i respawn gracza. Item Progression Slice jest później.

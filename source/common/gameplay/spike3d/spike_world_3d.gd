@@ -198,7 +198,7 @@ func _physics_process(delta: float) -> void:
 			var direction: Vector2 = intent.direction
 			if Time.get_ticks_msec() - int(intent.time) > INPUT_TIMEOUT_MS:
 				direction = Vector2.ZERO
-			if combat_endpoint.health.get(peer_id, 100) <= 0:
+			if not combat_endpoint.can_move(peer_id):
 				direction = Vector2.ZERO
 			characters[peer_id].simulate(delta, direction)
 		_snapshot_accum += delta
@@ -211,6 +211,7 @@ func _physics_process(delta: float) -> void:
 			_input_accum = fmod(_input_accum, INPUT_INTERVAL)
 			_sequence += 1
 			var direction := Input.get_vector("player_move_left", "player_move_right", "player_move_up", "player_move_down")
+			direction = combat_endpoint.assist_direction(direction)
 			if ClientState.menu_open or not DisplayServer.window_is_focused():
 				direction = Vector2.ZERO
 			submit_input.rpc_id(1, _sequence, direction)
