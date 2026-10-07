@@ -1,5 +1,8 @@
 # Repository workflow
 
+Gameplay priorities and accepted scope are recorded in `docs/project-direction.md`.
+Follow them when deciding the next implementation; avoid speculative frameworks.
+
 - Work on a separate `codex/<short-topic>` branch for each coherent change.
 - Keep `main` as the integrated baseline. Do not implement new work directly on it.
 - Before merging, inspect the diff and run checks appropriate to the change.
@@ -17,6 +20,7 @@ Run from the repository root in PowerShell:
 git diff --check
 & .\tests\run-items.ps1
 & .\tests\run-spike3d.ps1
+& .\tests\run-pve.ps1
 ```
 
 Full item-session integration additionally uses `& .\tests\run-items.ps1 -WithSession`.

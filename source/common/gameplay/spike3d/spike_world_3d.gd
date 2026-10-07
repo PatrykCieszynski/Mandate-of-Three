@@ -17,6 +17,7 @@ var _snapshot_accum: float = 0.0
 var _camera: Camera3D
 var _status: Label
 var inventory_endpoint: SpikeInventory3D
+var combat_endpoint: SpikeCombat3D
 
 func _ready() -> void:
 	_server = GameMode.is_world_server()
@@ -24,6 +25,9 @@ func _ready() -> void:
 	inventory_endpoint = SpikeInventory3D.new()
 	inventory_endpoint.name = "Inventory"
 	add_child(inventory_endpoint)
+	combat_endpoint = SpikeCombat3D.new()
+	combat_endpoint.name = "Combat"
+	add_child(combat_endpoint)
 	if not _server:
 		local_peer = multiplayer.get_unique_id()
 		_build_camera_and_ui()
@@ -124,9 +128,11 @@ func join_world() -> void:
 	intentions[peer_id] = {"direction": Vector2.ZERO, "sequence": -1, "time": 0}
 	_send_roster()
 	inventory_endpoint.initialize_peer(peer_id)
+	combat_endpoint.initialize_peer(peer_id)
 	print("SPIKE3D_JOIN: ", peer_id)
 
 func remove_peer(peer_id: int) -> void:
+	combat_endpoint.remove_peer(peer_id)
 	inventory_endpoint.remove_peer(peer_id)
 	intentions.erase(peer_id)
 	if characters.has(peer_id):
@@ -191,6 +197,8 @@ func _physics_process(delta: float) -> void:
 			var intent: Dictionary = intentions[peer_id]
 			var direction: Vector2 = intent.direction
 			if Time.get_ticks_msec() - int(intent.time) > INPUT_TIMEOUT_MS:
+				direction = Vector2.ZERO
+			if combat_endpoint.health.get(peer_id, 100) <= 0:
 				direction = Vector2.ZERO
 			characters[peer_id].simulate(delta, direction)
 		_snapshot_accum += delta
