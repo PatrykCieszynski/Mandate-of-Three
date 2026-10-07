@@ -8,7 +8,6 @@ class_name DungeonService
 ## v1 SLICE: solo entry via the entrance portal (the lobby that forms a multi-
 ## player group calls the SAME start_run with the group's peers — next chunk).
 ## No timer / scaling / lockout / shadow-mob authoring yet — see docs/dungeons.md.
-## Server-authoritative; common-side state with direct WorldServer access like SparringService.
 
 # group_id -> the private dungeon ServerInstance (Node) running for that group.
 static var _runs: Dictionary[int, Node] = {}
@@ -503,11 +502,6 @@ static func on_dungeon_cleared(instance: Node) -> void:
 	var label: String = dungeon_name + (" (Hard)" if hard else "")
 	for peer: int in GroupService.members_of(group_id):
 		var player: Player = instance.get_player(peer) as Player # all members are in this run
-		# Only HARD clears are ranked — the fixed hand-designed course is the fair
-		# race (Normal will go procedural later). The time stands apart from the
-		# reward lockout, so a reward-locked re-run can still set a faster record.
-		if hard and player != null:
-			LeaderboardService.record_dungeon_clear(player, dungeon_name, seconds)
 		if player != null:
 			DailyQuestService.on_dungeon_clear(player.player_resource)
 		WorldServer.curr.data_push.rpc_id(peer, &"dungeon.cleared", {
@@ -648,7 +642,6 @@ static func _elapsed_s(group_id: int) -> float:
 
 
 ## Sweep a disconnecting peer out of any dungeon lobby queue AND out of a live run
-## (dissolving the group when it empties), mirroring SparringService. Without this
 ## a mid-run crash leaves a phantom in the group/lobby and a never-freed run map.
 ## Wired from WorldServer._on_peer_disconnected.
 static func on_peer_disconnected(peer_id: int) -> void:

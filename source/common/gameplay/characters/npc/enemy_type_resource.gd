@@ -3,8 +3,6 @@ extends Resource
 ## Data-driven enemy definition. Drop one of these into a HostileNpc node's
 ## `enemy_data` slot and the NPC reads its stats / loot / AI knobs from this
 ## resource instead of inspector-tuned per-instance @exports. Mirrors how
-## ShopResource powers a shop NPC and CraftingStationResource powers
-## CraftingStation — the pattern is "one .tres = one enemy archetype, drop
 ## it into many instances."
 ##
 ## Why: balancing a tier of enemies means editing one file, not N nodes. New

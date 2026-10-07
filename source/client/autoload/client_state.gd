@@ -4,6 +4,8 @@ extends Node
 
 
 signal local_player_ready(local_player: LocalPlayer)
+## Dimension-neutral readiness; new 3D gameplay does not instantiate LocalPlayer2D.
+signal world_ready(player: Node)
 signal player_profile_requested(id: int)
 ## Same as player_profile_requested but the target is identified by PEER id (a world
 ## click) — the client doesn't carry the persistent player_id, so the server resolves
@@ -201,18 +203,6 @@ func _on_combat_reward(data: Dictionary) -> void:
 			"+%d attribute points" % int(data.get("points_gained", 0)),
 			{"sfx": UISound.LEVELUP}
 		)
-	var big: PackedStringArray = PackedStringArray()
-	var mastery: Dictionary = data.get("mastery", {})
-	if bool(mastery.get("started", false)):
-		big.append("%s Mastery begun! +1 mastery point (Character > Mastery)" % str(mastery.get("category", "")).capitalize())
-	elif bool(mastery.get("leveled_up", false)):
-		big.append("%s Mastery Lv %d! +1 mastery point" % [
-			str(mastery.get("category", "")).capitalize(),
-			int(mastery.get("level", 1)),
-		])
-	if not big.is_empty():
-		Toaster.toast_group("Mastery", big)
-
 	if lines.is_empty() and enemy_type.is_empty():
 		return  # Nothing to show.
 	# Repeated kills coalesce into one "Defeated a Goblin ×N" card; quest/basing
@@ -270,27 +260,10 @@ func _on_gather_result(data: Dictionary) -> void:
 
 	gather_succeeded.emit(data)
 
-	# The yield itself rides the icon feed; the card keeps only job XP + level-ups.
-	var title: String = "Mined"
-	var lines: PackedStringArray = PackedStringArray()
+	# Gathering only yields items; profession XP/perks have been removed.
 	var amount: int = int(data.get("amount", 0))
 	if amount > 0:
 		LootFeed.add_item(int(data.get("ore_id", 0)), amount, str(data.get("ore_name", "ore")))
-	# XP entries — primary job first (verbose), additional grants compact.
-	var grants_v: Variant = data.get("grants", [])
-	if grants_v is Array:
-		for grant: Dictionary in grants_v:
-			lines.append("+%d %s XP" % [int(grant.get("xp", 0)), str(grant.get("job", "")).capitalize()])
-	# Level-up / perk = one-off → its own card; the yield body coalesces per ore.
-	var big: PackedStringArray = PackedStringArray()
-	if data.get("leveled_up", false):
-		big.append("%s — Level %d!" % [str(data.get("job", "mining")).capitalize(), int(data.get("level", 1))])
-	if int(data.get("perk_points_gained", 0)) > 0:
-		big.append("Perk point available. Spend in Character → Jobs.")
-	if not big.is_empty():
-		Toaster.toast_group("Level Up!", big)
-
-	Toaster.toast_feed("mine:" + str(data.get("ore_name", "ore")), title, lines)
 
 
 ## Look up the MineableNode the result is about and push the new progress +

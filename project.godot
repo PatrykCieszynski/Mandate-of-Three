@@ -33,7 +33,6 @@ ClientState="*res://source/client/autoload/client_state.gd"
 Client="*res://source/client/autoload/client.tscn"
 Toaster="*res://source/client/autoload/toaster.gd"
 Announcer="*res://source/client/autoload/announcer.gd"
-MCPRuntime="*uid://bmdn775mlknqs"
 Transition="*res://source/client/autoload/transition.gd"
 LootFeed="*res://source/client/autoload/loot_feed.gd"
 
@@ -54,7 +53,7 @@ window/stretch/mode="canvas_items"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot-sqlite/plugin.cfg", "res://addons/godot_mcp/plugin.cfg", "res://addons/tinymmo/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot-sqlite/plugin.cfg", "res://addons/tinymmo/plugin.cfg")
 
 [file_customization]
 
@@ -204,7 +203,6 @@ locale/translations=PackedStringArray("res://data/translations/translations.en_U
 2d_physics/layer_2="world"
 2d_physics/layer_3="hurtbox"
 2d_physics/layer_4="pickup"
-2d_physics/layer_5="flag"
 2d_physics/layer_6="harvestable"
 2d_physics/layer_7="interactable"
 

@@ -345,10 +345,8 @@ func _view_profile(parent: Node) -> void:
 	# Stats (members is on the header bar, so it's omitted here).
 	box.add_child(_make_section_header("Stats"))
 	box.add_child(_stat_row("Kills", int(_guild.get("total_kills", 0))))
-	box.add_child(_stat_row_str("Base time", _format_duration(int(_guild.get("territory_seconds", 0)))))
 	box.add_child(_stat_row("Seasonal glory", int(_guild.get("seasonal_glory", 0))))
 	box.add_child(_stat_row("Eternal glory", int(_guild.get("eternal_glory", 0))))
-	box.add_child(_stat_row("Spar rating", int(_guild.get("spar_score", 0))))
 
 	# Trophies are read-only here — the Profile tab stays static; picking
 	# happens in Settings (single editing place, owner call).

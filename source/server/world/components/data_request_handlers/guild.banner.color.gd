@@ -45,8 +45,4 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 
 	store.add_guild_log(guild_id, "banner", player.display_name, "", {"cost": cost})
 
-	# Re-tint held flags live for everyone watching.
-	for flag: TerritoryFlag in BasingService.held_flags(world_server, guild_id):
-		flag.update_owner_banner(color_norm)
-
 	return {"error": 0, "ok": true, "treasury": guild.treasury, "banner_color": color_norm}

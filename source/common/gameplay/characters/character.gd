@@ -91,13 +91,6 @@ const BAR_COLOR_HOSTILE: Color = Color(0.86, 0.33, 0.28) # mobs / default
 ## a ClientState → LocalPlayer → Player → ClientState compile cycle.
 static var local_viewer_guild_id: int = 0
 
-## Peer ids of the local player's CURRENT spar teammates / opponents (empty when
-## not in a match). Same static-mirror pattern as local_viewer_guild_id; set by
-## LocalPlayer from the sparring.match.state push. While a match is live these
-## override guild colors on health bars — an opposing guildmate reads hostile.
-static var spar_ally_peers: Array = []
-static var spar_opponent_peers: Array = []
-
 ## Peer ids of the local player's CURRENT co-op group (empty when not grouped) —
 ## the dungeon allegiance, mirrored client-side from the group.roster push, same
 ## pattern as spar peers. Groupmates read as allies regardless of guild.

@@ -4,24 +4,11 @@ extends Resource
 ## Healing Herb, ...). A [MineableNode] scene instanced in a map points at
 ## one of these resources via its `data` export, then reads the gathering
 ## config from it. Tuning copper vein values now updates every copper vein
-## in every map at once — same pattern as [JobPerks] for jobs.
-##
-## Author one `.tres` per node type under
-## `source/common/gameplay/maps/components/mineable_nodes/`. The
-## upcoming jobs/source-slug bake tool will scan that folder, look at each
-## resource's `job_xp` dict, and auto-populate the matching JobPerks
-## `source_slugs` lists — killing the hand-maintained content drift.
+## in every map at once. Gathering currently grants items only.
 
 ## The item granted per yield (a MaterialItem; its outlet is a vendor trade or a recipe).
 @export var ore: Item
 @export var yield_amount: int = 1
-## How many job-XP grants happen on each yield. Examples:
-##   { &"mining": 10 }                          # ore vein
-##   { &"harvesting": 5, &"medicine": 5 }       # herb that teaches both
-@export var job_xp: Dictionary[StringName, int] = {&"mining": 10}
-## Minimum job level required (legacy: still gated on mining specifically
-## for ore veins). Set 0 for non-ore nodes.
-@export var required_level: int = 0
 ## Tool the player must have equipped (matched against ToolItem.tool_type).
 @export var required_tool: StringName = &"pickaxe"
 

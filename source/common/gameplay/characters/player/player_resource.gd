@@ -51,19 +51,10 @@ const HEALTH_PER_LEVEL: float = 5.0
 ## Character experience toward the next level (resets to the overflow on level-up).
 @export var experience: int
 
-## Profession skills: skill_name (&"mining", &"woodcutting", ...) -> {"level": int, "xp": int}.
-## Generalizes to any gathering/crafting profession; persisted as JSON.
+## Legacy persisted payloads retained for SQLite compatibility.
+## Jobs, mastery and their ability loadout have no active runtime.
 @export var skills: Dictionary
-
-## Weapon mastery: category (&"wand", ...) -> {"level": int, "xp": int, "spent": Dictionary}.
-## "spent" holds the bought mastery-tree node ids (node_id (String) -> true).
-## Persisted as JSON (mastery_json column) together with ability_loadout.
 @export var masteries: Dictionary
-
-## Chosen special abilities per weapon category: category (String) -> Array of
-## mastery node ids (String), in slot order. The server mounts the matching
-## abilities into the weapon's special slots (Q, then E) when a weapon of that
-## category is wielded, greedily within its weight capacity (MasteryService).
 @export var ability_loadout: Dictionary
 
 ## Quests: quest_id (int) -> {"state": StringName, "progress": Dictionary(obj_index:int -> count:int)}.
@@ -95,9 +86,7 @@ const HEALTH_PER_LEVEL: float = 5.0
 ## skin is always in here. Persisted as owned_skins_json (mirrors [member friends]).
 @export var owned_skins: PackedInt64Array
 
-## Leaderboard counters with rolling day/week buckets. Keys:
-## pvp_kills_day/week/total, pve_kills_day/week/total, lb_bucket_day_ms, lb_bucket_week_ms.
-## Owned and rolled over by LeaderboardService.
+## Legacy statistics payload; also retains general played-time accounting.
 @export var lb_stats: Dictionary
 
 ## Vanity titles ever earned by this character. Quest turn-ins can add to this
@@ -145,8 +134,6 @@ const HEALTH_PER_LEVEL: float = 5.0
 ## Fired once per level gained (see level_up). The live server Player listens and
 ## applies the per-level grants (HEALTH_PER_LEVEL) — one hook instead of touching
 ## every add_experience call site (kills, quests, dailies, /xp, redeems).
-## (Named level_gained, not leveled_up — add_skill_xp/add_mastery_xp already use
-## leveled_up as a local, and the signal would be shadowed.)
 signal level_gained
 
 ## Current Network ID
@@ -157,21 +144,11 @@ var current_peer_id: int
 ## persisted — each session starts fresh.
 var session_start_ms: int = 0
 
-## True while the player is in a sparring match. Bypasses the zone PvP check
-## in projectile/melee damage. Server-side runtime only — not persisted; if a
-## player disconnects mid-match, SparringService ends the match cleanly so
-## this never lingers across sessions.
-var in_match: bool = false
-
 var stats: Dictionary
 
 ## Live timed stat buffs ({stat, amount, expires_ms} — see BuffService). Runtime
 ## only on purpose: survives instance changes within a session, gone on logout.
 var active_buffs: Array[Dictionary] = []
-
-## Mastery passive modifiers currently applied to live stats ({stat, value}).
-## Runtime only — rebuilt by MasteryService.refresh on spawn and weapon swaps.
-var applied_mastery_passives: Array[Dictionary] = []
 
 ## Per-node gather cooldowns (node_id -> next-ready time in ms). Runtime only, not persisted.
 var gather_cooldowns: Dictionary
@@ -281,84 +258,4 @@ func add_experience(amount: int) -> Dictionary:
 		"experience": experience,
 		"levels_gained": levels_gained,
 		"points_gained": levels_gained * ATTRIBUTE_POINTS_PER_LEVEL,
-	}
-
-
-## Baseline xp needed to advance a profession skill (scales with current level).
-const SKILL_XP_BASE: int = 100
-
-
-## Returns the {"level", "xp", "perks"} entry for a skill, creating it at level 1 if
-## missing. Also backfills "perks" on entries loaded from older saves.
-func get_skill(skill_name: StringName) -> Dictionary:
-	if not skills.has(skill_name):
-		skills[skill_name] = {"level": 1, "xp": 0, "perks": {}}
-	var skill: Dictionary = skills[skill_name]
-	if not skill.has("perks"):
-		skill["perks"] = {}
-	return skill
-
-
-func skill_xp_to_next(skill_level: int) -> int:
-	return SKILL_XP_BASE * maxi(1, skill_level)
-
-
-## Adds xp to a profession skill, applying any level-ups. Returns the new
-## {"level", "xp", "leveled_up"} so callers can report progress to the client.
-func add_skill_xp(skill_name: StringName, amount: int) -> Dictionary:
-	var skill: Dictionary = get_skill(skill_name)
-	skill["xp"] = int(skill["xp"]) + amount
-	var leveled_up: bool = false
-	while int(skill["xp"]) >= skill_xp_to_next(int(skill["level"])):
-		skill["xp"] = int(skill["xp"]) - skill_xp_to_next(int(skill["level"]))
-		skill["level"] = int(skill["level"]) + 1
-		leveled_up = true
-	return {"level": int(skill["level"]), "xp": int(skill["xp"]), "leveled_up": leveled_up}
-
-
-## Baseline xp to advance a weapon-mastery level (scales linearly, like skills).
-const MASTERY_XP_BASE: int = 150
-## Max mastery level per weapon category. Combined with MasteryService
-## POINTS_PER_LEVEL (2) this sets the point budget (20). Tree content now exceeds
-## the budget on purpose — you specialize, you don't own everything (docs/mastery.md).
-const MASTERY_LEVEL_CAP: int = 10
-
-
-## Returns the {"level", "xp", "spent"} entry for a weapon category, creating
-## it at level 1 (= 1 spendable point) if missing.
-func get_mastery(category: StringName) -> Dictionary:
-	if not masteries.has(category):
-		masteries[category] = {"level": 1, "xp": 0, "spent": {}}
-	return masteries[category]
-
-
-func mastery_xp_to_next(mastery_level: int) -> int:
-	return MASTERY_XP_BASE * maxi(1, mastery_level)
-
-
-## Adds weapon-mastery xp to a category, applying level-ups (frozen at the
-## cap). Returns {"category", "level", "xp", "xp_to_next", "leveled_up",
-## "started"} so the kill-reward push can report progress to the client —
-## "started" marks the very first practice (entry creation at level 1), which
-## deserves its own toast even though no level-UP happened.
-func add_mastery_xp(category: StringName, amount: int) -> Dictionary:
-	var started: bool = not masteries.has(category)
-	var entry: Dictionary = get_mastery(category)
-	var leveled_up: bool = false
-	if amount > 0 and int(entry["level"]) < MASTERY_LEVEL_CAP:
-		entry["xp"] = int(entry["xp"]) + amount
-		while int(entry["xp"]) >= mastery_xp_to_next(int(entry["level"])):
-			entry["xp"] = int(entry["xp"]) - mastery_xp_to_next(int(entry["level"]))
-			entry["level"] = int(entry["level"]) + 1
-			leveled_up = true
-			if int(entry["level"]) >= MASTERY_LEVEL_CAP:
-				entry["xp"] = 0
-				break
-	return {
-		"category": String(category),
-		"level": int(entry["level"]),
-		"xp": int(entry["xp"]),
-		"xp_to_next": mastery_xp_to_next(int(entry["level"])),
-		"leveled_up": leveled_up,
-		"started": started,
 	}

@@ -9,12 +9,11 @@ const CHARACTER_BODY: int = 1 << 0  ## layer 1 — player/NPC navigation bodies
 const WORLD: int = 1 << 1           ## layer 2 — solid environment (walls, barriers)
 const HURTBOX: int = 1 << 2         ## layer 3 — character damage-receiving areas (attack target)
 const PICKUP: int = 1 << 3          ## layer 4 — coins / collectibles / doors (already in use here)
-const FLAG: int = 1 << 4            ## layer 5 — territory objectives (attack target)
 const HARVESTABLE: int = 1 << 5     ## layer 6 — mineable nodes (pick / sickle target)
 const INTERACTABLE: int = 1 << 6    ## layer 7 — warpers / masters / stations
 
-## A projectile / melee hitbox hits: hurtboxes (damage) + flags (capture) + world (block).
+## A projectile / melee hitbox hits: hurtboxes (damage) + world (block).
 ## Deliberately NOT character bodies — those are navigation only.
-const COMBAT_TARGET_MASK: int = WORLD | HURTBOX | FLAG
+const COMBAT_TARGET_MASK: int = WORLD | HURTBOX
 ## Pick / sickle arc additionally gathers mineables.
 const HARVEST_TARGET_MASK: int = COMBAT_TARGET_MASK | HARVESTABLE

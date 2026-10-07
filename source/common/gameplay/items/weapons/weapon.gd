@@ -18,12 +18,6 @@ var character: Character
 ## button, so the release sends even if the server's "began" hasn't echoed back.
 var _held: Dictionary[int, bool] = {}
 
-## Ability count the SCENE shipped (after _ready's duplication) — mastery
-## loadout abilities are appended after this index, so remounting can strip
-## them without touching scene defaults (the bow/hammer pattern until their
-## trees ship).
-var _base_ability_count: int = 1
-
 @onready var hand: Hand = $Hand
 @onready var weapon_sprite: Sprite2D = $WeaponSprite
 
@@ -78,7 +72,6 @@ func _ready() -> void:
 	for i: int in abilities.size():
 		if abilities[i] != null:
 			abilities[i] = _own_ability(abilities[i])
-	_base_ability_count = abilities.size()
 	# Register this weapon's animation libraries on the wielder so ability
 	# swing_animation names ("weapon/sword.swing", ...) resolve. ONE loader for
 	# every weapon — per-weapon scripts must not re-implement this. Idempotent:
@@ -115,42 +108,9 @@ func _stamp_cooldown(ability: AbilityResource) -> void:
 			character.ability_cooldowns[key] = ability.last_action_time
 
 
-## Mounts the mastery-chosen special abilities at their PICKED slot positions
-## (every machine runs this off the synced special-ability ids — see
-## EquipmentComponent). Slot i lands at abilities[_base_ability_count + i], so
-## the panel's "Slot 1 (Q) / Slot 2 (E)" labels are always truthful; an empty
-## pick leaves a null HOLE (all input/use gates skip nulls) instead of
-## shifting later picks onto the wrong key. All-empty ids just strip previous
-## loadout mounts — scene-default specials (bow/hammer until their trees
-## ship) are untouched.
-func mount_specials(ability_ids: Array[int]) -> void:
-	var ids: Array[int] = ability_ids.duplicate()
-	while not ids.is_empty() and ids[ids.size() - 1] <= 0:
-		ids.pop_back() # trailing empties: shrink the array, no pointless holes
-	abilities.resize(_base_ability_count)
-	if ids.is_empty():
-		return
-	if ContentRegistryHub.registry_of(&"abilities") == null:
-		return # index not generated yet — loadout stays inert
-	abilities.resize(_base_ability_count + ids.size())
-	for i: int in ids.size():
-		if ids[i] <= 0:
-			continue # explicit empty slot — leave the null hole
-		var ability: AbilityResource = ContentRegistryHub.load_by_id(&"abilities", ids[i]) as AbilityResource
-		if ability != null:
-			# Same rule as _ready: own the instance outright, but keep its cooldown.
-			abilities[_base_ability_count + i] = _own_ability(ability)
-
-
-## Install a runtime-built ability on the SPECIAL (Q) slot, leaving the PRIMARY
-## (left-click) slot empty — used by held non-weapon items (a consumable's "drink") so
-## the action is a DELIBERATE Q press / tile tap, never the spammy main attack (stray
-## left-clicks would otherwise waste potions). NOT duplicated (the caller made a fresh
-## per-mount instance); the [null, ability] shape + _base_ability_count = 2 mean a later
-## mount_specials() can't resize it away (the generic hand ships with zero abilities).
+## Consumables mount their use action directly on the generic held item.
 func set_special_ability(ability: AbilityResource) -> void:
 	abilities = [null, ability]
-	_base_ability_count = 2
 
 
 ## The just-fired charged shot consumed the armed override named [param override_name]:

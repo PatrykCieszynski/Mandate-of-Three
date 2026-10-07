@@ -36,6 +36,11 @@ static func ensure_schema(db: SQLite) -> void:
 	if version < 9:
 		_migration_v9(db)
 		_set_schema_version(db, 9)
+	if version < 10:
+		if ItemStoreSqlite.ensure_schema(db):
+			_set_schema_version(db, 10)
+		else:
+			push_error("Could not migrate ItemInstance schema to v10.")
 
 
 static func _migration_v1(db: SQLite) -> void:

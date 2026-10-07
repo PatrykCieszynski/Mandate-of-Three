@@ -11,9 +11,6 @@ region = Rect2(0, 32, 32, 32)
 [resource]
 script = ExtResource("1_script")
 ore = ExtResource("2_cloth")
-job_xp = Dictionary[StringName, int]({
-&"harvesting": 8
-})
 required_tool = &"sickle"
 extraction_hp = 2
 charge_regen_seconds = 10.0

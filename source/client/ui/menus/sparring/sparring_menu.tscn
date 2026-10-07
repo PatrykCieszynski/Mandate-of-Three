@@ -1,9 +1,0 @@
-[gd_scene load_steps=2 format=4]
-
-[ext_resource type="Script" path="res://source/client/ui/menus/sparring/sparring_menu.gd" id="1_sparm"]
-
-[node name="SparringMenu" type="Control"]
-anchor_right = 1.0
-anchor_bottom = 1.0
-mouse_filter = 2
-script = ExtResource("1_sparm")

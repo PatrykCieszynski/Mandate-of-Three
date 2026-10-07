@@ -8,7 +8,6 @@ extends Area2D
 ##  • SIMPLE station — just this node, configured in the inspector (menu_name +
 ##    menu_arg). No script needed (DungeonExit, a quest board, …).
 ##  • STATEFUL station — a node with its own server-side data (DungeonMaster,
-##    DuelMaster) EXTENDS this, sets menu_name/menu_arg in _ready, calls
 ##    super._ready(), and keeps its fields. The click is inherited.
 ##
 ## The server never clicks, so it just disables input; the client wires the handler.

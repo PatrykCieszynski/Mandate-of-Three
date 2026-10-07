@@ -3,8 +3,6 @@
 [ext_resource type="Script" uid="uid://4k5246c3w18u" path="res://source/client/ui/menus/character/character_menu.gd" id="1_main"]
 [ext_resource type="Script" uid="uid://dm4es1smo6nxw" path="res://source/client/ui/menus/inventory/stats_panel.gd" id="3_stats"]
 [ext_resource type="Script" uid="uid://blh63bbqvk7pv" path="res://source/client/ui/menus/inventory/attributes_panel.gd" id="4_attr"]
-[ext_resource type="Script" uid="uid://d1q3d0rf4tsle" path="res://source/client/ui/menus/character/jobs_panel.gd" id="5_jobs"]
-[ext_resource type="Script" path="res://source/client/ui/menus/character/mastery_panel.gd" id="7_mastery"]
 
 [sub_resource type="StyleBoxEmpty" id="SBE_card"]
 
@@ -79,22 +77,6 @@ theme_type_variation = &"HeaderTab"
 toggle_mode = true
 button_pressed = true
 text = "Stats"
-
-[node name="JobsTab" type="Button" parent="Margin/Card/Pad/Root/HeaderBar/TabBar" unique_id=1717343591]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 0)
-layout_mode = 2
-theme_type_variation = &"HeaderTab"
-toggle_mode = true
-text = "Jobs"
-
-[node name="MasteryTab" type="Button" parent="Margin/Card/Pad/Root/HeaderBar/TabBar" unique_id=1999000101]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 0)
-layout_mode = 2
-theme_type_variation = &"HeaderTab"
-toggle_mode = true
-text = "Mastery"
 
 [node name="RightBox" type="HBoxContainer" parent="Margin/Card/Pad/Root/HeaderBar" unique_id=1364567951]
 layout_mode = 2
@@ -235,20 +217,3 @@ text = "Defense 0"
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
 text = "+"
-
-[node name="JobsContent" type="VBoxContainer" parent="Margin/Card/Pad/Root/Content" unique_id=1596733831]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-script = ExtResource("5_jobs")
-
-[node name="SkillList" type="VBoxContainer" parent="Margin/Card/Pad/Root/Content/JobsContent" unique_id=1924344970]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="MasteryContent" type="VBoxContainer" parent="Margin/Card/Pad/Root/Content" unique_id=1999000102]
-unique_name_in_owner = true
-visible = false
-layout_mode = 2
-script = ExtResource("7_mastery")

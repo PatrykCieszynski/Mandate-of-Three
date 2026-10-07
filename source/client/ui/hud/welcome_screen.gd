@@ -5,11 +5,11 @@ extends Control
 ## itself on dismiss. The same guidance lives in the Help menu for later. Edit WELCOME_TEXT to retune.
 
 
-const WELCOME_TEXT: String = """This is a hard, sandbox MMORPG. You are free to do whatever you want, and you will find most of your footing on your own. That is by design.
+const WELCOME_TEXT: String = """Welcome to Mandate of Three.
 
-If you want somewhere to start: step out of this cell and talk to the Hall Keeper. They can give you your first quest.
+This is a technical test build with a shared map. Move around and check multiplayer connectivity.
 
-You can reopen this kind of guidance any time from the Help menu. Good luck."""
+The 3D world and gameplay systems are under development."""
 
 
 func _ready() -> void:

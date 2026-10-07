@@ -39,7 +39,6 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 		"spar_score": guild.spar_score,
 		"treasury": guild.treasury,
 		"hall_upgrades": _build_hall_upgrades(guild),
-		"territories": _build_territories(world_server, guild),
 		"owned_logos": Array(guild.owned_logos),
 		"logo_cost": GuildUpgrades.LOGO_COST,
 		"banner_color": guild.banner_color,
@@ -89,12 +88,3 @@ func _string_ids(ids: Array[StringName]) -> Array:
 
 ## The guild's current holdings: one entry per owned flag with the live guard
 ## count, so the Hall can show what the Defender upgrades are actually doing.
-func _build_territories(world_server: WorldServer, guild: Guild) -> Array:
-	var out: Array = []
-	for flag: TerritoryFlag in BasingService.held_flags(world_server, guild.guild_id):
-		out.append({
-			"name": flag.territory_name,
-			"defenders": BasingService.alive_defender_count(flag),
-			"defender_cap": GuildUpgrades.defender_count(guild) if flag.defenders_enabled else 0,
-		})
-	return out

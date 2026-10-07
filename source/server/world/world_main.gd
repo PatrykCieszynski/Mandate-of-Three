@@ -13,7 +13,7 @@ func _ready() -> void:
 	# Albion Online - 2 ticks per second (to verify).
 	# Valorant (5v5 FPS game) - 128 ticks per second.
 	# I believe it depends of your game and architecture, it's a large topic.
-	Engine.set_physics_ticks_per_second(10) # 60 by default
+	Engine.set_physics_ticks_per_second(60) # Authoritative CharacterBody3D physics; snapshots remain 20 Hz.
 	
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_title("World Server")

@@ -18,7 +18,6 @@ const MUSIC_CROSSFADE_S: float = 1.5
 const MUSIC_BOSS_FIGHT: String = "res://assets/audio/music/middle_boss.ogg"
 const MUSIC_BOSS_VICTORY: String = "res://assets/audio/music/boss_clear.ogg"
 
-@onready var world_clock: WorldClock = $WorldClock
 @onready var audio_manager: AudioManager = $AudioManager
 @onready var instance_manager: InstanceManagerClient = $InstanceManager
 
@@ -27,9 +26,6 @@ var _area_music: AudioStream
 ## Bumped on any music-context change; cancels a pending victory-sting auto-resume so a
 ## map change or a new fight during the sting isn't clobbered when it finishes.
 var _music_gen: int = 0
-## Screen-space ambient weather overlay (leaves/rain/snow), created on first connect and
-## driven by Map.weather on each area change. Client-only.
-var _weather_layer: WeatherLayer
 
 
 func _enter_tree() -> void:
@@ -77,11 +73,6 @@ func _on_connection_succeeded() -> void:
 	# Boss-event music cues (world boss, dungeon boss): fight / victory / end.
 	# subscribe() dedupes, so re-running it on each reconnect is safe.
 	subscribe(&"boss.music", _on_boss_music)
-	# Ambient weather overlay — created once, driven by Map.weather on each area change.
-	if _weather_layer == null:
-		_weather_layer = WeatherLayer.new()
-		add_child(_weather_layer)
-
 	if OS.has_feature("editor"):
 		DisplayServer.window_set_title("Client - %d" % peer_id)
 
@@ -97,8 +88,6 @@ func _on_instance_changed(instance: InstanceClient) -> void:
 	if track != null:
 		_area_music = track
 		audio_manager.play_music_stream(track, 0.0, 0.0, MUSIC_CROSSFADE_S)
-	if _weather_layer != null:
-		_weather_layer.apply(instance.instance_map.weather)
 
 
 ## Boss-event music cue (server-driven). "fight" overrides the area track with combat

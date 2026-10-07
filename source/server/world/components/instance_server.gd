@@ -271,15 +271,6 @@ func instantiate_player(peer_id: int) -> Player:
 		# change — the resource outlives the per-instance Player node).
 		player_resource.level_gained.connect(new_player._on_level_gained)
 
-		# Mastery: mount the chosen special + the wielded category's passive
-		# nodes, and keep both in sync with later weapon swaps.
-		MasteryService.refresh(new_player)
-		new_player.equipment_component.equipment_changed.connect(
-			func(slot: StringName, _item_id: int) -> void:
-				if slot == &"weapon":
-					MasteryService.refresh(new_player)
-		)
-
 		# Set health to max health (heal player to full HP)
 		new_player.stats_component.set_stat(
 			Stat.HEALTH,

@@ -159,36 +159,6 @@ func _build_left() -> void:
 		_deposit(int(amount_field.value)))
 	dep_row.add_child(deposit)
 
-	# Held territories with live guard counts — what the Defender upgrades are
-	# actually doing right now. Reinforcing happens AT the flag (click it).
-	_left_host.add_child(HSeparator.new())
-	_left_host.add_child(_section_header("Territories"))
-	var territories: Array = _guild.get("territories", [])
-	if territories.is_empty():
-		var none: Label = Label.new()
-		none.text = "No territory held."
-		none.add_theme_color_override(&"font_color", COLOR_MUTED)
-		none.add_theme_font_size_override(&"font_size", 12)
-		_left_host.add_child(none)
-	else:
-		for territory: Dictionary in territories:
-			var line: Label = Label.new()
-			var text: String = str(territory.get("name", "?"))
-			var cap: int = int(territory.get("defender_cap", 0))
-			if cap > 0:
-				text += "   ·   %d / %d guards" % [int(territory.get("defenders", 0)), cap]
-			line.text = text
-			line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			line.add_theme_font_size_override(&"font_size", 12)
-			_left_host.add_child(line)
-		var hint: Label = Label.new()
-		hint.text = "Click a flag in the world to inspect or reinforce it."
-		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hint.add_theme_color_override(&"font_color", COLOR_MUTED)
-		hint.add_theme_font_size_override(&"font_size", 11)
-		_left_host.add_child(hint)
-
-
 # ---------------------------------------------------------------------------
 # Upgrades section
 # ---------------------------------------------------------------------------
@@ -279,7 +249,7 @@ func _build_cosmetics(host: VBoxContainer) -> void:
 	host.add_child(_section_header("Banner color"))
 	var color_cost: int = int(_guild.get("banner_color_cost", 100))
 	var color_blurb: Label = Label.new()
-	color_blurb.text = "Tints your territory banners and flag nameplates for everyone. %d funds per change." % color_cost
+	color_blurb.text = "Sets the guild banner color. %d funds per change." % color_cost
 	color_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	color_blurb.add_theme_color_override(&"font_color", COLOR_MUTED)
 	color_blurb.add_theme_font_size_override(&"font_size", 12)

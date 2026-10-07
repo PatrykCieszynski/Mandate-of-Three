@@ -3,19 +3,14 @@ extends MenuShell
 ## menu overlay, and pointed to by the first-run welcome modal. Edit HELP_TEXT to change the copy.
 
 
-const HELP_TEXT: String = """[b]The short version[/b]
-A hard, sandbox MMORPG. No forced path and no hand-holding. Explore, fight, build a guild, take territory. Finding your own footing is the point.
+const HELP_TEXT: String = """[b]Mandate of Three — technical spike[/b]
 
-[b]Where to start[/b]
-Talk to NPCs. The Hall Keeper near your starting cell has a first quest. NPCs offering quests are the main thread to pull when you want a direction.
+This build contains a shared test map for checking movement, chat and multiplayer connectivity.
 
-[b]Guilds and territory[/b]
-Join or found a guild, then take a territory by capturing its banner, and earn Glory for as long as your guild holds it. See the Guild and Leaderboard menus.
+The 3D world and the new combat/item systems are under development.
 
-[b]Community and feedback[/b]
-This is an alpha, so expect rough edges, and patch notes land in your Mailbox.
-Found a bug or have an idea? Type /feedback in chat to send it straight to us.
-Come say hi: join our [url=https://discord.gg/QE5JwpFzgK][color=#6cc5ff]Discord[/color][/url] or visit the [url=https://ekoniaonline.com][color=#6cc5ff]website[/color][/url]."""
+[b]Controls[/b]
+Move with WASD. Use the menu for settings and character stats."""
 
 
 func _ready() -> void:
