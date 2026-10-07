@@ -91,8 +91,9 @@ Tworzy lokalne konto gościa i postać; wymaga spokojnej normalnej instancji Spi
 ```
 
 Render OpenGL rzeczywistej sesji został wygenerowany i obejrzany. Logi i obrazy
-są w ignorowanym `.godot/verification`. Ręczny test etapu przez użytkownika
-pozostaje do wykonania. Techniczny respawn gracza nie ma osobnego testu
+są w ignorowanym `.godot/verification`. Użytkownik potwierdził ogólne działanie
+pionu w ręcznym teście (2026-10-07); nie jest to osobne potwierdzenie każdego
+przypadku brzegowego pickupu. Techniczny respawn gracza nie ma osobnego testu
 integracyjnego. Wcześniejsze komunikaty silnika o certyfikatach i zasobach przy
 zamknięciu nadal występują.
 

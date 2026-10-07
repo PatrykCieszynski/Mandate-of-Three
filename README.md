@@ -1,135 +1,82 @@
-# Mandate of Three — Tiny MMO fork
+# Mandate of Three
 
-Fork infrastruktury Godot Tiny MMO/Ekonia pod grę multiplayer 3D inspirowaną Metinem 2.
-Repo jest w trakcie reworku; aktualny świat to minimalny Spike 3D z serwerowym ruchem i kolizjami.
+Multiplayer 3D inspirowany Metinem 2, budowany w Godot na infrastrukturze
+[Godot Tiny MMO](https://github.com/SlayHorizon/godot-tiny-mmo).
+Repo zawiera działający techniczny vertical slice; to jeszcze nie alpha gry.
 
-- [Plan technicznego spike'a](docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf)
-- [Stan czyszczenia i pozostałe zależności](docs/repository-cleanup.md)
-- [Analiza Open-MT2 i kierunek reworku gameplayu](docs/open-mt2-analysis.md)
-- [Spike 3D: zakres, architektura i testy](docs/spike3d.md)
-- [Egzemplarze przedmiotów: UID, wyposażenie i trwały zapis](docs/item-instances.md)
-- [Vertical slice PvE: mob, walka, ground loot i pickup](docs/pve-ground-loot.md)
-- [Przyjęty kierunek i priorytety projektu](docs/project-direction.md)
+## Aktualny zakres
 
-Poniżej pozostaje README upstreamu jako referencja infrastruktury i lokalnego uruchamiania.
-Lista funkcji i map upstreamu nie opisuje aktualnego zakresu Mandate of Three.
+- Gateway, master i world: logowanie, sesje, tworzenie postaci i wejście do instancji.
+- Spike 3D: serwerowy ruch i fizyka, kolizje, interpolacja zdalnych postaci.
+- ItemDefinition i trwałe ItemInstance: UID, właściciel, bonusy, equip konkretnego
+  egzemplarza oraz transakcyjny zapis SQLite.
+- Jeden mob z serwerowym AI i walką, śmierć, loot na ziemi, rezerwacja i pickup.
+  Test dwóch klientów walczących o ten sam łup.
 
----
+Sterowanie: **WASD** — ruch, **I** — ekwipunek, **Spacja** — atak,
+**E** — podnieś najbliższy łup.
 
-> [!NOTE]
-> **Documentation & Guides**: [**slayhorizon.github.io/godot-tiny-mmo/**](https://slayhorizon.github.io/godot-tiny-mmo/)  
-> **Latest research note**: [**Byte-Level Networking Protocol for MMO Scalability**](https://slayhorizon.github.io/godot-tiny-mmo/#/pages/notes/next_level)
+AI ma prosty pościg bez nawigacji wokół przeszkód. Niepodniesiony loot oraz HP
+i pozycja są stanem runtime; przedmiot po pickupie jest trwały. AOI, local
+prediction, docelowe modele i animacje pozostają do kolejnych etapów.
+Starsze moduły upstreamu w repo nie oznaczają funkcji dostępnych w naszym 3D.
 
-[![Godot Engine](https://img.shields.io/badge/Godot-4.6+-blue?logo=godot-engine)](https://godotengine.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Documentation](https://img.shields.io/badge/docs-website-blue.svg)](https://slayhorizon.github.io/godot-tiny-mmo/)
+## Lokalne uruchomienie
 
-# Godot Tiny MMO
+Zweryfikowany silnik: **Godot 4.7.2**, lokalnie w `.godot/`.
+Godot i binaria dodatku godot-sqlite nie są wersjonowane; nowy checkout wymaga
+ich lokalnej instalacji. Folder `.godot` zawiera lokalny cache, silnik i wyniki testów.
 
-**Experimental open-source MMORPG framework** built with **Godot 4**.  
-Inspired by proven MMO systems, this project pushes the boundaries of what can be achieved with Godot in large-scale multiplayer.  
-It explores scalable multiplayer architecture and efficient byte-packed networking, while remaining clear and approachable as a learning project.
+Uruchom trzy role w osobnych terminalach PowerShell, z katalogu projektu:
 
-- **Cross-platform**: browser + desktop + mobile
-- **Unified codebase**: Client & multiple servers in one repo
-  - Faster iteration, develop in one place, test in one click
-  - Separate export presets for clean client/server builds 
-- **"Custom netcode"** but stay simple  
-  - No reliance on Godot’s `MultiplayerSynchronizer/Spawner`
-  - ID-based, byte-packed protocol (PackedByteArray instead of string-based messages) for efficient replication
-  - Built to support interpolation, multi-map instances, and seamless transitions
-- **True MMO-style architecture**
-  - **Gateway server**: authentication & routing
-  - **Master server**: orchestrator, account management & bridge between gateways and world servers
-  - **World server**: host multiple concurrent maps and instances; the place where gameplay actually happens
+```powershell
+& .\.godot\Godot_v4.7.2-stable_win64_console.exe --headless --path . --mode=master-server
+& .\.godot\Godot_v4.7.2-stable_win64_console.exe --headless --path . --mode=gateway-server
+& .\.godot\Godot_v4.7.2-stable_win64_console.exe --headless --path . --mode=world-server
+```
 
-<img width="1618" height="946" alt="image" src="https://github.com/user-attachments/assets/105805dd-b356-4a3a-9576-c3b0f2e2ea2a" />
+Następnie uruchom klienta, a do testu multiplayer dwa klienty:
 
-<details>
-<summary>See more screenshots:</summary>
-   
-![architecture-diagram](https://github.com/user-attachments/assets/78b1cce2-b070-4544-8ecd-59784743c7a0)
+```powershell
+& .\.godot\Godot_v4.7.2-stable_win64.exe --path . --mode=client
+```
 
-<img width="1132" height="830" alt="image" src="https://github.com/user-attachments/assets/bfa43924-529b-4f66-99f8-88142d7a7c53" />
+Można też użyć Godot **Debug → Customize Run Instances** z osobnymi feature tags
+`master-server`, `gateway-server`, `world-server` i `client`. Argument `--mode`
+podawaj przed separatorem `--`. Domyślne konfiguracje są w `data/config/`.
+Konta i bazy świata są lokalnymi danymi runtime wykluczonymi z Git.
 
-</details>
+## Testy i workflow
 
----
+```powershell
+& .\tests\run-items.ps1
+& .\tests\run-spike3d.ps1
+& .\tests\run-pve.ps1
+```
 
-## Features
+Testy używają osobnych baz i portów. Pełne logowanie/relog przez zwykłe serwery
+opisują dokumenty itemów i PvE; te scenariusze tworzą lokalne konta testowe.
+Nowe zmiany robimy na branchach `codex/<temat>`, sprawdzamy i mergujemy lokalnie
+z `--no-ff`. Zasady: [AGENTS.md](AGENTS.md).
 
-<details>
-<summary>See current and planned features:</summary>
+## Dokumentacja
 
-- [X] **Client-Server connection** through `WebSocketMultiplayerPeer`
-- [x] **Playable on web browser and desktop**
-- [x] **Network architecture** (see diagram below)
-- [X] **Authentication system** through gateway server with Login UI
-- [x] **Account Creation** for permanent player accounts
-- [x] **Server Selection UI** to let the player choose between different servers
-- [x] **SQLite persistence** (players, guilds, chat)
-- [x] **Guest Login** option for quick access
-- [x] **Game version check** to ensure client compatibility
+- [Kierunek i priorytety projektu](docs/project-direction.md)
+- [Spike 3D i transport ruchu](docs/spike3d.md)
+- [Egzemplarze przedmiotów i trwały zapis](docs/item-instances.md)
+- [PvE, ground loot i pickup](docs/pve-ground-loot.md)
+- [Cleanup i pozostałe zależności](docs/repository-cleanup.md)
+- [Analiza Open-MT2 jako referencji](docs/open-mt2-analysis.md)
+- [Pierwotny plan spike'a](docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf)
 
-- [x] **Character Creation**
-- [x] **Basic RPG class system** with three initial classes: Knight, Rogue, Wizard
-- [x] **Weapons** at least one usable weapon per class
-- [x] **Basic combat system**
-- [x] **Friend list**
-- [x] **Guild**
+## Upstream i credits
 
-- [X] **Entity synchronization** for players within the same instance
-- [ ] **Entity interpolation** to handle rubber banding
-- [x] **Instance-based chat** for localized communication
-- [X] **Instance-based maps** with traveling between different map instances
-   - [x] **Three different maps:** Overworld, Dungeon Entrance, Dungeon
-   - [ ] **Private instances** for solo players or small groups
-- [ ] **Server-side anti-cheat** (basic validation for speed hacks, teleport hacks, etc.)
-- [x] **Server-side NPCs** (AI logic processed on the server)
+Fork zachowuje infrastrukturę Godot Tiny MMO autorstwa **slayhorizon**:
+[repozytorium upstream](https://github.com/SlayHorizon/godot-tiny-mmo) i
+[dokumentację infrastruktury](https://slayhorizon.github.io/godot-tiny-mmo/).
+Upstreamowe mapy były autorstwa **higaslk**, a część pozostałych assetów pochodzi
+z prac **Anokolisa / Dungeon Crawler Pixel Art Asset Pack**. Podziękowania upstreamu
+obejmują również Jackiefrost, d-Cadrius i pozostałych współtwórców.
 
-- [x] **Interest management** (AOI filtering using grid on large maps)
-- [x] **Web-based admin dashboard** (monitor servers, instances, and connections)
-
-</details>
-
----
-
-## Getting Started
-
-To run the project, follow these steps:
-
-1. Open the project in **Godot 4.6**.
-2. Go to Debug tab, select **"Customizable Run Instance..."**.
-3. Enable **Multiple Instances** and set the count to **4 or more**.
-4. Under **Feature Tags**, ensure you have:
-   - Exactly **one** "gateway-server" tag.
-   - Exactly **one** "master-server" tag.
-   - Exactly **one** "world-server" tag.
-   - At least **one or more** "client" tags.
-5. (Optional) Under **Launch Arguments**:
-   - For servers, add **--headless** to prevent empty windows.
-   - For any, add **--config=config_file_path.cfg** to use non-default config path.
-6. Run the project (Press F5).
-
-Setup example 
-(More details in the wiki [How to use "Customize Run Instances..."](https://slayhorizon.github.io/godot-tiny-mmo/#/pages/customize_run_instances):
-<img width="1580" alt="debug-screenshot" src="https://github.com/user-attachments/assets/cff4dd67-00f2-4dda-986f-7f0bec0a695e">
-
----
-
-## Contributing
-
-Feel free to fork the repository and submit a pull request if you have ideas or improvements!  
-You can also open an [**Issue**](https://github.com/SlayHorizon/godot-tiny-mmo/issues) to discuss bugs or feature requests.
-
----
-
-## Credits
-
-Thanks to everyone who made this project possible:
-- **Maps** designed by [@higaslk](https://github.com/higaslk)
-- Valuable help and feedback: [@Jackiefrost](https://github.com/Jackietkfrost), [@d-Cadrius](https://github.com/d-Cadrius) and multiple anonymous contributors
-- Also [@Anokolisa](https://anokolisa.itch.io/dungeon-crawler-pixel-art-asset-pack) for allowing us to use its assets for this open source project!
-
-## License
-Source code under the [MIT License](https://github.com/SlayHorizon/godot-tiny-mmo/blob/main/LICENSE).
+Open-MT2 jest referencją zachowania Metina, bez importu kodu, assetów ani runtime.
+Licencja kodu upstreamu: [MIT](LICENSE), z zachowanym notice praw autorskich.
