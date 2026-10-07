@@ -79,13 +79,33 @@ func run() -> void:
 	combat.request_pickup.rpc_id(1, uid)
 	while world.inventory_endpoint.state.items.size() == 2:
 		await get_tree().process_frame
-	var persisted: Dictionary = world.inventory_endpoint.state.duplicate(true)
+	var picked: Dictionary = {}
 	var found: bool = false
-	for item: Dictionary in persisted.items:
-		found = found or item.uid == uid
+	for item: Dictionary in world.inventory_endpoint.state.items:
+		if item.uid == uid:
+			found = true
+			picked = item
 	if not found:
 		fail("ground UID not persisted")
 		return
+	var inventory: SpikeInventory3D = world.inventory_endpoint
+	var comparison: Dictionary = inventory.weapon_comparison(picked)
+	if comparison.attack != 10 + int(picked.stats.attack) or comparison.delta != comparison.attack - 27:
+		fail("picked item comparison")
+		return
+	if CmdlineUtils.get_parsed_args().has("preview"):
+		inventory._toggle_panel(true)
+		await capture("pve-item-comparison-preview.png")
+		inventory._toggle_panel(false)
+	await action("equip", picked)
+	if inventory.state.equipment.weapon != uid or inventory.state.stats.attack != comparison.attack:
+		fail("picked item exact equip and stats")
+		return
+	if CmdlineUtils.get_parsed_args().has("preview"):
+		inventory._toggle_panel(true)
+		await capture("pve-item-equipped-preview.png")
+		inventory._toggle_panel(false)
+	var persisted: Dictionary = inventory.state.duplicate(true)
 	Client.close_connection()
 	Client.instance_manager.teardown()
 	world = null
@@ -100,6 +120,6 @@ func run() -> void:
 	if world.inventory_endpoint.state != persisted:
 		fail("picked item/equip changed after relog")
 		return
-	print("PVE_SESSION_OK: gateway/master/world, combat, ground item, pickup, exact UID after relog")
+	print("PVE_SESSION_OK: gateway/master/world, combat, ground item, pickup, compare, equip, exact UID after relog")
 	Client.close_connection()
 	get_tree().quit()

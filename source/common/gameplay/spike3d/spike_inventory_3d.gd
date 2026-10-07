@@ -12,6 +12,8 @@ var _summary: Label
 var _message: Label
 var _rows: VBoxContainer
 var _pending: bool = false
+var _new_item_uid: String = ""
+var _pickup_notice: String = ""
 
 func _ready() -> void:
 	_world = get_parent()
@@ -79,6 +81,13 @@ func _send_state(peer_id: int, error: String = "") -> void:
 func receive_inventory(snapshot: Dictionary) -> void:
 	if GameMode.is_world_server():
 		return
+	if state.get("ok", false) and snapshot.get("ok", false):
+		var known: Dictionary = {}
+		for item: Dictionary in state.items: known[str(item.uid)] = true
+		for item: Dictionary in snapshot.items:
+			if not known.has(str(item.uid)):
+				_new_item_uid = str(item.uid)
+				_pickup_notice = "Podniesiono: %s · atak broni %d. Wybierz Załóż, aby zmienić broń." % [item.item_name, int(item.stats.get("attack", 0))]
 	state = snapshot.duplicate(true)
 	_pending = false
 	_render_items()
@@ -164,28 +173,62 @@ func _render_items() -> void:
 	var bag_count: int = 0
 	for item: Dictionary in state.items:
 		if item.location == "bag": bag_count += 1
-	_summary.text = "Atak: %d · Torba: %d / 24" % [int(state.stats.get("attack", 10)), bag_count]
-	_message.text = _error_message(str(state.get("error", "")))
+	var weapon_name: String = "Brak broni"
 	for item: Dictionary in state.items:
+		if str(item.uid) == str(state.equipment.get("weapon", "")):
+			weapon_name = str(item.item_name)
+	_summary.text = "Atak postaci: %d · Torba: %d / 24\nBroń: %s" % [int(state.stats.get("attack", 10)), bag_count, weapon_name]
+	var error: String = str(state.get("error", ""))
+	_message.text = _error_message(error) if error != "" or _pickup_notice == "" else _pickup_notice
+	var display_items: Array = state.items.duplicate()
+	display_items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a.location != b.location: return a.location == "equipment"
+		if (str(a.uid) == _new_item_uid) != (str(b.uid) == _new_item_uid): return str(a.uid) == _new_item_uid
+		if a.stats.get("attack", 0) != b.stats.get("attack", 0): return a.stats.get("attack", 0) > b.stats.get("attack", 0)
+		return int(a.bag_position) < int(b.bag_position))
+	for item: Dictionary in display_items:
 		var card := VBoxContainer.new()
+		card.name = "Item_" + str(item.uid)
 		_rows.add_child(card)
 		var title := Label.new()
 		title.add_theme_font_size_override("font_size", 16)
 		var equipped: bool = item.location == "equipment"
-		title.text = "%s +%d%s" % [item.item_name, int(item.upgrade_level), " · założony" if equipped else ""]
+		title.text = "%s +%d%s%s" % [item.item_name, int(item.upgrade_level), " · założony" if equipped else "", " · nowy" if str(item.uid) == _new_item_uid else ""]
+		title.tooltip_text = "Egzemplarz: " + str(item.uid)
 		card.add_child(title)
 		var description := Label.new()
 		description.add_theme_font_size_override("font_size", 14)
 		var bonus: float = 0
 		for affix: Dictionary in item.affixes:
 			if affix.stat == "attack": bonus += float(affix.value)
-		description.text = "Atak broni: %d · bonus +%d\nEgzemplarz: %s" % [int(item.stats.get("attack", 0)), int(bonus), str(item.uid).left(8)]
+		description.text = "Atak broni: %d · bonus ataku +%d" % [int(item.stats.get("attack", 0)), int(bonus)]
 		card.add_child(description)
+		if not equipped:
+			var comparison: Dictionary = weapon_comparison(item)
+			var preview := Label.new()
+			preview.name = "Comparison"
+			preview.add_theme_font_size_override("font_size", 14)
+			var difference: String = "bez zmiany" if comparison.delta == 0 else "%+d" % int(comparison.delta)
+			preview.text = "Po założeniu: %d ataku (%s)" % [int(comparison.attack), difference]
+			preview.modulate = Color("8ce5a3") if comparison.delta > 0 else (Color("f1a3a3") if comparison.delta < 0 else Color("cccccc"))
+			card.add_child(preview)
 		var button := Button.new()
 		button.text = "Zdejmij" if equipped else "Załóż"
 		button.disabled = _pending
 		button.pressed.connect(_act.bind("unequip" if equipped else "equip", str(item.uid), int(item.revision)))
 		card.add_child(button)
+
+func weapon_comparison(item: Dictionary) -> Dictionary:
+	# Presentation uses server-calculated instance stats. Equip and damage remain
+	# authoritative; this preview never changes or sends stats back to the server.
+	var current_attack: int = int(state.get("stats", {}).get("attack", 10))
+	var previous_attack: int = 0
+	var equipped_uid: String = str(state.get("equipment", {}).get("weapon", ""))
+	for equipped: Dictionary in state.get("items", []):
+		if str(equipped.uid) == equipped_uid:
+			previous_attack = int(equipped.stats.get("attack", 0))
+	var attack: int = current_attack - previous_attack + int(item.stats.get("attack", 0))
+	return {"attack": attack, "delta": attack - current_attack}
 
 func _act(action: String, uid: String, revision: int) -> void:
 	if _pending:
@@ -196,7 +239,7 @@ func _act(action: String, uid: String, revision: int) -> void:
 
 func _error_message(reason: String) -> String:
 	match reason:
-		"": return "Osobne UID i bonusy każdego egzemplarza."
+		"": return "Porównaj broń i wybierz egzemplarz do założenia."
 		"stale": return "Stan przedmiotu się zmienił. Wybierz go ponownie."
 		"owner": return "Ten przedmiot nie należy do tej postaci."
 		"too_fast": return "Odczekaj chwilę przed kolejną zmianą."

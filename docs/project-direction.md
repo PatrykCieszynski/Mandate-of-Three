@@ -33,3 +33,9 @@ trzyciosowe combo z odrzutem finału, kilka Wild Dogów, nawigację mobów,
 reakcję na trafienie oraz śmierć i respawn gracza. Zaznaczenie celu jest pomocą
 dla autoataku i przyszłych skilli; podstawowy atak nie wymaga zaznaczenia.
 Wdrożenie i granice prototypu opisuje [Combat Feel Pass](combat-feel.md).
+
+Po ręcznym potwierdzeniu Combat Feel Pass użytkownik zaakceptował pierwszy
+[Item Progression Slice](item-progression.md): porównanie znalezionej broni,
+equip i odczuwalna zmiana serwerowych obrażeń, z trwałością po relogu.
+Balans mobów i parametrów walki zostawiamy na później. Nie rozszerzamy tego
+etapu o upgrade, crafting ani ogólny framework progression.

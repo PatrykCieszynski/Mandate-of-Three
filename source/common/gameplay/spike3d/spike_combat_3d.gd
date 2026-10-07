@@ -232,6 +232,9 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 	if body.position.distance_to(drop.position) > PICKUP_REACH or not _visible_between(body.position, drop.position):
 		return {"ok": false, "error": "distance"}
 	var result: Dictionary = _store().claim_ground_item(owner_id, uid, int(drop.bonus))
+	if result.ok:
+		result["item_name"] = ItemDefinitions.IRON_SWORD.item_name
+		result["weapon_attack"] = int(ItemDefinitions.IRON_SWORD.base_stats[&"attack"]) + int(drop.bonus)
 	if result.ok or result.get("error", "") == "claimed": ground.erase(uid)
 	return result
 
@@ -242,7 +245,7 @@ func _reply(peer_id: int, result: Dictionary) -> void:
 func receive_feedback(result: Dictionary) -> void:
 	if GameMode.is_world_server(): return
 	match str(result.get("error", "")):
-		"": _notice = "Podniesiono żelazny miecz."
+		"": _notice = "Podniesiono: %s · atak %d · I: porównaj" % [result.get("item_name", "Żelazny miecz"), int(result.get("weapon_attack", 0))]
 		"reserved": _notice = "Łup jest jeszcze zarezerwowany dla innego gracza."
 		"distance": _notice = "Podejdź bliżej łupu."
 		"bag_full": _notice = "Torba jest pełna. Łup pozostaje na ziemi."
@@ -350,6 +353,8 @@ func _send_snapshot() -> void:
 		for uid: String in ground:
 			var drop: Dictionary = ground[uid]
 			drops[uid] = {"position": drop.position, "definition_id": drop.definition_id,
+				"item_name": ItemDefinitions.IRON_SWORD.item_name,
+				"weapon_attack": int(ItemDefinitions.IRON_SWORD.base_stats[&"attack"]) + int(drop.bonus),
 				"reserved_for": drop.owner_name if now < int(drop.protected_until) else "",
 				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner)}
 		receive_state.rpc_id(peer_id, {"dogs": mob_snapshots, "health": health.duplicate(), "drops": drops,
@@ -396,7 +401,7 @@ func receive_state(snapshot: Dictionary) -> void:
 			node.add_child(label)
 			_visual_drops[uid] = node
 		var label: Label3D = _visual_drops[uid].get_node("Name")
-		label.text = "Żelazny miecz · E" + ("\n" + str(drop.reserved_for) if drop.reserved_for != "" else "")
+		label.text = "%s · Atak %d · E" % [drop.item_name, int(drop.weapon_attack)] + ("\n" + str(drop.reserved_for) if drop.reserved_for != "" else "")
 		label.modulate = Color("ffe291") if drop.allowed else Color("e0a681")
 	_refresh_hud()
 

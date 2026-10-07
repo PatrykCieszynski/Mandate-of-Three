@@ -86,14 +86,38 @@ func run() -> void:
 	if world.inventory_endpoint.state.stats.attack != 23 or world.inventory_endpoint.state.equipment.weapon != weak.uid:
 		fail("weak exact equip")
 		return
+	var preview: Dictionary = world.inventory_endpoint.weapon_comparison(strong)
+	if preview.attack != 27 or preview.delta != 4:
+		fail("better weapon comparison")
+		return
 	await action("equip", strong)
 	if world.inventory_endpoint.state.stats.attack != 27 or world.inventory_endpoint.state.equipment.weapon != strong.uid:
 		fail("strong exact equip")
+		return
+	preview = world.inventory_endpoint.weapon_comparison(weak)
+	if preview.attack != 23 or preview.delta != -4:
+		fail("weaker weapon comparison")
+		return
+	var same_stats: Dictionary = strong.duplicate(true)
+	same_stats["uid"] = weak.uid
+	preview = world.inventory_endpoint.weapon_comparison(same_stats)
+	if preview.attack != 27 or preview.delta != 0:
+		fail("equal weapon comparison")
 		return
 	await action("equip", strong, "stale")
 	# Clear the expected rejection through a valid idempotent command.
 	var current: Dictionary = world.inventory_endpoint.state.items[0]
 	await action("equip", current)
+	current = world.inventory_endpoint.state.items[0]
+	await action("unequip", current)
+	preview = world.inventory_endpoint.weapon_comparison(weak)
+	if preview.attack != 23 or preview.delta != 13 or world.inventory_endpoint.state.stats.attack != 10:
+		fail("comparison without equipped weapon")
+		return
+	for item: Dictionary in world.inventory_endpoint.state.items:
+		if item.uid == current.uid:
+			await action("equip", item)
+			break
 	var persisted: Dictionary = world.inventory_endpoint.state.duplicate(true)
 	while world.characters.size() < 2:
 		await get_tree().process_frame
