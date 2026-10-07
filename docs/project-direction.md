@@ -39,3 +39,9 @@ Po ręcznym potwierdzeniu Combat Feel Pass użytkownik zaakceptował pierwszy
 equip i odczuwalna zmiana serwerowych obrażeń, z trwałością po relogu.
 Balans mobów i parametrów walki zostawiamy na później. Nie rozszerzamy tego
 etapu o upgrade, crafting ani ogólny framework progression.
+
+Kolejny wybrany przez użytkownika etap: [XP i poziomy postaci](character-xp.md).
+Wykorzystujemy pola i krzywą PlayerResource, dodajemy autorytatywną nagrodę za
+zabójstwo, HUD, level-up i trwałość po relogu. Reguła właściciela nagrody jest
+spójna z lootem: największy udział w obrażeniach. Balans pozostaje na później.
+Ręczny test pierwszego item progression i XP nadal czeka na użytkownika.

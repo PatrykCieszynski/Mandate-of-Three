@@ -47,6 +47,12 @@ static func ensure_schema(db: SQLite) -> void:
 			_set_schema_version(db, 11)
 		else:
 			push_error("Could not migrate ground item claims to v11.")
+			return
+	if version < 12:
+		if db.query("CREATE TABLE IF NOT EXISTS kill_xp_rewards (kill_uid TEXT PRIMARY KEY NOT NULL, owner_character_id INTEGER NOT NULL CHECK(owner_character_id>0), amount INTEGER NOT NULL CHECK(amount>0));"):
+			_set_schema_version(db, 12)
+		else:
+			push_error("Could not migrate kill XP receipts to v12.")
 
 
 static func _migration_v1(db: SQLite) -> void:

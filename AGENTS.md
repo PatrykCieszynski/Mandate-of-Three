@@ -23,10 +23,12 @@ git diff --check
 & .\tests\run-pve.ps1
 & .\tests\run-combat.ps1
 & .\tests\run-progression.ps1
+& .\tests\run-xp.ps1
 ```
 
-Run PvE, combat and progression tests sequentially: all use port 18098.
+Run PvE, combat, progression and XP tests sequentially: all use port 18098.
 Progression accepts `-Preview` to render its inventory comparison during the test.
+XP also accepts `-Preview` to render its HUD and level-up notice.
 
 Full item-session integration additionally uses `& .\tests\run-items.ps1 -WithSession`.
 It requires running gateway/master/world roles and creates local

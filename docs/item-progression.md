@@ -47,6 +47,9 @@ starterów ani schema v11. Jest to pierwsza progresja przez wybór lepszego
 egzemplarza, bez XP, poziomów, upgrade action, rarities, craftingu czy nowych
 rodzajów broni. Dalszy zakres progression wymaga osobnej decyzji.
 
+Po tym etapie użytkownik wybrał [XP i poziomy postaci](character-xp.md).
+Ten kolejny etap dodaje schema v12 dla potwierdzeń nagród, zachowując model itemów.
+
 ## Weryfikacja
 
 ```powershell
