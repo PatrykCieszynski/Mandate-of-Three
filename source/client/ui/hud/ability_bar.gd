@@ -39,7 +39,7 @@ func _on_local_player_ready(local_player: LocalPlayer) -> void:
 
 
 func _on_equipment_changed(slot: StringName, _item_id: int) -> void:
-	if slot == &"weapon" or slot == EquipmentComponent.SPECIAL_SLOT or slot == EquipmentComponent.SPECIAL_SLOT_2:
+	if slot == &"weapon":
 		# Mounting happens in the same call stack — rebuild once it settles.
 		_rebuild.call_deferred()
 

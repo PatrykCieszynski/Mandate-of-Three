@@ -304,7 +304,6 @@ func _rows_to_payload(rows: Array, conversation_id: String, extra: Dictionary) -
 ## courtesy messages (enforcement like mute/jail is applied server-side anyway).
 func push_system_to_player(instance: ServerInstance, player_id: int, text: String) -> void:
 	# instance is just a handle to the WorldServer for peer-id lookup; some callers
-	# (e.g. BasingService scheduled ticks) have no per-instance context, so fall back
 	# to WorldServer.curr when null.
 	var ws: WorldServer = instance.world_server if instance != null else WorldServer.curr
 	if ws == null:

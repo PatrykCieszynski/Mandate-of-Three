@@ -5,7 +5,6 @@ extends BaseMultiplayerEndpoint
 
 @export var database: WorldDatabase
 @export var world_manager: WorldManagerClient
-@export var world_clock: WorldClock
 @export var chat_service: ChatService
 
 ## The full-DB backup (WAL checkpoint TRUNCATE + whole-file copy) is the heaviest
@@ -122,7 +121,6 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	ServerLog.info("Peer %d disconnected." % peer_id)
 	# Sparring: if mid-match, end it before we tear down so the survivor gets
 	# the win + teleport instead of being stranded in the arena.
-	SparringService.on_peer_disconnected(peer_id)
 	# Dungeon: sweep them from any lobby queue / live run so the group + run maps
 	# don't keep a phantom member (and the private instance can free when empty).
 	DungeonService.on_peer_disconnected(peer_id)

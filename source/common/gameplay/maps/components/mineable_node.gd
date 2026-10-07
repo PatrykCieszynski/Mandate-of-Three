@@ -122,21 +122,6 @@ func register_gather_hit(player: Player, damage: int, instance: ServerInstance, 
 	if int(_cooldown_until_ms_by_player.get(player_id, 0)) > now_ms:
 		return {"ok": false, "reason": "cooldown"}
 
-	# Mining-tree gates only apply to mining nodes. The check is "is mining
-	# in this node's job_xp dict" — that lets a future "ore that also grants
-	# smithing XP" still respect mining level/perks while keeping herbs
-	# free of mining bias.
-	var is_mining_node: bool = data.job_xp.has(&"mining")
-	var mining_perks_resource: JobPerks = JobRegistry.perks_for(&"mining")
-	var mining_level: int = 1
-	var mining_perks: Dictionary = {}
-	if is_mining_node:
-		var mining_skill: Dictionary = player.player_resource.skills.get(&"mining", {})
-		mining_level = int(mining_skill.get("level", 1))
-		mining_perks = mining_skill.get("perks", {})
-		if mining_level < data.required_level:
-			return {"ok": false, "reason": "level", "required_level": data.required_level}
-
 	# Lazy-regen first so a swing on a depleted node that just timed out
 	# refills before we ask for a charge.
 	_regen()
@@ -178,48 +163,14 @@ func register_gather_hit(player: Player, damage: int, instance: ServerInstance, 
 	_consume_charge(now_ms)
 	_progress_hp_by_player.erase(player_id)
 
-	# Award. Bonus-yield + cooldown discount come from the mining perk tree
-	# and only apply to mining nodes (gated by is_mining_node above).
 	var amount: int = data.yield_amount
-	if is_mining_node and mining_perks_resource != null \
-			and randf() < mining_perks_resource.effective_bonus_yield_chance(mining_level, mining_perks):
-		amount += 1
 
 	var ore_id: int = int(data.ore.get_meta(&"id", 0))
 	Inventory.add_item(player.player_resource.inventory, ore_id, amount)
 	DailyQuestService.on_collect(player.player_resource, ore_id, amount)
 
-	# Job XP — iterate the dict so a node can credit multiple jobs at once.
-	var grants: Array = []
-	for job_name: StringName in data.job_xp:
-		var raw: int = int(data.job_xp[job_name])
-		var xp_gain: int = raw
-		var jp: JobPerks = JobRegistry.perks_for(job_name)
-		if jp != null:
-			var job_skill: Dictionary = player.player_resource.skills.get(job_name, {})
-			var job_perks_dict: Dictionary = job_skill.get("perks", {})
-			xp_gain = roundi(raw * jp.xp_multiplier(job_perks_dict))
-		var prog: Dictionary = player.player_resource.add_skill_xp(job_name, xp_gain)
-		grants.append({"job": String(job_name), "xp": xp_gain, "progress": prog})
-
-	# Per-player cooldown after extraction. Shortened by mining perks on
-	# mining nodes; flat duration otherwise.
-	var cooldown_factor: float = 1.0
-	if is_mining_node and mining_perks_resource != null:
-		cooldown_factor = mining_perks_resource.effective_cooldown_factor(mining_level, mining_perks)
-	_cooldown_until_ms_by_player[player_id] = now_ms + int(
-		data.player_cooldown_seconds * 1000.0 * cooldown_factor
-	)
-
-	# Build the "first grant" mining-style payload for backwards-compatible
-	# toast / gather_succeeded handling on the client.
-	var first: Dictionary = grants[0] if not grants.is_empty() else {}
-	var first_progress: Dictionary = first.get("progress", {})
-	var first_job: String = first.get("job", "")
-	var new_level: int = int(first_progress.get("level", 1))
-	var perk_points_gained: int = 0
-	if is_mining_node and mining_perks_resource != null and first_job == "mining":
-		perk_points_gained = mining_perks_resource.earned_points(new_level) - mining_perks_resource.earned_points(mining_level)
+	# Flat per-player cooldown; no profession bonuses.
+	_cooldown_until_ms_by_player[player_id] = now_ms + int(data.player_cooldown_seconds * 1000.0)
 
 	return {
 		"ok": true,
@@ -227,12 +178,6 @@ func register_gather_hit(player: Player, damage: int, instance: ServerInstance, 
 		"ore_id": ore_id,
 		"ore_name": String(data.ore.item_name),
 		"amount": amount,
-		"xp": int(first.get("xp", 0)),
-		"job": first_job,
-		"level": new_level,
-		"leveled_up": first_progress.get("leveled_up", false),
-		"perk_points_gained": perk_points_gained,
-		"grants": grants,
 		"progress_hp": 0,
 		"extraction_hp": data.extraction_hp,
 		"charges_left": _charges,

@@ -40,6 +40,7 @@ func _ready() -> void:
 	_build_ui()
 	visible = false
 	ClientState.local_player_ready.connect(_on_world_ready)
+	ClientState.world_ready.connect(_on_world_ready)
 	Client.connection_changed.connect(_on_connection_changed)
 
 

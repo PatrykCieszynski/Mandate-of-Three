@@ -24,7 +24,6 @@ const MENU_ENTRIES: Array[Dictionary] = [
 	{"label": "Friends",     "menu": "friends"},
 	{"label": "Mail",        "menu": "mail"},
 	{"label": "Guild",       "menu": "guild"},
-	{"label": "Leaderboard", "menu": "leaderboard"},
 	# World
 	{"label": "Map"},
 	{"label": "Achievements"},

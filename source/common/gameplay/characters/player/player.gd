@@ -57,18 +57,12 @@ const RAPID_DEATH_LIMIT: int = 3
 ## Staying dead during the delay also makes nearby enemies drop aggro (they ignore dead
 ## targets) instead of trailing the corpse.
 func die(killer: Character) -> void:
-	# Leaderboard: credit the killer for real open-world PvP only — never
-	# sparring/duels (those are tallied as arena wins/losses). in_match is still
-	# true here (on_player_died_in_match clears it below). NPC killers are
-	# filtered out inside record_pvp_kill.
-	if player_resource == null or not player_resource.in_match:
-		LeaderboardService.record_pvp_kill(killer)
 
 	# Anti-camp: count consecutive PvP deaths in a short window. Hitting the limit
 	# exiles the next respawn to the far, safe jail_room (below), so a spawn-camp or
 	# feed loop can't keep going. Sparring deaths are excluded.
 	var exile_after_respawn: bool = false
-	if killer is Player and (player_resource == null or not player_resource.in_match):
+	if killer is Player:
 		var now_ms: int = Time.get_ticks_msec()
 		_pvp_death_streak = (_pvp_death_streak + 1) if (now_ms - _last_pvp_death_ms <= RAPID_DEATH_WINDOW_MS) else 1
 		_last_pvp_death_ms = now_ms
@@ -84,15 +78,6 @@ func die(killer: Character) -> void:
 	var map: Map = get_parent() as Map
 	if map:
 		spawn_position = map.get_spawn_position()
-
-	# Sparring: override to the duel master's position BEFORE ending the match
-	# (on_player_died_in_match clears in_match and would un-resolve us otherwise).
-	# Then end the match so wins/losses are tallied and the opponent is healed.
-	if player_resource != null and player_resource.in_match:
-		var sparring_pos: Vector2 = SparringService.return_position_for(self)
-		if sparring_pos != Vector2.ZERO:
-			spawn_position = sparring_pos
-		SparringService.on_player_died_in_match(self, killer)
 
 	var peer_id: int = int(player_resource.current_peer_id)
 	if peer_id > 0:
@@ -178,16 +163,7 @@ func _set_active_guild_id(value: int) -> void:
 func _apply_team_bar_color() -> void:
 	if multiplayer.is_server():
 		return
-	# Spar team overrides guild for the duration of a match: an opposing
-	# guildmate reads hostile, a non-guild teammate reads ally. (Client Player
-	# nodes are named by peer id — see InstanceClient.)
 	var peer: int = name.to_int()
-	if Character.spar_opponent_peers.has(peer):
-		set_health_bar_fill(BAR_COLOR_HOSTILE)
-		return
-	if Character.spar_ally_peers.has(peer):
-		set_health_bar_fill(BAR_COLOR_ALLY)
-		return
 	# Co-op groupmates read as allies regardless of guild (dungeon context).
 	if Character.group_peers.has(peer):
 		set_health_bar_fill(BAR_COLOR_ALLY)

@@ -88,15 +88,11 @@ func _ready() -> void:
 	experience_bar.self_modulate.a = 0.0
 	Client.subscribe(&"combat.reward", _apply_progression)
 	Client.subscribe(&"player.died", _on_player_died)
-	# Fair-arena indicator: normalized spar matches carry sync_level > 0.
-	Client.subscribe(&"sparring.match.state", _on_spar_sync_state)
 	ClientState.local_player_ready.connect(func(_lp: LocalPlayer):
 		_refresh_progression()
 		_maybe_show_welcome())
 	_refresh_progression()
 
-	# Sparring countdown — big centered text fired each second by the server.
-	Client.subscribe(&"sparring.countdown", _on_sparring_countdown)
 
 	# Dungeon run HUD (live clock + revive pool) — self-contained; shows itself on dungeon.hud pushes.
 	add_child(DungeonHud.new())
@@ -172,7 +168,6 @@ func _on_player_died(data: Dictionary) -> void:
 
 ## Level the local player is currently SYNCED to by a normalized spar match
 ## (0 = none). Drives the "Lv 38 (sync 10)" level-label state.
-var _spar_sync_level: int = 0
 ## Seconds the xp bar stays visible after a gain before fading back out.
 const XP_BAR_LINGER_S: float = 3.0
 ## Fade tween for the bar chrome (owner call: xp is moment-of-gain info, not
@@ -259,21 +254,9 @@ func _show_xp_gain(amount: int) -> void:
 	tween.tween_callback(label.queue_free)
 
 
-## While a fair-arena match is live the level label reads "Lv 38 (sync 10)"
-## in the section amber (owner reco) — players should never have to GUESS
-## they're normalized. Restored the moment the match ends.
-func _on_spar_sync_state(payload: Dictionary) -> void:
-	_spar_sync_level = int(payload.get("sync_level", 0)) if bool(payload.get("in_match", false)) else 0
-	_refresh_level_label()
-
-
 func _refresh_level_label() -> void:
-	if _spar_sync_level > 0:
-		experience_level_label.text = "Lv %d (sync %d)" % [ClientState.player_level, _spar_sync_level]
-		experience_level_label.add_theme_color_override(&"font_color", Color(1.0, 0.85, 0.5))
-	else:
-		experience_level_label.text = "Lv %d" % ClientState.player_level
-		experience_level_label.remove_theme_color_override(&"font_color")
+	experience_level_label.text = "Lv %d" % ClientState.player_level
+	experience_level_label.remove_theme_color_override(&"font_color")
 
 
 func _on_input_type_changed(input_type: InputComponent.InputType) -> void:
@@ -403,56 +386,6 @@ func _on_notification_received(payload: Dictionary) -> void:
 			])
 		_:
 			Toaster.toast("You have a new notification.")
-
-
-## Big centered "3 / 2 / 1 / FIGHT!" pushed each second of the sparring countdown.
-## Lazily creates the label so we don't carry the node when nobody spars.
-##
-## Smoothing: each tick is a hard text swap (no fade between digits — fading
-## while the next digit arrives just looks twitchy). Only the final FIGHT!
-## tick (seconds=0) fades out, and we kill any prior tween so it can't leak
-## across into the next match.
-var _countdown_tween: Tween
-
-func _on_sparring_countdown(payload: Dictionary) -> void:
-	var label: Label = get_node_or_null(^"SparringCountdown") as Label
-	if label == null:
-		label = Label.new()
-		label.name = "SparringCountdown"
-		label.anchor_left = 0.5
-		label.anchor_top = 0.5
-		label.anchor_right = 0.5
-		label.anchor_bottom = 0.5
-		label.offset_left = -120
-		label.offset_top = -40
-		label.offset_right = 120
-		label.offset_bottom = 40
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override(&"font_size", 64)
-		add_child(label)
-
-	if _countdown_tween != null and _countdown_tween.is_valid():
-		_countdown_tween.kill()
-		_countdown_tween = null
-
-	label.text = str(payload.get("text", ""))
-	label.modulate.a = 1.0
-	label.visible = true
-
-	# Only the FIGHT! tick auto-fades. Intermediate digits stay solid until
-	# the next push replaces them, which keeps the cadence crisp.
-	if int(payload.get("seconds", 1)) > 0:
-		return
-
-	_countdown_tween = create_tween()
-	_countdown_tween.tween_interval(0.6)
-	_countdown_tween.tween_property(label, ^"modulate:a", 0.0, 0.4)
-	_countdown_tween.tween_callback(func():
-		label.visible = false
-		label.modulate.a = 1.0
-		_countdown_tween = null
-	)
 
 
 # --- UI sound + menu motion ------------------------------------------------

@@ -47,11 +47,6 @@ enum ZoneModifiers {
 ## the instance (see Client._on_instance_changed). Leave empty to keep whatever track
 ## is already playing — e.g. a small building inherits the overworld's music.
 @export var music: AudioStream
-## Ambient weather overlays applied when the local player enters this map. Each entry is
-## one stacked effect, so a map can run several at once (e.g. leaves + cloud shadows +
-## fog). Empty = clear skies. Driven by the same instance hook as [member music]. See
-## WeatherLayer.
-@export var weather: Array[WeatherResource]
 @export_group("Camera limits")
 ## Per-edge camera clamp (world px), mirroring Camera2D's own limit_* properties. On entry
 ## the local player's camera is clamped to whichever edges you set, so it never pans past the
@@ -70,22 +65,13 @@ var warpers: Dictionary[int, Warper]
 ## player is actually at, rather than trusting a client-sent key — and it lets an inline
 ## shop (no registry id) resolve by its owning NPC, the way quest_givers do.
 var shops: Dictionary[StringName, ShopResource]
-## node name -> CraftingStationResource, gathered from the CraftingStation nodes placed
-## in this map (same pattern as warpers). The server resolves/verifies the station a
-## player crafts at by node name, rather than trusting a client-sent key — and an inline
-## station (no registry id) resolves by its node, the way shops resolve by their NPC.
-var crafting_stations: Dictionary[StringName, CraftingStationResource]
 ## giver slug -> quest source: a QuestInteraction on an NPC (registered by its
 ## register(), keyed by the NPCResource filename slug). Exposes `quests` +
 ## `giver_name`, read by the quest handlers. The server resolves offered quests.
 var quest_givers: Dictionary[StringName, Object]
 ## table_id -> TradeTable node. The server holds each table's trade session.
 var trade_tables: Dictionary[int, TradeTable]
-## flag_id -> TerritoryFlag node, gathered from the basing flags placed in this
-## map. The server resolves which flag is being damaged/captured.
-var territory_flags: Dictionary[int, TerritoryFlag]
-## master_id -> DuelMaster NPC. The server queues sparring through these.
-var duel_masters: Dictionary[int, DuelMaster]
+
 
 
 ## Walk up from [param node] to the Map that owns it, or null. Map components
@@ -138,11 +124,6 @@ func get_shop(shop_key: StringName) -> ShopResource:
 	return shops.get(shop_key)
 
 
-## The crafting station with this node name in this map, or null.
-func get_crafting_station(station_key: StringName) -> CraftingStationResource:
-	return crafting_stations.get(station_key)
-
-
 ## The quest-giver NPC with this slug in this map, or null.
 func get_quest_giver(giver_key: StringName) -> Object:
 	return quest_givers.get(giver_key)
@@ -154,10 +135,6 @@ func get_trade_table(table_id: int) -> TradeTable:
 
 
 ## The duel master with this id in this map, or null.
-func get_duel_master(master_id: int) -> DuelMaster:
-	return duel_masters.get(master_id)
-
-
 func override_map_rules(instance_resource: InstanceResource) -> void:
 	# Can be implemented later.
 	# Could override fields when instances of the same map need different rules.

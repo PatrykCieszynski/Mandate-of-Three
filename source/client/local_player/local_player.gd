@@ -75,14 +75,7 @@ func _ready() -> void:
 	if InstanceClient.current != null:
 		_apply_camera_limits(InstanceClient.current.instance_map)
 	Client.subscribe(&"player.died", _on_player_died)
-	# Sparring: explicit teleport push at match start (to spawn) and end (back
-	# to the duel master). State-sync deltas alone can't move the LocalPlayer
-	# because process_movement overwrites with current input each frame; we
-	# need to actually set the position here AND freeze input briefly so the
-	# player doesn't run off the spot they were teleported to.
-	Client.subscribe(&"sparring.match.state", _on_sparring_match_state)
-	# Staff teleports (/goto, /summon) within the same map: same problem as the
-	# sparring teleport — we must set position locally + freeze input briefly.
+	# Staff teleports must move the owner locally as well as update server state.
 	Client.subscribe(&"player.teleport", _on_teleport)
 	# STUNNED (Pinning Arrow): the server locks our input for the duration — movement
 	# is client-authoritative, so the freeze must happen here. The movement lock also
@@ -140,35 +133,11 @@ func _on_player_died(data: Dictionary) -> void:
 	_dead = false
 
 
-## Server-driven teleport for the start/end of a sparring match. Pushes carry
-## the new position; we apply it and freeze input briefly so the player
-## doesn't immediately walk off the spot.
+## Shared movement lock for teleports and channelled actions.
 var _movement_lock_until_ms: int = 0
 
-func _on_sparring_match_state(payload: Dictionary) -> void:
-	var pos: Variant = payload.get("position", null)
-	if pos is Vector2 and pos != Vector2.ZERO:
-		global_position = pos
-		# Match START freezes for the whole countdown (3/2/1 must actually hold you on your spawn
-		# until FIGHT!); match END just settles you on the teleport back (500ms default).
-		_movement_lock_until_ms = Time.get_ticks_msec() + int(payload.get("countdown_ms", 500))
-	# Spar-team tinting: remember allies/opponents for the match (cleared on end)
-	# and re-tint everyone in the map so health bars flip immediately.
-	if bool(payload.get("in_match", false)):
-		Character.spar_ally_peers = payload.get("allies", [])
-		Character.spar_opponent_peers = payload.get("opponents", [])
-	else:
-		Character.spar_ally_peers = []
-		Character.spar_opponent_peers = []
-	var map: Node = get_parent()
-	if map != null:
-		for child: Node in map.get_children():
-			if child.has_method(&"_apply_team_bar_color"):
-				child.call(&"_apply_team_bar_color")
 
-
-## Co-op group roster push — set our groupmate peer ids and re-tint everyone in
-## the map so their health bars flip to ally immediately (same as spar teams).
+## Mirror the co-op group roster and refresh ally colors.
 func _on_group_roster(payload: Dictionary) -> void:
 	Character.group_peers = payload.get("members", [])
 	var map: Node = get_parent()

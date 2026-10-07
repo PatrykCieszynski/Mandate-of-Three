@@ -177,27 +177,6 @@ func get_role_holders() -> Array:
 	return out
 
 
-## Returns the persisted ownership of a flag, or {} if no row exists (flag never
-## captured — treat as unowned, full HP, no grace period).
-func get_flag_state(flag_id: int) -> Dictionary:
-	db.query_with_bindings(
-		"SELECT flag_id, owner_guild_id, last_capture_ms FROM flags WHERE flag_id=?;",
-		[flag_id]
-	)
-	if db.query_result.is_empty():
-		return {}
-	return db.query_result[0]
-
-
-## Upsert flag ownership. Called on every capture so the territory survives a
-## restart. Writes are rare (capture events) so no batching needed.
-func save_flag_state(flag_id: int, owner_guild_id: int, last_capture_ms: int) -> void:
-	db.query_with_bindings(
-		"INSERT OR REPLACE INTO flags(flag_id, owner_guild_id, last_capture_ms) VALUES(?, ?, ?);",
-		[flag_id, owner_guild_id, last_capture_ms]
-	)
-
-
 func get_player_profile_row(player_id: int) -> Dictionary:
 	db.query_with_bindings(
 		"SELECT player_id, account_name, display_name, skin_id, level, inventory_json, profile_status, profile_animation, active_guild_id, titles_json, stats_json "
@@ -564,15 +543,6 @@ func delete_guild(guild_id: int) -> void:
 	db.query_with_bindings("DELETE FROM guilds WHERE guild_id=?;", [guild_id])
 	db.query_with_bindings("DELETE FROM guild_members WHERE guild_id=?;", [guild_id])
 	db.query_with_bindings("DELETE FROM guild_log WHERE guild_id=?;", [guild_id])
-
-
-## Release every flag a guild owns in the DB (covers flags in uncharged
-## instances that have no live node right now). last_capture_ms 0 = no grace.
-func release_guild_flags(guild_id: int) -> void:
-	db.query_with_bindings(
-		"UPDATE flags SET owner_guild_id=0, last_capture_ms=0 WHERE owner_guild_id=?;",
-		[guild_id]
-	)
 
 
 func search_guilds_by_name(query: String, limit: int) -> Array:

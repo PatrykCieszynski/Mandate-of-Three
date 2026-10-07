@@ -28,6 +28,7 @@ func teardown() -> void:
 	InstanceClient.current = null
 	InstanceClient.local_player = null
 	ClientState.local_player = null
+	ClientState.menu_open = false
 
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -35,12 +36,22 @@ func charge_new_instance(map_path: String, instance_id: String) -> void:
 	# Positional banners (sealed portal / level warning) are about the map we're
 	# LEAVING — kill them so they never follow the player into the next biome.
 	Announcer.dismiss_positional()
+	var scene: PackedScene = load(map_path)
+	if scene == null:
+		push_error("Could not load instance map: " + map_path)
+		return
+	var loaded_map: Node = scene.instantiate()
+	if loaded_map is SpikeWorld3D:
+		_charge_3d_instance(loaded_map, instance_id)
+		return
 	var new_instance: InstanceClient = InstanceClient.new()
 	new_instance.name = instance_id
 	
 	print("Loading new map: %s." % map_path)
-	var map: Map = load(map_path).instantiate() as Map
+	var map: Map = loaded_map as Map
 	if not map:
+		loaded_map.free()
+		new_instance.free()
 		return
 	new_instance.instance_map = map
 	
@@ -76,4 +87,21 @@ func charge_new_instance(map_path: String, instance_id: String) -> void:
 	if not current_ui:
 		current_ui = preload("res://source/client/ui/ui.tscn").instantiate()
 		get_parent().add_sibling(current_ui)
+
+
+func _charge_3d_instance(map: Node3D, instance_id: String) -> void:
+	if current_instance != null:
+		current_instance.queue_free()
+	if current_ui != null:
+		current_ui.queue_free()
+		current_ui = null
+	InstanceClient.local_player = null
+	ClientState.local_player = null
+	ClientState.menu_open = false
+	var instance: InstanceClient = preload("res://source/client/network/spike_instance_3d.gd").new()
+	instance.name = instance_id
+	current_instance = instance
+	instance.add_child(map)
+	add_child(instance, true)
+	instance_changed.emit(instance)
 	

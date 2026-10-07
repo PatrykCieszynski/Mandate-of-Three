@@ -31,11 +31,6 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	if str(args.get("confirm", "")).strip_edges() != guild.guild_name:
 		return {"error": 1, "ok": false, "message": "Confirmation doesn't match the guild name."}
 
-	# Live flags first: guards despawn and banners go neutral for everyone
-	# watching, before any row disappears.
-	for flag: TerritoryFlag in BasingService.held_flags(world_server, guild_id):
-		flag.release_ownership()
-
 	var member_ids: Array = guild.members.keys()
 
 	store.begin()
@@ -51,7 +46,6 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 		if member.led_guild_id == guild_id:
 			member.led_guild_id = 0
 		store.save_player(member)
-	store.release_guild_flags(guild_id)
 	store.delete_guild(guild_id)
 	store.commit()
 

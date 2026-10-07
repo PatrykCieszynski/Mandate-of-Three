@@ -9,6 +9,7 @@
 
 # System/tool-specific ignores
 .directory
+.idea/
 *DS_Store
 *~
 
@@ -31,7 +32,6 @@ addons/godot-sqlite/bin/*
 # lock file for excel/libreoffice CSV editting
 .~lock.translations.csv#
 
-/docs
 /data/config/discord_webhook.cfg
 source/server/master/account_collection.tres
 /addons/godot_mcp

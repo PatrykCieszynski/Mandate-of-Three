@@ -7,14 +7,9 @@ const GLOBAL_COMMANDS_PATH: String = "res://source/server/world/components/chat_
 ## Name of the InstanceResource used as the jail. Create a .tres with
 ## instance_name = "jail" to enable the jail system.
 const JAIL_INSTANCE_NAME: String = "jail"
-## Town hub the universal Recall sends players to (an InstanceResource's
-## instance_name). Repointed to the tavern (2026-07-01) — it's the social hub +
-## login spawn + portal room, so recall landing anywhere else undercuts it.
-const RECALL_INSTANCE_NAME: String = "GuildHouse"
-## Social hub players spawn at on every login AFTER their first (the tavern / guild house).
-## A brand-new character's first-ever login starts in the jail cell instead — see
-## _on_peer_connected.
-const TAVERN_INSTANCE_NAME: String = "GuildHouse"
+## Temporary shared map for infrastructure checks before the 3D replacement.
+const RECALL_INSTANCE_NAME: String = "Spike"
+const DEFAULT_INSTANCE_NAME: String = "Spike"
 
 var loading_instances: Dictionary[InstanceResource, ServerInstance]
 var instance_collection: Dictionary[String, InstanceResource]
@@ -39,13 +34,6 @@ func start_instance_manager() -> void:
 	timer.timeout.connect(unload_unused_instances)
 	add_sibling(timer)
 
-	# Basing: territory tick — every owning guild earns +1 SG per held flag.
-	# Lower this constant temporarily if you want to watch ticks land during testing.
-	var territory_tick_timer: Timer = Timer.new()
-	territory_tick_timer.wait_time = BasingService.TERRITORY_TICK_SECONDS
-	territory_tick_timer.autostart = true
-	territory_tick_timer.timeout.connect(func(): BasingService.tick_all_territories(world_server))
-	add_sibling(territory_tick_timer)
 
 
 func setup_global_commands_and_roles() -> void:
@@ -76,52 +64,21 @@ func charge_new_instance(_map_path: String, _instance_id: String) -> void:
 	pass
 
 
-## Deal with player respawn on login. Should replace this with proper map respawn logic later?
+## Every login uses the technical map; no Ekonia tutorial/hub routing.
 func _on_peer_connected(peer_id: int) -> void:
-	var player_resource: PlayerResource = world_server.connected_players[peer_id]
-
-	# Jailed players go straight to the jail instance, regardless of where they
-	# logged out. If the jail map is missing (not authored yet), fall through
-	# to normal spawn so we don't strand them in a black void.
-	if JailList.is_jailed(player_resource.account_name):
-		var jail_res: InstanceResource = instance_collection.get(JAIL_INSTANCE_NAME, null)
-		if jail_res != null:
-			var jail_inst: ServerInstance
-			if jail_res.charged_instances.is_empty():
-				jail_inst = charge_instance(jail_res)
-			else:
-				jail_inst = jail_res.get_instance(0)
-			if jail_inst != null:
-				charge_new_instance.rpc_id(peer_id, jail_res.map_path, jail_inst.name)
-				jail_inst.awaiting_peers[peer_id] = {}
-				return
-
-	# First-ever login? current_instance can't tell us — it's in-memory only (set on spawn,
-	# shown on the dashboard, but never written to the DB). Instead read three values that ARE
-	# persisted: a pristine new character is level 1 with zero experience and zero banked
-	# playtime. Anything past that means they've played before — level/experience catch any
-	# progression, played_seconds (banked into lb_stats on every disconnect) catches a character
-	# that walked out of the cell without gaining XP. First login → the jail cell (lore:
-	# condemned by the Capital; NOT JailList-jailed, so the cell's warper lets them walk straight
-	# out — no lock, no forced tutorial). Every later login → the tavern (guild house) hub.
-	var played_seconds: int = int(player_resource.lb_stats.get("played_seconds", 0))
-	var is_first_login: bool = player_resource.level <= 1 and player_resource.experience <= 0 and played_seconds <= 0
-	var target_name: String = JAIL_INSTANCE_NAME if is_first_login else TAVERN_INSTANCE_NAME
-	var target_res: InstanceResource = instance_collection.get(target_name, null)
-	if target_res != null:
-		var target_inst: ServerInstance
-		if target_res.charged_instances.is_empty():
-			target_inst = charge_instance(target_res)
-		else:
-			target_inst = target_res.get_instance(0)
-		if target_inst != null:
-			charge_new_instance.rpc_id(peer_id, target_res.map_path, target_inst.name)
-			target_inst.awaiting_peers[peer_id] = {} # {} = the map's default spawn point (index 0)
-			return
-
-	# Fallback: the tavern/jail map is missing or mid-load — land in the default overworld so
-	# we never strand the player in a black void.
-	charge_new_instance.rpc_id(peer_id, default_instance.map_path, default_instance.charged_instances[0].name)
+	if default_instance == null:
+		push_error("No technical default instance configured.")
+		return
+	var instance: ServerInstance
+	if default_instance.charged_instances.is_empty():
+		instance = charge_instance(default_instance)
+	else:
+		instance = default_instance.get_instance(0)
+	if instance == null:
+		push_error("Could not create the technical default instance.")
+		return
+	instance.awaiting_peers[peer_id] = {}
+	charge_new_instance.rpc_id(peer_id, default_instance.map_path, instance.name)
 
 
 func _on_player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper) -> void:
@@ -200,11 +157,8 @@ func player_switch_instance(
 		current_instance.despawn_player(peer_id, false)
 	else:
 		return
-	# Leaving an instance: drop the peer from a dungeon run (dissolves the group
-	# when empty) and from any spar queue. Both no-op for an ordinary warp by
-	# someone not in a run/queue.
+	# Leaving a dungeon run drops this peer from its group.
 	DungeonService.on_player_left(peer_id, current_instance)
-	SparringService.on_player_left(peer_id, current_instance)
 	charge_new_instance.rpc_id(
 		peer_id,
 		target_instance.instance_resource.map_path,
@@ -226,6 +180,9 @@ func charge_instance(instance_resource: InstanceResource) -> ServerInstance:
 
 func prepare_instance(instance_resource: InstanceResource) -> ServerInstance:
 	var instance: ServerInstance = ServerInstance.new()
+	if instance_resource.use_3d:
+		instance.free()
+		instance = preload("res://source/server/world/components/spike_instance_3d.gd").new()
 	loading_instances[instance_resource] = instance
 	instance.name = str(instance.get_instance_id())
 	instance.instance_resource = instance_resource
@@ -254,7 +211,7 @@ func set_instance_collection() -> void:
 		var instance_resource: InstanceResource = loaded
 		if instance_resource.load_at_startup:
 			charge_instance(instance_resource)
-		if instance_resource.instance_name == "jail":
+		if instance_resource.instance_name == DEFAULT_INSTANCE_NAME:
 			default_instance = instance_resource
 		instance_collection.set(instance_resource.instance_name, instance_resource)
 

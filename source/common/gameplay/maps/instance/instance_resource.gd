@@ -13,6 +13,7 @@ enum SpawnOverride {
 @export var instance_name: StringName
 @export_file("*.tscn") var map_path: String
 @export var load_at_startup: bool = false
+@export var use_3d: bool = false
 @export var spawn_override: SpawnOverride = SpawnOverride.DEFAULT
 
 @export_group("Zone display")

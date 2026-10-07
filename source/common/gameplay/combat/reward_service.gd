@@ -1,11 +1,5 @@
 class_name RewardService
-## Distributes a mob kill's rewards — XP, loot, weapon-mastery XP, quest + daily
-## progress, basing glory, the PvE leaderboard, and level-milestone unlocks — to
-## EVERY player who meaningfully damaged the mob, not just the last hitter. Lifted
-## out of HostileNpc so the mob class stays "AI + combat": overworld mobs, dungeon
-## bosses, and world bosses all reward through here. A mob with no xp_reward AND no
-## loot (a dungeon "shadow") grants nothing, so it's skipped wholesale.
-## Server-only.
+## Server-side XP, loot, quest progress and level milestones for kill contributors.
 
 ## A player must have dealt at least this fraction of the mob's max HP to share in
 ## the kill (anti-leech). The killer is always included regardless.
@@ -61,12 +55,6 @@ static func _reward(player: Player, npc: HostileNpc) -> void:
 		Inventory.add_item(resource.inventory, int(entry["id"]), int(entry["amount"]))
 		DailyQuestService.on_collect(resource, int(entry["id"]), int(entry["amount"]))
 
-	# Weapon mastery: practicing a category = killing with it. Same xp number.
-	var mastery: Dictionary = {}
-	var weapon_item: WeaponItem = player.equipment_component.equipped_items.get(&"weapon", null) as WeaponItem
-	if weapon_item != null and not weapon_item.category.is_empty():
-		mastery = resource.add_mastery_xp(weapon_item.category, npc.xp_reward)
-
 	var peer_id: int = int(resource.current_peer_id)
 	if peer_id > 0:
 		WorldServer.curr.data_push.rpc_id(peer_id, &"combat.reward", {
@@ -78,7 +66,6 @@ static func _reward(player: Player, npc: HostileNpc) -> void:
 			"experience": resource.experience,
 			"xp_to_next": resource.level_xp_to_next(),
 			"loot": loot_gained,
-			"mastery": mastery,
 		})
 
 	var instance: Node = WorldServer.curr.instance_manager.find_instance_for_peer(peer_id) if peer_id > 0 else null
@@ -87,7 +74,6 @@ static func _reward(player: Player, npc: HostileNpc) -> void:
 		WorldServer.curr.data_push.rpc_id(peer_id, &"quest.update", {"messages": quest_updates})
 
 	DailyQuestService.on_kill(resource, npc.enemy_type)
-	LeaderboardService.record_pve_kill(player)
 
 	if int(progress.get("levels_gained", 0)) > 0:
 		var inst: Node = WorldServer.curr.instance_manager.find_instance_for_peer(peer_id) if peer_id > 0 else null

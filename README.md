@@ -1,3 +1,19 @@
+# Mandate of Three — Tiny MMO fork
+
+Fork infrastruktury Godot Tiny MMO/Ekonia pod grę multiplayer 3D inspirowaną Metinem 2.
+Repo jest w trakcie reworku; aktualny świat to minimalny Spike 3D z serwerowym ruchem i kolizjami.
+
+- [Plan technicznego spike'a](docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf)
+- [Stan czyszczenia i pozostałe zależności](docs/repository-cleanup.md)
+- [Analiza Open-MT2 i kierunek reworku gameplayu](docs/open-mt2-analysis.md)
+- [Spike 3D: zakres, architektura i testy](docs/spike3d.md)
+- [Egzemplarze przedmiotów: UID, wyposażenie i trwały zapis](docs/item-instances.md)
+
+Poniżej pozostaje README upstreamu jako referencja infrastruktury i lokalnego uruchamiania.
+Lista funkcji i map upstreamu nie opisuje aktualnego zakresu Mandate of Three.
+
+---
+
 > [!NOTE]
 > **Documentation & Guides**: [**slayhorizon.github.io/godot-tiny-mmo/**](https://slayhorizon.github.io/godot-tiny-mmo/)  
 > **Latest research note**: [**Byte-Level Networking Protocol for MMO Scalability**](https://slayhorizon.github.io/godot-tiny-mmo/#/pages/notes/next_level)

@@ -1,0 +1,25 @@
+# Repository workflow
+
+- Work on a separate `codex/<short-topic>` branch for each coherent change.
+- Keep `main` as the integrated baseline. Do not implement new work directly on it.
+- Before merging, inspect the diff and run checks appropriate to the change.
+- Merge completed branches locally with `git merge --no-ff` so the topic remains
+  visible in history. Do not rewrite published history or force-push.
+- Push the topic branch and the integrated `main` when the user asks to publish.
+- Keep runtime databases, accounts, logs, engine binaries and reference checkouts
+  in their ignored locations; commit source, documentation and repeatable tests.
+
+## Current verification commands
+
+Run from the repository root in PowerShell:
+
+```powershell
+git diff --check
+& .\tests\run-items.ps1
+& .\tests\run-spike3d.ps1
+```
+
+Full item-session integration additionally uses `& .\tests\run-items.ps1 -WithSession`.
+It requires running gateway/master/world roles and creates local
+guest accounts and test characters. Use it when session/persistence changes need
+verification, with awareness that it writes to the local runtime stores.
