@@ -43,10 +43,41 @@ Bronie zachowują umiejętności zapisane w scenie, a consumables własną akcj�
 Historyczne migracje SQLite i persisted payloads (skills/masteries/loadout,
 guild statistics, flags table) pozostają dla zgodności istniejącego zapisu.
 Nie ma aktywnego runtime usuniętych systemów. Przebudowa schematu i usunięcie
-historycznych pól wymagają osobnego etapu przed docelowym modelem ItemInstance.
+historycznych pól wymagają osobnego etapu przed publiczną alphą. Nowe egzemplarze
+ItemInstance już działają w osobnych tabelach SQLite, niezależnie od legacy payloads.
 
 Demo assets/audio nadal są używane przez login, pozostały UI, postać 2D i itemy.
 Usuwamy je dopiero po analizie referencji lub zastąpieniu tych warstw przez 3D.
+
+## Etap 4: drugi cleanup po pionie PvE
+
+2026-10-07, branch `codex/second-cleanup-readme`. Użytkownik potwierdził ręcznie
+działanie PvE przed tym etapem. Usunięto **157 nieużywanych assetów**, razem z ich
+metadanymi `.import`: **314 plików**, około **6,92 MiB** oryginalnych assetów:
+
+- 133 tekstury środowiska, budynków i terrainów pozostałe po usuniętych mapach;
+- 6 utworów muzyki tych map: fungus, lost_woods, market, shadow_temple, shop, village;
+- 13 ikon dawnych umiejętności/mastery bez pozostałych odwołań;
+- 5 nieużywanych wariantów ikon menu 16px.
+
+Pełny manifest: [cleanup-2-removed-assets.txt](cleanup-2-removed-assets.txt).
+Kandydat musiał nie mieć odwołania do ścieżki ani UID w pozostałych plikach
+źródłowych, scenach, zasobach, konfiguracjach i dodatkach. Uwzględniono referencje
+między assetami. Foldery ładowane dynamicznie (status, daily, menu 32px, emotes,
+guild trophies) nie podlegały usuwaniu. Ikony edytora, fonty, modele 2D, itemy
+i zasoby wciąż powiązane z loginem lub modułami w kwarantannie pozostają.
+
+README opisuje teraz faktyczny projekt, sterowanie, lokalny start i testy.
+Upstream został ograniczony do credits oraz referencji infrastruktury; zachowano
+LICENSE i informacje o autorach pozostałych assetów. Schemat SQLite i moduły
+w kwarantannie nie były przebudowywane w tym cleanupie.
+
+Weryfikacja etapu 4: brak odwołań do usuniętych ścieżek i UID w `source`,
+`addons/tinymmo`, konfiguracji, testach i pozostałych assetach; import edytora
+bez błędów parsowania i brakujących zasobów; wszystkie 872 zasoby źródłowe
+załadowane. `run-items.ps1`, `run-spike3d.ps1` i `run-pve.ps1` zakończyły się
+sukcesem, w tym test dwóch klientów bijących jednego moba i konkurencyjnego
+pickupu. `git diff --check` bez błędów.
 
 Party, guilds, trade, shops, quests, dungeon i events pozostają do osobnej oceny
 zgodnie z kategorią QUARANTINE w planie. Ich obecność nie przesądza o użyciu w MVP.
