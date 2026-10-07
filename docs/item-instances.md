@@ -59,6 +59,10 @@ założonej broni i widzą prosty model miecza przy kapsule. Nowy gracz otrzymuj
 stan broni obecnych graczy. Statystykę ataku wykorzystuje już
 [serwerowa walka z mobem 3D](pve-ground-loot.md).
 
+[Pierwszy Item Progression Slice](item-progression.md) dodaje porównanie z założoną
+bronią, podgląd ataku po zmianie i oznaczenie nowego łupu. Znaleziony egzemplarz
+można założyć i zachować razem ze statystykami po relogu.
+
 ## Weryfikacja
 
 ```powershell
