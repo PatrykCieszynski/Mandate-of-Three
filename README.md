@@ -24,7 +24,8 @@ This repository contains a working technical vertical slice, not a game alpha.
   Item pickup and equipment retain immediate DB transactions.
 - An opt-in [Web UI foundation](docs/web-ui.md): protocol v1, explicit commands,
   domain snapshots and region-based input routing. CEF and mock inventory remain
-  in the isolated test project; existing gameplay UI is unchanged.
+  in the isolated test project; existing gameplay UI is unchanged. CEF officially
+  targets Vulkan Mobile; Compatibility is unsupported / best-effort.
 
 Controls: **WASD** to move, **I** for inventory, **hold Space** for a combo in front
 of the character, **E** to pick up nearby loot. **Left click** selects an optional
