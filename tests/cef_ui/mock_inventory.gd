@@ -1,4 +1,4 @@
-class_name UiCommandRouter
+class_name MockInventory
 extends RefCounted
 ## Spike-only authoritative mock. No production inventory or generic dispatch.
 var revision: int = 0

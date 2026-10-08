@@ -1,5 +1,9 @@
 # CEF screen-space UI spike
 
+Historical results from the original spike. The adapter/protocol and mock location
+are superseded by [Web UI foundation](web-ui.md); current runners test protocol v1.
+The original observations and limitations below are preserved as evidence.
+
 Tested 2026-10-08. Recommendation: **ADOPT WITH CAVEATS** as a candidate for trusted,
 local desktop UI. This is evidence for a subsequent production integration gate,
 not approval to migrate Mandate's existing UI now.

@@ -35,7 +35,16 @@ def setup():
         project.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / "tools/cef_ui_spike/project.godot", project / "project.godot")
         for relative in ["source/client/ui_web", "tests/cef_ui"]:
-            shutil.copytree(ROOT / relative, project / relative, dirs_exist_ok=True)
+            target = (project / relative).resolve()
+            if not target.is_relative_to(CACHE.resolve()): raise RuntimeError("Unsafe copied-source path")
+            if target.exists(): shutil.rmtree(target)
+            shutil.copytree(ROOT / relative, target)
+        # Browser URL treats `tests` as its authority. Keep fixture modules on
+        # that same bundled origin rather than climbing above res://tests/.
+        shared = project / "tests/cef_ui/web/shared"
+        shared.mkdir(parents=True, exist_ok=True)
+        for name in ["protocol.js", "bridge.js", "store.js"]:
+            shutil.copy2(ROOT / "source/client/ui_web/web" / name, shared / name)
     print(f"CEF project: {PROJECT}")
     print("No addon/config changes to production project")
 

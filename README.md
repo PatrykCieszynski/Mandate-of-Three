@@ -22,8 +22,9 @@ This repository contains a working technical vertical slice, not a game alpha.
   delta checkpoint every 30 seconds and an atomic test spend including pending income.
 - Active-character combat stats in RAM; swings do not query SQLite inventory.
   Item pickup and equipment retain immediate DB transactions.
-- An isolated [godot-cef UI spike](docs/cef-ui-spike.md), with a mock inventory,
-  structured bridge and lifecycle checks. It does not replace production UI.
+- An opt-in [Web UI foundation](docs/web-ui.md): protocol v1, explicit commands,
+  domain snapshots and region-based input routing. CEF and mock inventory remain
+  in the isolated test project; existing gameplay UI is unchanged.
 
 Controls: **WASD** to move, **I** for inventory, **hold Space** for a combo in front
 of the character, **E** to pick up nearby loot. **Left click** selects an optional
@@ -93,7 +94,8 @@ with `--no-ff`. See [AGENTS.md](AGENTS.md).
 - [Optional local development visuals](docs/local-dev-visuals.md)
 - [Warrior compatibility](docs/warrior-compatibility.md)
 - [External legacy asset pipeline history](docs/legacy-asset-pipeline.md)
-- [CEF UI spike](docs/cef-ui-spike.md)
+- [Web UI foundation](docs/web-ui.md)
+- [Historical CEF UI spike](docs/cef-ui-spike.md)
 - [CI](docs/ci.md)
 - [Cleanup and remaining dependencies](docs/repository-cleanup.md)
 - [Open-MT2 reference analysis](docs/open-mt2-analysis.md)
