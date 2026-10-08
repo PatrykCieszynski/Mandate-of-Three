@@ -1,6 +1,7 @@
 class_name WarriorVisual3D
 extends Node3D
 ## One optional player visual, one variant and one rigid sword. Presentation only.
+const SWORD_GRIP_ROTATION_RADIANS := PI * 0.5
 var visual_id: StringName = &"warrior"
 var tint: Color = Color.WHITE
 var content: Node3D
@@ -92,6 +93,8 @@ func _attach_weapon() -> void:
 		# Native rig is centimetres with a 0.01 skeleton scale; sword GLB is metres.
 		var parent_scale := skeleton.global_basis.get_scale()
 		weapon.scale = Vector3.ONE / parent_scale
+		# Shared grip correction for swords authored with the blade along local +Y.
+		weapon.rotate_object_local(Vector3.BACK, SWORD_GRIP_ROTATION_RADIANS)
 	weapon.visible = alive
 
 func set_equipped(value: bool) -> void:

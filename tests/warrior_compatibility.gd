@@ -57,6 +57,9 @@ func _ready() -> void:
 				var bone := view.skeleton.find_bone("equip_right_hand")
 				var expected := view.skeleton.global_transform * view.skeleton.get_bone_global_pose(bone)
 				check(view.socket.global_position.distance_to(expected.origin) < 0.001,"socket follows animated hand")
+				if clip == &"idle":
+					var blade_direction := (view.weapon.global_basis * Vector3.UP).normalized()
+					check(blade_direction.dot(Vector3.UP) > 0.5,"sword blade points upward in idle for both variants")
 		view.set_locomotion(true)
 		view.play_attack(1)
 		check(view.animation_state == &"attack_1","first combo")
