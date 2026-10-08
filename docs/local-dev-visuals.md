@@ -51,7 +51,7 @@ exclusions when adding a preset. Release CI runs the placeholder entity test on
 a fresh checkout before exporting; it has no legacy source requirement.
 
 The resolver is deliberately small, with no generic manifest or batch system.
-Warrior and Iron Sword remain outside this change.
+Warrior and Iron Sword now follow the same policy; see [Warrior compatibility](warrior-compatibility.md).
 
 ## Animation and compatibility findings
 

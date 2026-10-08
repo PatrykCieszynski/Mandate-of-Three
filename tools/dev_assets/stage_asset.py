@@ -8,7 +8,12 @@ import struct
 import tempfile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ASSETS = {"stray_dog": Path("mobs/stray_dog/stray_dog.glb")}
+ASSETS = {
+    "stray_dog": Path("mobs/stray_dog/stray_dog.glb"),
+    "warrior": Path("players/warrior/warrior.glb"),
+    "warrior_armor": Path("players/warrior/warrior_armor.glb"),
+    "iron_sword": Path("weapons/iron_sword/iron_sword.glb"),
+}
 
 
 def validate_glb(path: Path) -> None:
@@ -29,7 +34,7 @@ def validate_glb(path: Path) -> None:
 
 def stage_asset(asset_id: str, generated_root: Path, repo_root: Path = REPO_ROOT) -> Path:
     if asset_id not in ASSETS:
-        raise ValueError("Only stray_dog is supported")
+        raise ValueError("Unsupported selected asset")
     repo_root = repo_root.resolve(strict=True)
     generated_root = generated_root.resolve(strict=True)
     if generated_root.is_relative_to(repo_root):

@@ -187,6 +187,8 @@ jobs:
           test ! -d .local/metin2
           timeout 30s ./godot --headless --path . --mode=client res://tests/optional_dog_visual.tscn -- --visual-expect=placeholder --no-dev-visuals | tee visual-test.log
           grep -q "OPTIONAL_DOG_VISUAL_OK placeholder" visual-test.log
+          timeout 30s ./godot --headless --path . --mode=client res://tests/warrior_compatibility.tscn -- --no-dev-visuals | tee warrior-test.log
+          grep -q "WARRIOR_COMPATIBILITY_OK" warrior-test.log
 
       - name: Export clients
         env:

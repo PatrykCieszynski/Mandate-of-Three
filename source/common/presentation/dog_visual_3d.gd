@@ -51,32 +51,7 @@ func reload_visual() -> void:
 			player.seek(clampf(player.get_animation(old_shot).length - old_remaining, 0.0, player.get_animation(old_shot).length), true)
 
 func _prepare_animations() -> void:
-	# Copies prevent mutation of cached resources and other dogs' clips.
-	for library_name: StringName in player.get_animation_library_list():
-		var source_library := player.get_animation_library(library_name)
-		var library := AnimationLibrary.new()
-		for clip_name: StringName in source_library.get_animation_list():
-			var clip := source_library.get_animation(clip_name).duplicate() as Animation
-			clip.loop_mode = Animation.LOOP_LINEAR if clip_name in [&"idle", &"run", &"attack"] else Animation.LOOP_NONE
-			# Preserve vertical bob and rotation; remove planar root displacement.
-			for track: int in clip.get_track_count():
-				if clip.track_get_type(track) != Animation.TYPE_POSITION_3D: continue
-				var path := clip.track_get_path(track)
-				var target := player.get_node(player.root_node).get_node_or_null(NodePath(path.get_concatenated_names()))
-				if not target is Skeleton3D or path.get_subname_count() == 0: continue
-				var skeleton := target as Skeleton3D
-				var bone := skeleton.find_bone(path.get_subname(0))
-				if bone < 0 or skeleton.get_bone_parent(bone) != -1: continue
-				if clip.track_get_key_count(track) == 0: continue
-				var origin: Vector3 = clip.track_get_key_value(track, 0)
-				for key: int in clip.track_get_key_count(track):
-					var position: Vector3 = clip.track_get_key_value(track, key)
-					position.x = origin.x
-					position.z = origin.z
-					clip.track_set_key_value(track, key, position)
-			library.add_animation(clip_name, clip)
-		player.remove_animation_library(library_name)
-		player.add_animation_library(library_name, library)
+	VisualAnimationTools.prepare_in_place(player, [&"idle", &"run", &"attack"])
 
 func set_locomotion(state: String, moving: bool) -> void:
 	_locomotion = &"attack" if state == "ATTACK" else (&"run" if moving else &"idle")
