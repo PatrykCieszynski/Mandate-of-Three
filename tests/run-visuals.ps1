@@ -43,6 +43,7 @@ try {
         $taskMoved = $true
     }
     Invoke-VisualTest 'placeholder'
+    & (Join-Path $PSScriptRoot 'run-warrior.ps1')
 } finally {
     $taskHotStash = Join-Path $taskLogs 'visual-hot-stash.glb'
     if (Test-Path -LiteralPath $taskHotStash) {

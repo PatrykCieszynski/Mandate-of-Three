@@ -43,12 +43,23 @@ class StagingTest(unittest.TestCase):
     def test_rejects_project_source_unknown_id_and_broken_glb(self):
         with self.assertRaisesRegex(ValueError, "outside"):
             stage.stage_asset("stray_dog", self.repo, self.repo)
-        with self.assertRaisesRegex(ValueError, "Only stray_dog"):
-            stage.stage_asset("warrior", self.generated, self.repo)
+        with self.assertRaisesRegex(ValueError, "Unsupported selected asset"):
+            stage.stage_asset("unknown", self.generated, self.repo)
         self.source.write_bytes(b"broken")
         with self.assertRaisesRegex(ValueError, "Truncated"):
             stage.stage_asset("stray_dog", self.generated, self.repo)
         self.assertFalse((self.repo / "dev_assets").exists())
+
+    def test_body_variant_and_sword_are_explicit_selections(self):
+        for asset in ("warrior", "warrior_armor", "iron_sword"):
+            source = self.generated / stage.ASSETS[asset]
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(glb({"asset": {"version": "2.0"}}))
+        body = stage.stage_asset("warrior", self.generated, self.repo)
+        self.assertEqual(list((self.repo / "dev_assets").rglob("*.glb")), [body])
+        sword = stage.stage_asset("iron_sword", self.generated, self.repo)
+        self.assertEqual(set((self.repo / "dev_assets").rglob("*.glb")), {body, sword})
+        self.assertFalse((self.repo / "dev_assets/metin2" / stage.ASSETS["warrior_armor"]).exists())
 
     def test_destination_link_cannot_write_outside_project(self):
         outside = self.root / "outside"

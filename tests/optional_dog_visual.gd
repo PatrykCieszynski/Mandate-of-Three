@@ -1,11 +1,11 @@
 extends Node3D
+var _failed := false
 ## Same gameplay entity in every source mode. No legacy assets needed by this test.
 
 func check(value: bool, message: String) -> void:
 	if not value:
 		push_error(message)
-		get_tree().quit(1)
-		assert(value, message)
+		_failed = true
 
 func _ready() -> void:
 	var expected := "placeholder"
@@ -89,5 +89,8 @@ func _ready() -> void:
 		check(view.content.scene_file_path == VisualResolver.DEV_DOG, "restaging returns to local visual")
 	dog.free()
 	await get_tree().process_frame
+	if _failed:
+		get_tree().quit(1)
+		return
 	print("OPTIONAL_DOG_VISUAL_OK ",expected)
 	get_tree().quit(0)
