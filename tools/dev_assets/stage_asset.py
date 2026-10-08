@@ -35,11 +35,17 @@ def validate_glb(path: Path) -> None:
 def stage_asset(asset_id: str, generated_root: Path, repo_root: Path = REPO_ROOT) -> Path:
     if asset_id not in ASSETS:
         raise ValueError("Unsupported selected asset")
+    return stage_relative_asset(ASSETS[asset_id], generated_root, repo_root)
+
+
+def stage_relative_asset(relative: Path, generated_root: Path, repo_root: Path = REPO_ROOT) -> Path:
+    relative = Path(relative)
+    if relative.is_absolute() or '..' in relative.parts or relative.suffix.lower() != '.glb':
+        raise ValueError('Expected a selected relative GLB path')
     repo_root = repo_root.resolve(strict=True)
     generated_root = generated_root.resolve(strict=True)
     if generated_root.is_relative_to(repo_root):
         raise ValueError("Generated source must be outside the Godot project")
-    relative = ASSETS[asset_id]
     source = (generated_root / relative).resolve(strict=True)
     if not source.is_relative_to(generated_root):
         raise ValueError("Source escapes the configured generated root")
