@@ -107,7 +107,7 @@ func _ready() -> void:
 func finish() -> void:
 	var report := FileAccess.open("res://.godot/verification/batch-godot-report.json", FileAccess.WRITE)
 	if report != null: report.store_string(JSON.stringify({"success": not failed, "require_dev": require_dev, "rows": rows}, "\t"))
-	if not failed: print("METIN_BATCH_VISUAL_OK ", rows.size(), " dev=", require_dev)
+	if not failed: print("LEGACY_BATCH_VISUAL_OK ", rows.size(), " dev=", require_dev)
 	get_tree().quit(1 if failed else 0)
 
 func setup_preview() -> void:
@@ -141,7 +141,7 @@ func setup_preview() -> void:
 	if OS.get_cmdline_user_args().has("--batch-capture"):
 		await get_tree().process_frame
 		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png("res://.godot/verification/metin-batch-gallery.png")
+		get_viewport().get_texture().get_image().save_png("res://.godot/verification/legacy-batch-gallery.png")
 		finish()
 
 func _process(delta: float) -> void:

@@ -6,7 +6,7 @@ const ARMOR_IDS: Array[StringName] = [&"warrior_saja", &"warrior_cheongrin"]
 const SWORD_IDS: Array[StringName] = [&"sword_00020", &"sword_00030", &"sword_00040"]
 const STRAY_DOG := &"stray_dog"
 const FINAL_DOG := "res://assets/final/mobs/stray_dog.tscn"
-const DEV_DOG := "res://dev_assets/metin2/mobs/stray_dog/stray_dog.glb"
+const DEV_DOG := "res://dev_assets/legacy/mobs/stray_dog/stray_dog.glb"
 const PLACEHOLDER_DOG := "res://assets/placeholders/mobs/stray_dog_placeholder.tscn"
 const PLACEHOLDER_WARRIOR := "res://assets/placeholders/players/warrior.tscn"
 const PLACEHOLDER_SWORD := "res://assets/placeholders/weapons/iron_sword.tscn"
@@ -20,15 +20,15 @@ static func paths(visual_id: StringName) -> PackedStringArray:
 	match visual_id:
 		&"warrior_male": return paths(&"warrior")
 		&"stray_dog": return [FINAL_DOG, DEV_DOG, PLACEHOLDER_DOG]
-		&"warrior": return ["res://assets/final/players/warrior.tscn", "res://dev_assets/metin2/players/warrior/warrior.glb", PLACEHOLDER_WARRIOR]
-		&"warrior_armor": return ["res://assets/final/players/warrior_armor.tscn", "res://dev_assets/metin2/players/warrior/warrior_armor.glb", PLACEHOLDER_WARRIOR]
-		&"iron_sword": return ["res://assets/final/weapons/iron_sword.tscn", "res://dev_assets/metin2/weapons/iron_sword/iron_sword.glb", PLACEHOLDER_SWORD]
+		&"warrior": return ["res://assets/final/players/warrior.tscn", "res://dev_assets/legacy/players/warrior/warrior.glb", PLACEHOLDER_WARRIOR]
+		&"warrior_armor": return ["res://assets/final/players/warrior_armor.tscn", "res://dev_assets/legacy/players/warrior/warrior_armor.glb", PLACEHOLDER_WARRIOR]
+		&"iron_sword": return ["res://assets/final/weapons/iron_sword.tscn", "res://dev_assets/legacy/weapons/iron_sword/iron_sword.glb", PLACEHOLDER_SWORD]
 	if MOB_IDS.has(visual_id):
-		return ["res://assets/final/mobs/%s.tscn" % visual_id, "res://dev_assets/metin2/mobs/%s/%s.glb" % [visual_id, visual_id], "res://assets/placeholders/mobs/mob_placeholder.tscn"]
+		return ["res://assets/final/mobs/%s.tscn" % visual_id, "res://dev_assets/legacy/mobs/%s/%s.glb" % [visual_id, visual_id], "res://assets/placeholders/mobs/mob_placeholder.tscn"]
 	if ARMOR_IDS.has(visual_id):
-		return ["res://assets/final/players/%s.tscn" % visual_id, "res://dev_assets/metin2/players/warrior/%s.glb" % visual_id, PLACEHOLDER_WARRIOR]
+		return ["res://assets/final/players/%s.tscn" % visual_id, "res://dev_assets/legacy/players/warrior/%s.glb" % visual_id, PLACEHOLDER_WARRIOR]
 	if SWORD_IDS.has(visual_id):
-		return ["res://assets/final/weapons/%s.tscn" % visual_id, "res://dev_assets/metin2/weapons/%s/%s.glb" % [visual_id, visual_id], PLACEHOLDER_SWORD]
+		return ["res://assets/final/weapons/%s.tscn" % visual_id, "res://dev_assets/legacy/weapons/%s/%s.glb" % [visual_id, visual_id], PLACEHOLDER_SWORD]
 	return []
 
 static func resolve(visual_id: StringName) -> PackedScene:

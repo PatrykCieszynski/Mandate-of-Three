@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install the project's Godot editor
@@ -25,7 +25,7 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path dev_assets) { throw 'CI must not contain local legacy assets' }
-          if (Test-Path .local/metin2) { throw 'CI must not contain legacy sources' }
+          if (Test-Path .local) { throw 'CI must not contain local legacy sources' }
           $engine = '.godot/Godot_v4.7.2-stable_win64_console.exe'
           # Existing upstream translations/theme need a cold import before the
           # subsequent project load. Keep both logs for diagnosis.
@@ -33,29 +33,48 @@ jobs:
           & $engine --headless --path . --import *> .godot/import.log
           if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
           if (Select-String .godot/import.log -Pattern 'SCRIPT ERROR|Parse Error|Failed loading resource') { throw 'Project load failed' }
-      - name: Verify placeholders and gameplay
+      - name: Whitespace validation
+        shell: pwsh
+        run: |
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed' }
+      - name: Python staging tests
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path .godot/verification -Force | Out-Null
+          python -m unittest discover -s tests -p test_asset_staging.py *> .godot/verification/python-staging.log
+          $testExit = $LASTEXITCODE
+          Get-Content .godot/verification/python-staging.log
+          if ($testExit -ne 0) { throw 'Staging tests failed' }
+      - name: Legacy pipeline fixture tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -p test_legacy_asset_pipeline.py *> .godot/verification/python-legacy-pipeline.log
+          $testExit = $LASTEXITCODE
+          Get-Content .godot/verification/python-legacy-pipeline.log
+          if ($testExit -ne 0) { throw 'Pipeline fixture tests failed' }
+      - name: Godot visual fallback tests
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $engine = '.godot/Godot_v4.7.2-stable_win64_console.exe'
-          git diff --check
-          if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed' }
-          python -m unittest discover -s tests -p test_asset_staging.py
-          if ($LASTEXITCODE -ne 0) { throw 'Staging tests failed' }
-          python -m unittest discover -s tests -p test_metin_pipeline.py
-          if ($LASTEXITCODE -ne 0) { throw 'Pipeline fixture tests failed' }
           & ./tests/run-visuals.ps1
-          & $engine --headless --path . --mode=client res://tests/metin_batch_visual.tscn -- --no-dev-visuals *> .godot/verification/batch-ci.log
-          if ($LASTEXITCODE -ne 0 -or -not (Select-String .godot/verification/batch-ci.log -Pattern 'METIN_BATCH_VISUAL_OK 23')) { throw 'Batch placeholders failed' }
+          & $engine --headless --path . --mode=client res://tests/legacy_batch_visual.tscn -- --no-dev-visuals *> .godot/verification/batch-ci.log
+          if ($LASTEXITCODE -ne 0 -or -not (Select-String .godot/verification/batch-ci.log -Pattern 'LEGACY_BATCH_VISUAL_OK 23')) { throw 'Batch placeholders failed' }
+      - name: Gameplay regression suites
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
           foreach ($suite in @('items','spike3d','pve','combat','progression','xp','yang')) {
             & "./tests/run-$suite.ps1"
           }
       - name: Keep verification logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: verification-logs
           path: |
             .godot/*.log
             .godot/verification/*.log
+          include-hidden-files: true
           if-no-files-found: ignore

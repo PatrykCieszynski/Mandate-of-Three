@@ -40,4 +40,4 @@ source/server/master/account_collection.tres
 /dev_assets/
 /tools/dev_assets/local.json
 __pycache__/
-/tools/metin_assets/local.json
+/tools/legacy_assets/local.json

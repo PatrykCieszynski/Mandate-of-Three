@@ -3,11 +3,11 @@
 Gameplay uses the logical ID stray_dog. The resolver supports this one mob:
 
 1. res://assets/final/mobs/stray_dog.tscn (tracked Mandate artwork, when supplied).
-2. res://dev_assets/metin2/mobs/stray_dog/stray_dog.glb (optional local development).
+2. res://dev_assets/legacy/mobs/stray_dog/stray_dog.glb (optional local development).
 3. res://assets/placeholders/mobs/stray_dog_placeholder.tscn (tracked procedural dog).
 
 The repository root is the Godot project root. Full legacy source and original
-assets remain outside it, for example ../Mandate Local/metin2/{bin,src,extern,generated}.
+assets remain outside it, for example ../Mandate Local/legacy/{bin,src,extern,generated}.
 Only the selected, self-contained converted GLB goes into dev_assets.
 Neither original GR2/DDS/TGA nor converted models, textures or materials belong in Git.
 
@@ -19,9 +19,9 @@ Use Python 3.12+ on Windows. The tool neither converts nor scans for other asset
     # Edit generated_root if your external layout differs.
     python tools/dev_assets/stage_asset.py stray_dog
 
-The example points to ../Mandate Local/metin2/generated, relative to the
+The example points to ../Mandate Local/legacy/generated, relative to the
 repository root. The source is mobs/stray_dog/stray_dog.glb beneath that directory.
-Override precedence: --generated-root, MANDATE_METIN_GENERATED_ROOT, then local
+Override precedence: --generated-root, MANDATE_LEGACY_GENERATED_ROOT, then local
 JSON. The configuration and destination are gitignored.
 
     python tools/dev_assets/stage_asset.py stray_dog --generated-root 'X:/my-local-assets/generated'
@@ -32,7 +32,7 @@ links/junctions and replaces only the selected file atomically. It does not copy
 the full legacy tree. Conversion stays in the external spike workspace.
 
 Open Godot to import a newly staged GLB. Then existing Wild Dogs use it without
-content or gameplay changes. Removing dev_assets/metin2 changes existing dogs
+content or gameplay changes. Removing dev_assets/legacy changes existing dogs
 to the placeholder within 0.25 seconds; stale imported resources cannot revive a
 deleted source. Restaging an already imported file restores the optional visual.
 A newly converted file must first be imported by the editor.
@@ -129,4 +129,4 @@ after import has no missing-resource/parse errors. No legacy asset is involved.
 This existing cold-import limitation is not silently counted as a clean first
 import.
 
-Batch conversion i jawne grupy: [lokalny pipeline](metin-asset-pipeline.md). Dotychczasowy stage_asset.py pozostaje kompatybilny dla czterech pierwotnych ID.
+Batch conversion i jawne grupy: [lokalny pipeline](legacy-asset-pipeline.md). Dotychczasowy stage_asset.py pozostaje kompatybilny dla czterech pierwotnych ID.

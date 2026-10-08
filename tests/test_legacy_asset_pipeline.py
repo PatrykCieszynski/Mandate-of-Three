@@ -1,6 +1,7 @@
 """No legacy assets/Blender needed. Real index, priority, dependency and cache fixtures."""
 import copy
 import json
+import os
 from pathlib import Path
 import struct
 import sys
@@ -8,10 +9,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools/metin_assets'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools/legacy_assets'))
 import asset_index
 from asset_index import AssetIndex, actor_bundle, scan, sha256, virtual_path, write_json
 import pipeline
+from filesystem_assertions import assert_same_files
 from stage_asset import stage_relative_asset
 
 
@@ -128,13 +130,85 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(bundles[0]['missing_textures'], ['dog.dds'])
         self.assertEqual(self.convert(bundles[0])['status'], 'MISSING_TEXTURE')
 
+    def test_lazy_configuration_and_source_free_staging(self):
+        config_path = self.root / 'local.json'
+        config_path.write_text(json.dumps({'generated_root': str(self.generated),
+            'source_root': 'not-installed', 'blender': 'not-installed', 'importer_root': 'not-installed'}))
+        with patch.dict(os.environ, {}, clear=True):
+            config = pipeline.configuration(config_path, 'stage_asset')
+            self.assertTrue(os.path.samefile(config['generated_root'], self.generated))
+            with self.assertRaises((OSError, ValueError)):
+                pipeline.configuration(config_path, 'convert_asset')
+        with patch.object(pipeline, 'blender_run', side_effect=self.fake_export):
+            self.assertEqual(self.convert()['status'], 'SUCCESS')
+        repo = self.root / 'stage-only-game'
+        repo.mkdir()
+        with patch.dict(os.environ, {}, clear=True), patch.object(sys, 'argv', ['pipeline', '--config', str(config_path), 'stage_asset', 'stray_dog']), patch.object(pipeline, 'stage_relative_asset', side_effect=lambda relative, root: stage_relative_asset(relative, root, repo)), patch.object(pipeline, 'blender_run', side_effect=AssertionError('Staging must not launch Blender')):
+            # No asset_index.json is present; source_root/tools are deliberately invalid.
+            self.assertEqual(pipeline.main(), 0)
+        self.assertTrue((repo / 'dev_assets/legacy/mobs/stray_dog/stray_dog.glb').exists())
+
+    def test_index_query_and_basic_resolution_do_not_require_native_tools(self):
+        config_path = self.root / 'local.json'
+        config_path.write_text(json.dumps({'source_root': str(self.source), 'generated_root': str(self.generated)}))
+        with patch.dict(os.environ, {}, clear=True):
+            for command in ('index', 'query', 'resolve_asset'):
+                config = pipeline.configuration(config_path, command)
+                self.assertNotIn('blender', config)
+            with self.assertRaisesRegex(ValueError, 'blender'):
+                pipeline.configuration(config_path, 'resolve_asset', native=True)
+            with patch.object(sys, 'argv', ['pipeline', '--config', str(config_path), 'index']):
+                self.assertEqual(pipeline.main(), 0)
+            with patch.object(pipeline, 'blender_run', side_effect=AssertionError('Read-only commands must not launch Blender')):
+                with patch.object(sys, 'argv', ['pipeline', '--config', str(config_path), 'query', '--race', '101']):
+                    self.assertEqual(pipeline.main(), 0)
+                with patch.object(sys, 'argv', ['pipeline', '--config', str(config_path), 'resolve_asset', 'stray_dog']), patch.object(pipeline, 'bundle_for', return_value=copy.deepcopy(self.bundle)):
+                    self.assertEqual(pipeline.main(), 0)
+
+    def test_unexpected_pipeline_error_is_visible_and_group_continues(self):
+        write_json(self.generated / '.pipeline/asset_index.json', self.index.data)
+        other = copy.deepcopy(self.bundle)
+        other['id'] = 'wolf'
+        def exporter(config, work, request):
+            if request['job']['id'] == 'stray_dog':
+                raise TypeError('unexpected orchestration bug')
+            return self.fake_export(config, work, request)
+        config = self.config | {'source_root': str(self.source)}
+        with patch.object(sys, 'argv', ['pipeline', 'convert_group', 'mobs_m1']), patch.object(pipeline, 'configuration', return_value=config), patch.object(pipeline, 'tool_signature', return_value='fixture'), patch.object(pipeline, 'prepare_bundles', return_value=[copy.deepcopy(self.bundle), other]), patch.object(pipeline, 'blender_run', side_effect=exporter):
+            self.assertEqual(pipeline.main(), 1)
+        report = json.loads((self.generated / '.pipeline/reports/mobs_m1.json').read_text())
+        self.assertEqual(report['counts'], {'PIPELINE_ERROR': 1, 'SUCCESS': 1})
+        job = self.generated / '.pipeline/jobs/stray_dog'
+        self.assertIn('TypeError: unexpected orchestration bug', (job / 'pipeline_error.log').read_text())
+        self.assertIn('Traceback', json.loads((job / 'last_attempt.json').read_text())['traceback'])
+
+    def test_malformed_result_keeps_last_known_good_glb(self):
+        with patch.object(pipeline, 'blender_run', side_effect=self.fake_export):
+            self.assertEqual(self.convert()['status'], 'SUCCESS')
+        output = self.generated / 'mobs/stray_dog/stray_dog.glb'
+        before = output.read_bytes()
+        def malformed(config, work, request):
+            self.fake_export(config, work, request)
+            return {'status': 'SUCCESS'}  # Internal protocol bug: findings absent.
+        with patch.object(pipeline, 'blender_run', side_effect=malformed):
+            self.assertEqual(self.convert(force=True)['status'], 'PIPELINE_ERROR')
+        self.assertEqual(output.read_bytes(), before)
+        manifest = json.loads(output.with_suffix('.manifest.json').read_text())
+        self.assertEqual(manifest['status'], 'SUCCESS')
+
+    def test_child_pipeline_error_is_not_an_asset_import_failure(self):
+        with patch.object(pipeline, 'blender_run', return_value={'status': 'PIPELINE_ERROR', 'error': 'child protocol bug', 'traceback': 'Child traceback: KeyError'}):
+            self.assertEqual(self.convert()['status'], 'PIPELINE_ERROR')
+        diagnostic = (self.generated / '.pipeline/jobs/stray_dog/pipeline_error.log').read_text()
+        self.assertIn('Child traceback: KeyError', diagnostic)
+
     def test_explicit_relative_staging_and_escape(self):
         relative = Path('mobs/wolf/wolf.glb')
         glb(self.generated / relative)
         repo = self.root / 'game'
         repo.mkdir()
         stage_relative_asset(relative, self.generated, repo)
-        self.assertEqual(list((repo / 'dev_assets').rglob('*.glb')), [repo / 'dev_assets/metin2' / relative])
+        assert_same_files(self, (repo / 'dev_assets').rglob('*.glb'), [repo / 'dev_assets/legacy' / relative])
         with self.assertRaises(ValueError):
             stage_relative_asset(Path('../escape.glb'), self.generated, repo)
         with self.assertRaises(ValueError):
