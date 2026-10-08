@@ -18,12 +18,16 @@ Repo zawiera działający techniczny vertical slice; to jeszcze nie alpha gry.
   Testy dwóch klientów obejmują walkę, śmierć i rywalizację o ten sam łup.
 - XP za zabicie psa, poziomy, pasek postępu i level-up; trwały zapis po relogu
   oraz checkpoint dirty progression co około 60 s i zapis przy końcu sesji.
+- Yang wallet, ground currency z loot rights i auto-pickup; osobny dirty delta
+  checkpoint co 30 s oraz atomowy testowy wydatek uwzględniający pending income.
 - Combat stats aktywnej postaci w RAM; zamach nie odpytuje SQLite o inventory.
   Item pickup i equip zachowują natychmiastowe transakcje DB.
 
 Sterowanie: **WASD** — ruch, **I** — ekwipunek, **przytrzymaj Spację** — combo
 przed postacią, **E** — podnieś najbliższy łup. **LPM** zaznacza opcjonalny cel,
-**F** przełącza autoatak; ręczny ruch przerywa autoatak.
+**F** przełącza autoatak; ręczny ruch przerywa autoatak. Yang podnosi się
+automatycznie z bliska; **G** podnosi najbliższy stos. Przycisk w HUD testowo
+wydaje 50 Yang.
 
 AI omija przeszkody na navmeshu areny. Niepodniesiony loot oraz HP
 i pozycja są stanem runtime; przedmiot po pickupie jest trwały. AOI, local
@@ -64,9 +68,10 @@ Konta i bazy świata są lokalnymi danymi runtime wykluczonymi z Git.
 & .\tests\run-combat.ps1
 & .\tests\run-progression.ps1
 & .\tests\run-xp.ps1
+& .\tests\run-yang.ps1
 ```
 
-Testy używają baz testowych; `run-pve`, `run-combat`, `run-progression` i `run-xp` współdzielą port 18098,
+Testy używają baz testowych; `run-pve`, `run-combat`, `run-progression` `run-xp` i `run-yang` współdzielą port 18098,
 więc uruchamiaj je kolejno. Pełne logowanie/relog przez zwykłe serwery
 opisują dokumenty itemów i PvE; te scenariusze tworzą lokalne konta testowe.
 Nowe zmiany robimy na branchach `codex/<temat>`, sprawdzamy i mergujemy lokalnie
@@ -74,6 +79,7 @@ z `--no-ff`. Zasady: [AGENTS.md](AGENTS.md).
 
 ## Dokumentacja
 
+- [Yang wallet i ground currency](docs/yang-wallet.md)
 - [Kierunek i priorytety projektu](docs/project-direction.md)
 - [Spike 3D i transport ruchu](docs/spike3d.md)
 - [Egzemplarze przedmiotów i trwały zapis](docs/item-instances.md)

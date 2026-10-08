@@ -18,6 +18,7 @@ var _camera: Camera3D
 var _status: Label
 var inventory_endpoint: SpikeInventory3D
 var combat_endpoint: SpikeCombat3D
+var currency_endpoint: SpikeCurrency3D
 
 func _ready() -> void:
 	_server = GameMode.is_world_server()
@@ -28,6 +29,9 @@ func _ready() -> void:
 	combat_endpoint = SpikeCombat3D.new()
 	combat_endpoint.name = "Combat"
 	add_child(combat_endpoint)
+	currency_endpoint = SpikeCurrency3D.new()
+	currency_endpoint.name = "Currency"
+	add_child(currency_endpoint)
 	if not _server:
 		local_peer = multiplayer.get_unique_id()
 		_build_camera_and_ui()
@@ -128,6 +132,7 @@ func join_world() -> void:
 	intentions[peer_id] = {"direction": Vector2.ZERO, "sequence": -1, "time": 0}
 	_send_roster()
 	inventory_endpoint.initialize_peer(peer_id)
+	currency_endpoint.initialize_peer(peer_id)
 	combat_endpoint.initialize_peer(peer_id)
 	print("SPIKE3D_JOIN: ", peer_id)
 
@@ -135,8 +140,9 @@ func remove_peer(peer_id: int) -> void:
 	if _server:
 		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 		if resource != null and WorldServer.curr.database != null:
-			WorldServer.curr.database.flush_progression(resource.player_id)
+			WorldServer.curr.database.flush_character(resource.player_id)
 	combat_endpoint.remove_peer(peer_id)
+	currency_endpoint.remove_peer(peer_id)
 	inventory_endpoint.remove_peer(peer_id)
 	intentions.erase(peer_id)
 	if characters.has(peer_id):

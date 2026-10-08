@@ -109,6 +109,15 @@ func run() -> void:
 	while int(combat.state.progression.experience) == 0 and int(combat.state.progression.level) == 1:
 		await get_tree().process_frame
 	var earned_progression: Dictionary = combat.state.progression.duplicate(true)
+	var currency: SpikeCurrency3D = world.currency_endpoint
+	# Walk into the drop to exercise production auto-pickup through movement RPCs.
+	while currency.state.is_empty() or int(currency.state.balance) == 0:
+		if not currency.state.is_empty() and not currency.state.drops.is_empty():
+			var first_drop: Dictionary = currency.state.drops.values()[0]
+			await face_or_approach(first_drop.position, 0.7)
+		else:
+			await get_tree().process_frame
+	var earned_yang: int = int(currency.state.balance)
 	Client.close_connection()
 	Client.instance_manager.teardown()
 	world = null
@@ -127,6 +136,10 @@ func run() -> void:
 	if world.combat_endpoint.state.progression != earned_progression:
 		fail("XP and level changed after relog")
 		return
-	print("PVE_SESSION_OK: gateway/master/world, combat, pickup/equip UID, XP and level after relog")
+	while world.currency_endpoint.state.is_empty(): await get_tree().process_frame
+	if int(world.currency_endpoint.state.balance) != earned_yang:
+		fail("Yang changed after logout/relog")
+		return
+	print("PVE_SESSION_OK: gateway/master/world, combat, pickup/equip UID, XP, level and Yang after relog")
 	Client.close_connection()
 	get_tree().quit()

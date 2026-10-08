@@ -199,6 +199,7 @@ func _die(dog: SpikeWildDog3D, now: int) -> void:
 	var uid: String = Crypto.new().generate_random_bytes(16).hex_encode()
 	ground[uid] = {"position": dog.position, "definition_id": "iron_sword", "bonus": randi_range(1, 9),
 		"owner": owner_id, "owner_name": owner_name, "protected_until": now + PROTECTION_MS, "expires": now + LOOT_LIFETIME_MS}
+	_world.currency_endpoint.spawn_currency(dog.position, owner_id, owner_name, now)
 	if owner_id > 0:
 		_award_experience(dog.contribution_players.get(owner_id))
 	dog.contribution_players.clear()
