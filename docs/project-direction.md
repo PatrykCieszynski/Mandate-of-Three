@@ -51,3 +51,27 @@ w RAM z dirty checkpointem około 60 s. Rezygnujemy z permanentnych kill receipt
 Itemy pozostają immediate transactional persistence. Przyszły Yang income ma
 runtime wallet z pending delta i osobnym checkpointem; krytyczny spend ma być
 atomowy razem ze zmianą ekonomii. Pełny podział: [persistence policy](persistence-policy.md).
+
+## Decyzje świata i następne milestone’y — 2026-10-08
+
+[Design Decisions](Mandate_of_Three_Design_Decisions.pdf) ustala jeden logiczny
+świat, transparentne overflow layers dopiero później, spawn regions/regional
+pressure, solo i party jako pełnoprawne sposoby gry, samodzielne klasy oraz
+podstawowe QoL bez consumable tax. Podane wartości są propozycjami do balansu.
+
+Przyjęta kolejność użytkownika:
+
+1. [Yang wallet](yang-wallet.md), GroundCurrency, mały autoloot bez peta,
+   HUD, delta checkpoint i jedna testowa operacja critical spend.
+2. Upgrade +0 → +1: Yang + jeden materiał, 100% success, atomowy item/wallet
+   commit i odświeżenie runtime stats. Bez failure, downgrade, destruction,
+   pity ani scrolli.
+3. Jeden reroll affixu: zużycie materiału i mutacja w jednej transakcji.
+4. Party vertical slice: invite/accept/leave, wspólna instancja i jawne reguły
+   XP oraz loot/contribution. Highest damage pozostaje tymczasową regułą solo.
+5. Pierwszy regionalny event: zabójstwa podnoszą pressure, threshold tworzy
+   Metin-like obiekt w jednym z kilku punktów; wspólna walka, reward i reset.
+
+Boss, darmowy base dungeon, keyed tiery, klasy/aury, poty/lure, AOI,
+local prediction, layering i PostgreSQL są później. Nie rozwijamy obecnie
+kolejnego dużego refactoru ani ogólnego frameworka craftingu.

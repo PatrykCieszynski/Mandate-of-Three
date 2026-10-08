@@ -159,6 +159,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 	database.save_player(player)
 	runtime_equipment.erase(player.player_id)
+	database.release_wallet(player.player_id)
 
 	player_id_to_peer_id.erase(player.player_id)
 	BlockList.clear_player(player.player_id)

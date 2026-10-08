@@ -53,6 +53,12 @@ static func ensure_schema(db: SQLite) -> void:
 			_set_schema_version(db, 13)
 		else:
 			push_error("Could not remove obsolete kill XP receipts in v13.")
+			return
+	if version < 14:
+		if WalletStoreSqlite.ensure_schema(db):
+			_set_schema_version(db, 14)
+		else:
+			push_error("Could not create Yang wallet schema in v14.")
 
 
 static func _migration_v1(db: SQLite) -> void:

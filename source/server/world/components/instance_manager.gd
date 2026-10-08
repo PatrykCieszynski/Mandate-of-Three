@@ -153,8 +153,8 @@ func player_switch_instance(
 	current_instance: ServerInstance,
 ) -> void:
 	var peer_id: int = player.name.to_int()
-	if not world_server.database.flush_progression(player.player_resource.player_id):
-		push_error("Instance transfer cancelled: progression could not be saved.")
+	if not world_server.database.flush_character(player.player_resource.player_id):
+		push_error("Instance transfer cancelled: character checkpoints could not be saved.")
 		return
 	if current_instance.connected_peers.has(peer_id):
 		current_instance.despawn_player(peer_id, false)

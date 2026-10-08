@@ -26,9 +26,10 @@ git diff --check
 & .\tests\run-combat.ps1
 & .\tests\run-progression.ps1
 & .\tests\run-xp.ps1
+& .\tests\run-yang.ps1
 ```
 
-Run PvE, combat, progression and XP tests sequentially: all use port 18098.
+Run PvE, combat, progression, XP and Yang tests sequentially: all use port 18098.
 Progression accepts `-Preview` to render its inventory comparison during the test.
 XP also accepts `-Preview` to render its HUD and level-up notice.
 

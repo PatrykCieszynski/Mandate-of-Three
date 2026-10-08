@@ -7,6 +7,11 @@ var db: SQLite
 var store: WorldStoreSqlite
 var mail_store: MailStore
 var item_store: ItemStoreSqlite
+var wallet_store: WalletStoreSqlite
+const WALLET_SAVE_SECONDS: float = 30.0
+var runtime_wallets: Dictionary[int, Dictionary] = {}
+var dirty_wallet: Dictionary[int, bool] = {}
+var _wallet_elapsed: float = 0.0
 const PROGRESSION_SAVE_SECONDS: float = 60.0
 var dirty_progression: Dictionary[int, PlayerResource] = {}
 var _progression_elapsed: float = 0.0
@@ -23,7 +28,69 @@ func flush_progression(owner_id: int = -1) -> bool:
 	for player: PlayerResource in players: dirty_progression.erase(player.player_id)
 	return true
 
+func load_wallet(owner_id: int) -> bool:
+	if runtime_wallets.has(owner_id): return true
+	if wallet_store == null:
+		if db == null: return false
+		wallet_store = WalletStoreSqlite.new(db)
+	var result: Dictionary = wallet_store.load_wallet(owner_id)
+	if not result.ok: return false
+	runtime_wallets[owner_id] = {"wallet_balance": int(result.balance), "pending_currency_delta": 0}
+	return true
+
+func wallet_balance(owner_id: int) -> int:
+	return int(runtime_wallets.get(owner_id, {}).get("wallet_balance", -1))
+
+func add_yang(owner_id: int, amount: int) -> bool:
+	if not runtime_wallets.has(owner_id) or amount <= 0: return false
+	var wallet: Dictionary = runtime_wallets[owner_id]
+	if amount > WalletStoreSqlite.MAX_YANG - int(wallet.wallet_balance): return false
+	wallet.wallet_balance += amount
+	wallet.pending_currency_delta += amount
+	dirty_wallet[owner_id] = true
+	return true
+
+func flush_wallet(owner_id: int = -1) -> bool:
+	var deltas: Dictionary = {}
+	for id: int in dirty_wallet:
+		if owner_id < 0 or id == owner_id:
+			deltas[id] = int(runtime_wallets[id].pending_currency_delta)
+	if deltas.is_empty(): return true
+	if wallet_store == null: return false
+	var result: Dictionary = wallet_store.checkpoint(deltas)
+	if not result.ok: return false
+	for id: int in deltas:
+		runtime_wallets[id].wallet_balance = int(result.balances[id])
+		runtime_wallets[id].pending_currency_delta = 0
+		dirty_wallet.erase(id)
+	return true
+
+func spend_yang(owner_id: int, cost: int) -> Dictionary:
+	# Affordability is checked against authoritative RAM, including pending income.
+	if cost <= 0 or not runtime_wallets.has(owner_id): return {"ok": false, "error": "request"}
+	var wallet: Dictionary = runtime_wallets[owner_id]
+	if int(wallet.wallet_balance) < cost: return {"ok": false, "error": "funds"}
+	var result: Dictionary = wallet_store.spend(owner_id, int(wallet.pending_currency_delta), cost)
+	if result.ok:
+		wallet.wallet_balance = int(result.balance)
+		wallet.pending_currency_delta = 0
+		dirty_wallet.erase(owner_id)
+	return result
+
+func release_wallet(owner_id: int) -> void:
+	# Failed offline saves remain authoritative until a later successful retry.
+	if not dirty_wallet.has(owner_id): runtime_wallets.erase(owner_id)
+
+func flush_character(owner_id: int = -1) -> bool:
+	var progression_ok: bool = flush_progression(owner_id)
+	var wallet_ok: bool = flush_wallet(owner_id)
+	return progression_ok and wallet_ok
+
 func _process(delta: float) -> void:
+	_wallet_elapsed += delta
+	if _wallet_elapsed >= WALLET_SAVE_SECONDS:
+		_wallet_elapsed = fmod(_wallet_elapsed, WALLET_SAVE_SECONDS)
+		if not flush_wallet(): push_error("Wallet checkpoint failed; pending income retained for retry.")
 	_progression_elapsed += delta
 	if _progression_elapsed < PROGRESSION_SAVE_SECONDS: return
 	_progression_elapsed = fmod(_progression_elapsed, PROGRESSION_SAVE_SECONDS)
@@ -37,6 +104,7 @@ func start_database(world_info: Dictionary) -> void:
 	store = WorldStoreSqlite.new(db)
 	mail_store = MailStore.new(db)
 	item_store = ItemStoreSqlite.new(db)
+	wallet_store = WalletStoreSqlite.new(db)
 
 
 func configure_database(world_info: Dictionary) -> void:
@@ -72,7 +140,7 @@ func open_database() -> void:
 func close_database() -> void:
 	# Plugin doesn’t always expose close explicitly; if it does, call it.
 	# Otherwise let refcount drop; but prefer close if available.
-	flush_progression()
+	flush_character()
 
 
 func _notification(what: int) -> void:
@@ -100,7 +168,7 @@ func get_guild(id: int) -> Guild:
 func save_player(p: PlayerResource) -> void:
 	# A session/profile save has its own legacy payload. XP checkpoints themselves
 	# only use the three-column batch above, never this full serializer.
-	flush_progression(p.player_id)
+	flush_character(p.player_id)
 	store.save_player(p)
 
 
@@ -114,7 +182,7 @@ func save_guild(g: Guild) -> void:
 ## anyone who hadn't disconnected yet. Returns the count actually saved.
 func save_all_connected(connected_players: Dictionary) -> int:
 	# Includes dirty characters whose peers have already disconnected.
-	if not flush_progression(): return -1
+	if not flush_character(): return -1
 	var count: int = 0
 	for peer_id: int in connected_players:
 		var p: PlayerResource = connected_players[peer_id]
