@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Compatibility','Vulkan','Software','Baseline','BaselineVulkan')][string]$Mode = 'Compatibility',
+    [ValidateSet('Compatibility','Vulkan','Software','Baseline','BaselineVulkan')][string]$Mode = 'Vulkan',
     [switch]$Measure,
     [switch]$Interactive
 )
@@ -25,6 +25,7 @@ try {
     if($taskImport.ExitCode -ne 0 -or $taskImportErrors -match 'SCRIPT ERROR|Parse Error'){throw 'Spike script import failed'}
     $taskArgs='--path "'+$taskProject+'"'
     if($Mode -in @('Vulkan','BaselineVulkan')){$taskArgs+=' --rendering-method mobile --rendering-driver vulkan'}
+    else{$taskArgs+=' --rendering-method gl_compatibility --rendering-driver opengl3'}
     if($Mode -in @('Baseline','BaselineVulkan')){$taskArgs+=' -- --baseline'}
     elseif(-not $Interactive){$taskArgs+=' -- --automated';if($Measure){$taskArgs+=' --measure'}}
     if($Mode -eq 'Software'){$taskArgs+=' --software'}

@@ -75,3 +75,10 @@ refactor or a general crafting framework now.
 
 The subsequent [CEF UI spike](cef-ui-spike.md) is an isolated technical evaluation;
 it does not authorize production UI migration or change gameplay priorities.
+
+## CEF renderer decision - 2026-10-08
+
+CEF Web UI officially targets **Vulkan Mobile**. Compatibility/OpenGL is
+**unsupported / best-effort**; its drag findings are not a blocker for the
+supported Vulkan path. See [Web UI foundation](web-ui.md). This does not yet
+migrate gameplay screens or introduce CEF into server/headless targets.

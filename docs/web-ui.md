@@ -13,6 +13,18 @@ The original [CEF spike](cef-ui-spike.md) is historical evidence. This document
 specifies **protocol v1** and the current foundation. Its tests replace the old
 unversioned bridge tests while retaining their standalone runner/cache paths.
 
+## Official renderer target
+
+Decision accepted 2026-10-08: **CEF Web UI officially targets Vulkan Mobile**.
+Compatibility/OpenGL is **unsupported / best-effort**. Its failed drag test stays
+as historical evidence, but Compatibility parity is not a production adoption
+gate. Do not add input/rendering workarounds just to support that renderer.
+
+The isolated CEF project and browser test runners default to Vulkan Mobile.
+Explicit Compatibility/Software modes remain diagnostic best-effort checks.
+The main game's renderer remains unchanged until actual CEF client integration;
+this decision does not install CEF in gameplay or server projects.
+
 ## Architecture and application wiring
 
 - `source/client/ui_web/web_ui_host.gd`: the only production CEF adapter. It
@@ -216,7 +228,7 @@ python tools/cef_ui_spike/setup.py
 # Default: no browser or GUI window.
 & ./tests/run-web-ui.ps1
 # Explicit final integration check (opens the standalone fixture).
-& ./tests/run-web-ui.ps1 -WithBrowser -Mode Compatibility
+& ./tests/run-web-ui.ps1 -WithBrowser -Mode Vulkan
 & ./tests/run-cef-ui.ps1 -Mode Vulkan
 ```
 
@@ -273,10 +285,11 @@ Captured UI/3D output remained around 60 FPS in the short fixture.
 
 Recommendation: **ADOPT WITH CAVEATS**. The transport, application boundary and
 state lifecycle are ready for a first small real screen on the validated Vulkan
-path. Stable Compatibility/software drag input remains a blocker to claiming a
-renderer-independent production UI foundation. The existing client's renderer
-has not been changed by this work. Do not call the overall deployment production
-ready until that input finding and the release gates are resolved.
+path, which is now the official CEF target. Compatibility/software drag failures
+remain documented best-effort findings and are outside the supported scope.
+The existing client's renderer has not been changed by this work. Do not call
+the overall deployment production ready until the remaining release gates are
+resolved.
 
 Remaining gates: non-debug packaging, physical input/IME/DPI/alt-tab, helper crash
 behavior, long soak and a target-device memory/renderer budget. No Linux/macOS,

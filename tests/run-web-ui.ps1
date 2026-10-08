@@ -1,7 +1,7 @@
 param(
     [string]$NodeExecutable = "node",
     [switch]$WithBrowser,
-    [ValidateSet('Compatibility','Vulkan','Software')][string]$Mode = 'Compatibility'
+    [ValidateSet('Compatibility','Vulkan','Software')][string]$Mode = 'Vulkan'
 )
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
