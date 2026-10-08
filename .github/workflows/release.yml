@@ -180,6 +180,14 @@ jobs:
           # segfaults (Godot 4 CLI quirk; same trick as deploy-server.sh).
           ./godot --headless --path . --import || true
 
+      - name: Verify visuals without local legacy assets
+        run: |
+          set -euo pipefail
+          test ! -d dev_assets
+          test ! -d .local/metin2
+          timeout 30s ./godot --headless --path . --mode=client res://tests/optional_dog_visual.tscn -- --visual-expect=placeholder --no-dev-visuals | tee visual-test.log
+          grep -q "OPTIONAL_DOG_VISUAL_OK placeholder" visual-test.log
+
       - name: Export clients
         env:
           # Godot reads these for release signing when the preset's keystore

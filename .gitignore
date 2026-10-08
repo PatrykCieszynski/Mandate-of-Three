@@ -35,3 +35,8 @@ addons/godot-sqlite/bin/*
 /data/config/discord_webhook.cfg
 source/server/master/account_collection.tres
 /addons/godot_mcp
+
+# Optional local visual staging; never source/runtime dependencies
+/dev_assets/
+/tools/dev_assets/local.json
+__pycache__/

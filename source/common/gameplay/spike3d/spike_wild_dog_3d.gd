@@ -1,6 +1,6 @@
 class_name SpikeWildDog3D
 extends SpikeCharacter3D
-## Small procedural placeholder. AI, navigation, hit stun and knockback run only
+## Visuals resolve independently. AI, navigation, hit stun and knockback run only
 ## on the server; clients interpolate position and play presentation effects.
 
 const MAX_HP: int = 120
@@ -20,6 +20,7 @@ var agent: NavigationAgent3D
 var hp_label: Label3D
 var name_label: Label3D
 var _repath_ms: int = 0
+var presentation: DogVisual3D
 
 func setup_dog(id: int, spawn: Vector3) -> void:
 	mob_id = id
@@ -34,14 +35,9 @@ func setup_dog(id: int, spawn: Vector3) -> void:
 	collision.shape = shape
 	collision.position.y = 0.4
 	add_child(collision)
-	visual = _part(Vector3(0, 0.5, 0), Vector3(0.65, 0.45, 0.95), Color("986943"))
-	_part(Vector3(0, 0.65, -0.65), Vector3(0.4, 0.4, 0.45), Color("795033"))
-	_part(Vector3(0, 0.57, -0.93), Vector3(0.26, 0.2, 0.2), Color("3a2d25"))
-	for x: float in [-0.2, 0.2]:
-		for z: float in [-0.3, 0.3]:
-			_part(Vector3(x, 0.2, z), Vector3(0.13, 0.4, 0.14), Color("67462f"))
-		_part(Vector3(x, 0.92, -0.65), Vector3(0.12, 0.25, 0.16), Color("493426"))
-	_part(Vector3(0, 0.7, 0.65), Vector3(0.12, 0.12, 0.5), Color("67462f"))
+	presentation = DogVisual3D.new()
+	presentation.visual_id = &"stray_dog"
+	add_child(presentation)
 	name_label = _label("Wild Dog", 1.3, 32)
 	hp_label = _label("120 / 120", 1.65, 24)
 	if GameMode.is_world_server():
@@ -50,18 +46,6 @@ func setup_dog(id: int, spawn: Vector3) -> void:
 		agent.target_desired_distance = 0.15
 		agent.path_max_distance = 1.2
 		add_child(agent)
-
-func _part(center: Vector3, size: Vector3, tint: Color) -> MeshInstance3D:
-	var part := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = size
-	part.mesh = box
-	part.position = center
-	var material := StandardMaterial3D.new()
-	material.albedo_color = tint
-	part.material_override = material
-	add_child(part)
-	return part
 
 func _label(text: String, height: float, size: int) -> Label3D:
 	var label := Label3D.new()
@@ -118,12 +102,28 @@ func respawn() -> void:
 	collision_layer = 4
 
 func present_snapshot(snapshot: Dictionary) -> void:
+	var previous_state := ai_state
 	hp = int(snapshot.hp)
 	ai_state = str(snapshot.state)
-	visible = ai_state not in ["DEAD", "DISABLED"]
-	collision_layer = 4 if visible else 0
+	var active := ai_state not in ["DEAD", "DISABLED"]
+	# The corpse is presentation only. Collision disables immediately as before.
+	visible = ai_state != "DISABLED"
+	collision_layer = 4 if active else 0
+	name_label.visible = active
+	hp_label.visible = active
+	if ai_state == "DEAD" and previous_state != "DEAD": presentation.play_death()
+	elif active and previous_state in ["DEAD", "DISABLED"]: presentation.reset_alive()
 	apply_snapshot(snapshot.position, snapshot.yaw)
 	hp_label.text = "%d / %d" % [hp, MAX_HP]
+
+func interpolate(delta: float) -> void:
+	var previous_position := position
+	super.interpolate(delta)
+	var moving := Vector2(position.x - previous_position.x, position.z - previous_position.z).length() > delta * 0.1
+	presentation.set_locomotion(ai_state, moving)
+
+func play_hit() -> void:
+	presentation.play_hit()
 
 func mark_selected(selected: bool) -> void:
 	name_label.modulate = Color("ffe291") if selected else Color.WHITE
