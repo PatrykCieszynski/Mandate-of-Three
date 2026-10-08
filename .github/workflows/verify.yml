@@ -1,0 +1,55 @@
+name: Mandate verification
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the project's Godot editor
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_win64.exe.zip' -OutFile "$env:RUNNER_TEMP/godot.zip"
+          Expand-Archive "$env:RUNNER_TEMP/godot.zip" -DestinationPath .godot
+      - name: Import clean checkout
+        shell: pwsh
+        run: |
+          if (Test-Path dev_assets) { throw 'CI must not contain local legacy assets' }
+          if (Test-Path .local/metin2) { throw 'CI must not contain legacy sources' }
+          $engine = '.godot/Godot_v4.7.2-stable_win64_console.exe'
+          # Existing upstream translations/theme need a cold import before the
+          # subsequent project load. Keep both logs for diagnosis.
+          & $engine --headless --path . --import *> .godot/cold-import.log
+          & $engine --headless --path . --import *> .godot/import.log
+          if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
+          if (Select-String .godot/import.log -Pattern 'SCRIPT ERROR|Parse Error|Failed loading resource') { throw 'Project load failed' }
+      - name: Verify placeholders and gameplay
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --check
+          python -m unittest discover -s tests -p test_asset_staging.py
+          if ($LASTEXITCODE -ne 0) { throw 'Staging tests failed' }
+          & ./tests/run-visuals.ps1
+          foreach ($suite in @('items','spike3d','pve','combat','progression','xp','yang')) {
+            & "./tests/run-$suite.ps1"
+          }
+      - name: Keep verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-logs
+          path: |
+            .godot/*.log
+            .godot/verification/*.log
+          if-no-files-found: ignore

@@ -1,6 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
-# NOTE: export_presets.cfg IS committed — CI (release.yml) needs it to export
+# NOTE: export_presets.cfg IS committed for repeatable local exports
 # headlessly. It contains no secrets (encrypt_pck=false). If you ever add signing
 # keys or store credentials to a preset, move those to CI secrets instead.
 
