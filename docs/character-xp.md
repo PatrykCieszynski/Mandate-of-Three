@@ -1,67 +1,67 @@
-# XP i poziomy postaci — Spike 3D
+# Character XP and levels - 3D spike
 
-Stan: 2026-10-07, branch `codex/character-xp`. Serwerowe XP po śmierci Wild Doga,
-level-up, HUD i trwałość po relogu. Parametry walki i itemów pozostają bez zmian.
+Status: 2026-10-07, branch `codex/character-xp`. Server-side XP on Wild Dog death,
+level-up, HUD and persistence across relog. Combat and item parameters are unchanged.
 
-## Nagroda i poziomy
+## Rewards and levels
 
-Wild Dog daje 20 XP. Całą nagrodę otrzymuje właściciel największego udziału
-w faktycznie zadanych obrażeniach, tak jak przy rezerwacji łupu. Overkill nie
-zwiększa udziału; remis rozstrzyga niższe trwałe ID postaci. Ostatni cios nie
-przejmuje automatycznie nagrody. XP przysługuje za śmierć moba, niezależnie od
-podniesienia itemu; same trafienia i pickup nie dodają doświadczenia.
+A Wild Dog awards 20 XP. The full reward goes to the character with the highest
+actual damage contribution, as with loot reservation. Overkill does not increase
+contribution; ties use the lower persistent character ID. The last hit does not
+automatically take the reward. XP is granted on mob death regardless of item
+pickup; hits and pickup alone do not award experience.
 
-Wykorzystujemy istniejące `PlayerResource.add_experience()` i krzywą
-`70 × aktualny poziom`. Nadmiar XP przechodzi na kolejny poziom. Cztery psy
-od zera dają 80 XP: poziom 2 i 10/140 XP. To parametry prototypu, do późniejszego
-balansu. Istniejący zapis wolnych punktów atrybutów zachowuje przyrost +3 za level;
-rozdawanie punktów nie jest dostępne w tym 3D i nie zmienia ataku ani HP.
+Reuse `PlayerResource.add_experience()` and the curve `70 x current level`.
+Excess XP carries into the next level. Four dogs from zero yield 80 XP: level 2
+and 10/140 XP. These are prototype values for later balancing. Existing unspent
+attribute-point storage retains +3 per level; allocation is not available in this
+3D slice and does not change attack or HP.
 
-HUD pokazuje poziom, XP do następnego poziomu, pasek postępu i przez 5 sekund
-komunikat nagrody/awansu. Nazwa gracza nad kapsułą zawiera poziom. Poziomy są
-publiczne, dokładny postęp XP trafia tylko do właściciela. Klient nie wysyła
-polecenia przyznania XP, ilości doświadczenia ani oczekiwanego poziomu.
+The HUD shows level, XP to the next level, a progress bar and a reward/level-up
+notice for five seconds. The capsule's name label includes level. Levels are
+public; exact XP progress is owner-only. The client cannot request XP grants,
+experience amounts or an expected level.
 
-## Zapis i idempotencja
+## Persistence and idempotency
 
-XP i level zmieniają się natychmiast w authoritative PlayerResource w RAM.
-WorldDatabase oznacza progression postaci jako dirty i zapisuje te postacie
-co około 60 s, w jednej transakcji obejmującej tylko level, experience i wolne
-punkty atrybutów. Disconnect/logout, transfer i graceful shutdown wymuszają zapis.
-Niepodniesiony loot nadal jest runtime; checkpoint XP nie zależy od jego claimu.
+XP and level change immediately in the authoritative PlayerResource in RAM.
+WorldDatabase marks character progression dirty and checkpoints dirty characters
+approximately every 60 seconds in one transaction updating only level, experience
+and unspent attribute points. Disconnect/logout, transfer and graceful shutdown
+force a save. Unclaimed loot remains runtime state; XP checkpoints do not depend
+on claiming it.
 
-WorldSchema v13 usuwa wcześniejsze `kill_xp_rewards`. Nie zapisujemy historii
-zabójstw ani nie tworzymy trwałego kill ID. Stan DEAD moba zapobiega powtórzeniu
-tej samej śmierci w pojedynczym authoritative World Serverze. Po crashu akceptujemy
-utratę soft progression od ostatniego checkpointu. Szczegóły i rozdzielenie itemów,
-XP oraz przyszłego walleta opisuje [persistence policy](persistence-policy.md).
+WorldSchema v13 removes the earlier `kill_xp_rewards` table. No kill history or
+persistent kill ID is created. A mob's DEAD state prevents duplicate processing
+of that death in the single authoritative World Server. A crash may lose soft
+progression since the last checkpoint. Details and separation of items, XP and
+wallet state: [persistence policy](persistence-policy.md).
 
-## Weryfikacja
+## Verification
 
 ```powershell
 & .\tests\run-xp.ps1
 & .\tests\run-xp.ps1 -Preview
 ```
 
-Serwer i dwa klienty używają izolowanej SQLite i portu 18098. Uruchamiaj kolejno
-z testami PvE, combat i item progression. Fixture zmniejsza HP psów, żeby skrócić
-test; nie zmienia kodu produkcyjnego ataku ani przyznawania XP.
+A server and two clients use isolated SQLite and port 18098. Run sequentially
+with PvE, combat and item progression tests. The fixture lowers dog HP to shorten
+the test without changing production attack or XP code.
 
-Potwierdzono największy udział zamiast ostatniego ciosu, rzeczywiste obrażenia
-z uwzględnieniem overkill, brak XP przed śmiercią, podwójny callback śmierci,
-wiele killów bez zapisu XP do DB, awans 1 → 2 z nadmiarem 10 XP, prywatność
-postępu, publiczny poziom, HUD, brak dodatkowego XP za pickup, checkpoint/reopen
-oraz prawdziwy disconnect z dirty progression. Test checkpointów sprawdza batch,
-rollback, wąskie UPDATE, forced save i zaakceptowane crash window bez receiptów.
-Markery: `CHECKPOINT_OK`, `XP_SERVER_OK` i dwa `XP_CLIENT_OK`.
+Verified: highest contribution rather than last hit, actual damage excluding
+overkill, no XP before death, duplicate death callback, multiple kills without DB
+XP writes, level 1 -> 2 with 10 excess XP, private progression, public level, HUD,
+no pickup XP, checkpoint/reopen and real disconnect with dirty progression.
+Checkpoint tests cover batching, rollback, narrow UPDATE, forced save and the
+accepted crash window without receipts. Markers: `CHECKPOINT_OK`, `XP_SERVER_OK`
+and two `XP_CLIENT_OK`.
 
-Pełne gateway/master/world w `tests/pve_session.tscn` potwierdza identyczne XP
-i poziom po relogu razem z podniesionym i założonym ItemInstance. Wariant z flagą
-`--xp-levelup` walczy do poziomu 2 i potwierdza zachowanie awansu po relogu.
-Regresje itemów,
-PvE, combatu, progression i ruchu także przeszły. Render `character-xp-preview.png`
-w `.godot/verification` został wygenerowany i obejrzany.
+Full gateway/master/world sessions in `tests/pve_session.tscn` verify identical XP
+and level after relog along with the picked-up/equipped ItemInstance. The
+`--xp-levelup` variant fights to level 2 and verifies the level survives relog.
+Item, PvE, combat, progression and movement regressions also passed. The generated
+`character-xp-preview.png` in `.godot/verification` was visually inspected.
 
-Test checkpointu celowo wywołuje błąd SQL. W logach pozostają wcześniejsze komunikaty
-silnika o certyfikatach i zasobach przy zamykaniu. Ręczny test użytkownika tego
-etapu pozostaje otwarty.
+The checkpoint test intentionally triggers an SQL error. Earlier engine
+certificate/exit-resource diagnostics remain in logs. Manual user verification
+of this stage is still pending.

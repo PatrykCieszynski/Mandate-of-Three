@@ -1,77 +1,77 @@
-# Przyjęty kierunek projektu
+# Accepted project direction
 
-Decyzje po review użytkownika, 2026-10-07:
+Decisions following the user's review, 2026-10-07:
 
-- Tiny MMO jest infrastrukturą forka. Zachowujemy gateway/master/world,
-  auth i sesje, lifecycle instancji, transport/replikację i persistence.
-- Ruch, walka i pickup mają autorytet serwera; klient wysyła intencje.
-- ItemDefinition i persistent ItemInstance z UID, owner, placement, upgrade,
-  affixami, socketami i revision pozostają docelowym kierunkiem. Atomowy
-  equip/swap oraz rollback są fundamentem ekonomii.
-- Open-MT2 jest referencją zachowania Metina, nie runtime ani dependency.
-- Obecny model itemów wystarcza; nie rozbudowujemy crafting/item frameworka.
-- Priorytet: Player → Mob → Combat → Death → Ground Loot → Pickup → Persistent
-  Item, z testem dwóch klientów bijących jednego moba.
-- Loot leży na ziemi. Sprawdzamy własność, pełną torbę i double pickup.
-- AOI później: najpierw rozważyć reuse gridu Tiny MMO na płaszczyźnie XZ.
-  Local prediction też może poczekać.
-- Legacy schema jest przejściowe. Przed publiczną alphą potrzebny jest własny
-  czystszy reset lub migracja; nie obiecujemy trwałej kompatybilności Ekonia.
-- Po vertical slice zrobić drugi cleanup assetów i upstreamowego contentu
-  oparty na zależnościach. Nie usuwać ich agresywnie w trakcie budowy pionu.
-- README skrócić do Mandate of Three; Tiny MMO zostawić jako upstream/credits
-  i referencję infrastruktury.
-- Nowa praca trafia na tematyczne branche i jest integrowana lokalnym merge.
+- Tiny MMO provides the fork's infrastructure. Keep gateway/master/world, auth and
+  sessions, instance lifecycle, transport/replication and persistence.
+- Movement, combat and pickup are server-authoritative; clients send intentions.
+- ItemDefinition and persistent ItemInstance with UID, owner, placement, upgrade,
+  affixes, sockets and revision remain the chosen direction. Atomic equip/swap
+  and rollback are the foundation of the economy.
+- Open-MT2 is a behavioral reference for Metin, not a runtime or dependency.
+- The current item model is sufficient; do not expand the crafting/item framework.
+- Priority: Player -> Mob -> Combat -> Death -> Ground Loot -> Pickup -> Persistent
+  Item, tested with two clients attacking the same mob.
+- Loot stays on the ground. Verify ownership, full inventory and double pickup.
+- AOI comes later: first consider reusing Tiny MMO's grid on the XZ plane.
+  Local prediction can also wait.
+- The legacy schema is temporary. Before public alpha, introduce our own cleaner
+  reset/migration; indefinite compatibility with Ekonia saves is not promised.
+- After the vertical slice, perform a second dependency-based asset/upstream cleanup.
+  Avoid aggressive removal while building the slice.
+- Shorten the README around Mandate; retain Tiny MMO as upstream/credits and an
+  infrastructure reference.
+- New work belongs on topic branches and is integrated through local merges.
 
-## Kolejność po pionie PvE
+## Order after the PvE slice
 
-Aktualna decyzja użytkownika: najpierw **Combat Feel Pass**, dopiero później
-**Item Progression Slice**. Nie rozwijamy teraz item/crafting frameworka.
+The accepted order is **Combat Feel Pass** first, then **Item Progression Slice**.
+Do not expand the crafting/item framework now.
 
-Combat Feel Pass obejmuje kierunkowy hitbox melee, wiele trafionych celów,
-trzyciosowe combo z odrzutem finału, kilka Wild Dogów, nawigację mobów,
-reakcję na trafienie oraz śmierć i respawn gracza. Zaznaczenie celu jest pomocą
-dla autoataku i przyszłych skilli; podstawowy atak nie wymaga zaznaczenia.
-Wdrożenie i granice prototypu opisuje [Combat Feel Pass](combat-feel.md).
+Combat Feel Pass covers directional melee, multiple targets, a three-hit combo
+with final knockback, several Wild Dogs, mob navigation, hit reactions and player
+death/respawn. Target selection assists autoattack and future skills; basic attacks
+do not require a selected target. Implementation and limits: [Combat Feel Pass](combat-feel.md).
 
-Po ręcznym potwierdzeniu Combat Feel Pass użytkownik zaakceptował pierwszy
-[Item Progression Slice](item-progression.md): porównanie znalezionej broni,
-equip i odczuwalna zmiana serwerowych obrażeń, z trwałością po relogu.
-Balans mobów i parametrów walki zostawiamy na później. Nie rozszerzamy tego
-etapu o upgrade, crafting ani ogólny framework progression.
+After manually confirming combat, the user accepted the first
+[Item Progression Slice](item-progression.md): compare a dropped weapon, equip it,
+observe changed server damage and retain it after relog. Mob/combat balance comes
+later. This stage does not include upgrades, crafting or a generic progression framework.
 
-Kolejny wybrany przez użytkownika etap: [XP i poziomy postaci](character-xp.md).
-Wykorzystujemy pola i krzywą PlayerResource, dodajemy autorytatywną nagrodę za
-zabójstwo, HUD, level-up i trwałość po relogu. Reguła właściciela nagrody jest
-spójna z lootem: największy udział w obrażeniach. Balans pozostaje na później.
-Ręczny test pierwszego item progression i XP nadal czeka na użytkownika.
+The next selected stage was [character XP and levels](character-xp.md), reusing
+PlayerResource fields/curve, authoritative kill rewards, HUD, level-up and relog
+persistence. Reward ownership follows loot: highest damage contribution. Balance
+remains deferred. Manual user verification of initial item progression and XP is
+still pending.
 
-Po review: combat używa minimalnego runtime equipment/stats, XP i level działają
-w RAM z dirty checkpointem około 60 s. Rezygnujemy z permanentnych kill receiptów.
-Itemy pozostają immediate transactional persistence. Przyszły Yang income ma
-runtime wallet z pending delta i osobnym checkpointem; krytyczny spend ma być
-atomowy razem ze zmianą ekonomii. Pełny podział: [persistence policy](persistence-policy.md).
+Following review, combat uses minimal runtime equipment/stats; XP and levels run
+in RAM with dirty checkpoints around 60 seconds. Permanent kill receipts are
+removed. Items retain immediate transactional persistence. Yang income uses a
+runtime wallet with pending delta and a separate checkpoint; critical spending
+must be atomic with the economic change. See [persistence policy](persistence-policy.md).
 
-## Decyzje świata i następne milestone’y — 2026-10-08
+## World decisions and next milestones - 2026-10-08
 
-[Design Decisions](Mandate_of_Three_Design_Decisions.pdf) ustala jeden logiczny
-świat, transparentne overflow layers dopiero później, spawn regions/regional
-pressure, solo i party jako pełnoprawne sposoby gry, samodzielne klasy oraz
-podstawowe QoL bez consumable tax. Podane wartości są propozycjami do balansu.
+[Design Decisions](Mandate_of_Three_Design_Decisions.pdf) establishes one logical
+world, transparent overflow layers later, spawn regions/regional pressure,
+viable solo and party play, self-sufficient classes and basic QoL without a
+consumable tax. Numerical values are balance proposals.
 
-Przyjęta kolejność użytkownika:
+Accepted order:
 
-1. [Yang wallet](yang-wallet.md), GroundCurrency, mały autoloot bez peta,
-   HUD, delta checkpoint i jedna testowa operacja critical spend.
-2. Upgrade +0 → +1: Yang + jeden materiał, 100% success, atomowy item/wallet
-   commit i odświeżenie runtime stats. Bez failure, downgrade, destruction,
-   pity ani scrolli.
-3. Jeden reroll affixu: zużycie materiału i mutacja w jednej transakcji.
-4. Party vertical slice: invite/accept/leave, wspólna instancja i jawne reguły
-   XP oraz loot/contribution. Highest damage pozostaje tymczasową regułą solo.
-5. Pierwszy regionalny event: zabójstwa podnoszą pressure, threshold tworzy
-   Metin-like obiekt w jednym z kilku punktów; wspólna walka, reward i reset.
+1. [Yang wallet](yang-wallet.md), GroundCurrency, short-range autoloot without a
+   pet, HUD, delta checkpoints and one test critical-spend operation.
+2. Upgrade +0 -> +1: Yang + one material, 100% success, atomic item/wallet commit
+   and refreshed runtime stats. No failure, downgrade, destruction, pity or scrolls.
+3. One affix reroll: consume material and mutate the item in one transaction.
+4. Party vertical slice: invite/accept/leave, shared instance and explicit XP,
+   loot/contribution rules. Highest damage remains a temporary solo rule.
+5. First regional event: kills increase pressure; a threshold spawns a Metin-like
+   object at one of several points; shared combat, reward and reset.
 
-Boss, darmowy base dungeon, keyed tiery, klasy/aury, poty/lure, AOI,
-local prediction, layering i PostgreSQL są później. Nie rozwijamy obecnie
-kolejnego dużego refactoru ani ogólnego frameworka craftingu.
+Bosses, free base dungeons, keyed tiers, classes/auras, potions/lure, AOI, local
+prediction, layering and PostgreSQL come later. Do not start another large
+refactor or a general crafting framework now.
+
+The subsequent [CEF UI spike](cef-ui-spike.md) is an isolated technical evaluation;
+it does not authorize production UI migration or change gameplay priorities.

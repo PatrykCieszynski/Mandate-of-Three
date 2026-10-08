@@ -47,8 +47,8 @@ There is no preload or scene dependency on the local GLB.
 
 All five export presets exclude dev_assets/*, .local/* and local staging
 configuration. The existing export plugin also skips these paths. Keep those
-exclusions when adding a preset. Release CI runs the placeholder entity test on
-a fresh checkout before exporting; it has no legacy source requirement.
+exclusions when adding a preset. Verification CI runs the placeholder entity test on
+a fresh checkout without exporting; it has no legacy source requirement.
 
 The resolver is deliberately small, with no generic manifest or batch system.
 Warrior and Iron Sword now follow the same policy; see [Warrior compatibility](warrior-compatibility.md).
@@ -116,8 +116,8 @@ to overwrite existing final artwork.
 Verified locally on Godot 4.7.2: staging tests, all visual modes, live fallback,
 GPU rendering, Windows PCK contents, a cold project copied only from the Git
 index, and the existing item/spike3d/PvE/combat/progression/XP/Yang checks.
-Remote CI has not been run. The repository's release workflow uses Godot 4.6.3;
-that version is not claimed as locally verified here. Existing headless tests
+Remote CI has not been run. The former Godot 4.6.3 release workflow was removed;
+current verification CI selects Godot 4.7.2. Existing headless tests
 and editor exports report resource/ObjectDB cleanup warnings at process exit;
 the visual tests have the same three-resource warning, with successful markers.
 
@@ -129,4 +129,6 @@ after import has no missing-resource/parse errors. No legacy asset is involved.
 This existing cold-import limitation is not silently counted as a clean first
 import.
 
-Batch conversion i jawne grupy: [lokalny pipeline](legacy-asset-pipeline.md). Dotychczasowy stage_asset.py pozostaje kompatybilny dla czterech pierwotnych ID.
+External batch-conversion history: [legacy pipeline](legacy-asset-pipeline.md).
+The in-repository converter has been removed. stage_asset.py remains available
+for the four original selected IDs.

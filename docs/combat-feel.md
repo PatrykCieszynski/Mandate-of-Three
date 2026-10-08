@@ -1,81 +1,78 @@
 # Combat Feel Pass
 
-Stan: 2026-10-07, branch `codex/combat-feel-pass`. Rozszerzenie działającego pionu
-PvE, bez zmiany schema SQLite i bez rozbudowy item progression.
+Status: 2026-10-07, branch `codex/combat-feel-pass`. Extends the working PvE slice
+without SQLite schema changes or expanded item progression.
 
-## Sterowanie i walka
+## Controls and combat
 
-- WASD: ruch i kierunek postaci; I: ekwipunek; E: najbliższy łup.
-- Przytrzymana Spacja: powtarzane zamachy przed postacią, także bez celu.
-- LPM: opcjonalne zaznaczenie psa; kliknięcie poza mobem usuwa zaznaczenie.
-- F: autoatak na zaznaczonego psa, z prostym podejściem i obrotem.
-  Ręczny ruch, śmierć gracza lub celu przerywa autoatak.
+- WASD: movement/facing; I: inventory; E: nearest loot.
+- Hold Space: repeated swings in front of the character, including without a target.
+- Left click: optionally select a dog; clicking away clears selection.
+- F: autoattack the selected dog with simple approach/turning.
+  Manual movement or player/target death interrupts autoattack.
 
-Klient wysyła tylko `request_attack(sequence)`; nie podaje ID celu, obrotu,
-obrażeń ani listy trafień. Serwer sprawdza sesję, żywego gracza, monotoniczną
-sekwencję int32 i recovery. Pobiera atak z runtime equipment/stats, zapamiętuje
-serwerowy kierunek postaci i rozpoczyna zamach. Atak pochodzi teraz z runtime
-statów załadowanych przy wejściu i odświeżanych po commit itemów, bez query przy
-zamachu; patrz [persistence policy](persistence-policy.md). Nietrafiony zamach zużywa etap
-combo i recovery. Ruch gracza jest blokowany na czas recovery.
+Clients send only `request_attack(sequence)`, not target ID, rotation, damage or
+hit lists. The server validates session, living player, monotonic int32 sequence
+and recovery. It reads attack from runtime equipment/stats, records server facing
+and starts a swing. Entry loads runtime stats; item commits refresh them without
+per-swing queries; see [persistence policy](persistence-policy.md). Misses still
+consume combo stage/recovery. Player movement is blocked during recovery.
 
-Trafienie jest rozstrzygane po windupie przez zapytanie fizyki na warstwie mobów:
-zasięg 2,4 m, sektor ±65° przed postacią, różnica wysokości do 1,2 m oraz
-nieprzesłonięta linia w warstwie świata. Wszystkie kwalifikujące się psy otrzymują
-obrażenia raz w danym zamachu; cel zaznaczony przez klienta nie wpływa na wynik.
-Broad phase pobiera do 64 colliderów, co pokrywa obecną arenę z czterema psami.
+After windup, a mob-layer physics query resolves hits: 2.4 m reach, +/-65-degree
+frontal sector, up to 1.2 m vertical difference and unobstructed world-layer line
+of sight. Every eligible dog takes damage once per swing; client-selected targets
+do not affect the result. Broad phase returns up to 64 colliders, sufficient for
+the current four-dog arena.
 
-| Etap | Windup | Recovery | Obrażenia | Reakcja żywego moba |
+| Stage | Windup | Recovery | Damage | Living mob reaction |
 | --- | --- | --- | --- | --- |
-| 1 | 120 ms | 450 ms | atak z ekwipunku | 120 ms hit stun |
-| 2 | 140 ms | 450 ms | atak z ekwipunku | 120 ms hit stun |
-| 3 | 180 ms | 700 ms | 1,5 × atak, zaokrąglony w dół | 350 ms hit stun i odrzut |
+| 1 | 120 ms | 450 ms | Equipment attack | 120 ms hit stun |
+| 2 | 140 ms | 450 ms | Equipment attack | 120 ms hit stun |
+| 3 | 180 ms | 700 ms | 1.5 x attack, rounded down | 350 ms hit stun and knockback |
 
-Przerwa ponad 1100 ms między przyjętymi zamachami rozpoczyna combo od etapu 1.
-Odrzut ma początkową prędkość 7 m/s od gracza i wygasa przy serwerowej fizyce;
-kolizje ze światem nadal obowiązują. Zgon przed impactem anuluje rozpoczęty
-zamach. Powtórzone sekwencje i spam nie obchodzą recovery.
+A gap over 1100 ms between accepted swings resets to stage 1. Knockback begins
+at 7 m/s away from the player and decays through server physics; world collisions
+remain active. Death before impact cancels the swing. Replay/spam cannot bypass recovery.
 
-To parametry naszego prototypu, nie deklaracja dokładnego balansu ani limitów
-oryginalnego Metina. Cel jest przygotowany jako pomoc autoataku; skille nie są
-jeszcze wdrożone.
+These are prototype parameters, not claims about original Metin balance/limits.
+Selection assists autoattack; skills are not implemented yet.
 
-## Wild Dogi, nawigacja i śmierć
+## Wild Dogs, navigation and death
 
-Arena ma cztery psy po 120 HP. AI zachowuje `IDLE → CHASE → ATTACK → RETURN`.
-Aggro wynosi 6 m, leash 12 m od domu, zasięg ataku 1,65 m. Pies zadaje 6 obrażeń
-co 1200 ms, jeżeli gracz jest żywy, widoczny i mob nie jest w hit stun.
-Utrata celu lub wyjście poza leash uruchamia powrót do domu i odzyskanie HP.
+The arena has four 120-HP dogs. AI remains `IDLE -> CHASE -> ATTACK -> RETURN`.
+Aggro is 6 m, leash 12 m from home, attack reach 1.65 m. A dog deals 6 damage every
+1200 ms while the player is living/visible and the dog is not hit-stunned.
+Target loss or exceeding leash triggers return and HP restoration.
 
-Serwer jednorazowo wypieka navmesh małej areny ze StaticBody3D warstwy świata.
-Każdy pies korzysta z NavigationAgent3D i idzie do kolejnych punktów ścieżki
-przez CharacterBody3D. Ścieżki są odświeżane co 200 ms; zapytania czekają na
-synchronizację mapy nawigacji. Przeszkody są uwzględnione podczas wypiekania.
-Podejście korzysta z [natywnego navmeshu Godota](https://docs.godotengine.org/en/4.5/tutorials/navigation/navigation_using_navigationmeshes.html).
-Autoatak gracza ma proste podejście w stronę celu, bez własnego pathfindingu.
+The server bakes a small-arena navmesh once from world-layer StaticBody3D geometry.
+Each dog uses NavigationAgent3D and follows waypoints through CharacterBody3D.
+Paths refresh every 200 ms; queries wait for navigation-map synchronization.
+Obstacles are included in baking. This uses
+[Godot's native navigation mesh](https://docs.godotengine.org/en/4.5/tutorials/navigation/navigation_using_navigationmeshes.html).
+Player autoattack approaches the target directly without its own pathfinding.
 
-Gracz ma 100 HP. Przy zerowym HP serwer zatrzymuje ruch, anuluje zamach i combo,
-blokuje kolejne ataki i pickup. Klient pokazuje przewróconą kapsułę i odliczanie.
-Po 2 s serwer odradza gracza w punkcie startowym z 100 HP; następny zamach zaczyna
-combo od 1. Pies odradza się po 6 s. Są to automatyczne respawny prototypu.
+Players have 100 HP. At zero, the server stops movement, cancels swing/combo and
+blocks attack/pickup. The client shows a fallen capsule and countdown. After two
+seconds, the server respawns at the start with 100 HP; the next combo starts at 1.
+Dogs respawn after six seconds. These are automatic prototype respawns.
 
-Śmierć każdego psa tworzy osobny łup na ziemi. Własność liczy się z faktycznie
-zadanych obrażeń. Rezerwacja 15 s, lifetime 120 s, pełna torba i atomowe claimy
-pozostają jak w [pionie PvE](pve-ground-loot.md). Podniesiony egzemplarz zachowuje
-UID po relogu; HP, pozycje i niepodniesiony loot pozostają stanem runtime.
+Each dog death creates a separate ground drop. Ownership uses actual damage.
+Reservation 15 seconds, lifetime 120 seconds, full bags and atomic claims follow
+[PvE](pve-ground-loot.md). Picked-up instances keep their UID across relog;
+HP, positions and unclaimed loot remain runtime state.
 
-## Prezentacja i granice
+## Presentation and limits
 
-Psy mają proceduralne modele zastępcze z pudełek. Kapsuła gracza porusza bronią
-i pokazuje łuk zamachu; finał ma złoty efekt. Trafienie powoduje błysk modelu,
-krótkie zatrzymanie moba i fizyczny odrzut finału. Snapshoty mobów, HP, combo
-i respawnu są rozsyłane przy 10 Hz; klienci interpolują ruch.
+Dogs initially use procedural box placeholders. The player capsule moves its
+weapon and shows a swing arc; the finisher has a gold effect. Hits flash the model,
+briefly stop the mob and physically knock it back on the finisher. Mob/HP/combo/
+respawn snapshots broadcast at 10 Hz; clients interpolate movement.
 
-Nie ma jeszcze docelowego rigu i animacji, PvP, skilli, lokalnej predykcji ani
-AOI. Nawigacja jest dla statycznej, małej areny, bez avoidance tłumu i przebudowy
-navmeshu w trakcie gry. Kolejny etap item progression wymaga osobnego zakresu.
+Final rigs/animations, PvP, skills, local prediction and AOI are not included in
+this stage. Navigation targets a small static arena without crowd avoidance or
+runtime navmesh rebuilds. Item progression needs its own next-stage scope.
 
-## Weryfikacja
+## Verification
 
 ```powershell
 & .\tests\run-combat.ps1
@@ -84,22 +81,20 @@ navmeshu w trakcie gry. Kolejny etap item progression wymaga osobnego zakresu.
 & .\tests\run-items.ps1
 ```
 
-`run-combat` uruchamia serwer i dwa klienty WebSocket na porcie 18098 z bazą
-testową. Uruchamiaj go kolejno z `run-pve`, który używa tego samego portu.
-Test sprawdza dwa psy z przodu oraz nietrafione psy z boku i z tyłu, ignorowanie
-zaznaczonego celu, spam/replay, etapy i reset combo, rzeczywisty odrzut, omijanie
-centralnej przeszkody, powrót i leczenie psa, śmierć podczas windupu, blokadę
-inputu/ataku/pickupu po śmierci oraz ponowny atak po respawnie. Oba klienty
-potwierdzają replikowane trafienia, efekt finału, śmierć i odrodzenie tego samego
-gracza. Markery: `COMBAT_SERVER_OK` i dwa `COMBAT_CLIENT_OK`.
+`run-combat` starts a server/two WebSocket clients on port 18098 with a test DB.
+Run sequentially with `run-pve`, which shares that port. It checks two frontal
+dogs and missed side/rear dogs, ignored target selection, spam/replay, combo
+stages/reset, actual knockback, routing around the central obstacle, return/healing,
+death during windup, post-death input/attack/pickup blocking and attacks after
+respawn. Both clients verify replicated hits, finisher effect and the same player's
+death/respawn. Markers: `COMBAT_SERVER_OK` and two `COMBAT_CLIENT_OK`.
 
-Istniejący test PvE nadal sprawdza dwóch graczy bijących tego samego psa,
-ownership, pełną torbę, double pickup i trwałość UID po ponownym otwarciu SQLite.
-Pełne logowanie przez gateway/master/world sprawdzono także `tests/pve_session.tscn`:
-walka, ground loot, pickup i dokładny UID po relogu. Wygenerowano i obejrzano
-podglądy renderu combo i łupu w `.godot/verification`.
+Existing PvE still checks two players attacking one dog, ownership, full bag,
+double pickup and UID durability after SQLite reopen. Full gateway/master/world
+login was also verified through `tests/pve_session.tscn`: combat, ground loot,
+pickup and exact UID after relog. Combo/loot previews in `.godot/verification` were
+rendered and visually inspected.
 
-Import i załadowanie 873 źródłowych skryptów/scen/zasobów przeszły bez błędów
-parsowania. W logach pozostają wcześniejsze komunikaty silnika o magazynie
-certyfikatów i zasobach przy zamykaniu. Ręczne wyczucie sterowania i timingów
-na pulpicie pozostaje do oceny użytkownika.
+Import and all 873 source scripts/scenes/resources loaded without parse errors.
+Earlier certificate-store/exit-resource diagnostics remain. Manual assessment
+of desktop controls/timings was left to the user at this stage.

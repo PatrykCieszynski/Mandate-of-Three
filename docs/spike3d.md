@@ -1,98 +1,93 @@
-# Spike 3D — pierwszy etap
+# 3D spike - first stage
 
-Stan: 2026-10-07. Domyślna instancja `Spike` uruchamia teraz natywną mapę 3D.
+Status: 2026-10-07. The default Spike instance now runs a native 3D map.
 
-## Działający zakres
+## Implemented scope
 
-- Podłoga 32×32 m, ściany i dwie przeszkody ze StaticBody3D.
-- Gracze jako kapsuły CharacterBody3D z nazwą, kolorem i znacznikiem kierunku.
-- Kamera perspektywiczna śledząca lokalną postać z góry.
-- Ruch WASD po płaszczyźnie XZ, grawitacja i kolizje 3D.
-- Logowanie i handoff przez istniejący gateway, master i world.
-- Dołączanie, lista graczy, snapshoty ruchu i usuwanie odłączonych postaci.
-- Panel ekwipunku pod I, wyposażenie po UID i zapis egzemplarzy w SQLite;
-  [model przedmiotów i testy](item-instances.md).
+- 32 x 32 m floor, walls and two StaticBody3D obstacles.
+- CharacterBody3D player capsules with names, colors and facing markers.
+- Perspective camera following the local character from above.
+- WASD movement on XZ, gravity and 3D collisions.
+- Login/handoff through existing gateway, master and world.
+- Joining, player list, movement snapshots and disconnected-character cleanup.
+- I inventory panel, UID equipment and SQLite instances;
+  [item model and tests](item-instances.md).
 
-Klient wysyła numer sekwencji i kierunek Vector2 przy 20 Hz. Serwer normalizuje
-kierunek, odrzuca wartości niefinitywne oraz powtórzone/stare sekwencje, a fizykę
-CharacterBody3D wykonuje przy 60 Hz z prędkością 5 m/s. Brak świeżego inputu
-przez 250 ms zatrzymuje ruch. Utrata fokusu okna wysyła zerowy kierunek.
-Snapshoty Vector3 + yaw wracają przy 20 Hz; klienci interpolują pozycję i obrót.
-Pierwszy snapshot lokalnego gracza kończy ekran ładowania.
+Clients send a sequence number and Vector2 direction at 20 Hz. The server
+normalizes direction, rejects non-finite values and repeated/stale sequences,
+and runs CharacterBody3D physics at 60 Hz with a 5 m/s speed. Missing fresh input
+for 250 ms stops movement. Window focus loss sends zero direction.
+Vector3 + yaw snapshots return at 20 Hz; clients interpolate position/rotation.
+The local player's first snapshot dismisses the loading screen.
 
-Identyfikator gracza jest pobierany z nadawcy RPC. Dołączenie wymaga zarówno
-`awaiting_peers` konkretnej instancji, jak i uwierzytelnionej PlayerResource
-w WorldServer. Klient nie podaje własnej pozycji ani ID sterowanej postaci.
+Player identity comes from the RPC sender. Joining requires both the instance's
+`awaiting_peers` entry and an authenticated PlayerResource in WorldServer.
+Clients supply neither their position nor the controlled character ID.
 
-## Granica migracji
+## Migration boundary
 
-`spike_instance_3d.gd` po stronie klienta i serwera to adaptery istniejącego
-cyklu instancji. Dziedziczą typy używane przez menedżery sesji, ale nie uruchamiają
-starych Player/LocalPlayer/Map2D ani StateSynchronizer z polami Vector2.
-Nowy współdzielony endpoint SpikeWorld3D ma ten sam node path i konfigurację RPC
-po obu stronach. `InstanceResource.use_3d` wybiera adapter serwera, a klient
-rozpoznaje typ załadowanej sceny.
+Client/server `spike_instance_3d.gd` scripts adapt the existing instance lifecycle.
+They inherit the session managers' expected types without running old Player/
+LocalPlayer/Map2D or Vector2 StateSynchronizer behavior. Shared SpikeWorld3D uses
+the same node path/RPC configuration on both sides. `InstanceResource.use_3d`
+selects the server adapter; the client detects the loaded scene type.
 
-Legacy HUD, walka, NPC i interakcje pozostają do portowania. Spike ma własny
-panel przedmiotów, prosty model założonej broni i małą nakładkę z instrukcją ruchu
-i liczbą graczy. Stary inventory/equip nie obsługuje nowej mapy. Obecny transport
-oraz sesje TinyMMO pozostają podstawą projektu. Domyślna mapa techniczna 2D została
-zastąpiona; pozostałe klasy 2D są nadal zależnościami modułów w kwarantannie.
+Legacy HUD, combat, NPCs and interactions remained to be ported at this stage.
+The spike has its own item panel, simple equipped-weapon model and a small movement/
+player-count overlay. Old inventory/equipment does not handle the new map.
+TinyMMO transport/sessions remain the foundation. The default technical 2D map
+was replaced; remaining 2D classes still support quarantined modules.
 
-Pozycja 3D jest na tym etapie stanem runtime. Ponowne wejście tworzy kapsułę na
-punkcie startowym; starego `last_position` Vector2 nie reinterpretujemy jako
-współrzędnych 3D. Trwały zapis pozycji wymaga osobnego, jawnego rozszerzenia modelu.
-Nie ma jeszcze predykcji lokalnego ruchu, AOI ani limitu liczby graczy dla broadcastu
-snapshotów. Pierwszy etap jest przeznaczony do małego lokalnego spike'a.
+3D position is runtime state. Reentry creates a capsule at its spawn; legacy
+Vector2 `last_position` is not reinterpreted as 3D coordinates. Persistent position
+requires an explicit model extension. No local movement prediction, AOI or snapshot
+broadcast player cap exists yet. This first stage targets a small local spike.
 
-## Pliki
+## Files
 
-| Plik | Odpowiedzialność |
+| File | Responsibility |
 | --- | --- |
-| `source/common/gameplay/spike3d/spike_world_3d.gd` | Arena, wspólne RPC, kontrola inputu, snapshoty, kamera i nakładka. |
-| `source/common/gameplay/spike3d/spike_character_3d.gd` | Ciało i kolizja kapsuły, serwerowa fizyka, interpolacja klienta. |
-| `source/common/gameplay/maps/spike/spike_map_3d.tscn` | Scena domyślnej mapy Spike. |
-| `source/server/world/components/spike_instance_3d.gd` | Adapter instancji serwera. |
-| `source/client/network/spike_instance_3d.gd` | Adapter instancji klienta. |
-| `tests/spike3d_network.gd` | Test dwóch klientów przez WebSocket, bez zmian kont i bazy. |
-| `tests/run-spike3d.ps1` | Uruchomienie trzech procesów i sprawdzenie kodów wyjścia oraz markerów testu. |
+| `source/common/gameplay/spike3d/spike_world_3d.gd` | Arena, shared RPCs, input validation, snapshots, camera and overlay. |
+| `source/common/gameplay/spike3d/spike_character_3d.gd` | Capsule body/collision, server physics, client interpolation. |
+| `source/common/gameplay/maps/spike/spike_map_3d.tscn` | Default Spike map scene. |
+| `source/server/world/components/spike_instance_3d.gd` | Server instance adapter. |
+| `source/client/network/spike_instance_3d.gd` | Client instance adapter. |
+| `tests/spike3d_network.gd` | Two-client WebSocket test without changing accounts or DB. |
+| `tests/run-spike3d.ps1` | Launch three processes and verify exit codes/test markers. |
 
-## Weryfikacja
+## Verification
 
-Godot 4.7.2 z projektowego `.godot`:
+Godot 4.7.2 from the project's `.godot/`:
 
-- Import edytora: brak błędów parsowania nowych skryptów.
-- Wszystkie 873 skrypty, sceny i zasoby źródłowe zostały załadowane
-  po dodaniu modelu egzemplarzy, pionu PvE i Combat Feel Pass.
-- Test WebSocket: serwer + dwa headless klienty, wszystkie trzy procesy exit 0.
-  Potwierdzono listę dwóch graczy, ruch widziany przez drugiego klienta, ograniczenie
-  prędkości mimo dużego kierunku, odrzucenie replay/NaN, zatrzymanie po wygaśnięciu
-  inputu, kolizję ze ścianą/przeszkodą i cleanup po disconnect.
-- Pełne wejście przez gateway/master/world: dwa lokalne konta gościa i nowe
-  postacie testowe; oba klienty otrzymały stan 3D i widziały ruch drugiej postaci.
-  Fixture pełnego logowania i logi są w ignorowanym `.godot/verification`.
-- Render OpenGL: wygenerowano i obejrzano podgląd areny oraz dwóch kapsuł.
-- Ręczny test 3D na pulpicie użytkownika: użytkownik potwierdził działanie
-  po uruchomieniu dwóch klientów (2026-10-07). Jest to potwierdzenie ogólne;
-  reconnect i trwały zapis pozycji pozostają poza tym testem.
+- Editor import: no new-script parse errors.
+- All 873 source scripts/scenes/resources loaded after adding instances, PvE and combat.
+- WebSocket test: server plus two headless clients, all exit 0. Verified two-player
+  lists, movement seen by the other client, speed cap despite oversized direction,
+  replay/NaN rejection, expired-input stopping, wall/obstacle collisions and
+  disconnect cleanup.
+- Full gateway/master/world entry: two local guest accounts/new test characters;
+  both clients received 3D state and saw each other's movement. Full-login fixture/
+  logs live in ignored `.godot/verification`.
+- OpenGL arena/two-capsule preview generated and visually inspected.
+- Manual desktop test: user confirmed two-client 3D operation on 2026-10-07.
+  This is general confirmation, not reconnect or persistent-position verification.
 
-Powtarzalny test sieci/fizyki z katalogu projektu:
+Repeatable network/physics test from the project directory:
 
 ```powershell
 & .\tests\run-spike3d.ps1
 ```
 
-Test używa osobnego portu 18097. Fixture dostarcza lokalne zasoby sesji,
-więc nie wymaga uruchomienia gateway/master/world i nie testuje ich autoryzacji.
-Pełny handoff sprawdzono oddzielnie. Logi pozostają w `.godot/verification`.
-W środowisku nadal pojawiają się wcześniejsze komunikaty o magazynie certyfikatów
-Windows i zasobach przy zamykaniu; nie są to błędy nowych skryptów, lecz runtime
-nie jest całkowicie wolny od komunikatów silnika.
+The test uses port 18097 and fixture session resources. It needs no running
+gateway/master/world and does not test their authorization; full handoff was
+verified separately. Logs stay in `.godot/verification`. Earlier Windows
+certificate-store/exit-resource diagnostics remain; these are not new script
+errors, but runtime is not entirely free of engine diagnostics.
 
-## Następny etap
+## Next stage
 
-ItemDefinition/ItemInstance, equip po UID i trwały zapis są wdrożone.
-[Pion PvE z mobem i ground loot](pve-ground-loot.md) dodaje pierwszy przepływ
-walki, śmierci i pickupu. Dalsze priorytety opisuje [kierunek projektu](project-direction.md).
-[Combat Feel Pass](combat-feel.md) rozszerza ten pion o kierunkowe combo,
-cztery Wild Dogi, nawigację i respawn gracza. Item Progression Slice jest później.
+ItemDefinition/ItemInstance, UID equipment and persistence are implemented.
+The [PvE ground-loot slice](pve-ground-loot.md) adds combat/death/pickup.
+Further priorities: [project direction](project-direction.md).
+[Combat Feel Pass](combat-feel.md) expands this to directional combos, four Wild
+Dogs, navigation and player respawn. Item Progression Slice follows that stage.

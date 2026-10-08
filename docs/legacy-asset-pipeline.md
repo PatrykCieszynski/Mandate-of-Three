@@ -1,71 +1,77 @@
-# Optional local legacy asset pipeline
+# External legacy asset pipeline - historical record
 
-This optional local development pipeline has been validated against legacy Metin2 client assets. Metin2 is a third-party game/trademark and is not affiliated with this project. No original or derived third-party assets are distributed by Mandate of Three.
+The optional local development pipeline was validated against legacy Metin2
+client assets. Metin2 is a third-party game/trademark unaffiliated with this
+project. Mandate distributes no original or derived third-party assets.
 
-Pipeline jest narzędziem developerskim. Legacy źródła, zależności importera,
-cache, logi, modele i tekstury zostają poza projektem Godot i Git. Konwersja nie
-wykonuje stagingu. Gameplay nadal korzysta z logicznych visual IDs, a AI, ruch,
-walka, economy i persistence nie wybierają zachowania na podstawie grafiki.
+**Repository status, 2026-10-08:** the owner removed the in-repository converter,
+index, catalog and example configuration. Their obsolete fixture/CI step and local
+batch runner were removed as well. Commands below record the former tooling;
+they no longer run from this repository. Conversion remains external. Existing
+GLBs can still be staged with tools/dev_assets/stage_asset.py; see
+[local development visuals](local-dev-visuals.md). Generated assets in this
+workspace were reported at `N:/Mandate local/metin2/generated`; source locations
+belong in ignored local configuration, never in gameplay code.
 
-## Reuse sprawdzonego spike'a
+The remaining sections retain the implementation findings and historical results.
 
-BlenderGR2rs w rewizji 8722bb1e6fa431cfd395b4e56f8eb2c37b9e05fc i Blender 5.1.2
-pozostają sprawdzonym zestawem. Nie ma nowego dekodera GR2 ani pack extractora.
-Skrypt blender_export.py przenosi procedury load, materialize i export oraz bind
-włosów ze sprawdzonego eksportu Warriora. Zachowuje skalę .01, flip UV V, Z rotation
-180° dla aktorów, standardowy glTF Y-up, sampling 30 FPS i siedem mapowań klipów
-Warriora. Sword zachowuje bake rest transform do metrów i usunięcie jednego bone.
-Wspólny socket dalej obraca ostrze o +90° local Z.
+## Development boundary
 
-Nową częścią jest orchestration: indeks, ActorBundle, jawny katalog, rozwiązywanie
-wygrywających tekstur, fingerprint, osobny proces Blender dla konwersji,
-raportowanie i staging. Dotychczasowe pojedyncze eksportery zewnętrznego spike'a
-pozostają dostępne jako referencja; stager czterech pierwotnych ID nadal działa.
+Legacy sources, importer dependencies, cache, logs, models and textures stay
+outside the Godot project/Git. Conversion does not stage assets. Gameplay uses
+logical visual IDs; AI, movement, combat, economy and persistence do not select
+behavior from artwork.
 
-## Konfiguracja
+## Reuse of the validated spike
 
-Python 3.12+ (stdlib), Blender i checkout BlenderGR2rs z jego natywną biblioteką.
-Checkout importera musi być zewnętrzny. Narzędzia nie instalują go automatycznie.
+BlenderGR2rs revision 8722bb1e6fa431cfd395b4e56f8eb2c37b9e05fc and Blender 5.1.2
+were the validated combination. No new GR2 decoder or pack extractor was added.
+blender_export.py reused Warrior load/materialize/export and hair binding.
+It retained scale .01, UV V flip, 180-degree Z rotation for actors, standard glTF
+Y-up, 30 FPS sampling and seven Warrior clip mappings. Sword export retained
+rest-transform baking into metres and removal of its single bone. The shared
+socket still rotates the blade +90 degrees on local Z.
 
-Skopiuj tools/legacy_assets/local.example.json do gitignored local.json. Ustaw:
-source_root (katalog z bin/pack), generated_root, blender, importer_root
-(katalog zawierający moduł BlenderGR2rs), importer_revision. generated_root może
-być pod source_root/generated, ale nie pod bin ani wewnątrz projektu Godot.
-Względne ścieżki konfiguracji są liczone od repo root. Przykład katalogu źródeł:
-../Mandate Local/legacy; ten przykład nie jest ścieżką zakodowaną w gameplayu.
+New orchestration covered index, ActorBundle, explicit catalog, winning texture
+resolution, fingerprints, separate Blender processes, reporting and staging.
+External single-asset spike exporters remained references; the original four-ID
+stager remains available in this repository.
 
-Każde pole można nadpisać środowiskiem MANDATE_LEGACY_SOURCE_ROOT,
-MANDATE_LEGACY_GENERATED_ROOT, MANDATE_LEGACY_BLENDER, MANDATE_LEGACY_IMPORTER_ROOT,
-MANDATE_LEGACY_IMPORTER_REVISION. --config pozwala użyć innego pliku konfiguracji.
+## Former configuration
 
-## Wymagania zależne od komendy
+Required Python 3.12+ (stdlib), Blender and an external BlenderGR2rs checkout with
+its native library. Tools did not install the importer automatically.
 
-| Komenda | Wymagane pola konfiguracji |
+The former tools/legacy_assets/local.example.json was copied to ignored local.json
+with source_root (bin/pack parent), generated_root, blender, importer_root
+(directory containing BlenderGR2rs) and importer_revision. generated_root could
+be source_root/generated but not under bin or inside the Godot project. Relative
+paths resolved from repository root. ../Mandate Local/legacy was an example, not
+a gameplay constant.
+
+Environment overrides were MANDATE_LEGACY_SOURCE_ROOT,
+MANDATE_LEGACY_GENERATED_ROOT, MANDATE_LEGACY_BLENDER, MANDATE_LEGACY_IMPORTER_ROOT
+and MANDATE_LEGACY_IMPORTER_REVISION; --config selected another configuration.
+
+| Historical command | Required configuration |
 | --- | --- |
 | index, query, resolve_asset | source_root, generated_root |
 | stage_asset, stage_group | generated_root |
 | convert_asset, convert_group, resolve_asset --native | source_root, generated_root, blender, importer_root, importer_revision |
 
-Zwykłe resolve_asset odczytuje indeks i tekstowe dependencies bez natywnego probe.
-Opcja --native dodaje pełne rozpoznanie tekstur GR2 przez dotychczasowy importer.
-Konwersja zawsze korzysta z pełnego probe; jej ustawienia i semantyka nie zmieniają się.
-Staging nie wymaga źródeł, indeksu ani zainstalowanego Blendera/importera.
+Ordinary resolve_asset read index/text dependencies without native probing.
+--native added full GR2 texture resolution via the importer. Conversion always
+used full probing. Staging needed no sources/index/Blender/importer.
 
-## Migracja lokalnej konfiguracji
+The earlier naming cleanup moved local config to tools/legacy_assets/local.json
+and selected assets to res://dev_assets/legacy/, with MANDATE_LEGACY_ variables
+and no old API aliases. External source/generated directory names did not need
+changing or reconversion merely for staging names. Tooling changes affected the
+converter fingerprint under the existing cache policy.
 
-Przenieś lokalny config do tools/legacy_assets/local.json, a wybrane lokalne assety do
-res://dev_assets/legacy/. Zmień zmienne środowiskowe
-na prefiks MANDATE_LEGACY_. Nie ma aliasu starego publicznego API. W tym cleanupie
-lokalne pliki tego workspace zostały przeniesione razem z konfiguracją.
+## Historical commands
 
-Fizyczne zewnętrzne katalogi źródeł i generated mogą zachować swoje nazwy: ich
-rzeczywiste ścieżki są wyłącznie w gitignored config. Nie trzeba przenosić pełnej
-biblioteki ani rekonwertować jej tylko dla nazwy stagingu. Nowa wersja tooling'u
-zmienia converter fingerprint, zgodnie z dotychczasową polityką cache.
-
-## Komendy
-
-Uruchom z repo root:
+These refer to the removed converter and are preserved only as an operational record:
 
 ```powershell
 python tools/legacy_assets/pipeline.py index
@@ -84,102 +90,101 @@ python tools/legacy_assets/pipeline.py stage_asset warrior_male
 python tools/legacy_assets/pipeline.py stage_group mobs_m1
 ```
 
-Pozostałe grupy: reference_stones i basic_swords. first_batch to jawnie wybrane 23
-assety, nie cała biblioteka. warrior_male jest aliasem działającego visual ID
-warrior; zachowujemy istniejące ścieżki players/warrior zamiast przenosić je do
-characters i zmieniać działającą integrację. boar jest aliasem wild_boar.
+Other groups: reference_stones/basic_swords. first_batch explicitly selected 23
+assets, not the entire library. warrior_male aliased the existing warrior visual,
+retaining players/warrior rather than moving paths to characters. boar aliased wild_boar.
 
-stage_group z --skip-failed kopiuje tylko udane konwersje i wypisuje pominięte ID
-w not_staged. Bez tej opcji błąd stagingu kończy komendę; wcześniejsze poprawne
-kopie mogą już istnieć. Staging jest atomowy per GLB, nie cała grupa.
+stage_group --skip-failed copied only successful conversions and reported omitted
+IDs in not_staged. Without it, staging errors stopped the command, although earlier
+copies could exist. Staging was atomic per GLB, not per group.
 
-## Indeks i źródła
+## Index and source resolution
 
-generated/.pipeline/asset_index.json przechowuje 55,156 plików i 1,336 aktorów
-npclist z obecnego lokalnego źródła. Każdy plik ma relative_path, virtual_path,
-pack, order, registered, selected, type, category, size, mtime_ns, sha256 oraz
-duplicate_group. duplicate_groups zachowuje wszystkie źródła o wspólnym hashu;
-deduplikacja nie zmienia wygrywającego providera.
+The local source index generated/.pipeline/asset_index.json contained 55,156 files
+and 1,336 npclist actors. File metadata: relative_path, virtual_path, pack, order,
+registered, selected, type, category, size, mtime_ns, sha256 and duplicate_group.
+duplicate_groups retained all equal-hash sources; deduplication did not change
+winning providers.
 
-Rejestracja z Index.dev odpowiada rozpakowanym FOLDER providerom. Kolejność jest
-odwzorowana z klienta: pack, opcjonalny pack_texcache, następny pack.
-FIRST REGISTERED PATH WINS; drugi wpis tej samej nazwy packa jest ignorowany.
-Nieobecne providery zostają w provenance, niezarejestrowane foldery są widoczne
-w indeksie, ale nie mogą nadpisać zarejestrowanego virtual path. Normalizacja
-usuwa drive prefix, zmienia slash/case i zachowuje pełne ymir work/... .
+Index.dev registration followed unpacked FOLDER providers and client ordering:
+pack, optional pack_texcache, next pack. FIRST REGISTERED PATH WINS; repeated pack
+names were ignored. Missing providers remained in provenance; unregistered folders
+were visible but could not override registered virtual paths. Normalization
+removed drive prefixes, normalized slashes/case and retained full ymir work/... paths.
 
-RaceManager search order i aliasy npclist pozwalają znaleźć MSM; jego base model
-oraz motlist/MSA wyznaczają model i klipy. Zapisujemy LOD-y i wszystkie motion
-warianty z wagami, ale eksportujemy pierwsze podstawowe mapowanie semantyki.
-MSM SourceSkin/TargetSkin jest uwzględniane dla prostego ShapeData00. Złożone
-shape/costume layouts i # local resource paths nie są objęte obecnymi recipes.
-Nie próbujemy odtwarzać motion combat timings, efektów MSE ani collision data.
+RaceManager search order/npclist aliases resolved MSM; its base model and motlist/
+MSA determined models/clips. LODs and weighted motion variants were recorded,
+but export selected the first basic semantic mapping. Simple ShapeData00 honored
+MSM SourceSkin/TargetSkin. Complex shape/costume layouts and # local resource paths
+were outside recipes. Motion combat timings, MSE effects and collision data were
+not reconstructed.
 
-Tekstury GR2 odczytuje natywne API BlenderGR2rs; globalny indeks wybiera zwycięski
-virtual path. Względny basename jest rozwiązywany tylko obok konkretnego modelu,
-a nie przez globalne wyszukiwanie pierwszego pasującego pliku. Warriora obsługuje
-sprawdzona recipe z włosami i wariantami. Dla obu reference stones wybór DDS jest jawny,
-ponieważ ich GR2 nie zawiera diffuse binding. Nie wyciągamy strings z binarnego GR2.
+BlenderGR2rs native APIs read GR2 textures; the global index chose winning virtual
+paths. Relative basenames resolved beside the specific model, never by a global
+first-match search. Warrior used its validated hair/variant recipe. Both reference
+stones had explicit DDS choices because their GR2 had no diffuse binding.
+No binary GR2 string extraction was used.
 
-Po dodaniu plików lub zmianie npclist/registracji uruchom index ponownie.
-Zmiana Index.dev blokuje konwersję ze starego indeksu. Zmiany istniejących modeli,
-MSM, MSA i tekstur są odczytywane przy następnej konwersji; używane dependencies
-są ponownie hashowane. Query --sha256 znajduje wszystkie duplikaty/provenance.
+Adding files or changing npclist/registration required reindexing. Index.dev
+changes blocked conversion against a stale index. Existing model/MSM/MSA/texture
+changes were read on the next conversion; used dependencies were rehashed.
+Query --sha256 found all duplicates/provenance.
 
-## Cache, raporty i błędy
+## Cache, reports and failures
 
-Udany GLB i jego <id>.manifest.json leżą pod generated/mobs, players lub weapons.
-Manifest zapisuje source_files z pack/order/hash, timestamp, converter signature,
-rewizję importera, wersję Blendera, settings, texture mapping, bone names,
-animation mapping, bounds, root displacement i warnings.
+Successful GLBs and <id>.manifest.json lived under generated/mobs, players or
+weapons. Manifests included source_files pack/order/hash, timestamp, converter
+signature, importer revision, Blender version, settings, texture mapping, bone
+names, animation mapping, bounds, root displacement and warnings.
 
-Fingerprint obejmuje dependencies, recipe, rejestrację, skrypty pipeline'u,
-pliki Python/natywne importera oraz identyfikator lokalnego executable Blendera.
-Hash bieżącego outputu zabezpiecza przed zaakceptowaniem uszkodzonego cache.
-Udany fingerprint daje SKIPPED; zmiana źródeł/konwertera albo --force rekonwertuje.
+Fingerprints included dependencies, recipe, registration, pipeline scripts,
+importer Python/native files and local Blender executable identity. Output hashes
+rejected corrupt cache. Matching successful fingerprints yielded SKIPPED;
+source/converter changes or --force reconverted.
 
-Nieoczekiwane błędy Pythona/orchestration mają PIPELINE_ERROR, osobny
-pipeline_error.log i traceback w last_attempt.json. Pozostałe assety w grupie
-są nadal przetwarzane, ale końcowy exit code jest niezerowy. Błędy znanych
-zależności i importera zachowują dotychczasowe statusy domenowe.
+Unexpected Python/orchestration errors yielded PIPELINE_ERROR, pipeline_error.log
+and last_attempt.json traceback. Other group assets continued, but exit status
+was nonzero. Known dependency/importer errors kept domain statuses.
 
-Osobne procesy Blendera izolują błędy konwersji. Metadane modeli są cache'owane;
-gdy zbiorczy native probe się wywróci, modele są sprawdzane osobno. Logi i ostatnia
-próba leżą w generated/.pipeline/jobs/<id>/; report grupy pod .pipeline/reports/.
-Report jest aktualizowany po każdym aktorze. Pełen przebieg kontynuuje po błędzie,
-ale zwraca exit code 1, jeżeli jakikolwiek asset się nie powiódł.
+Separate Blender processes isolated conversion failures. Model metadata was cached;
+failed aggregate native probes fell back to individual probes. Logs/latest attempts
+lived under generated/.pipeline/jobs/<id>/; group reports under .pipeline/reports/.
+Reports updated per actor. Full runs continued after failures but exited 1 if any
+asset failed.
 
-Statusy: SUCCESS, SKIPPED, MISSING_MODEL, MISSING_TEXTURE, MISSING_ANIMATION,
-IMPORT_FAILED, EXPORT_FAILED, INVALID_SKELETON, UNKNOWN_LAYOUT, PIPELINE_ERROR. Brak wymaganej
-tekstury/klipu jest błędem, nie cichym białym materiałem. Nieudana próba zachowuje
-poprzedni dobry GLB, ale nie aktualizuje successful manifest; stager odrzuca asset
-z ostatnią nieudaną próbą. Można go ponowić po poprawce.
+Statuses: SUCCESS, SKIPPED, MISSING_MODEL, MISSING_TEXTURE, MISSING_ANIMATION,
+IMPORT_FAILED, EXPORT_FAILED, INVALID_SKELETON, UNKNOWN_LAYOUT, PIPELINE_ERROR.
+Missing required texture/clip was an error rather than a silent white material.
+Failed attempts retained the previous good GLB without updating its successful
+manifest; staging rejected assets whose latest attempt failed. They could be retried.
 
-GLB zachowuje natywną root translation dla audytu. Godot VisualAnimationTools
-kopiuje klipy per instancja i zamraża root X/Z, zachowując pionowy bob i rotację.
-Standalone GLB viewer może więc pokazać root motion; w gameplayu aktor nie może
-zmieniać authoritative pozycji przez animację. Test obejmuje wszystkie klipy.
+GLBs retained native root translation for auditing. Godot VisualAnimationTools
+duplicates clips per instance and freezes root X/Z, retaining vertical bob/rotation.
+Standalone viewers may therefore show root motion; gameplay animation cannot
+change authoritative position. Tests cover every clip.
 
-## Pierwszy batch i granice
+## First batch and boundaries
 
-Pierwszy reprezentatywny batch: **23 próby, 21 SUCCESS, 19 assetów z warnings,
-2 IMPORT_FAILED**. Ponowny niezmieniony przebieg: 21 SKIPPED i ponowienie 2 błędów.
-Wśród 19 warnings są 17 udanych actor bundles (root motion / motion variants)
-oraz 2 kamienie z jawną wskazówką tekstury. Nie są to 19 brakujących zależności.
+Representative first batch: **23 attempts, 21 SUCCESS, 19 assets with warnings,
+2 IMPORT_FAILED**. An unchanged rerun gave 21 SKIPPED and retried two failures.
+The 19 warnings comprised 17 successful actor bundles (root motion/motion variants)
+and two explicit stone texture hints, not 19 missing dependencies.
 
-Oba kamienie korzystają z tego samego metinstone_01.gr2. Importer odrzuca go:
+Both stones used metinstone_01.gr2. Importer validation rejected it:
 file.customization: models: raw/high-level count mismatch (1 != 0).
-Native probe widzi 89 meshes i 1 skeleton; dalszy import nie przechodzi walidacji.
-Nie obchodzimy jej własnym parserem. Oba logical IDs używają tracked placeholder.
-Pełne logi pozostają lokalne, a struktura problemu jest tu zapisana do przyszłego
-zgłoszenia/testu nowszej rewizji importera.
+Native probing found 89 meshes and one skeleton; import still failed validation.
+No custom-parser bypass was added. Both logical IDs use tracked placeholders.
+Full logs remain local; the issue structure is retained for a future report or
+new-importer-revision test.
 
-GPU gallery potwierdza tekstury, proporcje i spójną orientację 21 modeli oraz dwa
-fallbacki. Test Godot ładuje dwie niezależne instancje, wszystkie klipy, sprawdza
-materiały/tekstury, skeleton, prywatne animation resources i neutralizację root
-motion. Warrior socket i siedem clip states pozostają objęte dotychczasowym
-run-warrior. Scale .01 i orientation 180° są sprawdzonym wspólnym ustawieniem;
-inne kategorie mogą wymagać osobnej recipe, nie automatycznej korekcji po rozmiarze.
+The GPU gallery confirmed textures, proportions and consistent orientation for
+21 models plus two fallbacks. Godot loaded two independent instances, every clip,
+materials/textures, skeletons, private animation resources and root-motion
+neutralization. Existing run-warrior still covers its socket/seven clip states.
+Scale .01/orientation 180 degrees were validated shared settings; other categories
+may need separate recipes, not size-based automatic correction.
+
+Former verification commands (converter fixture/batch runner are now removed):
 
 ```powershell
 python -m unittest discover -s tests -p test_legacy_asset_pipeline.py
@@ -188,10 +193,10 @@ python -m unittest discover -s tests -p test_asset_staging.py
 & ./tests/run-visuals.ps1 -WithExport
 ```
 
-run-legacy-batch wymaga lokalnej konfiguracji i gotowego first_batch report.
-Tymczasowo stage'uje wyłącznie udane wybrane assety, sprawdza również wyłączone
-visuals i fizyczne usunięcie staged tree przy zachowanych import caches, po czym
-przywraca całą wcześniejszą zawartość dev_assets/legacy w finally.
-Gallery i wyniki Godot są w gitignored .godot/verification. CI używa wyłącznie
-syntetycznych fixtures oraz 23 tracked fallbacków; nie odpala tej lokalnej galerii
-ani Blendera. Publiczne eksporty wykluczają dev_assets i oba local.json.
+The former batch runner needed local config and a first_batch report. It temporarily
+staged successful selected assets, tested disabled visuals and physical staged-
+tree removal with import caches retained, then restored the original
+dev_assets/legacy tree in finally. Gallery/results stayed in ignored
+.godot/verification. Current CI uses staging fixtures and 23 tracked fallbacks;
+it runs neither the removed converter tests nor Blender/local galleries. Public
+exports exclude dev_assets and local configuration files.

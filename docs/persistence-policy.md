@@ -1,113 +1,108 @@
-# Persistence policy — jawny podział stanu
+# Persistence policy - explicit state categories
 
-Przyjęte po review użytkownika. Baza jest warstwą persistence; aktywna postać
-ma authoritative state w pamięci World Servera. Nie budujemy ogólnego frameworka
-statów, eventów ani autosave całego profilu dla każdej zmiany.
+Accepted following the user's review. The database is the persistence layer;
+an active character's authoritative state lives in World Server memory. Do not
+build a generic stats/event framework or autosave the entire profile for each change.
 
-| Stan / operacja | Runtime | Persistence |
+| State / operation | Runtime | Persistence |
 | --- | --- | --- |
-| XP, level, wolne punkty atrybutów | PlayerResource + osobny dirty set | Checkpoint około 60 s, tylko dirty postacie, jedna transakcja |
-| Equipment i combat stats | Minimalny cache serwera, odtworzony przy wejściu | Item transaction od razu, odświeżenie cache po commit |
-| ItemInstance: pickup, equip/unequip, własność, placement | Serwer waliduje intencję | Natychmiastowy atomowy zapis |
-| Yang z grindu | Balance + pending delta + wallet dirty | Delta checkpoint około 30 s |
-| Ekonomicznie istotny wydatek Yang | Sprawdzenie możliwości zapłaty względem RAM | Natychmiastowa transakcja obejmująca pending income, wydatek i zmianę ekonomii |
-| Trade, upgrade, socket, reroll, crafting | Serwerowy wynik | Natychmiastowa transakcja wszystkich zmienianych trwałych danych |
-| Materiały / waluty działające jak inventory item lub stack | Item/stack | Natychmiastowa transakcja, także split/merge i create/destroy |
+| XP, level, unspent attribute points | PlayerResource + separate dirty set | Approximately 60-second checkpoint, dirty characters only, one transaction |
+| Equipment and combat stats | Minimal server cache restored on entry | Immediate item transaction; refresh cache after commit |
+| ItemInstance: pickup, equip/unequip, ownership, placement | Server validates intent | Immediate atomic persistence |
+| Yang grinding income | Balance + pending delta + wallet dirty | Delta checkpoint around 30 seconds |
+| Economically significant Yang spending | Check affordability against RAM | Immediate transaction including pending income, spending and economic mutation |
+| Trade, upgrade, socket, reroll, crafting | Server-side result | Immediate transaction for all changed durable data |
+| Materials/currencies acting as inventory items or stacks | Item/stack | Immediate transaction, including split/merge and creation/destruction |
 
-## Działający obecnie runtime i checkpoint
+## Current runtime and checkpoints
 
-`WorldServer.runtime_equipment` przechowuje equipment UID i wynikowe statystyki
-aktywnej postaci według trwałego ID. Wejście ładuje inventory z SQLite;
-`SpikeInventory3D._send_state()` odświeża ten runtime po odczycie zatwierdzonego
-stanu. Combat pobiera `attack` z runtime, bez query przy zamachu. Nieudany equip
-nie zmienia placement ani ataku; brak poprawnego snapshotu unieważnia cache,
-więc combat nie korzysta ze starych statystyk po błędzie odczytu.
+`WorldServer.runtime_equipment` stores active characters' equipment UIDs and
+resulting stats by persistent ID. Entry loads inventory from SQLite;
+`SpikeInventory3D._send_state()` refreshes runtime from committed state.
+Combat reads `attack` from runtime without querying on a swing. Failed equipment
+changes affect neither placement nor attack; a missing valid snapshot invalidates
+the cache so combat cannot use stale stats after a read error.
 
-Śmierć moba jest zdarzeniem runtime. Stan `DEAD` zabezpiecza przed powtórzeniem
-tej samej śmierci w aktualnym encounterze. Rozstrzygnięcie wkładu i XP działa
-w RAM; level-up oraz informacja dla klienta są natychmiastowe. Nie ma persistent
-KillEvent ani kill ID dla persistence XP. UID ground itemu nadal służy jego
-economy-critical claimowi, niezależnie od progression.
+Mob death is a runtime event. DEAD state prevents repeated processing within the
+current encounter. Contribution resolution and XP run in RAM; level-up and client
+notification are immediate. There is no persistent KillEvent or kill ID for XP.
+The ground item's UID still serves its economy-critical claim independently of progression.
 
-`WorldDatabase.dirty_progression` jest osobnym setem referencji do postaci.
-Checkpoint co 60 s zapisuje wyłącznie `level`, `experience`,
-`available_attributes_points`, w jednej transakcji dla dirty postaci. Sukces
-usuwa ich dirty flags, błąd wycofuje całość i pozostawia RAM oraz dirty state do
-ponowienia. Brak dirty postaci oznacza brak transakcji. Czytanie postaci podczas
-reentry korzysta z dirty resource, aby nie cofnąć niezapisanej progresji.
+`WorldDatabase.dirty_progression` is a separate set of character references.
+Every 60 seconds, one transaction checkpoints only `level`, `experience` and
+`available_attributes_points` for dirty characters. Success clears their dirty
+flags; failure rolls back the batch and retains RAM/dirty state for retry.
+No dirty characters means no transaction. Reentry reads the dirty resource to
+avoid reverting unsaved progression.
 
-Wymuszony checkpoint działa przed końcem sesji, przy disconnect i opuszczeniu
-mapy 3D, przed istniejącym instance transfer oraz w save/shutdown/restart świata.
-Graceful shutdown przez master jest anulowany, gdy checkpoint się nie powiedzie.
-Dirty referencja pozostaje dostępna do ponowienia również po disconnect.
-Nie ma jeszcze transferu procesu dla 3D; przyszły taki handoff musi czekać na
-udany checkpoint przed przekazaniem ownership.
+Forced checkpoints run before session end, on disconnect and 3D map departure,
+before existing instance transfer and during world save/shutdown/restart.
+Graceful shutdown through the master is cancelled if a checkpoint fails.
+Dirty references remain available for retry after disconnect. 3D process transfer
+is not implemented; future handoff must wait for a successful checkpoint before
+transferring ownership.
 
-Starszy pełny serializer profilu nadal obsługuje niezależne dane legacy,
-zwykły zapis sesji i backup. XP tick ani kill go nie uruchamiają. Jego istniejący
-harmonogram nie zastępuje nowego checkpointu progression.
+The older full-profile serializer still handles independent legacy data, normal
+session saving and backups. XP ticks/kills do not invoke it. Its existing schedule
+does not replace the progression checkpoint.
 
-Schema v13 usuwa nieużywaną tabelę `kill_xp_rewards`, zachowując pola XP i itemy.
-Po crashu akceptujemy utratę soft progression od ostatniego udanego checkpointu:
-normalnie około minuty, a przy niedostępnej bazie do ostatniego udanego zapisu.
-Nie odtwarzamy zabójstw z durable historii. Item pickup i placement nadal mają
-natychmiastowe transakcje oraz własną ochronę przed double pickup.
+Schema v13 removes unused `kill_xp_rewards`, retaining XP fields and items.
+A crash may lose soft progression since the last successful checkpoint: normally
+about one minute, or back to the last successful save if the DB is unavailable.
+Kills are not recovered from durable history. Item pickup/placement retain
+immediate transactions and their own double-pickup protection.
 
-## Yang: działający wallet i ground currency
+## Yang: runtime wallet and ground currency
 
-W Spike 3D działa oddzielny wallet Yang oraz runtime GroundCurrency. Pies
-pozostawia 30 Yang z tymi samymi loot rights co jego item. Waluta jest
-automatycznie podnoszona w promieniu 1,25 m; G pozwala podnieść ją do 2,5 m.
-Nie ma peta, trwałego UID stosu ani per-drop rekordu DB. Legacy gold pozostaje
-oddzielnym upstreamowym stanem i nie jest migrowane do nowego walleta.
+Spike 3D has a separate Yang wallet and runtime GroundCurrency. Dogs drop 30 Yang
+with the same loot rights as their items. Auto-pickup works within 1.25 m; G picks
+up within 2.5 m. There is no pet, persistent stack UID or per-drop DB record.
+Legacy gold remains separate upstream state and is not migrated into the wallet.
 
-Wallet ma jawne `wallet_balance`, `pending_currency_delta` i osobny dirty set.
-Przychód zmienia balance w RAM, sumuje dodatnią deltę i oznacza wallet jako dirty.
-Checkpoint co 30 s zapisuje sumę delty, zamiast nadpisywać stary snapshot:
+Wallet fields are explicit: `wallet_balance`, `pending_currency_delta` and a
+separate dirty set. Income changes RAM balance, accumulates a positive delta and
+marks the wallet dirty. Every 30 seconds, checkpoints add the delta rather than
+overwriting an older snapshot:
 
 ```sql
 UPDATE wallets SET yang = yang + ? WHERE character_id = ?;
 ```
 
-Po udanym commit pending delta jest zerowana. Po błędzie pozostaje w RAM do
-ponowienia. WorldDatabase ma osobny `dirty_wallet` i checkpoint co 30 s;
-nie jest częścią pełnego autosave PlayerResource ani dirty progression.
+Successful commit clears pending delta; failure retains it for retry.
+WorldDatabase's separate `dirty_wallet` checkpoint is not part of full
+PlayerResource autosave or dirty progression.
 
-Testowy przycisk wydaje stałe, serwerowe 50 Yang. Krytyczny wydatek
-sprawdza dostępne środki względem runtime balance. Transakcja
-obejmuje pending income i odjęcie kosztu. Obecny testowy wydatek tylko zużywa
-walutę. Przyszły upgrade/zakup/trade musi zmienić też trwały stan ekonomii
-w tej samej transakcji; nie wolno wywołać osobnego spend i osobnego item commit.
-Przykład:
-DB 40000 + pending 30000 − koszt 50000 = 20000, wszystko w jednym COMMIT.
-Po commit runtime balance wynosi 20000 i pending delta 0. Rollback nie zużywa
-pending income ani nie publikuje zmiany itemu. Transakcja musi również chronić
-przed ujemnym saldem. Stary stan DB nie służy do odrzucania zakupu, na który
-po uwzględnieniu pending income gracza stać.
+The test button spends a fixed, server-defined 50 Yang. Critical spending checks
+runtime affordability and commits pending income with the cost. The current test
+only consumes currency. A future upgrade/purchase/trade must mutate durable
+economic state in the same transaction; separate spend and item commits are not
+acceptable. Example: DB 40000 + pending 30000 - cost 50000 = 20000 in one COMMIT.
+After commit, runtime balance is 20000 and pending delta is zero. Rollback does
+not consume pending income or publish item changes. Transactions must also prevent
+negative balances. Old DB state must not reject a purchase affordable after pending income.
 
-GroundCurrency jest runtime entity: amount, loot rights/owner, position, expiry.
-Pickup dodaje kwotę do walleta i usuwa entity. Nie tworzy persistent ItemInstance,
-durable UID ani wiersza DB na każdy mały stos Yang. Waluta będąca handlowalnym
-przedmiotem w torbie pozostaje jednak itemem/stackiem z immediate persistence.
+GroundCurrency is a runtime entity: amount, loot rights/owner, position, expiry.
+Pickup adds to the wallet and removes the entity. It creates no persistent
+ItemInstance, durable UID or DB row for each small Yang stack. A tradable inventory
+currency remains an item/stack with immediate persistence.
 
-Wallet i progression mają osobne dirty sety oraz niezależne checkpointy.
-Position dirty pozostaje do przyszłego wdrożenia. Wallet jest ładowany przy
-wejściu, a logout/disconnect/handoff/save/shutdown wymusza oba checkpointy.
-Nieudany zapis walleta zatrzymuje jego RAM oraz pending delta, również offline.
-Schema v14 dodaje osobną tabelę `wallets`; serializer PlayerResource jej nie
-nadpisuje. Po crashu niezapisany dochód i ground currency mogą zniknąć,
-normalnie z okna około 30 s. Zatwierdzony critical spend pozostaje trwały.
+Wallet and progression have separate dirty sets and independent checkpoints.
+Position dirty state is future work. Wallet loads on entry; logout/disconnect/
+handoff/save/shutdown force both checkpoints. Failed wallet saving retains RAM
+and pending delta even offline. Schema v14 adds `wallets`; PlayerResource's
+serializer does not overwrite it. A crash may lose unsaved income and ground
+currency, normally from a roughly 30-second window. Committed critical spending is durable.
 
-## Testy
+## Tests
 
-`run-progression` sprawdza runtime attack po equip, rollback bez zmiany cache,
-zero odczytów inventory w obu testowanych zamachach i odtworzenie statów przy
-wejściu z utrwalonym equipem. `run-xp` sprawdza wiele killów w RAM, brak tabeli
-receiptów, checkpoint, prawdziwy disconnect, rollback całego batcha, wąskie
-UPDATE tylko trzech kolumn, brak zapisu clean postaci i zaakceptowane crash window.
-Pełne gateway/master/world nadal testuje logout/relog, awans i dokładny UID broni.
+`run-progression` verifies runtime attack after equip, rollback without cache
+mutation, zero inventory reads in both tested swings and stat restoration from
+persistent equipment on entry. `run-xp` verifies multiple kills in RAM, no receipt
+table, checkpointing, real disconnect, batch rollback, UPDATE of only three columns,
+no clean-character writes and the accepted crash window. Full gateway/master/world
+still tests logout/relog, level-up and the exact weapon UID.
 
-`run-yang.ps1` sprawdza delta checkpoint, brak zapisów XP/profile przy Yang,
-rollback spend i batcha, prywatny HUD, rights/autoloot/pickup race, expiry,
-przeszkody, RPC replay oraz realny disconnect. Pełny `pve_session` sprawdza
-Yang zdobyte przez combat i autoloot oraz dokładne saldo po logout/relog.
+`run-yang.ps1` checks delta checkpoints, no XP/profile writes for Yang, spend/batch
+rollback, private HUD, rights/autoloot/pickup races, expiry, obstacles, RPC replay
+and real disconnect. Full `pve_session` verifies combat/autoloot income and exact
+balance after logout/relog.

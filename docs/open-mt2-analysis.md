@@ -1,227 +1,193 @@
-# Open-MT2 jako referencja dla Mandate of Three
+# Open-MT2 as a reference for Mandate of Three
 
-Data analizy: 2026-10-07. Repozytorium: [willianmarquess/open-mt2](https://github.com/willianmarquess/open-mt2).
-Przeanalizowany snapshot: commit `8d8800d470f0b69221886723eb5877a2ed9d9d8d`
-z 2026-08-18, `Merge pull request #262 from dimabirca/fix/non-weapon-melee-attack`.
-Odnośniki poniżej są przypięte do tego commita.
+Analysis date: 2026-10-07. Repository: [willianmarquess/open-mt2](https://github.com/willianmarquess/open-mt2).
+Analyzed snapshot: `8d8800d470f0b69221886723eb5877a2ed9d9d8d`, dated 2026-08-18,
+`Merge pull request #262 from dimabirca/fix/non-weapon-melee-attack`.
+Links below are pinned to that commit. This is a historical analysis of the fork
+before subsequent 3D/item/combat changes; current priorities are in
+[project-direction.md](project-direction.md).
 
-## Wniosek i zakres
+## Conclusion and scope
 
-Open-MT2 jest przydatną referencją reguł serwera: egzemplarzy przedmiotów,
-ekwipunku, walidacji ataków, zachowania mobów i lootu na ziemi. W Mandate of Three
-zachowujemy transport oraz cykl sesji TinyMMO i implementujemy własną domenę
-gameplayu w Godot. Open-MT2 nie dodajemy jako zależności runtime ani drugiego backendu.
+Open-MT2 is useful as a server-rule reference for item instances, inventory,
+attack validation, mob behavior and ground loot. Mandate retains TinyMMO transport
+and session lifecycle and implements its own gameplay domain in Godot. Open-MT2
+is neither a runtime dependency nor a second backend.
 
-To analiza źródeł i wybranych testów, nie pełny audyt projektu. Sprawdzono modele
-Item/ItemState/Inventory, usługi move/drop/pickup/shop, zapis i cache przedmiotów,
-atak gracza i obliczanie obrażeń PvE, walidację ruchu, Behavior/Monster,
-DropManager oraz dokumentację questów i pakietów. Nie instalowano zależności,
-nie uruchamiano serwera, MySQL/Redis ani testów Open-MT2. Zaobserwowane ryzyka
-wynikają z kodu; nie są wynikami odtworzonych exploitów.
+This is source/selected-test analysis, not a full audit. Reviewed Item/ItemState/
+Inventory, move/drop/pickup/shop services, item persistence/cache, player attacks
+and PvE damage, movement validation, Behavior/Monster, DropManager and quest/packet
+documentation. Dependencies, server, MySQL/Redis and Open-MT2 tests were not run.
+Risks are code observations, not reproduced exploits.
 
-[README](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/README.md)
-opisuje projekt edukacyjny, dopuszczający odstępstwa od oryginalnego Metina.
-Dlatego traktujemy go jako materiał do projektowania, a nie specyfikację zgodności.
+[README](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/README.md) describes an educational project allowing deviations from original
+Metin. Treat it as design material rather than a compatibility specification.
 
-## Co faktycznie jest w kodzie
+## What the code contains
 
-| Obszar | Zaobserwowany stan | Zastosowanie u nas |
+| Area | Observed implementation | Application to Mandate |
 | --- | --- | --- |
-| Przedmioty | Prototyp `vnum`, osobne `dbId`, właściciel, pozycja, okno, ilość, 3 sockets i 7 par typ/wartość atrybutu. | Rozdzielić ItemDefinition od ItemInstance; identyfikator egzemplarza nadać przed włożeniem do ekwipunku. |
-| Inventory/equipment | Siatka stron 5×9, wielopolowe przedmioty, wydzielone sloty wyposażenia, zdarzenia equip/unequip, przenoszenie i split stacków. | Przenieść reguły własności, slotów i stacków; rozmiar siatki jest decyzją UI, niezależną od 3D. |
-| Bonusy | Pola egzemplarza są zapisywane i wysyłane w pakietach. Equip applies iteruje po bonusach prototypu. | Zbudować własne generowanie affixów i kalkulację statystyk instancji. Sam zapis bonusu nie wystarczy. |
-| Ulepszanie/reroll | Są `refineId`/`refineSet` i metadane prototypów; w przejrzanym `src` nie znaleziono usługi refine ani rerollu atrybutów. | Zaprojektować własny UpgradeService i RerollService. Nie zakładać, że można przeportować gotowe +0…+9. |
-| Walka | Klient wskazuje cel i skill; serwer liczy obrażenia, sprawdza stan i ogranicza częstotliwość. Melee ma kontrolę odległości. PvP w PlayerBattle jest TODO. | Własny AttackRequest oraz walidacja świata, zasięgu, czasu i wyposażenia; najpierw PvE. |
-| Ruch | Limit długości pojedynczego zgłoszenia, budżet przebytej odległości dla zgłoszeń pozycji, korekta klienta po odrzuceniu. | Serwerowa walidacja ruchu 3D, z uwzględnieniem kolizji i wysokości. |
-| AI | Idle/wander, wyszukiwanie celu, follow, attack, powrót, stun, reakcja grupy, udział w obrażeniach. | Mała maszyna stanów moba plus NavigationAgent3D i serwerowe timery. |
-| Loot | Common drops według rangi/poziomu, domyślny drop moba, gold, modyfikatory szans; osobna encja na ziemi. | Proste DropTable i GroundLootInstance, niezależne od grafiki. |
-| Pickup | Typ encji, ta sama area, odległość, prawa do podniesienia, pełny inventory, ochrona przed ponownym pickupem. | Zachować wszystkie te niezmienniki; UID właściciela zamiast nazwy. |
-| Persistence | Osobne rekordy itemów, kolejka update/delete, flush z odtworzeniem kolejki po błędzie. | Własny adapter SQLite i atomowe operacje zmieniające item oraz koszt. |
-| Quests | Klasy TypeScript, stany i zdarzenia LOGIN/KILL/CLICK itd., fasady gracza/NPC i osobne mechanizmy dialogu. | Inspirować się zdarzeniami domenowymi; questy pozostają poza pierwszym spike'em. |
+| Items | Prototype vnum, separate dbId, owner, position, window, amount, three sockets and seven attribute type/value pairs. | Separate ItemDefinition/ItemInstance; assign instance identity before inventory insertion. |
+| Inventory/equipment | 5x9 page grids, multi-cell items, dedicated equipment slots, equip/unequip events, movement and stack splitting. | Reuse ownership/slot/stack rules conceptually; grid size is a UI decision independent of 3D. |
+| Bonuses | Instance fields persist and appear in packets; equipment applies iterate prototype bonuses. | Implement our own affix generation/instance stats. Persisting a bonus alone is insufficient. |
+| Upgrade/reroll | refineId/refineSet and prototype metadata exist; no refine or attribute-reroll service found in reviewed src. | Design our own UpgradeService/RerollService; do not assume ready-made +0...+9 behavior. |
+| Combat | Client selects target/skill; server calculates damage, checks state/rate and melee distance. PlayerBattle PvP is TODO. | Own AttackRequest with world/range/time/equipment validation, initially PvE. |
+| Movement | Per-request distance cap, travel budget for position reports and rejection correction. | 3D server validation including collisions/height. |
+| AI | Idle/wander, target search, follow/attack/return, stun, group reactions and damage contributions. | Small mob state machine, NavigationAgent3D and server timers. |
+| Loot | Rank/level common drops, default mob drop, gold, chance modifiers and separate ground entity. | Simple DropTable/GroundLootInstance independent of artwork. |
+| Pickup | Entity type, same area, distance, loot rights, full inventory and duplicate protection. | Preserve invariants; use owner UID rather than name. |
+| Persistence | Separate item records, update/delete queues and flush queue restoration on error. | Own SQLite adapter and atomic item/cost operations. |
+| Quests | TypeScript classes, states, LOGIN/KILL/CLICK events, player/NPC facades and dialogue mechanisms. | Domain-event inspiration; quests stay outside the first spike. |
 
-Źródła: [Item](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/item/Item.ts),
-[ItemState](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/state/item/ItemState.ts),
-[Inventory](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/inventory/Inventory.ts),
-[MoveItemService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/MoveItemService.ts),
-[PlayerApplies](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/player/delegate/PlayerApplies.ts),
-[PlayerBattle](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/player/delegate/battle/PlayerBattle.ts),
-[quest docs](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/docs/quests.md).
+Sources: [Item](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/item/Item.ts), [ItemState](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/state/item/ItemState.ts), [Inventory](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/inventory/Inventory.ts), [MoveItemService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/MoveItemService.ts), [PlayerApplies](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/player/delegate/PlayerApplies.ts), [PlayerBattle](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/player/delegate/battle/PlayerBattle.ts), [quest docs](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/docs/quests.md).
 
-## Najważniejsza różnica względem obecnego forka
+## Main difference from the fork at analysis time
 
-Nasze `source/common/gameplay/items/inventory.gd` ma już osobne wpisy
-`slot_uid -> {id, a}`, więc nie zaczynamy od pustego modelu. Jednak:
+`source/common/gameplay/items/inventory.gd` already had separate
+`slot_uid -> {id, a}` entries, but:
 
-- `id` oznacza definicję z ContentRegistryHub; `next_uid()` nadaje lokalny numer
-  wpisu na podstawie aktualnej zawartości torby, a nie trwały globalny UID itemu;
-- `normalize()` zachowuje `id`, `a` i pinned; nowe pola upgrade/affixes/sockets
-  trzeba jawnie uwzględnić, inaczej znikną podczas odczytu zapisu;
-- `EquipmentComponent` i endpoint `item.equip` operują na ID definicji;
-  `remove_one_by_id()` wybiera pierwszy pasujący egzemplarz;
-- equipment zapisuje `slot -> item_id`, a statystyki i wygląd pochodzą z Resource;
-- `RewardService` przyznaje loot bezpośrednio do inventory uczestników zabójstwa,
-  bez etapu przedmiotu na ziemi.
+- id was the ContentRegistryHub definition; next_uid() assigned a local number
+  from current bag contents rather than a durable global item UID.
+- normalize() preserved id, a and pinned. Upgrade/affix/socket fields needed
+  explicit inclusion or they would disappear when loading.
+- EquipmentComponent/item.equip operated on definition IDs;
+  remove_one_by_id() selected the first matching instance.
+- Equipment stored slot -> item_id; stats/appearance came from the Resource.
+- RewardService granted items directly to kill participants, without ground loot.
 
-To oznacza, że dwa miecze tej samej definicji z różnymi bonusami nie są poprawnie
-adresowane przez obecny przepływ equipu. Dopisanie bonusów do Resource zmieniłoby
-definicję współdzieloną przez egzemplarze. Potrzebny jest rework domeny, endpointów,
-zapisu i projekcji UI, niezależnie od zmiany Node2D na Node3D.
+Two same-definition swords with different bonuses were therefore not addressed
+correctly by that equipment flow. Adding bonuses to Resource would mutate a shared
+definition. Domain, endpoints, persistence and UI projection needed rework
+independently of changing Node2D into Node3D.
 
-## Wzorce warte przejęcia i ich granice
+## Useful patterns and their limits
 
-### Przedmiot i operacje ekwipunku
+### Items and inventory operations
 
-W Open-MT2 `Item.getId()` zwraca ID prototypu, a `getDbId()` identyfikator rekordu.
-Nowy item otrzymuje `dbId` dopiero po INSERT. Własny ItemInstance powinien dostać
-UID przy utworzeniu i zachować go podczas equipu, lootu i zapisu. Pozycja w torbie
-oraz runtime ID encji sieciowej nie powinny pełnić tej roli.
+Item.getId() returns prototype ID; getDbId() returns record identity. New items
+receive dbId after INSERT. Our ItemInstance should receive its UID at creation
+and retain it across equip, loot and saves. Bag positions/runtime network entity
+IDs should not substitute for this identity.
 
-Proponowany kontrakt do implementacji:
+Proposed implementation contract:
 
 ```text
-ItemDefinition: definition_id, nazwa, slot, base_stats, stack_limit, affix_pool
+ItemDefinition: definition_id, name, slot, base_stats, stack_limit, affix_pool
 ItemInstance: uid, definition_id, owner_character_id, location, position,
               amount, upgrade_level, affixes[], sockets[], revision
 Equipment: slot -> item_uid
 ```
 
-UID i `owner_character_id` są niezależne od peer_id połączenia. `location` określa
-jedno aktualne miejsce itemu. Zwykłe materiały mogą się stackować, jeśli ich stan
-instancji jest zgodny; gear z indywidualnymi rollami pozostaje niestackowalny.
-Nie potrzebujemy metinowych `attributeType0…6` jako sztywnego schematu ani
-osobnej definicji każdego poziomu ulepszenia. Jawne `upgrade_level` i kolekcja
-affixów lepiej odpowiadają planowi PoE-lite.
+UID/owner_character_id are independent of connection peer_id. Location identifies
+one current place. Materials can stack when instance state matches; individually
+rolled gear remains nonstackable. Fixed attributeType0...6 fields and a definition
+per upgrade level are unnecessary; explicit upgrade_level and affix collections
+better fit the PoE-lite plan.
 
-W sprawdzonym snapshotcie `Item.create()` zeruje atrybuty instancji;
-`PlayerApplies.addItemApplies()`/`removeItemApplies()` czytają `item.getApplies()`
-z prototypu. Pola losowych bonusów nie dowodzą gotowego systemu ich losowania ani
-wpływu na statystyki. To istotna luka dla naszego celu.
+In this snapshot Item.create() zeroes instance attributes; PlayerApplies.addItemApplies()/
+removeItemApplies() read prototype item.getApplies(). Random-bonus fields do not
+prove implemented rolling or stat effects: a significant gap for our goal.
 
-### Atak i ruch
+### Attacks and movement
 
-[CharacterAttackService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/CharacterAttackService.ts)
-rozwiązuje virtual ID celu, a
-[Player.attack](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/player/Player.ts#L643)
-pilnuje stanu i czasu. Kontrola dystansu jest w
-[strategii PvE](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/player/delegate/battle/PlayerBattleAgainstMobStrategy.ts#L181).
-To dobry podział odpowiedzialności, ale wzory obrażeń i jednostki Metina nie są
-naszym docelowym balansem.
+[CharacterAttackService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/CharacterAttackService.ts) resolves the target's virtual ID; [Player.attack](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/player/Player.ts#L643) checks state/time;
+distance validation lives in [PvE strategy](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/player/delegate/battle/PlayerBattleAgainstMobStrategy.ts#L181). The responsibility split is useful,
+but Metin damage formulas/units are not our intended balance.
 
-Nasz AttackRequest powinien nieść cel, rodzaj akcji i numer żądania, a serwer
-sprawdzać instancję świata, żywy stan obu stron, cooldown, zasięg/kolizję oraz
-aktualny equip. Klient odtwarza animację i efekt wyniku. Atak wielu przeciwników
-powinien wynikać z jednej legalnej akcji/AoE. Test Open-MT2 dopuszcza pierwszy
-hit na nowym celu wewnątrz cooldownu, więc jego throttle nie jest globalnym
-limitem pojedynczych swingów do skopiowania bez decyzji projektowej.
+The historical proposal carried target, action type and request number; the server
+would check instance, both actors' life, cooldown, range/collision and equipment.
+Clients play animation/result effects. Multi-target attacks should derive from one
+legal action/AoE. Open-MT2's test allows a first hit on a new target during cooldown;
+its throttle is not a global per-swing cap to copy without a design decision.
+Later Mandate decisions select directional melee without a required target;
+see [Combat Feel Pass](combat-feel.md).
 
-[CharacterMoveService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/CharacterMoveService.ts)
-wywołuje `Player.isMoveAllowed()`. Istnieje kontrola skoku pozycji i budżet
-odległości, ale budżet jest pomijany dla typu MOVE; kod rozróżnia zadanie celu
-marszu od zgłoszenia bieżącej pozycji. Nie przenosimy tego mechanicznie do 3D.
-Nasz serwer musi kontrolować prędkość i dozwoloną przestrzeń, a replikacja
-potrzebuje jawnego rozróżnienia intencji, stanu i korekty klienta.
+[CharacterMoveService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/CharacterMoveService.ts) calls Player.isMoveAllowed(). Position-jump/travel-budget checks exist,
+but MOVE skips the budget; the code distinguishes movement destinations from
+current-position reports. Do not port mechanically into 3D. Our server must
+control speed/allowed space; replication needs explicit intent/state/correction.
 
-### AI, udział w walce i loot
+### AI, contribution and loot
 
-[Behavior](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/mob/behavior/Behavior.ts)
-jest dobrą listą minimalnych zachowań: roam, acquire, chase, attack, return.
-Ruch operuje na płaszczyźnie i testach blokady mapy. U nas przełożymy stany na
-NavigationAgent3D; nie przejmujemy algorytmów współrzędnych i jednostek map Metina.
+[Behavior](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/mob/behavior/Behavior.ts) is a useful minimal list: roam, acquire, chase, attack, return.
+Movement uses planar map-blocking checks. Map states onto NavigationAgent3D without
+copying Metin coordinate/unit algorithms.
 
-W `Behavior.onDamage()` porównywane są całe obiekty wpisów damageMap zamiast ich
-wartości `.damage`. `Monster.reward()` wiąże drop z bieżącym targetem.
-Dlatego tej ścieżki nie traktujemy jako sprawdzonej reguły wyboru gracza z
-największym udziałem. Własne `aggro_target`, killer, lista udziałów i loot_owner
-powinny być rozdzielone i mieć jawne reguły. Źródło:
-[Monster](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/mob/Monster.ts).
+Behavior.onDamage() compares whole damageMap entry objects rather than .damage
+values. Monster.reward() associates the drop with the current target. This is not
+a verified highest-contribution rule. Keep aggro_target, killer, contribution list
+and loot_owner separate with explicit rules. Source: [Monster](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/mob/Monster.ts).
 
-[DropManager](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/manager/DropManager.ts)
-łączy kilka źródeł dropu oraz bonusy/level delta. Na spike wystarczy jeden mob,
-prosta tabela szans i jedna reguła właściciela. Nie potrzebujemy premium,
-empire privileges ani mnożników golda.
+[DropManager](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/manager/DropManager.ts) combines several drop sources and bonuses/level deltas. The spike needs
+one mob, a simple chance table and one ownership rule, not premium, empire
+privileges or gold multipliers.
 
-[DroppedItem](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/item/DroppedItem.ts)
-ma prawa właściciela wygasające po 15 s i despawn po 30 s. Czasy są przykładem,
-nie proponowanym balansem. W
-[PickupItemService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/PickupItemService.ts)
-sprawdzane są area, odległość i właściciel. `markTaken()` przed pierwszym await
-chroni przed ponownym podniesieniem w tym procesie. Jednak świat i torba są
-zmienione przed zapisem DB; ten przepływ nie daje sam z siebie odporności na
-awarię zapisu. U nas rezerwacja lootu i commit muszą mieć obsługę błędu.
+[DroppedItem](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/entities/game/item/DroppedItem.ts) reserves loot for 15 seconds and despawns after 30; these are examples,
+not proposed balance. [PickupItemService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/PickupItemService.ts) checks area, distance and owner. markTaken()
+before the first await prevents duplicate pickup in that process. However, world/
+bag state changes before DB persistence, so the flow alone cannot survive save
+failure. Our reservation/commit path must handle errors.
 
-### Zapis i ekonomia
+### Persistence and economy
 
-[ItemManager.flush](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/manager/ItemManager.ts)
-odtwarza kolejkę po błędzie i nie powinien zgubić update'u dodanego podczas await.
-To wartościowy przykład obsługi cache. Promise.all osobnych zapisów nie stanowi
-jednak wspólnej transakcji; część rekordów może zostać zapisana przed błędem.
+[ItemManager.flush](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/core/domain/manager/ItemManager.ts) restores its queue after failure and should retain updates added during
+await. This is useful cache handling, but Promise.all of independent writes is
+not one transaction; some records may persist before failure.
 
-W
-[PrivateShopService.buy](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/PrivateShopService.ts#L288)
-jest kontrola konkretnego egzemplarza, miejsca w torbie i limitu waluty. Przedmiot
-i gold zmieniają stan w pamięci, a kupujący i sprzedający są zapisywani osobno.
-[SaveCharacterService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/domain/service/SaveCharacterService.ts)
-zwraca wyniki Promise.allSettled; buy nie sprawdza odrzuconych wyników przed OK.
-To konkretna granica wzorca: nie używamy go jako gotowej bezpiecznej transakcji
-ekonomii. W spike upgrade/reroll zapisuje zmianę instancji oraz zużycie kosztu
-w jednej transakcji SQLite i potwierdza sukces po commicie. Handel dwóch graczy
-pozostaje późniejszym etapem.
+[PrivateShopService.buy](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/app/service/PrivateShopService.ts#L288) checks exact instance, bag space and currency cap. Item/gold change in
+RAM, and buyer/seller save separately. [SaveCharacterService](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/src/game/domain/service/SaveCharacterService.ts) returns Promise.allSettled results;
+buy does not inspect rejected results before OK. Do not adopt this as a safe
+economy transaction. Upgrade/reroll should persist instance changes and consumed
+cost in one SQLite transaction, acknowledging success after commit. Two-player
+trade is a later stage.
 
-## Co robimy z pozostałymi zależnościami TinyMMO
+## Remaining TinyMMO dependencies
 
-| Zależność | Rekomendacja po analizie |
+| Dependency | Recommendation after analysis |
 | --- | --- |
-| Login, auth, gateway, master, world lifecycle | Zachować i sprawdzać przez rzeczywiste logowanie dwóch klientów. Open-MT2 ma inny stos/protokół, nie zastępuje tego fundamentu. |
-| ContentRegistryHub i statyczne Resources | Zachować rolę rejestru definicji; przebudować definicje gameplayowe. Nie przechowywać w Resource stanu egzemplarza. |
-| Inventory, equipment, item.equip i zapis JSON | Przebudować razem do UID egzemplarzy; przejrzeć wszystkich odbiorców starego `item_id` przed usuwaniem adapterów. |
-| Character/LocalPlayer, fizyka, hitboxy, sceny broni i mapy | Zastępować małymi pionowymi etapami przez 3D. Zachować potrzebne interfejsy sesji/replikacji. |
-| RewardService i loot | Rozdzielić XP, udział w zabójstwie, losowanie itemów i GroundLoot/Pickup. |
-| Party, guild, trade, shops, quests, dungeon, events | Pozostają w kwarantannie poza ścieżką spike'a. Obecność odpowiednika w Open-MT2 nie jest powodem ich uruchamiania. |
-| Metinowe pakiety, Node/MySQL/Redis, dane i assets Open-MT2 | Nie dodawać do runtime projektu. Implementujemy własne reguły w Godot. |
+| Login/auth/gateway/master/world lifecycle | Keep; verify actual two-client login. Open-MT2's different stack/protocol does not replace it. |
+| ContentRegistryHub/static Resources | Keep definition registry role; rebuild gameplay definitions without instance state in Resources. |
+| Inventory/equipment/item.equip/JSON persistence | Rework together around instance UIDs; inspect old item_id consumers before removing adapters. |
+| Character/LocalPlayer/physics/hitboxes/weapons/maps | Replace through small 3D vertical slices, preserving session/replication interfaces. |
+| RewardService/loot | Separate XP, contribution, item rolls and GroundLoot/Pickup. |
+| Party/guild/trade/shops/quests/dungeon/events | Quarantine outside the spike path; Open-MT2 equivalents do not justify enabling them. |
+| Metin packets, Node/MySQL/Redis, Open-MT2 data/assets | Do not add to runtime; implement our own Godot rules. |
 
-Obecny stan usunięć i testów forka jest w [repository-cleanup.md](repository-cleanup.md).
-Analiza nie usuwa automatycznie kolejnych modułów ani nie zmienia istniejącego save'a.
+Removal/test status: [repository-cleanup.md](repository-cleanup.md). The analysis
+does not automatically delete more modules or change existing saves.
 
-## Kolejność implementacji
+## Recommended implementation order at analysis time
 
-1. **Minimalny świat 3D i dwie sesje:** mapa Spike, CharacterBody3D, kamera,
-   serwerowy ruch, replikacja i reconnect. Potwierdzić realne wejście dwóch klientów.
-2. **Pionowa ścieżka itemu:** ItemDefinition/ItemInstance, UID, nowy equip,
-   snapshot inventory i zapis/odczyt. Dwa miecze jednej definicji zachowują różne
-   bonusy i tożsamość po equipie oraz ponownym logowaniu.
-3. **Jeden mob PvE:** AttackRequest, walidacja, HP, idle/chase/attack/return,
-   śmierć i pojedyncze przyznanie nagrody.
-4. **Loot na ziemi:** drop table, encja 3D, prawo podniesienia, dystans,
-   pełna torba i dwa konkurujące żądania pickup.
-5. **Upgrade +1 i reroll:** koszty, wynik serwera, zmiana tej samej instancji,
-   atomowy zapis i idempotencja ponowionego żądania. Pełne +0…+9 po tej walidacji.
+1. Minimal 3D world/two sessions: Spike, CharacterBody3D, camera, server movement,
+   replication/reconnect; verify two actual clients entering.
+2. Item vertical path: ItemDefinition/ItemInstance, UID, new equip, inventory
+   snapshot and persistence. Same-definition swords retain distinct bonuses/
+   identity after equip/relogin.
+3. One PvE mob: AttackRequest, validation, HP, idle/chase/attack/return, death and
+   one-time reward.
+4. Ground loot: drop table, 3D entity, rights, distance, full bag and two competing pickups.
+5. Upgrade +1/reroll: costs, server result, same-instance mutation, atomic save and
+   retry idempotency; full +0...+9 follows validation.
 
-Ta kolejność jest rekomendacją implementacji zgodną z planem spike'a; analiza
-nie oznacza, że którykolwiek z nowych etapów został już wykonany.
+This historical recommendation follows the spike plan; analysis alone does not
+mean any stage had been implemented.
 
-## Scenariusze weryfikacji do wykorzystania
+## Verification scenarios to reuse
 
-W repo Open-MT2 przeczytano wybrane testy jako przykłady przypadków brzegowych:
-[PickupItemService.test](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/test/unit/game/app/service/PickupItemService.test.ts),
-[PlayerAttackThrottle.test](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/test/unit/core/domain/entities/game/player/PlayerAttackThrottle.test.ts),
-[ItemManagerFlush.test](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/test/unit/core/domain/manager/ItemManagerFlush.test.ts).
-Nie były uruchamiane w tej analizie.
+Selected source tests were read as edge-case examples: [PickupItemService.test](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/test/unit/game/app/service/PickupItemService.test.ts), [PlayerAttackThrottle.test](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/test/unit/core/domain/entities/game/player/PlayerAttackThrottle.test.ts), [ItemManagerFlush.test](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/test/unit/core/domain/manager/ItemManagerFlush.test.ts).
+They were not executed during this analysis.
 
-Nasze kryteria spike'a: atak poza zasięgiem i w innej instancji jest odrzucony;
-spam nie zwiększa liczby legalnych akcji; przedmiot można podnieść tylko raz;
-pełna torba nie kasuje lootu; nie można wyposażyć cudzego UID; różne egzemplarze
-tej samej definicji nie zamieniają bonusów; relog zachowuje equip/upgrade/affixes;
-błąd zapisu upgrade/reroll nie zużywa kosztu bez odpowiadającej zmiany itemu;
-ponowienie żądania nie nalicza drugi raz kosztu ani nagrody.
+Our criteria: reject attacks out of range/in another instance; spam cannot increase
+legal actions; one pickup per item; full bag does not delete loot; foreign UIDs
+cannot be equipped; same-definition instances keep their bonuses; relog retains
+equip/upgrade/affixes; upgrade/reroll save failures do not consume costs without
+item mutation; retry does not charge/grant twice.
 
-## Pochodzenie materiałów
+## Material provenance
 
-Źródła referencyjne przechowano lokalnie w ignorowanym
-`.godot/reference/open-mt2`; nie są częścią kodu naszego forka. Do projektu
-dodano tę analizę, bez kopiowania implementacji lub assetów Open-MT2.
+Reference sources were kept locally in ignored `.godot/reference/open-mt2`, not
+as fork code. Only this analysis was added; no Open-MT2 implementation/assets copied.
 
-[LICENSE](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/LICENSE)
-zawiera GPL v3, a README wskazuje GPL. Jednocześnie
-[package.json](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/package.json)
-ma `license: ISC`. To niespójność metadanych źródła; analiza nie rozstrzyga jej
-prawnie. Aktualny sposób użycia to odniesienie do reguł i własna implementacja.
+[LICENSE](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/LICENSE) contains GPL v3 and README indicates GPL, while [package.json](https://github.com/willianmarquess/open-mt2/blob/8d8800d470f0b69221886723eb5877a2ed9d9d8d/package.json) declares
+license ISC. This is source metadata inconsistency, not a legal determination.
+Current use is rule reference plus our own implementation.

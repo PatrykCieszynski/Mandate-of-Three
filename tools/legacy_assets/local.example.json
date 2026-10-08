@@ -1,7 +1,0 @@
-{
-  "source_root": "../Mandate Local/legacy",
-  "generated_root": "../Mandate Local/legacy/generated",
-  "blender": "path/to/blender.exe",
-  "importer_root": "path/to/checkout-containing-BlenderGR2rs",
-  "importer_revision": "8722bb1e6fa431cfd395b4e56f8eb2c37b9e05fc"
-}
