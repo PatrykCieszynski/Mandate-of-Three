@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="StandardMaterial3D" id="Material"]
+albedo_color = Color(0.52, 0.55, 0.60, 1)
+roughness = 0.85
+
+[sub_resource type="CapsuleMesh" id="Mesh"]
+material = SubResource("Material")
+radius = 0.35
+height = 1.4
+
+[node name="MobPlaceholder" type="Node3D"]
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.7, 0)
+mesh = SubResource("Mesh")

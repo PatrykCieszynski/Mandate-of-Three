@@ -37,10 +37,16 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $engine = '.godot/Godot_v4.7.2-stable_win64_console.exe'
           git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed' }
           python -m unittest discover -s tests -p test_asset_staging.py
           if ($LASTEXITCODE -ne 0) { throw 'Staging tests failed' }
+          python -m unittest discover -s tests -p test_metin_pipeline.py
+          if ($LASTEXITCODE -ne 0) { throw 'Pipeline fixture tests failed' }
           & ./tests/run-visuals.ps1
+          & $engine --headless --path . --mode=client res://tests/metin_batch_visual.tscn -- --no-dev-visuals *> .godot/verification/batch-ci.log
+          if ($LASTEXITCODE -ne 0 -or -not (Select-String .godot/verification/batch-ci.log -Pattern 'METIN_BATCH_VISUAL_OK 23')) { throw 'Batch placeholders failed' }
           foreach ($suite in @('items','spike3d','pve','combat','progression','xp','yang')) {
             & "./tests/run-$suite.ps1"
           }

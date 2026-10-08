@@ -40,7 +40,7 @@ func _export_begin(features: PackedStringArray, _is_debug: bool, _path: String, 
 
 
 func _export_file(path: String, _type: String, features: PackedStringArray) -> void:
-	if path.begins_with("res://dev_assets/") or path.begins_with("res://.local/") or path == "res://tools/dev_assets/local.json":
+	if path.begins_with("res://dev_assets/") or path.begins_with("res://.local/") or path in ["res://tools/dev_assets/local.json", "res://tools/metin_assets/local.json"]:
 		skip()
 		return
 	if not features.has("client"):

@@ -128,3 +128,5 @@ imported. The same messages were reproduced from unchanged main. Reopening
 after import has no missing-resource/parse errors. No legacy asset is involved.
 This existing cold-import limitation is not silently counted as a clean first
 import.
+
+Batch conversion i jawne grupy: [lokalny pipeline](metin-asset-pipeline.md). Dotychczasowy stage_asset.py pozostaje kompatybilny dla czterech pierwotnych ID.
