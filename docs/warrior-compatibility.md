@@ -60,7 +60,12 @@ hand attachment can also be inspected throughout the death clip.
 The skeleton socket is equip_right_hand, not a guessed hand vertex position.
 The native skeleton retains a 0.01 scale while the independent sword GLB is
 already in metres. The BoneAttachment child compensates by reciprocal parent
-scale (100 at normal size). No hand rotation or translation offsets were needed.
+scale (100 at normal size). A shared +90-degree rotation around sword-local Z
+turns the blade upward in idle. This correction belongs to the sword attachment,
+including the procedural sword on an animated rig; it is not baked into each GLB.
+Swords follow the local +Y blade convention. The capsule placeholder has no hand
+socket and already holds its sword upright, so it keeps its original placement.
+No hand translation offset was needed.
 Attachment world position is tested against the animated bone for every clip
 in both variants, after Godot's deferred skeleton update.
 
