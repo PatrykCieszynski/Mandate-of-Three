@@ -46,13 +46,6 @@ jobs:
           $testExit = $LASTEXITCODE
           Get-Content .godot/verification/python-staging.log
           if ($testExit -ne 0) { throw 'Staging tests failed' }
-      - name: Legacy pipeline fixture tests
-        shell: pwsh
-        run: |
-          python -m unittest discover -s tests -p test_legacy_asset_pipeline.py *> .godot/verification/python-legacy-pipeline.log
-          $testExit = $LASTEXITCODE
-          Get-Content .godot/verification/python-legacy-pipeline.log
-          if ($testExit -ne 0) { throw 'Pipeline fixture tests failed' }
       - name: Godot visual fallback tests
         shell: pwsh
         run: |

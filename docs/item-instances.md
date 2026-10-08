@@ -1,102 +1,101 @@
-# Egzemplarze przedmiotów — Spike 3D
+# Item instances - 3D spike
 
-Stan: 2026-10-07. Nowy model działa w Spike 3D przez istniejące logowanie
-gateway/master/world. Panel otwiera się klawiszem **I**, zamyka przez I, Esc lub
-przycisk. Otwarty panel zatrzymuje wysyłanie kierunku ruchu.
+Status: 2026-10-07. The new model works in Spike 3D through existing
+gateway/master/world login. **I** opens the panel; I, Esc or its button closes it.
+An open panel stops movement-direction transmission.
 
-## Model i działający zakres
+## Model and implemented scope
 
-`ItemDefinition` jest wspólnym Resource z ID definicji, nazwą, slotem, limitem
-stacka, bazowymi statystykami i przyrostem na poziom ulepszenia. Definicja nie
-przechowuje właściciela ani wylosowanych bonusów.
+`ItemDefinition` is a shared Resource with definition ID, name, slot, stack limit,
+base stats and upgrade-level growth. It stores neither owner nor rolled bonuses.
 
-`ItemInstance` opisuje konkretny egzemplarz: UID, ID definicji, trwałe ID postaci,
-ilość, poziom ulepszenia, affixy, sockety, wersję oraz położenie w torbie lub slocie.
-UID to 16 losowych bajtów z Crypto, zapisanych jako 32 znaki hex. Istniejący UID
-jest odczytywany z SQLite; logowanie nie generuje go ponownie.
+`ItemInstance` describes one instance: UID, definition ID, persistent character
+ID, quantity, upgrade level, affixes, sockets, version and bag/equipment placement.
+UID is 16 random Crypto bytes encoded as 32 hex characters. Existing UIDs are read
+from SQLite, not regenerated at login.
 
-Pierwsze wejście postaci do Spike przyznaje jednorazowo zestaw techniczny:
+The character's first Spike entry grants a one-time technical starter set:
 
-| Egzemplarz | Definicja | Bonus ataku | Atak broni | Atak postaci po założeniu |
+| Instance | Definition | Attack bonus | Weapon attack | Character attack when equipped |
 | --- | --- | --- | --- | --- |
-| Pierwszy miecz | `iron_sword` | +3 | 13 | 23 |
-| Drugi miecz | `iron_sword` | +7 | 17 | 27 |
+| First sword | `iron_sword` | +3 | 13 | 23 |
+| Second sword | `iron_sword` | +7 | 17 | 27 |
 
-Bazowy atak postaci wynosi 10. Bonusy zestawu są celowo ustalone, aby powtarzalnie
-sprawdzać rozdzielenie egzemplarzy. Torba ma 24 miejsca, a wyposażenie jeden slot
-`weapon`. Założenie kolejnej broni oddaje poprzednią do zwalnianego miejsca torby.
-Zdjęcie broni wymaga wolnego miejsca. Panel pokazuje UID w skrócie, ale wysyła
-pełny UID. Model obsługuje zapis poziomu +0…+9 i socketów; działania ulepszania,
-wkładania kamieni i rerollowania nie są jeszcze zaimplementowane.
+Base character attack is 10. Starter bonuses are fixed for repeatable instance
+separation tests. The bag has 24 positions and equipment has one `weapon` slot.
+Equipping another weapon puts the previous weapon in the vacated bag position.
+Unequip requires a free position. The panel abbreviates UIDs but sends the full
+UID. The model persists +0...+9 upgrade levels and sockets; upgrading, socketing
+and reroll actions are not implemented yet.
 
-## Autorytatywny zapis i synchronizacja
+## Authoritative persistence and synchronization
 
-Migracja WorldSchema **v10** dodaje trzy tabele, zachowując wcześniejsze dane:
+WorldSchema **v10** adds three tables while preserving older data:
 
-- `item_instances`: UID, właściciel, definicja, ilość, ulepszenie, JSON bonusów
-  i socketów oraz wersja.
-- `item_placements`: UID, właściciel i dokładne miejsce. Indeksy unikalne chronią
-  miejsce w torbie oraz slot wyposażenia danej postaci.
-- `item_initializations`: trwały marker przyznania zestawu. Nawet pusta torba
-  nie powoduje ponownego przyznania przedmiotów przy logowaniu.
+- `item_instances`: UID, owner, definition, quantity, upgrade, bonus/socket JSON
+  and version.
+- `item_placements`: UID, owner and exact position. Unique indexes protect each
+  character's bag positions and equipment slots.
+- `item_initializations`: durable starter-grant marker. An empty bag does not
+  trigger another grant at login.
 
-Stary serializer PlayerResource nie zapisuje tych tabel. Nie importujemy
-automatycznie starego inventory JSON ani jego założonej broni. Tabele nie mają
-klucza obcego do `players`, ponieważ legacy zapis używa `INSERT OR REPLACE`.
-Inicjalizacja sprawdza istnienie postaci; operacje filtrują właściciela w obu
-tabelach. Przyszłe usuwanie postaci będzie wymagać jawnego sprzątania jej
-egzemplarzy, położeń i markera inicjalizacji.
+The old PlayerResource serializer does not write these tables. Legacy inventory
+JSON and equipped weapons are not automatically imported. Tables have no foreign
+key to `players` because legacy persistence uses `INSERT OR REPLACE`.
+Initialization checks character existence; operations filter owner in both tables.
+Future character deletion must explicitly clean up instances, placements and the
+initialization marker.
 
-Klient wysyła wyłącznie akcję, UID i oczekiwaną wersję. Serwer bierze ID postaci
-z uwierzytelnionej sesji nadawcy RPC, sprawdza własność, wersję i slot oraz ogranicza
-częstotliwość poleceń do jednego na 100 ms. Zmiana odbywa się w `BEGIN IMMEDIATE`:
-położenia obu broni i ich wersje są zatwierdzane razem. Błąd wycofuje całość.
-Snapshot wraca po transakcji; statystyki są liczone na serwerze z zapisanych
-egzemplarzy. Nie ma oddzielnego cache wymagającego zapisu przy wylogowaniu.
+The client sends only action, UID and expected version. The server obtains the
+character ID from the authenticated RPC sender session, checks ownership/version/
+slot and limits commands to one per 100 ms. `BEGIN IMMEDIATE` commits both weapon
+placements and versions together; errors roll back the entire change. The snapshot
+returns after the transaction; stats are server-calculated from stored instances.
+At this initial stage there was no separate cache requiring a logout flush; the
+later runtime equipment/stat cache follows [persistence policy](persistence-policy.md).
 
-Pełny ekwipunek trafia tylko do właściciela. Inni gracze dostają ID definicji
-założonej broni i widzą prosty model miecza przy kapsule. Nowy gracz otrzymuje także
-stan broni obecnych graczy. Statystykę ataku wykorzystuje już
-[serwerowa walka z mobem 3D](pve-ground-loot.md).
+Only the owner receives full inventory. Other players get the equipped weapon's
+definition ID and see a simple sword model attached to the capsule. New players
+also receive existing players' weapon state. Attack is used by
+[server-side 3D mob combat](pve-ground-loot.md).
 
-[Pierwszy Item Progression Slice](item-progression.md) dodaje porównanie z założoną
-bronią, podgląd ataku po zmianie i oznaczenie nowego łupu. Znaleziony egzemplarz
-można założyć i zachować razem ze statystykami po relogu.
+The [first Item Progression Slice](item-progression.md) adds equipped-weapon
+comparison, post-swap attack preview and new-loot marking. A found instance can
+be equipped and retained with its stats after relog.
 
-## Weryfikacja
+## Verification
 
 ```powershell
-# Osobna baza SQLite: nie wymaga uruchomionych serwerów.
+# Separate SQLite database; no running servers required.
 & .\tests\run-items.ps1
 
-# Wymaga normalnego gateway/master/world; tworzy dwa lokalne konta gościa
-# i postacie testowe w ich zwykłych magazynach danych.
+# Requires normal gateway/master/world; creates two local guest accounts
+# and test characters in their normal stores.
 & .\tests\run-items.ps1 -WithSession
 
-# Regresja sieci i fizyki 3D, osobny port i sesje fixture.
+# Network/physics regression with a separate port and fixture sessions.
 & .\tests\run-spike3d.ps1
 ```
 
-Wszystkie testy zakończyły się sukcesem na projektowym Godot 4.7.2:
+All tests passed on the project's Godot 4.7.2:
 
-- SQLite: osobne UID i bonusy, exact equip/swap, własność, odrzucenie starej wersji,
-  unequip, zachowanie legacy profilu, izolacja od starego zapisu, ponowne otwarcie
-  bazy z identycznym stanem oraz brak ponownego przyznania zestawu.
-- Wstrzyknięcie błędu SQL podczas zamiany broni: obie lokalizacje i wersje
-  wracają do stanu sprzed operacji; kolejna poprawna transakcja działa.
-- Dwa klienty z pełnym logowaniem: statystyki 23/27, wybór konkretnego UID,
-  odrzucenie starej wersji przez RPC, widoczna broń obu postaci i relog z identycznym
-  snapshotem UID/bonusów/wyposażenia/wersji.
-- Test sieci/fizyki 3D nadal przechodzi dla serwera i dwóch klientów.
-- Załadowanie wszystkich 871 skryptów, scen i zasobów źródłowych; brak błędów
-  parsowania. Render OpenGL panelu i broni wygenerowany i obejrzany.
+- SQLite: distinct UIDs/bonuses, exact equip/swap, ownership, stale-version rejection,
+  unequip, preserved legacy profile, isolation from old saves, identical state
+  after reopening and no repeated starter grant.
+- Injected SQL failure during weapon swap: both placements/versions revert;
+  the next valid transaction succeeds.
+- Two full-login clients: stats 23/27, specific UID selection, stale-version RPC
+  rejection, visible weapons and identical UID/bonus/equipment/version after relog.
+- Network/physics checks still pass for the server and two clients.
+- All 871 source scripts/scenes/resources loaded without parse errors; the OpenGL
+  panel/weapon preview was generated and inspected.
 
-Logi i obraz podglądu są w ignorowanym `.godot/verification`. Test SQLite celowo
-wywołuje jeden błąd SQL przy sprawdzaniu rollbacku. Nadal występują wcześniejsze
-komunikaty silnika o magazynie certyfikatów Windows i zasobach przy zamknięciu.
+Logs/previews live in ignored `.godot/verification`. SQLite tests intentionally
+trigger one SQL rollback error. Earlier Windows certificate-store and exit-resource
+engine diagnostics remain.
 
-## Następny krok
+## Next step
 
-Mob PvE, serwerowe obrażenia i pickup nowego egzemplarza są opisane w
-[pionie PvE](pve-ground-loot.md). Handel, upgrade i reroll powinny później używać
-tego samego modelu oraz atomowych operacji na egzemplarzu.
+PvE mobs, server damage and new-instance pickup are described in the
+[PvE slice](pve-ground-loot.md). Trade, upgrade and reroll should later reuse this
+model and atomic instance operations.

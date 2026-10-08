@@ -1,46 +1,48 @@
 # Mandate of Three
 
-Multiplayer 3D inspirowany Metinem 2, budowany w Godot na infrastrukturze
-[Godot Tiny MMO](https://github.com/SlayHorizon/godot-tiny-mmo).
-Repo zawiera działający techniczny vertical slice; to jeszcze nie alpha gry.
+A multiplayer 3D game inspired by Metin 2, built in Godot on
+[Godot Tiny MMO](https://github.com/SlayHorizon/godot-tiny-mmo) infrastructure.
+This repository contains a working technical vertical slice, not a game alpha.
 
-## Aktualny zakres
+## Current scope
 
-- Gateway, master i world: logowanie, sesje, tworzenie postaci i wejście do instancji.
-- Spike 3D: serwerowy ruch i fizyka, kolizje, interpolacja zdalnych postaci.
-- ItemDefinition i trwałe ItemInstance: UID, właściciel, bonusy, equip konkretnego
-  egzemplarza oraz transakcyjny zapis SQLite.
-- Pierwsza progresja przez loot: atak broni na ziemi, porównanie z założonym
-  egzemplarzem, podgląd ataku po zmianie oraz trwały equip podniesionego miecza.
-- Cztery Wild Dogi z nawigacją i serwerowym AI; kierunkowe melee trafiające wiele
-  celów, trzyciosowe combo, reakcja na trafienie i odrzut ostatniego ciosu.
-- Śmierć i respawn gracza oraz mobów, loot na ziemi, rezerwacja i trwały pickup.
-  Testy dwóch klientów obejmują walkę, śmierć i rywalizację o ten sam łup.
-- XP za zabicie psa, poziomy, pasek postępu i level-up; trwały zapis po relogu
-  oraz checkpoint dirty progression co około 60 s i zapis przy końcu sesji.
-- Yang wallet, ground currency z loot rights i auto-pickup; osobny dirty delta
-  checkpoint co 30 s oraz atomowy testowy wydatek uwzględniający pending income.
-- Combat stats aktywnej postaci w RAM; zamach nie odpytuje SQLite o inventory.
-  Item pickup i equip zachowują natychmiastowe transakcje DB.
+- Gateway, master and world: login, sessions, character creation and instance entry.
+- 3D spike: server-side movement and physics, collisions and remote-character interpolation.
+- ItemDefinition and persistent ItemInstance: UID, owner, bonuses, equipping a specific
+  instance and transactional SQLite persistence.
+- Initial loot progression: weapon attack shown on the ground, comparison with the
+  equipped instance, attack preview after swapping and persistent sword equipment.
+- Four Wild Dogs with navigation and server-side AI; directional melee hitting multiple
+  targets, a three-hit combo, hit reactions and final-hit knockback.
+- Player and mob death/respawn, ground loot, reservation and persistent pickup.
+  Two-client tests cover combat, death and competition for the same loot.
+- XP for killing dogs, levels, progress bar and level-up; persistence across relog,
+  dirty progression checkpoints approximately every 60 seconds and session-end saves.
+- Yang wallet, ground currency with loot rights and auto-pickup; a separate dirty
+  delta checkpoint every 30 seconds and an atomic test spend including pending income.
+- Active-character combat stats in RAM; swings do not query SQLite inventory.
+  Item pickup and equipment retain immediate DB transactions.
+- An isolated [godot-cef UI spike](docs/cef-ui-spike.md), with a mock inventory,
+  structured bridge and lifecycle checks. It does not replace production UI.
 
-Sterowanie: **WASD** — ruch, **I** — ekwipunek, **przytrzymaj Spację** — combo
-przed postacią, **E** — podnieś najbliższy łup. **LPM** zaznacza opcjonalny cel,
-**F** przełącza autoatak; ręczny ruch przerywa autoatak. Yang podnosi się
-automatycznie z bliska; **G** podnosi najbliższy stos. Przycisk w HUD testowo
-wydaje 50 Yang.
+Controls: **WASD** to move, **I** for inventory, **hold Space** for a combo in front
+of the character, **E** to pick up nearby loot. **Left click** selects an optional
+target; **F** toggles autoattack, interrupted by manual movement. Nearby Yang is
+picked up automatically; **G** picks up the nearest stack. A HUD test button spends
+50 Yang.
 
-AI omija przeszkody na navmeshu areny. Niepodniesiony loot oraz HP
-i pozycja są stanem runtime; przedmiot po pickupie jest trwały. AOI, local
-prediction, docelowe modele i animacje pozostają do kolejnych etapów.
-Starsze moduły upstreamu w repo nie oznaczają funkcji dostępnych w naszym 3D.
+AI routes around obstacles on the arena navmesh. Unclaimed loot, HP and position
+are runtime state; items become persistent on pickup. AOI, local prediction and
+final models/animations remain future work. Optional local development visuals
+are described below. Upstream modules still present do not imply available 3D features.
 
-## Lokalne uruchomienie
+## Local setup
 
-Zweryfikowany silnik: **Godot 4.7.2**, lokalnie w `.godot/`.
-Godot i binaria dodatku godot-sqlite nie są wersjonowane; nowy checkout wymaga
-ich lokalnej instalacji. Folder `.godot` zawiera lokalny cache, silnik i wyniki testów.
+Verified engine: **Godot 4.7.2**, installed locally in `.godot/`.
+Godot and godot-sqlite native binaries are not versioned; a fresh checkout needs
+local installation. `.godot/` contains local cache, the engine and test results.
 
-Uruchom trzy role w osobnych terminalach PowerShell, z katalogu projektu:
+Start the three roles in separate PowerShell terminals from the project directory:
 
 ```powershell
 & .\.godot\Godot_v4.7.2-stable_win64_console.exe --headless --path . --mode=master-server
@@ -48,18 +50,18 @@ Uruchom trzy role w osobnych terminalach PowerShell, z katalogu projektu:
 & .\.godot\Godot_v4.7.2-stable_win64_console.exe --headless --path . --mode=world-server
 ```
 
-Następnie uruchom klienta, a do testu multiplayer dwa klienty:
+Then start a client, or two clients for multiplayer testing:
 
 ```powershell
 & .\.godot\Godot_v4.7.2-stable_win64.exe --path . --mode=client
 ```
 
-Można też użyć Godot **Debug → Customize Run Instances** z osobnymi feature tags
-`master-server`, `gateway-server`, `world-server` i `client`. Argument `--mode`
-podawaj przed separatorem `--`. Domyślne konfiguracje są w `data/config/`.
-Konta i bazy świata są lokalnymi danymi runtime wykluczonymi z Git.
+Alternatively, use Godot **Debug -> Customize Run Instances** with separate feature
+tags `master-server`, `gateway-server`, `world-server` and `client`. Place `--mode`
+before the `--` separator. Default configurations are in `data/config/`.
+Accounts and world databases are local runtime data excluded from Git.
 
-## Testy i workflow
+## Tests and workflow
 
 ```powershell
 & .\tests\run-items.ps1
@@ -71,35 +73,41 @@ Konta i bazy świata są lokalnymi danymi runtime wykluczonymi z Git.
 & .\tests\run-yang.ps1
 ```
 
-Testy używają baz testowych; `run-pve`, `run-combat`, `run-progression` `run-xp` i `run-yang` współdzielą port 18098,
-więc uruchamiaj je kolejno. Pełne logowanie/relog przez zwykłe serwery
-opisują dokumenty itemów i PvE; te scenariusze tworzą lokalne konta testowe.
-Nowe zmiany robimy na branchach `codex/<temat>`, sprawdzamy i mergujemy lokalnie
-z `--no-ff`. Zasady: [AGENTS.md](AGENTS.md).
+Tests use test databases. PvE, combat, progression, XP and Yang share port 18098;
+run them sequentially. Full login/relog through normal servers is covered in the
+item and PvE documents; these scenarios create local test accounts.
+Work on `codex/<topic>` branches, review and verify changes, then merge locally
+with `--no-ff`. See [AGENTS.md](AGENTS.md).
 
-## Dokumentacja
+## Documentation
 
-- [Yang wallet i ground currency](docs/yang-wallet.md)
-- [Kierunek i priorytety projektu](docs/project-direction.md)
-- [Spike 3D i transport ruchu](docs/spike3d.md)
-- [Egzemplarze przedmiotów i trwały zapis](docs/item-instances.md)
-- [PvE, ground loot i pickup](docs/pve-ground-loot.md)
-- [Combat Feel Pass i aktualne sterowanie](docs/combat-feel.md)
-- [Item Progression Slice: porównanie, equip i obrażenia](docs/item-progression.md)
-- [XP, poziomy i trwałe nagrody za zabójstwa](docs/character-xp.md)
-- [Persistence policy: progression, itemy i przyszły Yang wallet](docs/persistence-policy.md)
-- [Cleanup i pozostałe zależności](docs/repository-cleanup.md)
-- [Analiza Open-MT2 jako referencji](docs/open-mt2-analysis.md)
-- [Pierwotny plan spike'a](docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf)
+- [Project direction and priorities](docs/project-direction.md)
+- [Persistence policy](docs/persistence-policy.md)
+- [3D spike and movement transport](docs/spike3d.md)
+- [Item instances and persistence](docs/item-instances.md)
+- [PvE, ground loot and pickup](docs/pve-ground-loot.md)
+- [Combat Feel Pass and controls](docs/combat-feel.md)
+- [Item progression: comparison, equipment and damage](docs/item-progression.md)
+- [Character XP and levels](docs/character-xp.md)
+- [Yang wallet and ground currency](docs/yang-wallet.md)
+- [Optional local development visuals](docs/local-dev-visuals.md)
+- [Warrior compatibility](docs/warrior-compatibility.md)
+- [External legacy asset pipeline history](docs/legacy-asset-pipeline.md)
+- [CEF UI spike](docs/cef-ui-spike.md)
+- [CI](docs/ci.md)
+- [Cleanup and remaining dependencies](docs/repository-cleanup.md)
+- [Open-MT2 reference analysis](docs/open-mt2-analysis.md)
+- [Original spike plan](docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf)
+- [Design decisions](docs/Mandate_of_Three_Design_Decisions.pdf)
 
-## Upstream i credits
+## Upstream and credits
 
-Fork zachowuje infrastrukturę Godot Tiny MMO autorstwa **slayhorizon**:
-[repozytorium upstream](https://github.com/SlayHorizon/godot-tiny-mmo) i
-[dokumentację infrastruktury](https://slayhorizon.github.io/godot-tiny-mmo/).
-Upstreamowe mapy były autorstwa **higaslk**, a część pozostałych assetów pochodzi
-z prac **Anokolisa / Dungeon Crawler Pixel Art Asset Pack**. Podziękowania upstreamu
-obejmują również Jackiefrost, d-Cadrius i pozostałych współtwórców.
+The fork retains Godot Tiny MMO infrastructure by **slayhorizon**:
+[upstream repository](https://github.com/SlayHorizon/godot-tiny-mmo) and
+[infrastructure documentation](https://slayhorizon.github.io/godot-tiny-mmo/).
+Upstream maps were created by **higaslk**; some remaining assets are from
+**Anokolisa / Dungeon Crawler Pixel Art Asset Pack**. Upstream acknowledgements
+also include Jackiefrost, d-Cadrius and other contributors.
 
-Open-MT2 jest referencją zachowania Metina, bez importu kodu, assetów ani runtime.
-Licencja kodu upstreamu: [MIT](LICENSE), z zachowanym notice praw autorskich.
+Open-MT2 is a behavioral reference for Metin, without importing its code, assets
+or runtime. Upstream code uses the [MIT license](LICENSE), with its copyright notice retained.

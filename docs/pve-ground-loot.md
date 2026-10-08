@@ -1,107 +1,104 @@
-# Vertical slice PvE — jeden mob i ground loot
+# PvE vertical slice - one mob and ground loot
 
-Ten dokument opisuje pierwszy, historyczny etap PvE. Aktualna walka ma cztery
-Wild Dogi, kierunkowe combo i RPC ataku bez ID celu; wartości cooldownu i model
-atakowania poniżej zostały zastąpione przez [Combat Feel Pass](combat-feel.md).
-Zasady rezerwacji, transakcyjnego pickupu i trwałego UID nadal obowiązują.
+This document records the first, historical PvE stage. Current combat has four
+Wild Dogs, directional combos and attack RPCs without target IDs. Cooldowns and
+attack behavior below were superseded by [Combat Feel Pass](combat-feel.md).
+Reservation, transactional pickup and persistent UID rules still apply.
 
-Stan: 2026-10-07. Minimalny pion na branchu `codex/pve-ground-loot`:
+Status: 2026-10-07; minimal slice on `codex/pve-ground-loot`:
 
-`Player → Mob → Combat → Death → Ground Loot → Pickup → Persistent Item`
+`Player -> Mob -> Combat -> Death -> Ground Loot -> Pickup -> Persistent Item`
 
-## Gra i autorytet
+## Gameplay and authority
 
-**WASD**: ruch; **I**: ekwipunek; **Spacja**: atak strażnika; **E**: podnieś
-najbliższy łup. Podejdź do celu na około 2 m. Mob jest czerwoną kapsułą z nazwą
-i HP, łup złotym przedmiotem na ziemi z nazwą i rezerwacją.
+**WASD**: movement; **I**: inventory; **Space**: attack the guard; **E**: nearest
+loot. Approach to about 2 m. The mob is a red capsule with name/HP; loot is a gold
+ground object with name/reservation.
 
-Serwer liczy obrażenia z aktualnego ekwipunku SQLite: atak 10 bez broni, 23 lub 27
-z mieczem startowym. Klient wysyła sekwencję i ID jedynego znanego moba, bez
-obrażeń, pozycji ani własnego ID. Wymagane są żywy gracz, dystans ≤2,4 m,
-nieprzesłonięta linia w warstwie świata i cooldown **600 ms**. Monotoniczna
-sekwencja int32 odrzuca replay; spam nie zwiększa częstotliwości obrażeń.
+At this historical stage, the server calculated damage from current SQLite
+equipment: 10 unarmed, 23/27 with starter swords. Clients sent sequence and the
+sole known mob's ID, never damage, position or their own identity. Required: living
+player, distance <=2.4 m, unobstructed world-layer line of sight and **600 ms**
+cooldown. Monotonic int32 sequences rejected replay; spam did not increase damage frequency.
 
-## Mob i AI
+## Mob and AI
 
-Jeden strażnik: 120 HP, prędkość 2,8 m/s, dom `(-4, 0, 0)`.
-AI wykonuje się w fizyce serwera przy 60 Hz:
+One guard: 120 HP, speed 2.8 m/s, home `(-4, 0, 0)`.
+AI runs in server physics at 60 Hz:
 
-| Stan | Zachowanie |
+| State | Behavior |
 | --- | --- |
-| IDLE | Wybiera najbliższego żywego gracza w promieniu 6 m z widoczną linią. |
-| CHASE | Idzie do celu z kolizjami CharacterBody3D. |
-| ATTACK | W zasięgu 1,8 m zadaje 4 obrażenia co sekundę. |
-| RETURN | Po utracie celu lub przekroczeniu leasha 10 m wraca do domu, odzyskuje HP i resetuje udział graczy w obrażeniach. |
-| DEAD | Tworzy jeden łup, znika i odradza się po 6 sekundach. |
+| IDLE | Select nearest living player within 6 m with line of sight. |
+| CHASE | Approach using CharacterBody3D collisions. |
+| ATTACK | Deal 4 damage each second within 1.8 m. |
+| RETURN | On target loss or exceeding a 10 m leash, return home, restore HP and reset contributions. |
+| DEAD | Create one drop, disappear and respawn after 6 seconds. |
 
-RETURN jest niewrażliwy na ataki. Śmierć jest jednorazowym przejściem; dalsze
-polecenia nie tworzą kolejnego lootu. Player ma 100 HP. Przy zerowym HP traci ruch,
-atak i pickup; po 2 sekundach wraca do punktu startowego z pełnym HP. HP i pozycja
-pozostają stanem runtime. Nie ma nawigacji wokół przeszkód: prosty pościg może
-zatrzymać moba na ścianie. Brak animacji ataku, combosów, PvP, wielu celów i
-walidacji facing ataku.
+RETURN is immune to attacks. Death is a one-time transition; later commands cannot
+create more loot. Players have 100 HP. At zero HP, movement/attack/pickup stop;
+after two seconds the player returns to spawn with full HP. HP/position remain
+runtime state. This initial stage lacked obstacle navigation (chase could stop
+at a wall), attack animations, combos, PvP, multiple targets and facing validation.
 
-## Ground loot i własność
+## Ground loot and ownership
 
-Śmierć tworzy jeden runtime drop: unikalny UID, pozycja, `iron_sword` i bonus
-ataku +1…+9 wybrany przez serwer. Przez **15 sekund** ma go zarezerwowanego
-postać z największym udziałem w obrażeniach; remis rozstrzyga niższe trwałe ID.
-Rezerwacja jest powiązana z postacią, więc relog i zmiana peer ID jej nie zmieniają.
-Potem loot jest publiczny; niepodniesiony znika po **120 sekundach**.
+Death creates one runtime drop: unique UID, position, `iron_sword` and a server-
+selected +1...+9 attack bonus. For **15 seconds**, the highest damage contributor
+has the reservation; ties use the lower persistent character ID. Reservation
+belongs to the character, so relog/peer-ID changes do not alter it. Loot becomes
+public afterward and expires unclaimed after **120 seconds**.
 
-Klient wysyła sam UID. Serwer sprawdza żywego gracza, istniejący/niewygasły drop,
-własność, zasięg ≤2,5 m, widoczną linię i miejsce w torbie. Nie przyjmuje definicji,
-bonusu ani odbiorcy od klienta.
+Clients send only the UID. The server checks living player, existing/unexpired
+drop, ownership, range <=2.5 m, line of sight and bag space. It accepts no client-
+provided definition, bonus or recipient.
 
-SQLite **schema v11** dodaje `ground_item_claims` z unikalnym UID dropu.
-Jedna transakcja zapisuje potwierdzenie odbioru, ItemInstance z tym samym UID i
-miejsce w torbie. Dopiero po COMMIT serwer usuwa drop i aktualizuje prywatny
-inventory snapshot. Pełna torba lub błąd SQL pozostawia łup na ziemi; rollback
-wycofuje też potwierdzenie. Dwa RPC dla tego samego dropu mają jednego zwycięzcę.
-Trwałe potwierdzenie blokuje ponowne przyznanie UID także po otwarciu bazy.
+SQLite **schema v11** adds `ground_item_claims` with unique drop UID. One transaction
+writes the receipt, same-UID ItemInstance and bag placement. Only after COMMIT does
+the server remove the drop and update the private inventory snapshot. A full bag
+or SQL error leaves loot on the ground; rollback also removes the receipt.
+Two RPCs for one drop have one winner. Durable receipts prevent duplicate UID
+grants after DB reopen.
 
-Niepodniesiony loot nie jest zapisany na dysku: restart world usuwa runtime dropy.
-Zatwierdzony pickup jest trwały. Mob/HP/dropy są replikowane co 100 ms do małej
-instancji; klienci interpolują ruch moba. AOI i local prediction pozostają później.
+Unclaimed loot is not persisted; world restart removes runtime drops. Committed
+pickup is durable. Mob/HP/drop state is replicated every 100 ms to the small
+instance; clients interpolate mob movement. AOI/local prediction come later.
 
-## Testy
+## Tests
 
 ```powershell
-# Izolowana SQLite i WebSocket 18098, bez zwykłych kont i world DB.
+# Isolated SQLite and WebSocket 18098, separate from normal accounts/world DB.
 & .\tests\run-pve.ps1
 
-# Regresja itemów i fizyki sieciowej.
+# Item and network-physics regressions.
 & .\tests\run-items.ps1
 & .\tests\run-spike3d.ps1
 ```
 
-Testy przeszły na projektowym Godot 4.7.2:
+Passed on the project's Godot 4.7.2:
 
-- IDLE → CHASE → ATTACK → RETURN → IDLE, obrażenia moba i reset HP.
-- Zasięg, przeszkoda, replay/nieznany mob oraz cooldown przy spamie dwóch klientów.
-- Obaj gracze biją tego samego moba; jedna śmierć tworzy jeden drop, bez przyznania
-  przedmiotu przed pickupem.
-- Rezerwacja, pełna torba, pickup z daleka, konkurencyjny publiczny pickup,
-  jeden zwycięzca i brak dupe po ponowieniu.
-- Rollback przy wymuszonym błędzie placement po częściowym zapisie; trwałość
-  UID, bonusu, miejsca i potwierdzenia po ponownym otwarciu SQLite.
-- Obaj klienci widzą HP, śmierć i ground loot; tylko zwycięzca otrzymuje item.
+- IDLE -> CHASE -> ATTACK -> RETURN -> IDLE, mob damage and HP reset.
+- Range, obstruction, replay/unknown mob and cooldown under two-client spam.
+- Both players attack one mob; one death produces one drop, with no pre-pickup grant.
+- Reservation, full bag, distant pickup, competing public pickups, one winner and
+  no duplicate on retry.
+- Forced placement failure after partial writes rolls back; UID, bonus, placement
+  and receipt survive SQLite reopen.
+- Both clients see HP/death/ground loot; only the winner receives the item.
 
-`tests/pve_session.tscn` sprawdził oddzielnie prawdziwe gateway/master/world:
-equip, zabicie moba, loot, pickup i relog z identycznym snapshotem przedmiotów.
-Tworzy lokalne konto gościa i postać; wymaga spokojnej normalnej instancji Spike:
+`tests/pve_session.tscn` separately verified real gateway/master/world:
+equip, kill, loot, pickup and relog with an identical item snapshot. It creates a
+local guest account/character and needs a quiet normal Spike instance:
 
 ```powershell
 & .\.godot\Godot_v4.7.2-stable_win64_console.exe --headless --path . --mode=client res://tests/pve_session.tscn
 ```
 
-Render OpenGL rzeczywistej sesji został wygenerowany i obejrzany. Logi i obrazy
-są w ignorowanym `.godot/verification`. Użytkownik potwierdził ogólne działanie
-pionu w ręcznym teście (2026-10-07); nie jest to osobne potwierdzenie każdego
-przypadku brzegowego pickupu. Techniczny respawn gracza nie ma osobnego testu
-integracyjnego. Wcześniejsze komunikaty silnika o certyfikatach i zasobach przy
-zamknięciu nadal występują.
+An OpenGL real-session render was generated and inspected. Logs/images are in
+ignored `.godot/verification`. The user manually confirmed general slice operation
+on 2026-10-07, not every pickup edge case. Technical player respawn lacked a
+separate integration test at this stage. Earlier certificate/exit-resource
+diagnostics remain.
 
-Import edytora i załadowanie wszystkich 872 skryptów, scen oraz zasobów źródłowych
-zakończyły się bez błędów parsowania. Regresja pełnego equip/relog dwóch klientów
-przez gateway/master/world również przeszła po dodaniu walki.
+Editor import and all 872 source scripts/scenes/resources loaded without parse
+errors. Full two-client equip/relog through gateway/master/world also passed after
+combat was added.

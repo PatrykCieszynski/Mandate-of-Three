@@ -1,56 +1,56 @@
-# Yang wallet — pierwszy slice
+# Yang wallet - first slice
 
-Pies po śmierci zostawia item oraz osobne 30 Yang. Wartość jest placeholderem.
-GroundCurrency ma wyłącznie lokalny ID encji, kwotę, pozycję, loot rights
-największego contributor’a, rezerwację 15 s i lifetime 120 s. Nie zapisuje się
-jako ItemInstance ani ground claim w SQLite. Powtórzony callback śmierci nie
-tworzy drugiej nagrody.
+A dying dog drops an item and a separate 30 Yang. The amount is a placeholder.
+GroundCurrency has only a local entity ID, amount, position, highest contributor's
+loot rights, a 15-second reservation and a 120-second lifetime. It is not persisted
+as ItemInstance or a SQLite ground claim. Duplicate death callbacks do not create
+another reward.
 
-Auto-pickup działa na serwerze co 0,2 s w promieniu 1,25 m. G podnosi najbliższe
-Yang w promieniu 2,5 m. Oba sprawdzają życie gracza, odległość, line of sight,
-rezerwację i expiry; klient nie podaje kwoty ani ownership. Publiczny stack
-może zostać podniesiony tylko raz. Pełne inventory nie blokuje walleta.
-Nie ma jeszcze peta ani konfiguracji auto-pickupu.
+Server-side auto-pickup runs every 0.2 seconds within 1.25 m. G picks up the nearest
+Yang within 2.5 m. Both check player life, distance, line of sight, reservation and
+expiry; the client supplies neither amount nor ownership. Public stacks can be
+picked up only once. Full inventory does not block the wallet. There is no pet or
+auto-pickup configuration yet.
 
-WorldDatabase trzyma `runtime_wallets` według persistent character ID:
-`wallet_balance`, `pending_currency_delta` i oddzielny `dirty_wallet` set.
-Income jest synchroniczną zmianą RAM i usunięciem stosu z ziemi, bez SQL.
-HUD dostaje jedynie własne saldo i publiczny stan stosów, bez cudzych walletów.
+WorldDatabase keeps `runtime_wallets` by persistent character ID:
+`wallet_balance`, `pending_currency_delta` and a separate `dirty_wallet` set.
+Income synchronously changes RAM and removes the ground stack without SQL.
+The HUD receives only its owner's balance and public stack state, never other wallets.
 
-Co 30 s wszystkie dirty delty zapisują się w jednej transakcji do `wallets`
-(schema v14). UPDATE dodaje deltę do istniejącego salda. Commit zeruje pending
-oraz dirty; rollback zachowuje je do ponowienia. Clean interval nie otwiera
-transakcji. Zapis nie dotyka PlayerResource, inventory ani progression.
-Logout/disconnect, opuszczenie mapy, transfer instancji i graceful save/shutdown
-wymuszają zapis. Failed offline state jest zachowane i używane przy reentry.
-Nowa postać zaczyna z 0 Yang; legacy gold nie jest przenoszone.
+Every 30 seconds, all dirty deltas are persisted in one transaction to `wallets`
+(schema v14). UPDATE adds the delta to the existing balance. Commit clears pending
+and dirty state; rollback retains them for retry. Clean intervals do not open a
+transaction. Saving does not touch PlayerResource, inventory or progression.
+Logout/disconnect, map departure, instance transfer and graceful save/shutdown
+force a save. Failed offline state is retained and reused on reentry.
+New characters start with 0 Yang; legacy gold is not transferred.
 
-## Testowy critical spend
+## Test critical spend
 
-Przycisk „Test: wydaj 50 Yang” zużywa stałe 50 Yang ustalone przez serwer.
-To tymczasowa operacja do weryfikacji persistence, bez nagrody za wydatek.
-RPC przyjmuje tylko sequence; waliduje sesję, życie, replay i rate limit.
-Affordability korzysta z RAM. W jednej transakcji store dodaje pending income
-oraz odejmuje koszt z warunkiem nieujemnego salda. Runtime zmienia się dopiero
-po commit, a rollback pozostawia balance i pending income bez zmian.
+The HUD's test button spends a fixed, server-defined 50 Yang. This temporary
+operation verifies persistence and gives no reward. RPC accepts only a sequence;
+it validates session, life, replay and rate limit. Affordability uses RAM.
+One store transaction applies pending income and subtracts the cost with a
+nonnegative-balance condition. Runtime changes only after commit; rollback leaves
+balance and pending income unchanged.
 
-Test SQLite sprawdza `40000 DB + 30000 pending - 50000 spend = 20000` oraz
-wymuszony błąd w drugim UPDATE, po dodaniu pending income: całość się wycofuje.
-Przyszły upgrade musi dołączyć zużycie materiału i mutację itemu do tego samego
-commitu. Ten slice nie tworzy callbacków ani generic transaction frameworka.
+SQLite tests verify `40000 DB + 30000 pending - 50000 spend = 20000` and force an
+error in the second UPDATE after applying pending income: the entire operation
+rolls back. Future upgrades must include material consumption and item mutation
+in that same commit. This slice adds no callbacks or generic transaction framework.
 
-Przy crashu akceptujemy utratę niezapisanego income od ostatniego udanego
-checkpointu (normalnie około 30 s) oraz runtime ground currency. Zatwierdzony
-wydatek i immediate item transactions są trwałe.
+A crash may lose unsaved income since the last successful checkpoint (normally
+about 30 seconds) and runtime ground currency. Committed spending and immediate
+item transactions remain durable.
 
-## Weryfikacja
+## Verification
 
-`& .\tests\run-yang.ps1`: prawdziwy SQLite i dwa RPC klienty, autoloot,
-rights, range/obstruction, expiry/death, pickup race, prywatne saldo/HUD,
-critical spend/replay, delta checkpoint, batch rollback i realny disconnect.
-`-Preview` zapisuje `.godot/verification/yang-preview.png`.
+`& .\tests\run-yang.ps1`: real SQLite and two RPC clients, autoloot, rights,
+range/obstruction, expiry/death, pickup races, private balance/HUD, critical
+spend/replay, delta checkpoints, batch rollback and real disconnect.
+`-Preview` writes `.godot/verification/yang-preview.png`.
 
-`tests/pve_session.tscn` przez normalne gateway/master/world sprawdza combat,
-item pickup/equip, XP/level oraz Yang autoloot i dokładne saldo po logout/relog.
-Yang network współdzieli port 18098 z PvE/combat/progression/XP — uruchamiać
-kolejno. Zasady wszystkich kategorii: [Persistence policy](persistence-policy.md).
+`tests/pve_session.tscn` through normal gateway/master/world verifies combat,
+item pickup/equip, XP/level, Yang autoloot and exact balance after logout/relog.
+Yang network tests share port 18098 with PvE/combat/progression/XP; run sequentially.
+All state categories: [Persistence policy](persistence-policy.md).

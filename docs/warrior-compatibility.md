@@ -126,9 +126,9 @@ body/sword deletion and restaging, and tracked placeholder fallback.
 run-visuals.ps1 also runs the Warrior test while the entire local legacy staging
 directory is temporarily absent. Its export probe verifies all tracked
 placeholders and rejects legacy GLBs, extracted textures and local configuration
-inside the Windows PCK. Release CI runs the no-assets Warrior test before export.
+inside the Windows PCK. Verification CI runs the no-assets Warrior test without exporting.
 
 Local Godot verification is 4.7.2, including GPU rendering, all existing gameplay
-checks and a cold copy from the Git index with no dev_assets. Remote CI and its
-Godot 4.6.3 version have not been run here. The previously documented baseline
+checks and a cold copy from the Git index with no dev_assets. Remote verification CI has not been run here; it now selects Godot 4.7.2.
+The former Godot 4.6.3 release workflow was removed. The previously documented baseline
 cold-import and shutdown cleanup diagnostics also apply to this spike.
