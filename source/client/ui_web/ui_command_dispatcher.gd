@@ -27,6 +27,6 @@ func _snapshot() -> void:
 
 func _command(type: String, id: String, payload: Dictionary) -> void:
 	# Callable is registered explicitly by the application; never supplied by JS.
-	var result: Dictionary = _handlers[type].call(payload)
+	var result: Dictionary = await _handlers[type].call(payload)
 	assert(result.has("ok") and result.ok is bool)
 	bridge.send("command.result", result, id)

@@ -4,10 +4,11 @@ CEF provides DOM layout, CSS styling and browser text/pointer handling over
 Godot's 3D viewport. The goal is a reusable screen-space UI boundary while Godot
 retains client state and the server retains gameplay/economy authority.
 
-The client has a small, opt-in Web UI boundary. Existing gameplay screens are
-not migrated. The production source contains no mock inventory or diagnostic
-commands. The runnable CEF integration remains in an isolated local project;
-installing its addon in the main project is not part of this change.
+The client has a small Web UI boundary. The first integrated screen is the
+[3D equipment/backpack](inventory-ui-prototype.md), available in an isolated
+Vulkan Mobile gameplay client. Other gameplay screens retain native Godot UI. The production source contains no mock inventory or diagnostic
+commands. The addon remains in ignored local staging projects; the root server/headless
+project loads no CEF extension.
 
 The original [CEF spike](cef-ui-spike.md) is historical evidence. This document
 specifies **protocol v1** and the current foundation. Its tests replace the old
@@ -205,7 +206,7 @@ fetch (tested), but must not be presented as confinement of local resources.
 Do not load untrusted/mod/downloaded HTML into this runtime. Debug builds expose
 local DevTools on 9229; a non-debug packaged client remains an adoption gate.
 
-No CEF addon, autoload or main-project setting is added. Setup extracts native
+No CEF addon, autoload or main-project setting is added to the root. Setup extracts native
 binaries only into ignored `.godot/cef-spike/project`; its headless baseline has
 no addon. Host guards headless/unavailable classes and creates no browser. Server
 exports must continue to exclude native CEF and UI setup. No server/client release
@@ -274,7 +275,8 @@ The initial new fixture also failed because of a JavaScript syntax mistake and
 then an invalid cross-authority relative module path. Both fixture mistakes were
 corrected. Real Vulkan readiness and IPC now verify the packaged module layout.
 The root production shell's modules use relative paths within the source origin;
-its blank composition does not constitute a production-screen migration test.
+its blank composition remains a foundation fixture; the equipment screen has
+its own client composition and gameplay integration tests.
 
 These final browser runs execute assertions during the runner's sampling window,
 so their CPU/RAM samples are **not idle performance measurements**. No fresh idle
@@ -292,5 +294,26 @@ the overall deployment production ready until the remaining release gates are
 resolved.
 
 Remaining gates: non-debug packaging, physical input/IME/DPI/alt-tab, helper crash
-behavior, long soak and a target-device memory/renderer budget. No Linux/macOS,
-server export, production client export or real inventory migration was tested.
+behavior, long soak and a target-device memory/renderer budget. Linux/macOS and server/client release exports remain untested. The first
+inventory integration is separately documented.
+
+## First gameplay screen
+
+`InventoryWebController` composes the shared host/bridge/dispatcher for Spike 3D.
+It maps private server UID/revision/placement/stat snapshots to the reusable web
+view; wallet/progression updates only refresh displayed information. Explicit
+commands are `inventory.move_item`, `inventory.equipment` and `inventory.close`.
+Results await correlated World Server replies; results do not replace snapshots.
+The dispatcher now supports synchronous or awaited registered handlers.
+
+The screen opens with I and uses modal ownership while open: movement/combat are
+gated by the existing menu_open state, and click-carried items can move beyond
+panel bounds. Escape first cancels a carried item, then closes. Browser readiness
+restores the latest snapshot and modal state after reload. Client failures release
+input and retain the native fallback. Headless and Compatibility use native UI.
+
+Use `tools/cef_client/run.ps1` for the actual game with CEF. It creates an ignored
+copy of source/assets/config/addons/tests and pinned Windows CEF, with Vulkan
+Mobile settings. Servers continue running from the root project. Changes require
+refreshing staging. This is a development launcher, not a release export or Linux/
+macOS setup. Native packaging/physical input gates above remain applicable.

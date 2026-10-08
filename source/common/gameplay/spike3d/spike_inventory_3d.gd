@@ -3,6 +3,8 @@ extends Node
 ## UID commands and private inventory snapshots share the authenticated map path.
 
 signal state_changed(state: Dictionary)
+signal operation_finished(command_id: String, result: Dictionary)
+var web_ui_active: bool = false
 var state: Dictionary = {}
 var public_weapons: Dictionary[int, String] = {}
 var _last_action_ms: Dictionary[int, int] = {}
@@ -40,20 +42,34 @@ func remove_peer(peer_id: int) -> void:
 	_last_action_ms.erase(peer_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
-func request_equipment(action: String, uid: String, revision: int) -> void:
-	if not GameMode.is_world_server():
+func request_equipment(action: String, uid: String, revision: int, command_id: String = "") -> void:
+	_handle_command(action, uid, revision, -1, command_id)
+
+@rpc("any_peer", "call_remote", "reliable", 1)
+func request_move_item(uid: String, revision: int, position: int, command_id: String) -> void:
+	_handle_command("move", uid, revision, position, command_id)
+
+func _handle_command(action: String, uid: String, revision: int, position: int, command_id: String) -> void:
+	if not GameMode.is_world_server() or command_id.length() > 80:
 		return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id) or _store() == null:
 		return
+	var result: Dictionary
 	var now: int = Time.get_ticks_msec()
 	if now - _last_action_ms.get(peer_id, -1000) < 100:
-		_send_state(peer_id, "too_fast")
-		return
-	_last_action_ms[peer_id] = now
-	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
-	var result: Dictionary = _store().change_equipment(resource.player_id, uid, revision, action)
+		result = {"ok": false, "error": "too_fast"}
+	else:
+		_last_action_ms[peer_id] = now
+		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+		result = _store().move_bag_item(resource.player_id, uid, revision, position) if action == "move" else _store().change_equipment(resource.player_id, uid, revision, action)
 	_send_state(peer_id, "" if result.ok else str(result.error))
+	if command_id != "":
+		receive_operation.rpc_id(peer_id, command_id, result)
+
+@rpc("authority", "call_remote", "reliable", 1)
+func receive_operation(command_id: String, result: Dictionary) -> void:
+	if GameMode.is_client(): operation_finished.emit(command_id, result)
 
 func _send_state(peer_id: int, error: String = "") -> void:
 	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
@@ -148,7 +164,7 @@ func _build_panel() -> void:
 	_panel.hide()
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if _panel == null or not event is InputEventKey or not event.pressed or event.echo:
+	if web_ui_active or _panel == null or not event is InputEventKey or not event.pressed or event.echo:
 		return
 	if event.physical_keycode == KEY_I:
 		_toggle_panel(not _panel.visible)
@@ -156,6 +172,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	elif event.keycode == KEY_ESCAPE and _panel.visible:
 		_toggle_panel(false)
 		get_viewport().set_input_as_handled()
+
+func enable_web_ui(active: bool) -> void:
+	web_ui_active = active
+	if _panel != null: _toggle_panel(false)
 
 func _toggle_panel(open: bool) -> void:
 	_panel.visible = open

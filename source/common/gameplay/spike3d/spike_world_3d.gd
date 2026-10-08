@@ -35,6 +35,11 @@ func _ready() -> void:
 	if not _server:
 		local_peer = multiplayer.get_unique_id()
 		_build_camera_and_ui()
+		if WebUiHost.supported_client():
+			var web_inventory := InventoryWebController.new()
+			web_inventory.name = "WebInventory"
+			add_child(web_inventory)
+			web_inventory.setup(self)
 		join_world.rpc_id.call_deferred(1)
 
 func _build_arena() -> void:

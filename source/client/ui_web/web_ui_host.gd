@@ -14,6 +14,9 @@ var modal: bool = false
 var _regions: Array[Rect2] = []
 var _held: int = 0
 
+static func supported_client() -> bool:
+	return DisplayServer.get_name() != "headless" and ClassDB.class_exists("CefTexture") and RenderingServer.get_current_rendering_method() == "mobile"
+
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(func() -> void: _regions.clear())
@@ -85,7 +88,7 @@ func set_modal(active: bool) -> void:
 	if is_instance_valid(browser): browser.mouse_filter = Control.MOUSE_FILTER_STOP if active else Control.MOUSE_FILTER_IGNORE
 
 func _apply_focus() -> void:
-	if not is_instance_valid(browser): return
+	if not is_inside_tree() or not is_instance_valid(browser): return
 	if keyboard_owner == "gameplay" or not browser.is_visible_in_tree():
 		var owner: Control = get_viewport().gui_get_focus_owner()
 		if owner == browser or (is_instance_valid(owner) and browser.is_ancestor_of(owner)):

@@ -110,3 +110,6 @@ func play_swing(stage: int) -> void:
 	var tween := create_tween()
 	tween.tween_property(material, "albedo_color:a", 0.0, 0.25)
 	tween.tween_callback(slash.queue_free)
+
+func get_display_name() -> String:
+	return _display_name
