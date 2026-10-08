@@ -19,11 +19,11 @@ function Invoke-WarriorTest([string]$Mode,[string]$Options) {
     }
 }
 try {
-    $taskAvailable = (Test-Path -LiteralPath (Join-Path $taskRoot 'dev_assets/metin2/players/warrior/warrior.glb')) -and (Test-Path -LiteralPath (Join-Path $taskRoot 'dev_assets/metin2/players/warrior/warrior_armor.glb')) -and (Test-Path -LiteralPath (Join-Path $taskRoot 'dev_assets/metin2/weapons/iron_sword/iron_sword.glb'))
+    $taskAvailable = (Test-Path -LiteralPath (Join-Path $taskRoot 'dev_assets/legacy/players/warrior/warrior.glb')) -and (Test-Path -LiteralPath (Join-Path $taskRoot 'dev_assets/legacy/players/warrior/warrior_armor.glb')) -and (Test-Path -LiteralPath (Join-Path $taskRoot 'dev_assets/legacy/weapons/iron_sword/iron_sword.glb'))
     if ($taskAvailable) { Invoke-WarriorTest 'dev' '--require-dev --remove-live' }
     Invoke-WarriorTest 'placeholder' '--no-dev-visuals'
 } finally {
-    foreach ($taskEntry in @(@('warrior-hot-body.glb','dev_assets/metin2/players/warrior/warrior.glb'),@('warrior-hot-sword.glb','dev_assets/metin2/weapons/iron_sword/iron_sword.glb'))) {
+    foreach ($taskEntry in @(@('warrior-hot-body.glb','dev_assets/legacy/players/warrior/warrior.glb'),@('warrior-hot-sword.glb','dev_assets/legacy/weapons/iron_sword/iron_sword.glb'))) {
         $taskStash = Join-Path $taskLogs $taskEntry[0]
         if (Test-Path -LiteralPath $taskStash) { Move-Item -LiteralPath $taskStash -Destination (Join-Path $taskRoot $taskEntry[1]) }
     }

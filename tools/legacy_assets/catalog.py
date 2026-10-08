@@ -10,7 +10,7 @@ ARMORS = {'warrior': 'warrior_novice', 'warrior_armor': 'warrior_nahan',
           'warrior_saja': 'warrior_saja', 'warrior_cheongrin': 'warrior_cheongrin'}
 SWORDS = {'iron_sword': '00010', 'sword_00020': '00020', 'sword_00030': '00030', 'sword_00040': '00040'}
 GROUPS = {
-    'mobs_m1': list(MOBS)[:8], 'orcs': list(MOBS)[8:13], 'metin_stones': list(MOBS)[13:],
+    'mobs_m1': list(MOBS)[:8], 'orcs': list(MOBS)[8:13], 'reference_stones': list(MOBS)[13:],
     'warrior_male': list(ARMORS), 'basic_swords': list(SWORDS),
 }
 GROUPS['first_batch'] = list(MOBS) + list(ARMORS) + list(SWORDS)

@@ -4,7 +4,7 @@ $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
 $taskLogs = Join-Path $taskRoot '.godot/verification'
 New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
-$taskDev = Join-Path $taskRoot 'dev_assets/metin2'
+$taskDev = Join-Path $taskRoot 'dev_assets/legacy'
 $taskStash = Join-Path $taskLogs 'visual-dev-stash'
 $taskFinal = Join-Path $taskRoot 'assets/final/mobs/stray_dog.tscn'
 $taskMoved = $false

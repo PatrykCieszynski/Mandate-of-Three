@@ -16,8 +16,14 @@ from BlenderGR2rs import gr2_native
 from BlenderGR2rs.gr2_importer import import_gr2, import_gr2_animation
 
 
+class AssetFailure(Exception):
+    def __init__(self, status, message):
+        self.status = status
+        super().__init__(status + ': ' + message)
+
+
 def fail(status, message):
-    raise RuntimeError(status + ': ' + message)
+    raise AssetFailure(status, message)
 
 
 def load(path):
@@ -231,7 +237,7 @@ try:
 except Exception as error:
     traceback.print_exc()
     message = str(error)
-    statuses = ['MISSING_MODEL', 'MISSING_TEXTURE', 'MISSING_ANIMATION', 'IMPORT_FAILED', 'EXPORT_FAILED', 'INVALID_SKELETON', 'UNKNOWN_LAYOUT']
-    result = {'status': next((s for s in statuses if message.startswith(s + ':')), 'IMPORT_FAILED'), 'error': message}
+    result = {'status': error.status if isinstance(error, AssetFailure) else 'PIPELINE_ERROR',
+              'error': message, 'traceback': traceback.format_exc()}
 Path(request['result']).write_text(json.dumps(result, indent=2), encoding='utf-8')
-print('METIN_BLENDER_RESULT_WRITTEN')
+print('LEGACY_BLENDER_RESULT_WRITTEN')

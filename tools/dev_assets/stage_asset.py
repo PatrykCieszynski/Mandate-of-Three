@@ -50,7 +50,7 @@ def stage_relative_asset(relative: Path, generated_root: Path, repo_root: Path =
     if not source.is_relative_to(generated_root):
         raise ValueError("Source escapes the configured generated root")
     validate_glb(source)
-    destination = repo_root / "dev_assets/metin2" / relative
+    destination = repo_root / "dev_assets/legacy" / relative
     # Reject staging through symlinks/junctions, including an existing target.
     for candidate in [destination, *destination.parents]:
         if candidate == repo_root: break
@@ -74,11 +74,11 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=Path(__file__).with_name("local.json"))
     args = parser.parse_args()
     try:
-        configured = args.generated_root or os.environ.get("MANDATE_METIN_GENERATED_ROOT")
+        configured = args.generated_root or os.environ.get("MANDATE_LEGACY_GENERATED_ROOT")
         if not configured and args.config.is_file():
             configured = json.loads(args.config.read_text(encoding="utf-8-sig")).get("generated_root")
         if not configured:
-            raise ValueError("Set --generated-root, MANDATE_METIN_GENERATED_ROOT or local.json; see local.example.json")
+            raise ValueError("Set --generated-root, MANDATE_LEGACY_GENERATED_ROOT or local.json; see local.example.json")
         generated_root = Path(configured)
         if not generated_root.is_absolute(): generated_root = REPO_ROOT / generated_root
         print(stage_asset(args.asset_id, generated_root))

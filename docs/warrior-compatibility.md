@@ -91,8 +91,8 @@ described in local-dev-visuals.md. Stage each selection explicitly:
     python tools/dev_assets/stage_asset.py warrior_armor
     python tools/dev_assets/stage_asset.py iron_sword
 
-Only these three GLBs are copied, to dev_assets/metin2/players/warrior and
-dev_assets/metin2/weapons/iron_sword. Godot may create adjacent embedded textures
+Only these three GLBs are copied, to dev_assets/legacy/players/warrior and
+dev_assets/legacy/weapons/iron_sword. Godot may create adjacent embedded textures
 and import metadata; those stay ignored with the source GLBs.
 
 Open Godot to import new files. The existing prototype player automatically
@@ -123,7 +123,7 @@ root tracks, animated hand attachment, variant replacement, existing player
 event hooks, unchanged collider, equipment and position, death/respawn, live
 body/sword deletion and restaging, and tracked placeholder fallback.
 
-run-visuals.ps1 also runs the Warrior test while the entire local Metin staging
+run-visuals.ps1 also runs the Warrior test while the entire local legacy staging
 directory is temporarily absent. Its export probe verifies all tracked
 placeholders and rejects legacy GLBs, extracted textures and local configuration
 inside the Windows PCK. Release CI runs the no-assets Warrior test before export.
