@@ -16,6 +16,11 @@ try {
   const address = server.address();
   if (!address || typeof address === 'string') throw Error('Missing port');
   const url = `http://127.0.0.1:${address.port}`;
+  const directEntry = await fetch(url + '/inventory/game.html', {
+    redirect: 'manual',
+  });
+  assert.equal(directEntry.status, 302);
+  assert.equal(directEntry.headers.get('location'), '/web/inventory/game.html');
   assert.equal((await fetch(url + '/..%2fpackage.json')).status, 404);
   assert.equal((await fetch(url + '/__dev/runtime.ts')).status, 404);
   browser = await chromium.launch({
@@ -81,6 +86,65 @@ try {
   await ui.locator('#inventory-window').waitFor({ state: 'visible' });
   assert.equal(await ui.locator('#inventory .inventory-item').count(), 3);
   assert.equal(await page.locator('#scale').inputValue(), '1');
+  const storage = ui.locator('#storage');
+  await ui.locator('#storage-window').waitFor({ state: 'visible' });
+  assert.equal(await storage.locator('.cell').count(), 135);
+  assert.equal(await storage.locator('.ui-item-slot').count(), 3);
+  await storage.locator('.ui-item-slot').first().hover();
+  assert.equal(await storage.locator('.ui-tooltip').isVisible(), true);
+  await storage.getByRole('tab', { name: 'II', exact: true }).click();
+  assert.equal(await storage.locator('.ui-tooltip').isVisible(), false);
+  assert.equal(await storage.locator('.ui-item-slot').count(), 2);
+  await storage.locator('[data-id=stored-page-two]').click();
+  await page.waitForFunction(() =>
+    document.querySelector('pre')?.textContent?.includes('storage.item_action'),
+  );
+  await storage.locator('.window-close').click();
+  await ui.locator('#storage-window').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Open Storage', exact: true }).click();
+  await ui.locator('#storage-window').waitFor({ state: 'visible' });
+  assert.ok(
+    await ui
+      .locator('#storage')
+      .evaluate(
+        (node) =>
+          Number(getComputedStyle(node).zIndex) >
+          Number(
+            getComputedStyle(document.getElementById('inventory') ?? node)
+              .zIndex,
+          ),
+      ),
+  );
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await page.selectOption('#scale', '1.5');
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('iframe')
+        ?.contentDocument?.querySelector<HTMLElement>('#storage')
+        ?.style.getPropertyValue('--ui-scale') === '1.5',
+  );
+  const storageBounds = await ui.locator('#storage-window').boundingBox();
+  const viewportBounds = await page.locator('iframe').boundingBox();
+  assert.ok(storageBounds);
+  assert.ok(viewportBounds);
+  assert.ok(
+    storageBounds.x >= viewportBounds.x - 1 &&
+      storageBounds.x + storageBounds.width <=
+        viewportBounds.x + viewportBounds.width + 1,
+  );
+  await storage.locator('.storage-grid-viewport').evaluate((node) => {
+    node.scrollLeft = node.scrollWidth;
+  });
+  await storage.locator('[data-id=stored-page-two-stack]').click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector('pre')
+      ?.textContent?.includes('stored-page-two-stack'),
+  );
+  await page.getByRole('button', { name: 'Hide Storage', exact: true }).click();
+  await ui.locator('#storage-window').waitFor({ state: 'hidden' });
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await page.reload();
   await page
     .getByText('Ready — production UI with fixture IPC', { exact: true })

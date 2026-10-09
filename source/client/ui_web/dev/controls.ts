@@ -17,7 +17,11 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
         if (scale) scale.value = '1';
       }
       send({ action });
-    } else if (action === 'inventory' || action === 'equipment')
+    } else if (
+      action === 'inventory' ||
+      action === 'equipment' ||
+      action === 'storage'
+    )
       send({ action, value: button.dataset.value === 'true' });
   });
 }

@@ -47,12 +47,24 @@ the production HTML, bridge, store and views contain no preview flag or fallback
 The server binds only to loopback and serves the runtime and explicit preview
 files. Development source/output is excluded from game export presets.
 
-The panel supplies populated/empty fixtures, visibility, the seven supported
+The panel supplies populated/empty fixtures, Inventory/Equipment/Storage visibility, the seven supported
 UI scales, Wallet updates, an Escape shortcut and outgoing command inspection.
 Commands reject by default. Accept mode returns successful command results and
 hides closed windows, but does not implement item placement, equip eligibility,
 economy or other server rules. Item state changes come from fixtures. This host
 is for browser UI work, not a simulated authoritative game backend.
+
+Storage is a browser-preview screen in `ts/screens/storage/`, composed from the
+same UiWindow, tabs, item grid/slots and tooltip as the other screens. Its typed
+screen model has two 15-column × 9-row pages (270 cells total), independently of
+Inventory's native 5×9×4 validation. It reuses the production application's
+manager and item resolver, so activation, dragging, scale and viewport changes
+apply across all three windows. On narrow viewports, the Storage frame is capped
+to the logical viewport width and its grid scrolls horizontally at unchanged
+40px cell size. Page I and II fixtures include tall items and boundary stacks.
+Item clicks are logged as `storage.item_action` preview actions only. There is
+no Storage native domain, command, transfer, persistence or server implementation.
+The native production entrypoint still mounts only Inventory and Equipment.
 
 Use Godot for native CEF embedding/transparency, IPC transport, focus/input
 handoff, settings-derived scale and live snapshots/server command effects. The

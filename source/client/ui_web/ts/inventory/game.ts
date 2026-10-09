@@ -15,8 +15,8 @@ const legacy = await loadLegacySkin();
 await applySkin(document.documentElement, legacy.skin);
 uiIcons.replace(legacy.uiIcons, new URL('./', import.meta.url));
 const itemIcons = new ItemIconResolver(legacy.itemIcons);
-const resolveItemIcon = (id: ItemIconId) => itemIcons.resolve(id);
-const manager = new WindowManager();
+export const resolveItemIcon = (id: ItemIconId) => itemIcons.resolve(id);
+export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
 const root = findElement(document, '#inventory', 'main'),
   equipmentRoot = findElement(document, '#equipment', 'main'),

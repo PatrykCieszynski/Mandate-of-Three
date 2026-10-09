@@ -1,3 +1,5 @@
+import { mountStorage } from '../web/screens/storage/storage-view.js';
+import type { StorageSnapshot } from '../web/screens/storage/storage-types.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UiWindow } from '../web/core/window/ui-window.js';
@@ -326,6 +328,64 @@ test('Storage delegated tooltip hides on empty cells and can show again over an 
     assert.equal(tooltip.hidden, false);
   } finally {
     fixture.dispose();
+    manager.dispose();
+  }
+});
+
+test('Storage owns two independent pages and composes item actions, tooltips and lifecycle', () => {
+  const { doc, manager } = environment(),
+    root = target();
+  doc.body.append(root);
+  const actions: string[] = [];
+  let closes = 0;
+  const view = mountStorage(root, {
+    manager,
+    resolveItemIcon: () => null,
+    onClose: () => closes++,
+    onItemAction: (_event, item) => actions.push(item.id),
+  });
+  const state: StorageSnapshot = {
+    columns: 15,
+    rows: 9,
+    pages: 2,
+    items: [
+      { ...bagItem, id: 'page-one', x: 14, y: 6, page: 0 },
+      { ...bagItem, id: 'page-two', x: 3, y: 2, page: 1 },
+    ],
+  };
+  try {
+    view.setState(state);
+    assert.equal(root.querySelectorAll('.cell').length, 135);
+    const first = findElement(root, '.ui-item-slot', 'div');
+    assert.equal(first.dataset.id, 'page-one');
+    fire(first, 'pointermove');
+    const tooltip = findElement(root, '.ui-tooltip', 'aside');
+    assert.equal(tooltip.hidden, false);
+    fire(findElement(root, '.cell', 'div'), 'pointermove');
+    assert.equal(tooltip.hidden, true);
+    fire(first, 'pointerdown');
+    assert.deepEqual(actions, ['page-one']);
+    const tabs = root.querySelectorAll<HTMLButtonElement>('[role=tab]');
+    assert.equal(tabs.length, 2);
+    tabs[1]?.click();
+    assert.equal(tooltip.hidden, true);
+    assert.equal(tabs[1]?.getAttribute('aria-selected'), 'true');
+    const second = findElement(root, '.ui-item-slot', 'div');
+    assert.equal(second.dataset.id, 'page-two');
+    fire(second, 'pointerdown');
+    assert.deepEqual(actions, ['page-one', 'page-two']);
+    view.setState({ ...state, items: [] });
+    assert.equal(root.querySelector('.ui-item-slot'), null);
+    assert.equal(root.querySelectorAll('.cell').length, 135);
+    findElement(root, '.window-close', 'button').click();
+    assert.equal(closes, 1);
+    view.dispose();
+    view.dispose();
+    assert.equal(manager.has('storage'), false);
+    first.click();
+    assert.equal(actions.length, 2);
+  } finally {
+    view.dispose();
     manager.dispose();
   }
 });
