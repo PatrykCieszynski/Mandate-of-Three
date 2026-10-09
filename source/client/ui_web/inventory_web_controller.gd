@@ -61,7 +61,7 @@ func _inventory(snapshot: Dictionary) -> void:
 	var equipped: Array = []
 	for item: Dictionary in snapshot.items:
 		var comparison: Dictionary = world.inventory_endpoint.weapon_comparison(item)
-		var display := {"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon": "iron_sword", "height": int(item.inventory_height), "quantity": int(item.amount), "description": "Attack %d. After equipping: %d (%+d)." % [int(item.stats.get("attack", 0)), comparison.attack, comparison.delta]}
+		var display := {"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon_id": str(item.get("icon_id", "")), "height": int(item.inventory_height), "quantity": int(item.amount), "description": "Attack %d. After equipping: %d (%+d)." % [int(item.stats.get("attack", 0)), comparison.attack, comparison.delta]}
 		if item.location == "equipment":
 			display["slot"] = str(item.equipment_slot)
 			equipped.append(display)

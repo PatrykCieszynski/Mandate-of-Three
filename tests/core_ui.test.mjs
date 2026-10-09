@@ -75,3 +75,16 @@ test('skin swapping clears stale assets, detects missing images and cannot chang
  assert.ok(values.get(skinVariable('window.frame')).includes('replacement.png'));assert.equal(classes.get('has-close-asset'),false);
  assert.equal(values.get(skinVariable('button.close.normal')),'none');
 });
+
+import {UiIconRegistry,uiIconDomains} from '../source/client/ui_web/web/core/ui-icons.js';
+import {ItemIconResolver} from '../source/client/ui_web/web/content/item-icons.js';
+test('structured UI icons are replaceable and isolated from item content',()=>{
+ const registry=new UiIconRegistry();let changes=0;const remove=registry.subscribe(()=>changes++);
+ registry.replace(Object.fromEntries(uiIconDomains.map(domain=>[domain,{test:'glyph.png'}])),'https://example.test/ui/');
+ for(const domain of uiIconDomains)assert.equal(registry.resolve(domain+'.test'),'https://example.test/ui/glyph.png');
+ assert.equal(registry.resolve('missing'),null);assert.throws(()=>registry.replace({items:{sword:'sword.png'}}),/domain/);
+ const items=new ItemIconResolver({sword:'sword.png'},'https://example.test/content/');
+ assert.equal(items.resolve('sword'),'https://example.test/content/sword.png');assert.equal(registry.resolve('sword'),null);
+ registry.replace({currencies:{yang:'coin.png'}},'https://example.test/new/');assert.equal(registry.resolve('skills.test'),null);assert.equal(changes,2);
+ remove();registry.replace({});assert.equal(changes,2);assert.equal(items.resolve('unknown'),null);
+});

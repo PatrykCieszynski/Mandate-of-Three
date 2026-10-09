@@ -20,7 +20,8 @@ CHROME = {
 ICONS = {'iron_sword':'item/00010.tga.png', 'short_sword':'item/00020.tga.png', 'potion':'item/27001.tga.png'}
 def stage():
     TARGET.mkdir(parents=True,exist_ok=True)
-    skin = {'chrome':{},'icons':{}}
+    skin = {'chrome':{}}
+    item_icons = {}
     for category, entries in [('chrome',CHROME),('icons',ICONS)]:
         for name, relative in entries.items():
             source = CACHE / relative
@@ -31,7 +32,7 @@ def stage():
             shutil.copyfile(source,target)
             if hashlib.sha256(source.read_bytes()).digest() != hashlib.sha256(target.read_bytes()).digest():
                 raise RuntimeError('Skin copy differs from source')
-            skin[category][name] = './legacy_skin/'+target.name
-    (TARGET/'skin.js').write_text('export const skin = '+json.dumps(skin)+';\n',encoding='utf-8')
-    print('Staged',sum(map(len,skin.values())),'exact PNGs; no resize/retouch, no atlas coordinates')
+            (item_icons if category == 'icons' else skin['chrome'])[name] = './legacy_skin/'+target.name
+    (TARGET/'skin.js').write_text('export const skin = '+json.dumps(skin)+';\nexport const itemIcons = '+json.dumps(item_icons)+';\nexport const uiIcons = '+json.dumps({'currencies':{'yang':skin['chrome']['yang']} if 'yang' in skin['chrome'] else {}})+';\n',encoding='utf-8')
+    print('Staged',sum(map(len,skin.values()))+len(item_icons),'exact PNGs; no resize/retouch, no atlas coordinates')
 if __name__ == '__main__': stage()

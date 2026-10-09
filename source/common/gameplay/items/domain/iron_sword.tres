@@ -3,6 +3,7 @@
 [resource]
 script = ExtResource("1")
 definition_id = &"iron_sword"
+icon_id = &"iron_sword"
 item_name = "Żelazny miecz"
 equipment_slot = &"weapon"
 stack_limit = 1
