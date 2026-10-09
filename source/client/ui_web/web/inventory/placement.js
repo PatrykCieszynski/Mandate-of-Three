@@ -12,7 +12,3 @@ export function placement(inventory, item, x, y, page) {
       y < other.y + other.height && y + item.height > other.y);
   return {x, y, page, valid};
 }
-export function clampWindow(position, size, viewport, scale) {
-  return {x: Math.max(0, Math.min(position.x, viewport.width / scale - size.width)),
-          y: Math.max(0, Math.min(position.y, viewport.height / scale - size.height))};
-}

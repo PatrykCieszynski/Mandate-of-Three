@@ -1,41 +1,21 @@
-import {WindowLayout} from './window-layout.js';
+import {UiWindow} from '../core/ui-window.js';
 import {placement,carriedCell} from './placement.js';
 import {icons} from './skin.js';
-export function mountInventory(root,{layout=new WindowLayout(),moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
-  root.innerHTML=`<section id="inventory-window" class="window window-chrome" aria-label="Inventory">
-    <i class="chrome edge top"></i><i class="chrome edge bottom"></i><i class="chrome edge left"></i><i class="chrome edge right"></i>
-    <i class="chrome corner tl"></i><i class="chrome corner tr"></i><i class="chrome corner bl"></i><i class="chrome corner br"></i>
-    <header class="window-header"><h1>Inventory</h1><button class="window-close" aria-label="Close inventory">×</button></header>
-    <nav class="inventory-tabs" aria-label="Inventory pages">${['I','II','III','IV'].map((label,page)=>`<button role="tab" data-page="${page}">${label}</button>`).join('')}</nav>
+export function mountInventory(root,{manager,moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
+  const shell=new UiWindow(root,{window_id:'inventory',title:'Inventory',className:'window',manager,
+    placement:{preferredAnchor:'right',defaultOffset:{x:-16,y:240}},scrollBorder:2,hideHorizontalOverflow:true,
+    onClose,canDrag:()=>!carry,onCancel:()=>cancelCarry(),onRegionsChanged,onGeometry:()=>{
+      surface.style.width=innerWidth/shell.scale+'px';surface.style.height=innerHeight/shell.scale+'px';
+    },content:`<nav class="inventory-tabs" aria-label="Inventory pages">${['I','II','III','IV'].map((label,page)=>`<button role="tab" data-page="${page}">${label}</button>`).join('')}</nav>
     <div class="inventory-grid"></div><footer class="wallet"><span class="yang-icon">●</span><span>Yang</span><strong>—</strong></footer>
-    <p class="inventory-status" role="status"></p></section><div id="carry-surface" hidden></div>
-    <div class="carried-item" hidden></div><aside class="item-tooltip" hidden><h2></h2><p></p></aside>`;
+    <p class="inventory-status" role="status"></p>`});
+  root.insertAdjacentHTML('beforeend',`<div id="carry-surface" hidden></div><div class="carried-item" hidden></div><aside class="item-tooltip" hidden><h2></h2><p></p></aside>`);
   const panel=root.querySelector('.window'),grid=root.querySelector('.inventory-grid'),surface=root.querySelector('#carry-surface'),
     ghost=root.querySelector('.carried-item'),tooltip=root.querySelector('.item-tooltip'),status=root.querySelector('.inventory-status');
-  let inventory={columns:5,rows:9,pages:4,items:[]},scale=1,page=0,position=null,carry=null,windowDrag=null,windowFrame=0,pending=false,disposed=false;
-  const viewport=()=>({width:innerWidth,height:innerHeight});
-  const point=e=>({x:e.clientX/scale,y:e.clientY/scale});
+  let inventory={columns:5,rows:9,pages:4,items:[]},page=0,carry=null,pending=false,disposed=false;
+  const point=e=>shell.point(e);
   const cell=()=>parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
-  layout.register({id:'inventory',element:panel,preferredAnchor:'right',defaultOffset:{x:-16,y:240}});
-  panel.style.left='0px';panel.style.top='0px';
-  function paintWindow() {
-    panel.style.transform=`translate3d(${position.x}px,${position.y}px,0)`;onRegionsChanged();
-  }
-  function flushWindowMove() {
-    if(windowFrame){cancelAnimationFrame(windowFrame);windowFrame=0;paintWindow();}
-  }
-  function positionWindow() {
-    // display:none has no measurable geometry; clamp on reopening instead.
-    if(root.hidden)return;
-    flushWindowMove();
-    // Only the unusually small viewport fallback scrolls; core geometry stays fixed.
-    panel.style.maxHeight=innerHeight/scale+"px";
-    const small=panel.scrollHeight+2>innerHeight/scale;
-    panel.style.overflowY=small?"auto":"visible";panel.style.overflowX=small?"hidden":"visible";
-    layout.setViewport(viewport(),scale);position=layout.place('inventory');
-    paintWindow();
-    surface.style.width=innerWidth/scale+'px';surface.style.height=innerHeight/scale+'px';onRegionsChanged();
-  }
+  const positionWindow=()=>shell.refresh();
   function icon(node,item) {
     node.replaceChildren();
     if(icons[item.icon]) {const img=document.createElement('img');img.src=icons[item.icon];img.alt='';img.className='item-icon';node.append(img);}
@@ -63,8 +43,8 @@ export function mountInventory(root,{layout=new WindowLayout(),moveItem,equipIte
   function showTooltip(event,item) {
     tooltip.querySelector('h2').textContent=item.name;tooltip.querySelector('p').textContent=item.description||'';tooltip.hidden=false;
     const p=point(event),width=tooltip.offsetWidth,height=tooltip.offsetHeight;
-    const x=p.x+14+width>innerWidth/scale?p.x-width-14:p.x+14;
-    tooltip.style.left=Math.max(0,Math.min(x,innerWidth/scale-width))+'px';tooltip.style.top=Math.max(0,Math.min(p.y+14,innerHeight/scale-height))+'px';
+    const x=p.x+14+width>innerWidth/shell.scale?p.x-width-14:p.x+14;
+    tooltip.style.left=Math.max(0,Math.min(x,innerWidth/shell.scale-width))+'px';tooltip.style.top=Math.max(0,Math.min(p.y+14,innerHeight/shell.scale-height))+'px';
   }
   function releaseCapture(state) {if(state?.node?.hasPointerCapture(state.pointer))state.node.releasePointerCapture(state.pointer);}
   function cancelCarry() {
@@ -74,14 +54,14 @@ export function mountInventory(root,{layout=new WindowLayout(),moveItem,equipIte
   function beginCarry(event,item,node) {
     if(event.button!==0||pending||carry)return;event.preventDefault();tooltip.hidden=true;
     const rect=node.getBoundingClientRect(),p=point(event);
-    carry={item,node,pointer:event.pointerId,start:p,offset:{x:(event.clientX-rect.left)/scale,y:(event.clientY-rect.top)/scale},moved:false,latched:false};
+    carry={item,node,pointer:event.pointerId,start:p,offset:{x:(event.clientX-rect.left)/shell.scale,y:(event.clientY-rect.top)/shell.scale},moved:false,latched:false};
     node.setPointerCapture(event.pointerId);node.classList.add('carried');icon(ghost,item);ghost.style.height=item.height*cell()-2+'px';ghost.hidden=false;updateCarry(event);
   }
   function updateCarry(event) {
     if(!carry)return;const p=point(event);
     if(Math.hypot(p.x-carry.start.x,p.y-carry.start.y)>3)carry.moved=true;
     ghost.style.left=p.x-carry.offset.x+'px';ghost.style.top=p.y-carry.offset.y+'px';
-    const rect=grid.getBoundingClientRect(),{x,y}=carriedCell({x:(event.clientX-rect.left)/scale,y:(event.clientY-rect.top)/scale},carry.offset,cell());
+    const rect=grid.getBoundingClientRect(),{x,y}=carriedCell({x:(event.clientX-rect.left)/shell.scale,y:(event.clientY-rect.top)/shell.scale},carry.offset,cell());
     carry.preview=placement(inventory,carry.item,x,y,page);
     let preview=grid.querySelector('.placement-preview');if(!preview){preview=document.createElement('div');grid.append(preview);}
     preview.className='placement-preview'+(carry.preview.valid?'':' invalid');preview.style.left=x*cell()+'px';preview.style.top=y*cell()+'px';preview.style.height=carry.item.height*cell()+'px';
@@ -100,17 +80,9 @@ export function mountInventory(root,{layout=new WindowLayout(),moveItem,equipIte
   }
   function pointerDown(event) {if(carry?.latched&&event.button===0){event.preventDefault();updateCarry(event);if(carry.preview.valid)submit();}}
   function pointerMove(event) {
-    if(windowDrag&&event.pointerId===windowDrag.pointer){
-      if(!windowDrag.node.hasPointerCapture(windowDrag.pointer))windowDrag=null;
-      else {const p=point(event);
-        position=layout.move('inventory',{x:p.x-windowDrag.offset.x,y:p.y-windowDrag.offset.y});
-        if(!windowFrame)windowFrame=requestAnimationFrame(()=>{windowFrame=0;if(!disposed)paintWindow();});
-      }
-    }
     if(carry)updateCarry(event);
   }
   function pointerUp(event) {
-    if(windowDrag&&event.pointerId===windowDrag.pointer){flushWindowMove();panel.style.willChange='auto';const old=windowDrag;windowDrag=null;releaseCapture(old);}
     if(!carry||carry.latched||event.pointerId!==carry.pointer)return;updateCarry(event);
     if(carry.moved){submit();return;}carry.latched=true;releaseCapture(carry);surface.hidden=false;onRegionsChanged();
   }
@@ -119,26 +91,18 @@ export function mountInventory(root,{layout=new WindowLayout(),moveItem,equipIte
     if(root.hidden||event.repeat)return;
     if(event.key==='Escape'||event.key.toLowerCase()==='i'){event.preventDefault();if(event.key==='Escape')cancelOrClose();else {cancelCarry();onClose();}}
   }
-  function cancelled(){flushWindowMove();panel.style.willChange='auto';cancelCarry();if(windowDrag){const old=windowDrag;windowDrag=null;releaseCapture(old);}}
-  root.querySelector('.window-close').addEventListener('click',()=>{cancelCarry();onClose();});
   root.querySelectorAll('[data-page]').forEach(tab=>tab.addEventListener('click',()=>{if(!carry?.latched)cancelCarry();page=Number(tab.dataset.page);render();}));
-  root.querySelector('.window-header').addEventListener('pointerdown',event=>{
-    if(event.button!==0||event.target.closest('button')||carry)return;event.preventDefault();const p=point(event);
-    panel.style.willChange='transform';windowDrag={node:event.currentTarget,pointer:event.pointerId,offset:{x:p.x-position.x,y:p.y-position.y}};event.currentTarget.setPointerCapture(event.pointerId);
-  });
-  const resize=()=>{cancelled();positionWindow();};
-  document.addEventListener('pointerdown',pointerDown);document.addEventListener('pointermove',pointerMove);document.addEventListener('pointerup',pointerUp);
-  document.addEventListener('pointercancel',cancelled);document.addEventListener('keydown',keyDown);window.addEventListener('resize',resize);window.addEventListener('blur',cancelled);
-  root.addEventListener('lostpointercapture',event=>{
+  shell.listen(document,'pointerdown',pointerDown);shell.listen(document,'pointermove',pointerMove);shell.listen(document,'pointerup',pointerUp);
+  shell.listen(document,'keydown',keyDown);
+  shell.listen(root,'lostpointercapture',event=>{
     if(carry&&!carry.latched&&carry.pointer===event.pointerId)cancelCarry();
-    if(windowDrag?.pointer===event.pointerId){flushWindowMove();panel.style.willChange='auto';windowDrag=null;}
   });render();
   return {regions:[panel,surface],cancelCarry,cancelOrClose,
     setState(snapshot){cancelCarry();inventory=structuredClone(snapshot.inventory);render();this.setInfo(snapshot);},
     setInfo(snapshot){root.querySelector('.wallet strong').textContent=Number(snapshot.wallet?.balance||0).toLocaleString('en-US');
-      const next=Number(snapshot.hud?.ui_scale||scale);if(next!==scale){cancelled();scale=next;root.style.setProperty('--ui-scale',scale);}
+      manager.setScale(Number(snapshot.hud?.ui_scale||shell.scale));
       // Opening and Godot viewport snapshots also clamp; native resize events may lag.
       positionWindow();},
-    dispose(){disposed=true;cancelled();layout.unregister('inventory');document.removeEventListener('pointerdown',pointerDown);document.removeEventListener('pointermove',pointerMove);document.removeEventListener('pointerup',pointerUp);document.removeEventListener('pointercancel',cancelled);document.removeEventListener('keydown',keyDown);window.removeEventListener('resize',resize);window.removeEventListener('blur',cancelled);}
+    dispose(){disposed=true;shell.dispose();}
   };
 }

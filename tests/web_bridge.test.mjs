@@ -77,18 +77,16 @@ test('carried footprint snaps nearest to its origin regardless of grab height',(
  assert.equal(placement(inventory,{id:'sword',height:3},2,7,0).valid,false);
 });
 
-const placementUrl='data:text/javascript;base64,'+Buffer.from(await readFile(new URL('inventory/placement.js',base),'utf8')).toString('base64');
-const layoutCode=(await readFile(new URL('inventory/window-layout.js',base),'utf8')).replace("'./placement.js'",JSON.stringify(placementUrl));
-const {WindowLayout}=await import('data:text/javascript;base64,'+Buffer.from(layoutCode).toString('base64'));
+import {WindowManager} from '../source/client/ui_web/web/core/window-manager.js';
 test('window placement uses measured neighbors and preserves/clamps manual positions',()=>{
- const hiddenLayout=new WindowLayout();
+ const hiddenLayout=new WindowManager({host:null});
  hiddenLayout.setViewport({width:1920,height:1080},1);
- hiddenLayout.register({id:'hidden',element:{getClientRects:()=>[]}});
- hiddenLayout.register({id:'visible',element:{getClientRects:()=>[{}],offsetWidth:220,offsetHeight:400},relativeTo:'hidden',defaultOffset:{x:-16,y:240}});
+ hiddenLayout.register({window_id:'hidden',element:{style:{},getClientRects:()=>[]}});
+ hiddenLayout.register({window_id:'visible',element:{style:{},getClientRects:()=>[{}],offsetWidth:220,offsetHeight:400},relativeTo:'hidden',defaultOffset:{x:-16,y:240}});
  const fallback=hiddenLayout.place('visible');assert.ok(Number.isFinite(fallback.x)&&fallback.x+220<=1920);
- const layout=new WindowLayout(),bag={offsetWidth:260,offsetHeight:480,getClientRects:()=>[{}]},equipment={offsetWidth:220,offsetHeight:400,getClientRects:()=>[{}]};
- layout.register({id:'inventory',element:bag,defaultOffset:{x:-16,y:240}});
- layout.register({id:'equipment',element:equipment,relativeTo:'inventory',relativeOffset:{x:-12,y:0}});
+ const layout=new WindowManager({host:null}),bag={style:{},offsetWidth:260,offsetHeight:480,getClientRects:()=>[{}]},equipment={style:{},offsetWidth:220,offsetHeight:400,getClientRects:()=>[{}]};
+ layout.register({window_id:'inventory',element:bag,defaultOffset:{x:-16,y:240}});
+ layout.register({window_id:'equipment',element:equipment,relativeTo:'inventory',relativeOffset:{x:-12,y:0}});
  for(const [width,height,scale] of [[1280,720,.8],[1280,720,.9],[1920,1080,1],[2560,1440,1.1],[3840,2160,1.5]]){
   layout.setViewport({width,height},scale);
   const right=layout.place('inventory'),left=layout.place('equipment');
