@@ -11,7 +11,9 @@ git diff --check
 & ./tests/run-smoke.ps1
 ```
 
-Godot 4.7.2 and Node are required. `-NodeExecutable` can select a bundled Node.
+Godot 4.7.2 and Node 20.19+ are required. Run `npm ci --ignore-scripts` in
+`source/client/ui_web` once for the pinned compiler and test dependencies.
+Smoke compiles TypeScript and tests the emitted static browser JS. `-NodeExecutable` can select a bundled Node.
 No running server, browser, GUI, network port or production accounts are required.
 The smoke suite does not install/download CEF. Installing CEF is optional; installed CEF loads in headless without
 creating a browser. The suite has five small SQLite scenarios and one bridge contract group:
@@ -49,7 +51,7 @@ It checks behavior and broad bounds, with no pixel/exact-tree assertions or down
 It does not replace native root-client CEF verification.
 
 Asset pipeline tests and visual fallback probes remain optional for pipeline
-changes. The small default suite does not install Pillow or Playwright.
+changes. The small default suite downloads no browser and does not install Pillow.
 
 The old CEF spike, its mock/diagnostic adapter, its renderer/measurement runners
 and the exact-layout browser matrix test were removed. The original adoption
@@ -60,7 +62,9 @@ resize/transparency/shutdown checks; no parallel standalone UI mock.
 
 ## CI and cleanup
 
-Push/PR CI imports a clean checkout, checks whitespace and runs smoke only.
+Push/PR CI installs the pinned Web UI development dependencies, compiles TypeScript,
+checks that committed runtime assets match their source, imports a clean checkout,
+checks whitespace and runs smoke.
 Workflow dispatch can opt into extended gameplay/asset checks. Local execution
 verifies the scripts; it does not prove the remote Actions run until published.
 

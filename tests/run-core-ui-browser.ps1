@@ -4,5 +4,7 @@ param(
     [string]$NodeExecutable = 'node'
 )
 $ErrorActionPreference = 'Stop'
-& $NodeExecutable (Join-Path $PSScriptRoot 'core_ui_browser.cjs') $PlaywrightModule $BrowserExecutable
+$taskRoot = Split-Path -Parent $PSScriptRoot
+& (Join-Path $taskRoot 'tools/build-web-ui.ps1') -NodeExecutable $NodeExecutable -Tests
+& $NodeExecutable (Join-Path $taskRoot 'source/client/ui_web/.tests/core_ui_browser.mjs') $PlaywrightModule $BrowserExecutable
 if ($LASTEXITCODE -ne 0) { throw 'Core UI browser milestone check failed' }

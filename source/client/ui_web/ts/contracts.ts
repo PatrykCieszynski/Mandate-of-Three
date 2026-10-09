@@ -1,0 +1,60 @@
+// Presentation contracts mirror the existing native Web UI bridge.
+export type WindowId = string;
+export type ItemIconId = string;
+export interface Point { x: number; y: number }
+export interface Size { width: number; height: number }
+export type Viewport = Size;
+export interface ItemPresentation {
+  id: string; revision: number; name: string; icon_id: ItemIconId;
+  height: number; quantity: number; description?: string;
+}
+export interface InventoryItem extends ItemPresentation { x: number; y: number; page: number }
+export interface EquipmentItem extends ItemPresentation { slot: string }
+export interface InventorySnapshot { columns: number; rows: number; pages: number; items: InventoryItem[] }
+export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?: number } }
+export interface WalletSnapshot { balance?: number; ready?: boolean }
+export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; ui_scale?: number; viewport?: Viewport }
+export type RawObject = Record<string, unknown>;
+export type DomainName = 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type RawDomainState = Partial<Record<DomainName, RawObject>>;
+export interface DomainSnapshot {
+  inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
+  player?: RawObject; hud?: HudSnapshot;
+}
+export interface Envelope { v: 1; type: string; id?: string; payload: RawObject }
+export type StateType = 'ui.snapshot' | `${DomainName}.updated`;
+// State payloads remain raw until their domain/view validators have checked them.
+export interface StateMessage extends Envelope { type: StateType }
+export interface ShortcutMessage { v: 1; type: 'ui.shortcut'; payload: {key: 'Escape'} }
+export interface CommandResultMessage { v: 1; type: 'command.result'; id: string; payload: CommandResult }
+export interface ItemCommand { id: string; revision: number }
+export interface MoveItemCommand extends ItemCommand { x: number; y: number; page: number }
+export interface CommandPayloads {
+  'inventory.move_item': MoveItemCommand;
+  'equipment.equip': ItemCommand;
+  'equipment.unequip': ItemCommand;
+  'inventory.close': Record<string, never>;
+  'equipment.close': Record<string, never>;
+}
+export type CommandMessage = {[K in keyof CommandPayloads]: {v: 1; type: K; id: string; payload: CommandPayloads[K]}}[keyof CommandPayloads];
+export interface CommandResult { ok: boolean; error?: string }
+export interface InteractiveRegion { id: string; x: number; y: number; w: number; h: number }
+export interface InteractiveRegions { width: number; height: number; regions: InteractiveRegion[] }
+export interface EventPayloads { 'ui.ready': Record<string, never>; 'ui.interactive_regions': InteractiveRegions }
+export type EventMessage = {[K in keyof EventPayloads]: {v: 1; type: K; payload: EventPayloads[K]}}[keyof EventPayloads];
+export type ResolveItemIcon = (id: ItemIconId) => string | null;
+export type AssetPaths = Record<string, string>;
+export type AssetLoader = (url: string) => Promise<boolean>;
+export type UiIconDomain = 'buffs' | 'debuffs' | 'status' | 'skills' | 'actions' | 'currencies' | 'quests' | 'glyphs';
+export type UiIconId = `${UiIconDomain}.${string}`;
+export type UiIconGroups = Partial<Record<UiIconDomain, AssetPaths>>;
+export type SkinKey = 'window.frame' | 'window.title' | `window.frame.corner.${'tl'|'tr'|'bl'|'br'}` |
+  `window.frame.edge.${'top'|'bottom'|'left'|'right'}` | `button.close.${'normal'|'hover'|'pressed'}` |
+  'slot.normal' | 'tab.normal' | 'tab.active' | 'currency.yang' | 'equipment.background';
+export interface Skin { assets?: Partial<Record<SkinKey, string>> }
+declare global {
+  interface Window {
+    sendIpcMessage(message: string): void;
+    ipcMessage: { addListener(callback: (message: unknown) => void): void };
+  }
+}

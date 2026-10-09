@@ -4,18 +4,21 @@ Accepted 2026-10-09. This is Mandate's small CEF presentation layer, extracted
 from the production Inventory and Equipment. It is an internal composition tool,
 with no frontend framework or public SDK contract.
 
+The production browser logic is maintained in TypeScript and emitted to the
+same static `web/` module paths. See [build and test instructions](../source/client/ui_web/README.md).
+
 ## Ownership
 
-- `source/client/ui_web/web/core/`: domain-agnostic window shell, geometry,
+- `source/client/ui_web/ts/core/`: domain-agnostic window shell, geometry,
   chrome primitives, semantic skin application and global UI icon registry.
 - `game-ui/`: proven inventory grid, item and equipment slot presentation.
   These components accept data and dimensions; they make no gameplay decisions.
 - `inventory/`: Inventory/Equipment composition, page/carry/pending state,
   equipment layout, advisory placement and injected domain actions.
-- `content/item-icons.js`: resolver for item content identity.
-- `skins/legacy.js`: adapter for the optional, exact legacy PNG manifest.
+- `content/item-icons.ts`: resolver for item content identity.
+- `skins/legacy.ts`: adapter for the optional, exact legacy PNG manifest.
   It is the only runtime module that knows its concrete staging paths.
-- `inventory/game.js`: application composition; it chooses the skin, supplies
+- `inventory/game.ts`: application composition; it chooses the skin, supplies
   resolvers/actions, owns one manager and binds the existing Web bridge.
 
 Ownership, revisions, equip eligibility, free-bag selection, transactions and

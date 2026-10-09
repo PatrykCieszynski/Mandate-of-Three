@@ -25,6 +25,18 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Install Web UI development dependencies
+        working-directory: source/client/ui_web
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Web UI dependency installation failed' }
+      - name: Verify committed static Web UI assets
+        shell: pwsh
+        run: |
+          & ./tools/build-web-ui.ps1 -Tests
+          $generatedChanges = git status --porcelain -- source/client/ui_web/web
+          if ($LASTEXITCODE -ne 0 -or $generatedChanges) { throw "Generated Web UI assets are out of date: $generatedChanges" }
       - name: Install the project's Godot editor
         shell: pwsh
         run: |
