@@ -26,7 +26,7 @@ export function mountInventory(root,{manager,resolveItemIcon=()=>null,moveItem,e
   const positionWindow=()=>shell.refresh();
   function icon(node,item) {
     node.replaceChildren();
-    if(resolveItemIcon(item.icon)) {const img=document.createElement('img');img.src=resolveItemIcon(item.icon);img.alt='';img.className='item-icon';node.append(img);}
+    if(resolveItemIcon(item.icon_id)) {const img=document.createElement('img');img.src=resolveItemIcon(item.icon_id);img.alt='';img.className='item-icon';node.append(img);}
     else {const label=document.createElement('span');label.className='icon-fallback';label.textContent=item.name;node.append(label);}
     if(item.quantity>1){const qty=document.createElement('span');qty.className='quantity';qty.textContent=item.quantity;node.append(qty);}
   }
@@ -107,6 +107,6 @@ export function mountInventory(root,{manager,resolveItemIcon=()=>null,moveItem,e
       manager.setScale(Number(snapshot.hud?.ui_scale||shell.scale));
       // Opening and Godot viewport snapshots also clamp; native resize events may lag.
       positionWindow();},
-    dispose(){disposed=true;shell.dispose();tabs.forEach(tab=>tab.dispose());tip.dispose();}
+    dispose(){disposed=true;shell.dispose();tabs.forEach(tab=>tab.dispose());tip.dispose();currency.dispose();}
   };
 }

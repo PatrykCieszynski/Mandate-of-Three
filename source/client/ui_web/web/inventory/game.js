@@ -1,3 +1,5 @@
+import {uiIcons} from '../core/ui-icons.js';
+import {ItemIconResolver} from '../content/item-icons.js';
 import {applySkin} from '../core/skin.js';
 import {loadLegacySkin} from '../skins/legacy.js';
 import {WindowManager} from '../core/window-manager.js';
@@ -7,7 +9,9 @@ import {mountInventory} from './inventory-view.js';
 import {mountEquipment} from './equipment-view.js';
 const legacy=await loadLegacySkin();
 await applySkin(document.documentElement,legacy.skin);
-const resolveItemIcon=id=>legacy.itemIcons[id]||null;
+uiIcons.replace(legacy.uiIcons,new URL('./',import.meta.url));
+const itemIcons=new ItemIconResolver(legacy.itemIcons);
+const resolveItemIcon=id=>itemIcons.resolve(id);
 const manager=new WindowManager();
 manager.setViewport({width:innerWidth,height:innerHeight},1);
 const root=document.getElementById('inventory'),equipmentRoot=document.getElementById('equipment'),store=new DomainStore();

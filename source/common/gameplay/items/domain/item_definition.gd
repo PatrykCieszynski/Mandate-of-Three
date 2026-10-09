@@ -4,6 +4,7 @@ extends Resource
 
 @export var definition_id: StringName
 @export var item_name: String
+@export var icon_id: StringName
 @export var equipment_slot: StringName
 @export var stack_limit: int = 1
 @export var base_stats: Dictionary[StringName, float] = {}

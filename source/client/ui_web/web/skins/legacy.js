@@ -7,11 +7,11 @@ const chromeKeys={
 };
 export async function loadLegacySkin(){
   try {
-    const {skin}=await import('../inventory/legacy_skin/skin.js');
+    const {skin,itemIcons,uiIcons}=await import('../inventory/legacy_skin/skin.js');
     // Old local manifests used paths relative to inventory/skin.js.
     const base=new URL('../inventory/skin.js',import.meta.url);
     const urls=entries=>Object.fromEntries(Object.entries(entries||{}).map(([key,path])=>[key,new URL(path,base).href]));
     const assets=skin.assets||Object.fromEntries(Object.entries(skin.chrome||{}).map(([key,path])=>[chromeKeys[key],path]).filter(([key])=>key));
-    return {skin:{assets:urls(assets)},itemIcons:urls(skin.icons)};
-  }catch{return {skin:{assets:{}},itemIcons:{}};}
+    return {skin:{assets:urls(assets)},itemIcons:urls(itemIcons||skin.icons),uiIcons:uiIcons||{currencies:assets['currency.yang']?{yang:urls(assets)['currency.yang']}:{}}};
+  }catch{return {skin:{assets:{}},itemIcons:{},uiIcons:{}};}
 }

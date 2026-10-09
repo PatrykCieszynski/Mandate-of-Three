@@ -33,6 +33,7 @@ func run() -> void:
 	if failed: return
 	var weak: Dictionary = initial.items[0]
 	var strong: Dictionary = initial.items[1]
+	check(weak.icon_id == str(ItemDefinitions.IRON_SWORD.icon_id) and weak.icon_id != "", "content icon identity travels with the snapshot")
 	check(weak.uid != strong.uid and weak.definition_id == strong.definition_id, "distinct UIDs, same definition")
 	check(weak.stats.attack == 13 and strong.stats.attack == 17, "independent affixes")
 	check(store.initialize_character(owner_a).ok and store.inventory(owner_a) == initial, "repeated grant changes nothing")

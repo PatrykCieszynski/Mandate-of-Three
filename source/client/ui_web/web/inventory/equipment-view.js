@@ -44,7 +44,7 @@ export function mountEquipment(root,{manager,resolveItemIcon=()=>null,unequipIte
       const item=items.find(item=>item.slot===slot);button.replaceChildren();button.disabled=slot!=='weapon'||!item||pending;
       button.classList.toggle('equipped',!!item);
       if(item){button.removeAttribute('title');
-        if(resolveItemIcon(item.icon)){const img=document.createElement('img');img.src=resolveItemIcon(item.icon);img.alt=item.name;img.className='item-icon';button.append(img);}
+        if(resolveItemIcon(item.icon_id)){const img=document.createElement('img');img.src=resolveItemIcon(item.icon_id);img.alt=item.name;img.className='item-icon';button.append(img);}
         else button.textContent=item.name;
       }
     }

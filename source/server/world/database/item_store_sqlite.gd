@@ -104,6 +104,7 @@ func inventory(owner_id: int) -> Dictionary:
 			return _error("unknown_definition")
 		var snapshot: Dictionary = item.to_snapshot()
 		snapshot["item_name"] = definition.item_name
+		snapshot["icon_id"] = str(definition.icon_id)
 		snapshot["stats"] = item.effective_stats(definition)
 		snapshot["inventory_height"] = definition.inventory_height
 		items.append(snapshot)
