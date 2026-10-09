@@ -102,16 +102,78 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   await page.mouse.move(grid.x+3*size+size/2,grid.y+4*size+item.height-5,{steps:4});await page.mouse.up();
   await page.waitForFunction(()=>sent.some(message=>message.type==='inventory.move_item'));
   assert.deepEqual((await commands()).at(-1)?.payload,{id:'bag-item',revision:3,x:3,y:4,page:0});
-  // Window interaction activates its root and uses pointer capture until release.
-  for(const id of ['inventory','equipment']){
-   const header=page.locator('#'+id+' .window-header');
-   await header.evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected HTML header');node.addEventListener('pointerdown',event=>{node.testPointer=event.pointerId;},{once:true});});
-   const rect=await header.boundingBox();assert.ok(rect);await page.mouse.move(rect.x+rect.width/2,rect.y+rect.height/2);await page.mouse.down();
-   assert.equal(await header.evaluate(node=>node instanceof HTMLElement && node.testPointer!==undefined && node.hasPointerCapture(node.testPointer)),true);
-   const other=id==='inventory'?'equipment':'inventory';
-   assert.ok(await page.evaluate(({id,other})=>Number(getComputedStyle(document.getElementById(id) ?? document.documentElement).zIndex)>Number(getComputedStyle(document.getElementById(other) ?? document.documentElement).zIndex),{id,other}));
-   await page.mouse.move(30,30,{steps:3});await page.mouse.up();await frame();
-   assert.equal(await header.evaluate(node=>node instanceof HTMLElement && node.testPointer!==undefined && node.hasPointerCapture(node.testPointer)),false);
+  // Dragging from either outer side of the title row works for every shared shell.
+  for (const id of ['inventory', 'equipment']) {
+    const header = page.locator('#' + id + ' .window-header');
+    const panel = page.locator('#' + id + '-window');
+    for (const grab of ['left', 'right', 'center']) {
+      await header.evaluate((node) => {
+        if (!(node instanceof HTMLElement))
+          throw Error('Expected HTML header');
+        node.addEventListener(
+          'pointerdown',
+          (event) => {
+            node.testPointer = event.pointerId;
+          },
+          { once: true },
+        );
+      });
+      const title = await header.boundingBox(),
+        before = await panel.boundingBox();
+      assert.ok(title);
+      assert.ok(before);
+      const x =
+        grab === 'left'
+          ? before.x + 5
+          : grab === 'right'
+            ? before.x + before.width - 2
+            : title.x + title.width / 2;
+      const y = title.y + title.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      assert.equal(
+        await header.evaluate(
+          (node) =>
+            node instanceof HTMLElement &&
+            node.testPointer !== undefined &&
+            node.hasPointerCapture(node.testPointer),
+        ),
+        true,
+        id + ' captures from ' + grab,
+      );
+      const other = id === 'inventory' ? 'equipment' : 'inventory';
+      assert.ok(
+        await page.evaluate(
+          ({ id, other }) =>
+            Number(
+              getComputedStyle(
+                document.getElementById(id) ?? document.documentElement,
+              ).zIndex,
+            ) >
+            Number(
+              getComputedStyle(
+                document.getElementById(other) ?? document.documentElement,
+              ).zIndex,
+            ),
+          { id, other },
+        ),
+      );
+      await page.mouse.move(x - 30, y + 10, { steps: 3 });
+      await page.mouse.up();
+      await frame();
+      assert.equal(
+        await header.evaluate(
+          (node) =>
+            node instanceof HTMLElement &&
+            node.testPointer !== undefined &&
+            node.hasPointerCapture(node.testPointer),
+        ),
+        false,
+      );
+      const after = await panel.boundingBox();
+      assert.ok(after);
+      assert.ok(after.x < before.x, id + ' moves when grabbed from ' + grab);
+    }
   }
   const matrix=[[1280,720,.8],[1280,720,.9],[1920,1080,1],[2560,1440,1],[2560,1440,1.1],[2560,1440,1.25],[3440,1440,1],[3440,1440,1.1],[3840,2160,1.25],[3840,2160,1.5]] satisfies [number,number,number][];
   for(const [width,height,scale] of matrix){
