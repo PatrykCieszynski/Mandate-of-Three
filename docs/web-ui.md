@@ -358,3 +358,7 @@ The action does not travel in UI snapshots and the Web controller only transport
 the command. Explicit `equipment.equip` and `equipment.unequip` remain available.
 Results, rate limiting and Inventory/Equipment snapshots use the existing command
 path; a successful acknowledgement alone never changes browser domain state.
+
+Shared production item gestures and screen drop policies are described in
+[ItemDragRuntime v1](item-drag-runtime.md); the command wire format and server
+authority remain unchanged.

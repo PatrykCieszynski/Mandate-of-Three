@@ -242,10 +242,39 @@ try {
   );
   await page.mouse.up();
   assert.equal(await sword.evaluate((node) => node.style.left), '361px');
-  await storage
-    .locator('[data-id=preview-material]')
-    .click({ modifiers: ['Control'] });
+  // Exact withdrawal hits the real Inventory grid at the current scale.
+  const withdrawing = await storage
+      .locator('[data-id=preview-material]')
+      .boundingBox(),
+    receiving = await inventory.locator('.inventory-grid').boundingBox();
+  assert.ok(withdrawing);
+  assert.ok(receiving);
+  await page.mouse.move(withdrawing.x + 10 * 1.25, withdrawing.y + 10 * 1.25);
+  await page.mouse.down();
+  await page.mouse.move(
+    receiving.x + (3 * 40 + 10) * 1.25,
+    receiving.y + (5 * 40 + 10) * 1.25,
+    { steps: 5 },
+  );
+  assert.equal(
+    await inventory.locator('.placement-preview.invalid').count(),
+    0,
+  );
+  assert.equal(await inventory.locator('.placement-preview').isVisible(), true);
+  await page.mouse.up();
   await inventory.locator('[data-id=preview-material]').waitFor();
+  assert.equal(
+    await inventory
+      .locator('[data-id=preview-material]')
+      .evaluate((node) => node.style.left),
+    '121px',
+  );
+  assert.equal(
+    await inventory
+      .locator('[data-id=preview-material]')
+      .evaluate((node) => node.style.top),
+    '201px',
+  );
   await page.selectOption('#scale', '1');
   await page.waitForFunction(
     () =>
@@ -257,11 +286,11 @@ try {
   // Escape cancels before applying a transfer.
   await sword.click({ position: { x: 10, y: 10 } });
   await page.keyboard.press('Escape');
-  assert.equal(await ui.locator('.transferred-item').isVisible(), false);
+  assert.equal(await ui.locator('.carried-item').isVisible(), false);
   assert.equal(await sword.evaluate((node) => node.style.top), '81px');
   await sword.click({ position: { x: 10, y: 10 } });
   await storage.locator('.window-close').click();
-  assert.equal(await ui.locator('.transferred-item').isVisible(), false);
+  assert.equal(await ui.locator('.carried-item').isVisible(), false);
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Hide Storage', exact: true }).click();
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });

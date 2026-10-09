@@ -103,6 +103,33 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   await page.mouse.move(grid.x+3*size+size/2,grid.y+4*size+item.height-5,{steps:4});await page.mouse.up();
   await page.waitForFunction(()=>sent.some(message=>message.type==='inventory.move_item'));
   assert.deepEqual((await commands()).at(-1)?.payload,{id:'bag-item',revision:3,x:3,y:4,page:0});
+  // Slot drops use explicit equip; dragging an equipped item receives automatically.
+  for (const scale of [1, 1.25]) {
+    await send({...snapshot,hud:{...snapshot.hud,ui_scale:scale}});await frame();await clear();
+    const source=await page.locator('.inventory-item').boundingBox(),slot=await page.locator('[data-slot=weapon]').boundingBox();
+    assert.ok(source);assert.ok(slot);
+    await page.mouse.move(source.x+10*scale,source.y+10*scale);await page.mouse.down();
+    await page.mouse.move(slot.x+slot.width/2,slot.y+slot.height/2,{steps:5});
+    assert.equal(await page.locator('[data-slot=weapon] .item-drop-highlight').isVisible(),true);
+    await page.mouse.up();await page.waitForFunction(()=>sent.some(message=>message.type==='equipment.equip'));
+    assert.deepEqual((await commands()).at(-1)?.payload,{id:'bag-item',revision:3});
+    await clear();const equipped=await page.locator('[data-slot=weapon]').boundingBox(),destination=await page.locator('.inventory-grid').boundingBox();
+    assert.ok(equipped);assert.ok(destination);
+    await page.mouse.move(equipped.x+10*scale,equipped.y+10*scale);await page.mouse.down();
+    await page.mouse.move(destination.x+2*size*scale+10*scale,destination.y+3*size*scale+10*scale,{steps:5});
+    assert.equal(await page.locator('.inventory-grid .item-drop-highlight').isVisible(),true);
+    await page.mouse.up();await page.waitForFunction(()=>sent.some(message=>message.type==='equipment.unequip'));
+    assert.deepEqual((await commands()).at(-1)?.payload,{id:'equipped-item',revision:4});
+    // A rejection keeps both authoritative items and removes gesture visuals.
+    assert.equal(await page.locator('.carried-item').isVisible(),false);
+    assert.equal(await page.locator('.inventory-item').count(),1);
+  }
+  await send(snapshot);await frame();await clear();
+  await page.locator('.inventory-item').click();
+  await page.locator('.inventory-item').click({button:'right'});
+  assert.equal(await page.locator('.carried-item').isVisible(),false);assert.equal((await commands()).length,0);
+  await page.locator('.inventory-item').click();await page.evaluate(()=>window.dispatchEvent(new Event('blur')));
+  assert.equal(await page.locator('.carried-item').isVisible(),false);assert.equal((await commands()).length,0);
   // Reference artwork hover targets remain aligned at every supported UI scale.
   const equipmentProbes = [
     [22, 86, 'Weapon'], [58, 21, 'Helmet'], [58, 72, 'Armor'],

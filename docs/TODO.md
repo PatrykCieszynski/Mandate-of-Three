@@ -1,7 +1,8 @@
 # UI follow-up
 
-- The current InventoryStorageTransferController (`screens/storage/inventory-storage-transfer.ts`)
-  is transitional and explicitly knows Inventory and Storage. Do not extend it to
-  NPC Shop, Player Shop, Trade or Equipment. Before the next system requiring
-  cross-window item interaction, design the common drag/drop and item interaction
-  rules layer. Do not implement that framework in this cleanup pass.
+- ItemDragRuntime v1 replaces the transitional Inventory/Storage controller.
+  Future Shop/Trade item subjects and drop rules belong in feature policies;
+  do not add feature routing or gameplay commands to the gesture runtime.
+- Before Shop work, share authoritative Inventory receiving checks within the
+  economic transaction. Capacity failure must not charge the buyer. See the
+  [receive/purchase invariants](item-drag-runtime.md#future-purchase-invariant).

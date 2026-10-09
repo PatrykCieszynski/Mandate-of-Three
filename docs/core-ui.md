@@ -15,7 +15,7 @@ static ES modules under `web/`. The production entry remains
   and window behavior (`core/window/`).
 - `game-ui/`: item grid (`game-ui/items/`), item tooltip/icon/slot and equipment slot presentation.
   These components accept data and dimensions; they make no gameplay decisions.
-- `screens/inventory/` and `screens/equipment/`: composition, page/carry/pending state,
+- `screens/inventory/` and `screens/equipment/`: composition, page/pending state and item interaction policies,
   equipment layout, advisory placement and injected domain actions.
 - `content/item-icons.ts`: resolver for item content identity.
 - `skins/legacy.ts`: adapter for the optional, exact legacy PNG manifest.
@@ -244,13 +244,11 @@ its page selection and typed snapshot while actions and icons are injected.
 Window geometry, scale, clamp, z-order and interactive regions stay shared.
 On narrow viewports the Storage frame fits and the grid scrolls horizontally.
 
-`screens/storage/inventory-storage-transfer.ts` is the production carry interaction used unchanged
-by CEF and the browser preview: drag/drop, click-to-carry across pages, target
-footprint preview and Ctrl + left click. It sends an injected authoritative
-transfer action and never commits local domain state. The former dev-only carry
-and Storage modules have been removed. With Storage closed, Inventory retains
-its existing authoritative move/equip behavior. No drag manager or Core UI
-inventory state is introduced.
+Inventory, Storage and Equipment use one [ItemDragRuntime](item-drag-runtime.md).
+Screens own their sources and drop policies; the runtime owns only gestures,
+ghost, hit testing and preview cleanup. The former Inventory-local carry and
+Inventory/Storage transfer controller have been removed. Inventory-only moves
+retain their original command; slot drops use explicit Equipment commands.
 
 The fixture host supplies domain snapshots and handles the same bridge commands.
 Its pure fixture transfer operation validates revisions and footprints; the
@@ -268,4 +266,4 @@ There is one StorageSnapshot contract in protocol/contracts.ts, with geometry
 constants in screens/storage/storage-model.ts. `storage_open => inventory_open`
 is enforced by the native composition and fixture host; invalid HUD snapshots
 are rejected at the presentation boundary. Closing Inventory closes Storage.
-See [the UI follow-up TODO](TODO.md) for the transfer controller's limited scope.
+See [the runtime contract](item-drag-runtime.md) for receiving semantics and future purchase invariants.
