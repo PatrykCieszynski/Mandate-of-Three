@@ -74,7 +74,7 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   await page.waitForFunction(()=>sent.some(message=>message.type==='item.activate'));
   assert.deepEqual((await commands())[0]?.payload,{id:'bag-item',revision:3});
   assert.equal((await commands()).some(message=>message.type==='equipment.equip'),false);
-  await page.locator('.equipment-slot[data-slot=weapon]').click();
+  await page.locator('.equipment-slot[data-slot=weapon]').click({button:'right'});
   assert.deepEqual((await commands()).at(-1)?.payload,{id:'equipped-item',revision:4});
   // A rejected command does not remove the item before an authoritative update.
   assert.equal(await page.locator('.inventory-item').getAttribute('data-id'),'bag-item');
@@ -103,7 +103,7 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   await page.mouse.move(grid.x+3*size+size/2,grid.y+4*size+item.height-5,{steps:4});await page.mouse.up();
   await page.waitForFunction(()=>sent.some(message=>message.type==='inventory.move_item'));
   assert.deepEqual((await commands()).at(-1)?.payload,{id:'bag-item',revision:3,x:3,y:4,page:0});
-  // Slot drops use explicit equip; dragging an equipped item receives automatically.
+  // Slot drops use explicit equip; an equipped item preserves exact Inventory placement.
   for (const scale of [1, 1.25]) {
     await send({...snapshot,hud:{...snapshot.hud,ui_scale:scale}});await frame();await clear();
     const source=await page.locator('.inventory-item').boundingBox(),slot=await page.locator('[data-slot=weapon]').boundingBox();
@@ -117,9 +117,9 @@ async function verify(browser: Browser,url: string,fallback: boolean){
     assert.ok(equipped);assert.ok(destination);
     await page.mouse.move(equipped.x+10*scale,equipped.y+10*scale);await page.mouse.down();
     await page.mouse.move(destination.x+2*size*scale+10*scale,destination.y+3*size*scale+10*scale,{steps:5});
-    assert.equal(await page.locator('.inventory-grid .item-drop-highlight').isVisible(),true);
+    assert.equal(await page.locator('.inventory-grid .placement-preview').isVisible(),true);
     await page.mouse.up();await page.waitForFunction(()=>sent.some(message=>message.type==='equipment.unequip'));
-    assert.deepEqual((await commands()).at(-1)?.payload,{id:'equipped-item',revision:4});
+    assert.deepEqual((await commands()).at(-1)?.payload,{id:'equipped-item',revision:4,x:2,y:3,page:0});
     // A rejection keeps both authoritative items and removes gesture visuals.
     assert.equal(await page.locator('.carried-item').isVisible(),false);
     assert.equal(await page.locator('.inventory-item').count(),1);

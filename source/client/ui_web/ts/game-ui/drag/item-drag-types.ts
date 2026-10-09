@@ -23,8 +23,6 @@ export interface DropPreview<T> {
 export interface ItemDragSource {
   element: HTMLElement;
   payload: (event: PointerEvent) => ItemDragPayload | null;
-  // Optional existing source-local short-click action (e.g. explicit unequip).
-  onClick?: () => void;
 }
 export interface ItemDropTarget<T> {
   element: HTMLElement;

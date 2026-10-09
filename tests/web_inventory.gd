@@ -84,8 +84,9 @@ func run_client() -> void:
 	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
 	check(result.ok and endpoint.state.equipment.get("weapon") == item.uid, "explicit equip still commits")
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
-	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision})
-	check(result.ok and endpoint.state.stats.attack == 10, "explicit unequip restores runtime stats")
+	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision,"x":2,"y":3,"page":1})
+	check(result.ok and endpoint.state.stats.attack == 10, "exact unequip restores runtime stats")
+	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 62 and i.revision == current.revision + 1), "Web exact unequip publishes selected cell and page")
 	web.storage_opened = true
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
 	var transfer_payload: Dictionary = {"id":item.uid,"revision":current.revision,"from":"inventory","to":"storage","x":14,"y":0,"page":1,"quick":false}

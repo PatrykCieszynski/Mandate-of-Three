@@ -24,6 +24,7 @@ export interface ShortcutMessage { v: 1; type: 'ui.shortcut'; payload: {key: 'Es
 export interface CommandResultMessage { v: 1; type: 'command.result'; id: string; payload: CommandResult }
 export interface ItemCommand { id: string; revision: number }
 export interface MoveItemCommand extends ItemCommand { x: number; y: number; page: number }
+export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
   'item.activate': ItemCommand;
@@ -31,7 +32,7 @@ export interface CommandPayloads {
   'storage.close': Record<string, never>;
   'inventory.move_item': MoveItemCommand;
   'equipment.equip': ItemCommand;
-  'equipment.unequip': ItemCommand;
+  'equipment.unequip': UnequipItemCommand;
   'inventory.close': Record<string, never>;
   'equipment.close': Record<string, never>;
 }

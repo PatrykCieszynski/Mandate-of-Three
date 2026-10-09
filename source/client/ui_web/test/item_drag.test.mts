@@ -350,7 +350,7 @@ test('production policies preserve exact routes, quick receive, slot drops and r
     quickDeposit: (item) => storage.receiveFromInventory(item),
     withdrawItem: (item, position) =>
       storage.withdrawToInventory(item, position),
-    receiveEquipped: (item) => equipment.unequip(item),
+    receiveEquipped: (item, position) => equipment.unequip(item, position),
   });
   const invGrid = invRoot.querySelector<HTMLElement>('.inventory-grid'),
     storageGrid = storageRoot.querySelector<HTMLElement>('.storage-grid');
@@ -463,7 +463,22 @@ test('production policies preserve exact routes, quick receive, slot drops and r
       payload: { id: bagItem.id, revision: 3 },
     });
     capture(weapon);
-    await drop(weapon, invGrid);
+    f.setHit(null);
+    f.pointer(weapon, 'pointerdown');
+    f.pointer(weapon, 'pointerup');
+    assert.equal(f.runtime.latched, true);
+    assert.equal(commands.length, 0);
+    f.setHit(invGrid);
+    f.pointer(invGrid, 'pointerdown', 90, 130);
+    await flush();
+    assert.deepEqual(commands.pop(), {
+      type: 'equipment.unequip',
+      payload: { id: equippedItem.id, revision: 4, x: 2, y: 3, page: 0 },
+    });
+    await drop(weapon, invGrid, 10, 50, false);
+    assert.equal(commands.length, 0);
+    f.pointer(weapon, 'pointerdown', 10, 10, 2);
+    await flush();
     assert.deepEqual(commands.pop(), {
       type: 'equipment.unequip',
       payload: { id: equippedItem.id, revision: 4 },

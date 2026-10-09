@@ -86,7 +86,6 @@ export class ItemDragRuntime {
                     else {
                         source.element.classList.remove('carried');
                         this.session.node = null;
-                        this.session.source = null;
                     }
                 }
             },
@@ -217,7 +216,6 @@ export class ItemDragRuntime {
             this.suppressClick = true;
             this.session = {
                 payload,
-                source,
                 node: source.element,
                 pointerId: event.pointerId,
                 start: { x: event.clientX, y: event.clientY },
@@ -254,11 +252,6 @@ export class ItemDragRuntime {
             return;
         if (session.moved)
             this.drop();
-        else if (session.source?.onClick) {
-            const action = session.source.onClick;
-            this.cancel();
-            action();
-        }
         else {
             session.latched = true;
             this.release(session);

@@ -42,7 +42,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	dispatcher.register_command("inventory.move_item", _valid_move, _move)
 	dispatcher.register_command("item.activate", _valid_equipment, _activate)
 	dispatcher.register_command("equipment.equip", _valid_equipment, _equip)
-	dispatcher.register_command("equipment.unequip", _valid_equipment, _unequip)
+	dispatcher.register_command("equipment.unequip", _valid_unequip, _unequip)
 	dispatcher.register_command("equipment.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_equipment)
 	dispatcher.register_command("inventory.close", func(p: Dictionary) -> bool: return p.is_empty(), _close)
 	host.keyboard_owner_changed.connect(func(owner: String) -> void: ClientState.menu_open = owner != "gameplay")
@@ -96,6 +96,9 @@ static func _valid_scale(payload: Dictionary) -> bool:
 static func _valid_equipment(payload: Dictionary) -> bool:
 	return payload.size() == 2 and _valid_identity(payload)
 
+static func _valid_unequip(payload: Dictionary) -> bool:
+	return _valid_equipment(payload) or _valid_move(payload)
+
 static func _valid_storage(p: Dictionary) -> bool:
 	if p.size() != 8 or not p.has_all(["id","revision","from","to","x","y","page","quick"]) or not _valid_identity(p): return false
 	if (p.from == "inventory" and p.to == "inventory") or p.from not in ["inventory","storage"] or p.to not in ["inventory","storage"] or not p.quick is bool: return false
@@ -138,7 +141,7 @@ func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
 	elif action == "activate":
 		world.inventory_endpoint.request_activate_item.rpc_id(1, payload.id, int(payload.revision), id)
 	else:
-		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id)
+		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id, int(payload.page) * InventoryGrid.PAGE_CELLS + int(payload.y) * InventoryGrid.COLUMNS + int(payload.x) if payload.has("x") else -1)
 	return await _wait_command(id)
 
 func _wait_command(id: String, timeout_ms: int = 2500) -> Dictionary:
