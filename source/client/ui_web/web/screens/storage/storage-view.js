@@ -1,3 +1,4 @@
+import { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES, STORAGE_PAGE_CELLS, ITEM_SLOT_SIZE, } from './storage-model.js';
 import { UiWindow } from '../../core/window/ui-window.js';
 import { UiTab } from '../../core/primitives/ui-tab.js';
 import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
@@ -32,11 +33,20 @@ export function mountStorage(root, options) {
     viewport.append(gridRoot);
     const capacity = document.createElement('p');
     capacity.className = 'storage-capacity';
-    capacity.textContent = '135 slots per page · 2 pages';
-    shell.contentRoot.append(nav, viewport, capacity);
-    const grid = UiItemGrid(gridRoot, { slotSize: () => 40 });
+    capacity.textContent = `${STORAGE_PAGE_CELLS} slots per page · ${STORAGE_PAGES} pages`;
+    const status = document.createElement('p');
+    status.className = 'storage-status';
+    status.setAttribute('role', 'status');
+    status.hidden = true;
+    shell.contentRoot.append(nav, viewport, capacity, status);
+    const grid = UiItemGrid(gridRoot, { slotSize: () => ITEM_SLOT_SIZE });
     const tooltip = ItemTooltip(root, { geometry: () => options.manager });
-    let state = { columns: 15, rows: 9, pages: 2, items: [] };
+    let state = {
+        columns: STORAGE_COLUMNS,
+        rows: STORAGE_ROWS,
+        pages: STORAGE_PAGES,
+        items: [],
+    };
     let page = 0, disposed = false;
     const tabs = ['I', 'II'].map((label, index) => {
         const tab = UiTab({
@@ -57,7 +67,7 @@ export function mountStorage(root, options) {
             items: state.items.filter((item) => item.page === page),
         }, (item) => UiItemSlot({
             item,
-            slotSize: 40,
+            slotSize: ITEM_SLOT_SIZE,
             resolveItemIcon: options.resolveItemIcon,
         }));
         tabs.forEach((tab, index) => tab.setSelected(index === page));
@@ -87,6 +97,11 @@ export function mountStorage(root, options) {
         regions: [shell.panel],
         refresh: () => shell.refresh(),
         activate: () => shell.handle.activate(),
+        setStatus(message) {
+            status.textContent = message;
+            status.hidden = message.length === 0;
+            shell.refresh();
+        },
         setState(snapshot) {
             state = structuredClone(snapshot);
             render();

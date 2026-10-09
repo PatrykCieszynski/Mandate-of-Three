@@ -1,6 +1,7 @@
-import { carriedCell, placement } from '../screens/inventory/placement.js';
-import { paintItemIcon } from '../game-ui/items/item-icon.js';
-export function itemTransfers(options) {
+import { ITEM_SLOT_SIZE } from './storage-model.js';
+import { carriedCell, placement } from '../inventory/placement.js';
+import { paintItemIcon } from '../../game-ui/items/item-icon.js';
+export function inventoryStorageTransfers(options) {
     let carry = null;
     let pending = false;
     let target = null;
@@ -56,13 +57,13 @@ export function itemTransfers(options) {
             const cell = carriedCell({
                 x: (event.clientX - rect.left) / scale,
                 y: (event.clientY - rect.top) / scale,
-            }, { x: carry.offsetX, y: carry.offsetY }, 40);
+            }, { x: carry.offsetX, y: carry.offsetY }, ITEM_SLOT_SIZE);
             const valid = placement({ ...options.getState(id), items: [...options.getState(id).items] }, carry.item, cell.x, cell.y, page(id)).valid;
             target = { container: id, ...cell, page: page(id), valid };
             marker.className = 'placement-preview' + (valid ? '' : ' invalid');
-            marker.style.left = cell.x * 40 + 'px';
-            marker.style.top = cell.y * 40 + 'px';
-            marker.style.height = carry.item.height * 40 + 'px';
+            marker.style.left = cell.x * ITEM_SLOT_SIZE + 'px';
+            marker.style.top = cell.y * ITEM_SLOT_SIZE + 'px';
+            marker.style.height = carry.item.height * ITEM_SLOT_SIZE + 'px';
             element.append(marker);
         }
     }
@@ -148,8 +149,8 @@ export function itemTransfers(options) {
         node.setPointerCapture(event.pointerId);
         node.classList.add('carried');
         paintItemIcon(ghost, item, { resolveItemIcon: options.resolveItemIcon });
-        ghost.style.width = 40 * scale + 'px';
-        ghost.style.height = item.height * 40 * scale + 'px';
+        ghost.style.width = ITEM_SLOT_SIZE * scale + 'px';
+        ghost.style.height = item.height * ITEM_SLOT_SIZE * scale + 'px';
         ghost.hidden = false;
         surface.hidden = false;
         options.onRegionsChanged();

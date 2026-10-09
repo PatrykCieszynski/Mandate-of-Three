@@ -1,4 +1,4 @@
-import { itemTransfers } from '../game-ui/item-transfers.js';
+import { inventoryStorageTransfers } from '../screens/storage/inventory-storage-transfer.js';
 import { mountStorage } from '../screens/storage/storage-view.js';
 import { updateGameViews } from './domain-updates.js';
 import type { ItemIconId } from '../game-ui/item-types.js';
@@ -53,7 +53,9 @@ const bridge = new WebBridge({
       storage.setState(state.storage);
     if (message.type === 'ui.snapshot' || message.type === 'hud.updated') {
       const opened = storageRoot.hidden && state.hud?.storage_open === true;
-      storageRoot.hidden = !state.hud?.storage_open;
+      storageRoot.hidden = !(
+        state.hud?.storage_open && state.hud?.inventory_open
+      );
       storage.refresh();
       if (opened) {
         view.cancelCarry();
@@ -98,7 +100,7 @@ const storage = mountStorage(storageRoot, {
   onItemAction: () => {},
   onRegionsChanged: () => regions?.refresh(),
 });
-const transfers = itemTransfers({
+const transfers = inventoryStorageTransfers({
   manager,
   resolveItemIcon,
   onRegionsChanged: () => regions?.refresh(),
@@ -109,26 +111,36 @@ const transfers = itemTransfers({
     return container;
   },
   async move(from, to, item, target) {
+    if (from === 'inventory' && to === 'inventory' && !target) {
+      storage.setStatus('Inventory move requires a target');
+      return false;
+    }
     try {
-      const result = await bridge.request('storage.transfer', {
-        id: item.id,
-        revision: item.revision,
-        from,
-        to,
-        x: target?.x ?? 0,
-        y: target?.y ?? 0,
-        page: target?.page ?? 0,
-        quick: !target,
-      });
-      const status = storageRoot.querySelector('.storage-capacity');
-      if (status)
-        status.textContent = result.ok
-          ? '135 slots per page · 2 pages'
-          : `Transfer rejected: ${result.error ?? 'request'}`;
+      const result =
+        from === 'inventory' && to === 'inventory' && target
+          ? await bridge.request('inventory.move_item', {
+              id: item.id,
+              revision: item.revision,
+              x: target.x,
+              y: target.y,
+              page: target.page,
+            })
+          : await bridge.request('storage.transfer', {
+              id: item.id,
+              revision: item.revision,
+              from,
+              to,
+              x: target?.x ?? 0,
+              y: target?.y ?? 0,
+              page: target?.page ?? 0,
+              quick: !target,
+            });
+      storage.setStatus(
+        result.ok ? '' : `Transfer rejected: ${result.error ?? 'request'}`,
+      );
       return result.ok;
     } catch {
-      const status = storageRoot.querySelector('.storage-capacity');
-      if (status) status.textContent = 'Transfer failed';
+      storage.setStatus('Transfer failed');
       return false;
     }
   },

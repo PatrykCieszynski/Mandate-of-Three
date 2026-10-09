@@ -244,7 +244,7 @@ its page selection and typed snapshot while actions and icons are injected.
 Window geometry, scale, clamp, z-order and interactive regions stay shared.
 On narrow viewports the Storage frame fits and the grid scrolls horizontally.
 
-`game-ui/item-transfers.ts` is the production carry interaction used unchanged
+`screens/storage/inventory-storage-transfer.ts` is the production carry interaction used unchanged
 by CEF and the browser preview: drag/drop, click-to-carry across pages, target
 footprint preview and Ctrl + left click. It sends an injected authoritative
 transfer action and never commits local domain state. The former dev-only carry
@@ -260,3 +260,12 @@ Default tests cover bounded Storage validation, last-valid state isolation, full
 containers, same-account withdrawal, foreign access, revision rejection, rollback
 and reopen. Extended Web Inventory tests exercise bridge/RPC/SQLite deposit and
 withdrawal; browser tests exercise the shared production gestures.
+
+Inventory-only moves use the existing `inventory.move_item` / `move_bag_item`
+path even while Storage is open. Storage services reject inventory-to-inventory.
+Storage operation status is exposed through `setStatus`, separate from capacity.
+There is one StorageSnapshot contract in protocol/contracts.ts, with geometry
+constants in screens/storage/storage-model.ts. `storage_open => inventory_open`
+is enforced by the native composition and fixture host; invalid HUD snapshots
+are rejected at the presentation boundary. Closing Inventory closes Storage.
+See [the UI follow-up TODO](TODO.md) for the transfer controller's limited scope.

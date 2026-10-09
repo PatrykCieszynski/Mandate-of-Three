@@ -1,7 +1,7 @@
 import { MAX_STATE_BYTES, MAX_BYTES } from '../web/protocol.js';
 import { transfer } from '../web/screens/storage/transfer.js';
 import { mountStorage } from '../web/screens/storage/storage-view.js';
-import type { StorageSnapshot } from '../web/screens/storage/storage-types.js';
+import type { StorageSnapshot } from '../web/protocol/contracts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UiWindow } from '../web/core/window/ui-window.js';
@@ -357,6 +357,17 @@ test('Storage owns two independent pages and composes item actions, tooltips and
   };
   try {
     view.setState(state);
+    const capacity = findElement(root, '.storage-capacity', 'p');
+    const capacityText = capacity.textContent;
+    view.setStatus('Transfer rejected: full');
+    assert.equal(
+      findElement(root, '.storage-status', 'p').textContent,
+      'Transfer rejected: full',
+    );
+    assert.equal(capacity.textContent, capacityText);
+    view.setStatus('');
+    assert.equal(findElement(root, '.storage-status', 'p').hidden, true);
+    assert.equal(capacity.textContent, capacityText);
     assert.equal(root.querySelectorAll('.cell').length, 135);
     const first = findElement(root, '.ui-item-slot', 'div');
     assert.equal(first.dataset.id, 'page-one');
@@ -477,5 +488,29 @@ test('Storage IPC validates its capacity independently and large valid snapshots
   );
   assert.throws(() =>
     encode('storage.updated', { text: 'x'.repeat(MAX_STATE_BYTES) }),
+  );
+});
+
+test('HUD cannot open Storage without Inventory and preserves last valid lifecycle', () => {
+  const store = new DomainStore();
+  const valid = { storage_open: true, inventory_open: true };
+  assert.equal(
+    store.apply({ v: 1, type: 'hud.updated', payload: valid }),
+    true,
+  );
+  for (const payload of [
+    { storage_open: true, inventory_open: false },
+    { storage_open: true },
+  ]) {
+    assert.equal(store.apply({ v: 1, type: 'hud.updated', payload }), false);
+    assert.deepEqual(store.state.hud, valid);
+  }
+  assert.equal(
+    store.apply({
+      v: 1,
+      type: 'hud.updated',
+      payload: { storage_open: false, inventory_open: false },
+    }),
+    true,
   );
 });
