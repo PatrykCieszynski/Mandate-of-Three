@@ -11,9 +11,15 @@ Use Node 20.19+ (CI uses Node 24). From this directory, install the pinned
 
 ```powershell
 npm ci --ignore-scripts --no-audit --no-fund
+npm run format:check
 npm run build
 npm run check
 ```
+
+Use `npm run format` for deterministic formatting of Core UI and the production
+screen/composition modules, then rebuild their committed JS. The formatter is a
+pinned development dependency; generated template source is excluded. CI checks
+formatting alongside strict TypeScript and generated asset ownership.
 
 From the repository root:
 

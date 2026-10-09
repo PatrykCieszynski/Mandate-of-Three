@@ -26,7 +26,7 @@ test('registration, activation, hidden windows, resize and scale stay in the man
  one.hidden=false;manager.move('one',{x:9999,y:9999});manager.setScale(1.5);Object.defineProperties(host,{innerWidth:{value:600,configurable:true},innerHeight:{value:500,configurable:true}});host.dispatchEvent(new host.Event('resize'));
  const p=manager.place('one');assert.ok(p.x>=0&&p.x+one.offsetWidth<=host.innerWidth/manager.scale);assert.ok(p.y>=0);
  assert.throws(()=>manager.setScale(0),/Invalid/);manager.unregister('two');assert.equal(manager.activeWindowId,'one');
- manager.dispose();Object.defineProperty(host,'innerWidth',{value:100});host.dispatchEvent(new host.Event('resize'));assert.equal(manager.viewport.width,600);assert.equal(manager.windows.size,0);
+ manager.dispose();Object.defineProperty(host,'innerWidth',{value:100});host.dispatchEvent(new host.Event('resize'));assert.equal(manager.viewport.width,600);assert.equal(manager.registeredCount,0);
 });
 
 test('shared shell captures drag, cancels on lifecycle changes and removes listeners',()=>{
@@ -44,7 +44,7 @@ test('shared shell captures drag, cancels on lifecycle changes and removes liste
  shell.dispose();shell.dispose();const savedRegions=regions,savedCancels=cancels;
  close.click();fire(header,'pointerdown');fire(doc,'pointermove');fire(doc,'pointerup');host.dispatchEvent(new host.Event('blur'));
  assert.equal(header.hasPointerCapture(1),false);assert.equal(closes,1);assert.equal(regions,savedRegions);assert.equal(cancels,savedCancels);assert.equal(frames.size,0);
- assert.equal(manager.windows.size,0);manager.dispose();
+ assert.equal(manager.registeredCount,0);manager.dispose();
 });
 
 test('tooltip geometry flips and stays reachable at all scales and in small viewports',()=>{
@@ -195,7 +195,7 @@ test('Storage composes state/actions, regions, tooltip and window lifecycle with
  const close=findElement(root,'.window-close','button');close.click();assert.equal(closes,1);
  fire(updated,'pointermove');root.hidden=true;manager.refreshAll();assert.equal(tooltip.hidden,true);
  storage.dispose();storage.dispose();const savedRegions=regions;close.click();fire(updated,'pointerdown');fire(doc,'pointermove');host.dispatchEvent(new host.Event('blur'));
- assert.equal(closes,1);assert.equal(actions.length,2);assert.equal(regions,savedRegions);assert.equal(manager.windows.has('storage'),false);assert.equal(frames.size,0);manager.dispose();
+ assert.equal(closes,1);assert.equal(actions.length,2);assert.equal(regions,savedRegions);assert.equal(manager.has('storage'),false);assert.equal(frames.size,0);manager.dispose();
 });
 
 test('viewport corner anchors use logical size and stale handles cannot unregister replacement windows',()=>{
@@ -205,7 +205,7 @@ test('viewport corner anchors use logical size and stale handles cannot unregist
   [import('../web/core/window/window-types.js').ViewportPlacement['anchor'],{x:number;y:number},{x:number;y:number}][];
  for(const [anchor,offset,expected] of corners){
   const handle=manager.register({id:'corner',element,placement:{kind:'viewport',anchor,offset}});assert.deepEqual(handle.place(),expected);handle.dispose();
-  const replacement=manager.register({id:'corner',element});handle.dispose();assert.equal(manager.windows.has('corner'),true);replacement.dispose();
+  const replacement=manager.register({id:'corner',element});handle.dispose();assert.equal(manager.has('corner'),true);replacement.dispose();
  }
  manager.dispose();
 });

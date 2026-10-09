@@ -1,6 +1,12 @@
 export type WindowId = string;
-export interface Point { x: number; y: number }
-export interface Size { width: number; height: number }
+export interface Point {
+  x: number;
+  y: number;
+}
+export interface Size {
+  width: number;
+  height: number;
+}
 export type Viewport = Size;
 export interface ViewportPlacement {
   kind: 'viewport';
@@ -8,17 +14,25 @@ export interface ViewportPlacement {
   offset?: Point;
 }
 export interface RelativePlacement {
-  kind: 'relative'; target: WindowId;
+  kind: 'relative';
+  target: WindowId;
   side: 'left' | 'right' | 'top' | 'bottom';
-  align?: 'start' | 'center' | 'end'; gap?: number; offset?: Point;
+  align?: 'start' | 'center' | 'end';
+  gap?: number;
+  offset?: Point;
   // Preserve standalone placement while the target has never been measured.
   fallback?: ViewportPlacement;
 }
 export type WindowPlacement = ViewportPlacement | RelativePlacement;
 export interface WindowRegistration {
-  id: WindowId; element: HTMLElement; root?: HTMLElement; placement?: WindowPlacement;
+  id: WindowId;
+  element: HTMLElement;
+  root?: HTMLElement;
+  placement?: WindowPlacement;
 }
-export interface LayoutInvalidation { cancelTransient: boolean }
+export interface LayoutInvalidation {
+  cancelTransient: boolean;
+}
 export interface WindowHandle {
   activate(): void;
   place(): Point;

@@ -1,16 +1,51 @@
-import type {AssetLoader, UiIconId} from '../assets/types.js';
-import type {UiIconRegistry} from '../assets/ui-icons.js';
-import {uiIcons} from '../assets/ui-icons.js';
-import {loadImage} from '../assets/skin.js';
-export function UiCurrency(element=document.createElement('footer'),{label='',iconId,icons=uiIcons,loadAsset=loadImage}: {label?: string; iconId?: UiIconId; icons?: UiIconRegistry; loadAsset?: AssetLoader}={}) {
-  element.classList.add('ui-currency');element.replaceChildren();
-  const icon=document.createElement('span'),caption=document.createElement('span'),amount=document.createElement('strong');
-  icon.className='currency-icon';icon.textContent='●';caption.textContent=label;amount.textContent='—';element.append(icon,caption,amount);
-  let version=0,disposed=false;
-  const refresh=async()=>{
-    const current=++version,url=icons.resolve(iconId);icon.style.backgroundImage='none';
-    if(url&&await loadAsset(url)&&!disposed&&current===version)icon.style.backgroundImage=`url(${JSON.stringify(url)})`;
+import type { AssetLoader, UiIconId } from '../assets/types.js';
+import type { UiIconRegistry } from '../assets/ui-icons.js';
+import { uiIcons } from '../assets/ui-icons.js';
+import { loadImage } from '../assets/skin.js';
+export function UiCurrency(
+  element = document.createElement('footer'),
+  {
+    label = '',
+    iconId,
+    icons = uiIcons,
+    loadAsset = loadImage,
+  }: {
+    label?: string;
+    iconId?: UiIconId;
+    icons?: UiIconRegistry;
+    loadAsset?: AssetLoader;
+  } = {},
+) {
+  element.classList.add('ui-currency');
+  element.replaceChildren();
+  const icon = document.createElement('span'),
+    caption = document.createElement('span'),
+    amount = document.createElement('strong');
+  icon.className = 'currency-icon';
+  icon.textContent = '●';
+  caption.textContent = label;
+  amount.textContent = '—';
+  element.append(icon, caption, amount);
+  let version = 0,
+    disposed = false;
+  const refresh = async () => {
+    const current = ++version,
+      url = icons.resolve(iconId);
+    icon.style.backgroundImage = 'none';
+    if (url && (await loadAsset(url)) && !disposed && current === version)
+      icon.style.backgroundImage = `url(${JSON.stringify(url)})`;
   };
-  const unsubscribe=icons.subscribe(refresh);refresh();
-  return {element,setValue(value: number | undefined){amount.textContent=Number(value||0).toLocaleString('en-US');},dispose(){disposed=true;version++;unsubscribe();}};
+  const unsubscribe = icons.subscribe(refresh);
+  refresh();
+  return {
+    element,
+    setValue(value: number | undefined) {
+      amount.textContent = Number(value || 0).toLocaleString('en-US');
+    },
+    dispose() {
+      disposed = true;
+      version++;
+      unsubscribe();
+    },
+  };
 }

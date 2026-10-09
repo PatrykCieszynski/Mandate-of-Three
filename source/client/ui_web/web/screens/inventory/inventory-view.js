@@ -8,26 +8,56 @@ import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
 import { UiWindow } from '../../core/window/ui-window.js';
 import { placement, carriedCell } from './placement.js';
-export function mountInventory(root, { manager, resolveItemIcon = () => null, moveItem, equipItem, onClose = () => { }, onRegionsChanged = () => { } }) {
-    const shell = new UiWindow(root, { id: 'inventory', title: 'Inventory', className: 'window', manager,
-        placement: { kind: 'viewport', anchor: 'top-right', offset: { x: -16, y: 240 } }, scrollBorder: 2, hideHorizontalOverflow: true,
-        onClose, canDrag: () => !carry, onCancel: () => cancelCarry(), onRegionsChanged, onGeometry: () => {
+export function mountInventory(root, { manager, resolveItemIcon = () => null, moveItem, equipItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
+    const shell = new UiWindow(root, {
+        id: 'inventory',
+        title: 'Inventory',
+        className: 'window',
+        manager,
+        placement: {
+            kind: 'viewport',
+            anchor: 'top-right',
+            offset: { x: -16, y: 240 },
+        },
+        scrollBorder: 2,
+        hideHorizontalOverflow: true,
+        onClose,
+        canDrag: () => !carry,
+        onCancel: () => cancelCarry(),
+        onRegionsChanged,
+        onGeometry: () => {
             surface.style.width = innerWidth / shell.scale + 'px';
             surface.style.height = innerHeight / shell.scale + 'px';
-        } });
+        },
+    });
     shell.contentRoot.innerHTML = `<nav class="inventory-tabs" aria-label="Inventory pages"></nav>
     <div class="inventory-grid"></div><footer class="wallet"></footer>
     <p class="inventory-status" role="status"></p>`;
     root.insertAdjacentHTML('beforeend', `<div id="carry-surface" hidden></div><div class="carried-item" hidden></div>`);
     const panel = findElement(root, '.window', 'section'), grid = findElement(root, '.inventory-grid', 'div'), surface = findElement(root, '#carry-surface', 'div'), ghost = findElement(root, '.carried-item', 'div'), status = findElement(root, '.inventory-status', 'p');
-    const tip = ItemTooltip(root, { geometry: () => manager }), tooltip = tip.element, currency = UiCurrency(findElement(root, '.wallet', 'footer'), { label: 'Yang', iconId: 'currencies.yang' });
+    const tip = ItemTooltip(root, { geometry: () => manager }), tooltip = tip.element, currency = UiCurrency(findElement(root, '.wallet', 'footer'), {
+        label: 'Yang',
+        iconId: 'currencies.yang',
+    });
     const tabs = ['I', 'II', 'III', 'IV'].map((label, index) => {
-        const tab = UiTab({ label, onSelect: () => { if (!carry?.latched)
-                cancelCarry(); page = index; render(); } });
+        const tab = UiTab({
+            label,
+            onSelect: () => {
+                if (!carry?.latched)
+                    cancelCarry();
+                page = index;
+                render();
+            },
+        });
         findElement(root, '.inventory-tabs', 'nav').append(tab.element);
         return tab;
     });
-    let inventory = { columns: 5, rows: 9, pages: 4, items: [] }, page = 0, pending = false, disposed = false;
+    let inventory = {
+        columns: 5,
+        rows: 9,
+        pages: 4,
+        items: [],
+    }, page = 0, pending = false, disposed = false;
     let carry = null;
     const point = (e) => shell.point(e);
     const cell = () => parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
@@ -35,10 +65,14 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
     const gridView = UiItemGrid(grid, { slotSize: cell });
     const icon = (node, item) => paintItemIcon(node, item, { resolveItemIcon });
     function render() {
-        gridView.render({ columns: inventory.columns, rows: inventory.rows, items: inventory.items.filter(item => item.page === page) }, item => {
+        gridView.render({
+            columns: inventory.columns,
+            rows: inventory.rows,
+            items: inventory.items.filter((item) => item.page === page),
+        }, (item) => {
             const node = UiItemSlot({ item, slotSize: cell(), resolveItemIcon });
             node.classList.add('inventory-item');
-            node.addEventListener('pointerdown', event => {
+            node.addEventListener('pointerdown', (event) => {
                 if (event.button === 2 && equipItem && !carry && !pending) {
                     event.preventDefault();
                     equip(item);
@@ -46,9 +80,11 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
                 else
                     beginCarry(event, item, node);
             });
-            node.addEventListener('pointermove', event => { if (!carry && !pending)
-                showTooltip(event, item); });
-            node.addEventListener('pointerleave', () => tooltip.hidden = true);
+            node.addEventListener('pointermove', (event) => {
+                if (!carry && !pending)
+                    showTooltip(event, item);
+            });
+            node.addEventListener('pointerleave', () => (tooltip.hidden = true));
             return node;
         });
         tabs.forEach((tab, index) => tab.setSelected(index === page));
@@ -57,8 +93,10 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
     function showTooltip(event, item) {
         tip.show(event, item);
     }
-    function releaseCapture(state) { if (state?.node?.hasPointerCapture(state.pointer))
-        state.node.releasePointerCapture(state.pointer); }
+    function releaseCapture(state) {
+        if (state?.node?.hasPointerCapture(state.pointer))
+            state.node.releasePointerCapture(state.pointer);
+    }
     function cancelCarry() {
         const old = carry;
         carry = null;
@@ -67,7 +105,9 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
         surface.hidden = true;
         tooltip.hidden = true;
         grid.querySelector('.placement-preview')?.remove();
-        grid.querySelectorAll('.carried').forEach(n => n.classList.remove('carried'));
+        grid
+            .querySelectorAll('.carried')
+            .forEach((n) => n.classList.remove('carried'));
         onRegionsChanged();
     }
     function beginCarry(event, item, node) {
@@ -76,7 +116,18 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
         event.preventDefault();
         tooltip.hidden = true;
         const rect = node.getBoundingClientRect(), p = point(event);
-        carry = { item, node, pointer: event.pointerId, start: p, offset: { x: (event.clientX - rect.left) / shell.scale, y: (event.clientY - rect.top) / shell.scale }, moved: false, latched: false };
+        carry = {
+            item,
+            node,
+            pointer: event.pointerId,
+            start: p,
+            offset: {
+                x: (event.clientX - rect.left) / shell.scale,
+                y: (event.clientY - rect.top) / shell.scale,
+            },
+            moved: false,
+            latched: false,
+        };
         node.setPointerCapture(event.pointerId);
         node.classList.add('carried');
         icon(ghost, item);
@@ -92,14 +143,18 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
             carry.moved = true;
         ghost.style.left = p.x - carry.offset.x + 'px';
         ghost.style.top = p.y - carry.offset.y + 'px';
-        const rect = grid.getBoundingClientRect(), { x, y } = carriedCell({ x: (event.clientX - rect.left) / shell.scale, y: (event.clientY - rect.top) / shell.scale }, carry.offset, cell());
+        const rect = grid.getBoundingClientRect(), { x, y } = carriedCell({
+            x: (event.clientX - rect.left) / shell.scale,
+            y: (event.clientY - rect.top) / shell.scale,
+        }, carry.offset, cell());
         carry.preview = placement(inventory, carry.item, x, y, page);
         let preview = grid.querySelector('.placement-preview');
         if (!preview) {
             preview = document.createElement('div');
             grid.append(preview);
         }
-        preview.className = 'placement-preview' + (carry.preview.valid ? '' : ' invalid');
+        preview.className =
+            'placement-preview' + (carry.preview.valid ? '' : ' invalid');
         preview.style.left = x * cell() + 'px';
         preview.style.top = y * cell() + 'px';
         preview.style.height = carry.item.height * cell() + 'px';
@@ -113,7 +168,9 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
         try {
             const result = await equipItem({ id: item.id, revision: item.revision });
             if (!disposed)
-                status.textContent = result.ok ? '' : `Equip rejected: ${result.error || 'request'}`;
+                status.textContent = result.ok
+                    ? ''
+                    : `Equip rejected: ${result.error || 'request'}`;
         }
         catch (error) {
             if (!disposed)
@@ -127,14 +184,22 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
         if (!carry || pending || !carry.preview)
             return;
         const { item, preview } = carry;
-        const command = { id: item.id, revision: item.revision, x: preview.x, y: preview.y, page: preview.page };
+        const command = {
+            id: item.id,
+            revision: item.revision,
+            x: preview.x,
+            y: preview.y,
+            page: preview.page,
+        };
         cancelCarry();
         pending = true;
         status.textContent = 'Moving…';
         try {
             const result = await moveItem(command);
             if (!disposed)
-                status.textContent = result.ok ? '' : `Move rejected: ${result.error || 'request'}`;
+                status.textContent = result.ok
+                    ? ''
+                    : `Move rejected: ${result.error || 'request'}`;
         }
         catch (error) {
             if (!disposed)
@@ -144,12 +209,14 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
             pending = false;
         }
     }
-    function pointerDown(event) { if (carry?.latched && event.button === 0) {
-        event.preventDefault();
-        updateCarry(event);
-        if (carry.preview?.valid)
-            submit();
-    } }
+    function pointerDown(event) {
+        if (carry?.latched && event.button === 0) {
+            event.preventDefault();
+            updateCarry(event);
+            if (carry.preview?.valid)
+                submit();
+        }
+    }
     function pointerMove(event) {
         if (carry)
             updateCarry(event);
@@ -167,10 +234,12 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
         surface.hidden = false;
         onRegionsChanged();
     }
-    function cancelOrClose() { if (carry)
-        cancelCarry();
-    else
-        onClose(); }
+    function cancelOrClose() {
+        if (carry)
+            cancelCarry();
+        else
+            onClose();
+    }
     function keyDown(event) {
         if (root.hidden || event.repeat)
             return;
@@ -188,18 +257,32 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
     shell.listen(document, 'pointermove', pointerMove);
     shell.listen(document, 'pointerup', pointerUp);
     shell.listen(document, 'keydown', keyDown);
-    shell.listen(root, 'lostpointercapture', event => {
+    shell.listen(root, 'lostpointercapture', (event) => {
         if (carry && !carry.latched && carry.pointer === event.pointerId)
             cancelCarry();
     });
     render();
-    return { regions: [panel, surface], cancelCarry, cancelOrClose,
-        setState(snapshot) { cancelCarry(); inventory = structuredClone(snapshot.inventory); render(); this.setInfo(snapshot); },
+    return {
+        regions: [panel, surface],
+        cancelCarry,
+        cancelOrClose,
+        setState(snapshot) {
+            cancelCarry();
+            inventory = structuredClone(snapshot.inventory);
+            render();
+        },
         setInfo(snapshot) {
             currency.setValue(snapshot.wallet?.balance);
-            manager.setScale(Number(snapshot.hud?.ui_scale || shell.scale));
-            // Opening and Godot viewport snapshots also clamp; native resize events may lag.
-            positionWindow();
         },
-        dispose() { disposed = true; shell.dispose(); tabs.forEach(tab => tab.dispose()); tip.dispose(); currency.dispose(); gridView.dispose(); } };
+        refresh: () => shell.refresh(),
+        activate: () => shell.handle.activate(),
+        dispose() {
+            disposed = true;
+            shell.dispose();
+            tabs.forEach((tab) => tab.dispose());
+            tip.dispose();
+            currency.dispose();
+            gridView.dispose();
+        },
+    };
 }

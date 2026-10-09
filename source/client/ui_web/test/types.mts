@@ -22,6 +22,16 @@ export function checkContracts(bridge: WebBridge,manager: WindowManager,root: HT
   manager.register({id:'test',element:root,placement:{kind:'relative',target:'inventory'}});
   // @ts-expect-error Geometry is numeric.
   manager.setViewport({width:'1920',height:1080});
+  // @ts-expect-error Manager geometry is read-only outside its setters.
+  manager.scale=5;
+  // @ts-expect-error The viewport cannot be replaced by callers.
+  manager.viewport={width:800,height:600};
+  // @ts-expect-error The viewport cannot be mutated through a getter.
+  manager.viewport.width=800;
+  // @ts-expect-error Active identity is managed by activation.
+  manager.activeWindowId='test';
+  // @ts-expect-error Registered entries are not exposed.
+  manager.windows.clear();
   // Slot presentation deliberately has no revision, coordinates or page.
   UiItemSlot({item:{id:'content',name:'Sword',icon_id:'sword',height:3,quantity:1},slotSize:40,resolveItemIcon:()=>null});
   const itemId: ItemIconId='sword';

@@ -145,6 +145,8 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   const stored=page.locator('#storage .ui-item-slot');await stored.click();assert.deepEqual(await page.evaluate(()=>window.storageActions),['stored-material']);
   await stored.hover();assert.equal(await page.locator('#storage .item-tooltip').isVisible(),true);
   assert.equal(await page.locator('#storage .item-tooltip p').textContent(),'Storage description');
+  await page.locator('#storage .cell').first().hover();assert.equal(await page.locator('#storage .item-tooltip').isVisible(),false);
+  await stored.hover();assert.equal(await page.locator('#storage .item-tooltip').isVisible(),true);
   assert.ok(await page.evaluate(()=>window.storageReports>0));
   const storageHeader=page.locator('#storage .window-header');
   await storageHeader.evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected header');node.addEventListener('pointerdown',event=>{node.testPointer=event.pointerId;},{once:true});});
@@ -159,7 +161,7 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   assert.equal(await stored.getAttribute('data-id'),'updated-material');assert.equal(await stored.locator('.quantity').textContent(),'9');
   await page.locator('#storage .window-close').click();assert.equal(await page.evaluate(()=>window.storageCloses),1);
   await page.evaluate(()=>{window.storageFixture?.dispose();window.storageReporter?.dispose();window.storageManager?.dispose();document.getElementById('storage')?.remove();});
-  assert.equal(await page.evaluate(()=>window.storageManager?.windows.size),0);
+  assert.equal(await page.evaluate(()=>window.storageManager?.registeredCount),0);
   await page.setViewportSize({width:1920,height:1080});
   await send(snapshot);await clear();await page.locator('#inventory .window-close').click();
   assert.equal((await commands()).at(-1)?.type,'inventory.close');

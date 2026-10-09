@@ -12,14 +12,24 @@ export class WindowDragController {
         options.handle.addEventListener('pointerdown', this.start);
         options.handle.addEventListener('lostpointercapture', this.lostCapture);
     }
-    get active() { return this.state !== null; }
+    get active() {
+        return this.state !== null;
+    }
     start = (event) => {
         const { handle, getPosition, toLogicalPoint, canStart, onActiveChanged } = this.options, position = getPosition();
-        if (this.disposed || this.state || event.button !== 0 || (event.target instanceof Element && event.target.closest('button')) || !canStart() || !position)
+        if (this.disposed ||
+            this.state ||
+            event.button !== 0 ||
+            (event.target instanceof Element && event.target.closest('button')) ||
+            !canStart() ||
+            !position)
             return;
         event.preventDefault();
         const point = toLogicalPoint(event);
-        this.state = { pointer: event.pointerId, offset: { x: point.x - position.x, y: point.y - position.y } };
+        this.state = {
+            pointer: event.pointerId,
+            offset: { x: point.x - position.x, y: point.y - position.y },
+        };
         handle.setPointerCapture(event.pointerId);
         onActiveChanged(true);
         this.document.addEventListener('pointermove', this.move);
@@ -36,7 +46,10 @@ export class WindowDragController {
             return;
         }
         const point = this.options.toLogicalPoint(event);
-        this.pending = this.options.onMove({ x: point.x - state.offset.x, y: point.y - state.offset.y });
+        this.pending = this.options.onMove({
+            x: point.x - state.offset.x,
+            y: point.y - state.offset.y,
+        });
         if (!this.frame)
             this.frame = requestAnimationFrame(() => {
                 this.frame = 0;
@@ -46,11 +59,17 @@ export class WindowDragController {
                     this.options.paint(position);
             });
     };
-    end = (event) => { if (this.state?.pointer === event.pointerId)
-        this.stop(); };
-    lostCapture = (event) => { if (this.state?.pointer === event.pointerId)
-        this.stop(); };
-    cancel = () => { this.stop(); };
+    end = (event) => {
+        if (this.state?.pointer === event.pointerId)
+            this.stop();
+    };
+    lostCapture = (event) => {
+        if (this.state?.pointer === event.pointerId)
+            this.stop();
+    };
+    cancel = () => {
+        this.stop();
+    };
     stop() {
         this.document.removeEventListener('pointermove', this.move);
         this.document.removeEventListener('pointerup', this.end);

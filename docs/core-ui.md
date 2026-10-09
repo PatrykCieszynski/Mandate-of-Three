@@ -46,7 +46,10 @@ resize, scale changes and disposal. `onActivate` is a presentation callback;
 activation does not request native keyboard ownership.
 
 `WindowManager` registers IDs, tracks `activeWindowId` and bounded z-order,
-owns viewport/scale and browser resize, and invalidates layout. Registration
+owns viewport/scale and browser resize, and invalidates layout. Its window map,
+viewport, scale, active ID and order are private. Getters expose read-only state;
+`viewport` is also frozen at runtime. Use `has(id)` and `registeredCount` for
+queries, and handles for normal screen operations. Registration
 returns a `WindowHandle` with activate/place/move/resetPosition/dispose methods
 and layout/activation hooks; it takes no renderer callbacks.
 `WindowLayout` owns measurement, placement, clamping and manual positions.
@@ -56,6 +59,8 @@ standalone placement before a relative target has ever been measured.
 `setViewport(physicalViewport, scale)` handles snapshot/viewport changes;
 `setScale(scale)` updates every registered root and re-clamps. Pointer-down
 or focus inside a window raises its root; hidden windows cannot activate.
+Application composition also explicitly activates a hidden-to-visible window.
+Registration itself does not activate it.
 Registration rejects duplicate/empty IDs. Relative placement uses measured
 geometry and detects cycles. Manual positions survive domain updates. Hidden
 neighbors retain their last measured size; never-measured neighbors use the
@@ -67,12 +72,20 @@ to the Inventory ID and the gap. The manager has no knowledge of their meanings.
 Escape retains production policy: cancel carry first, then request Inventory
 close while open, then Equipment close. Z-order does not change shortcut policy.
 
-`refresh()` measures visible windows; application visibility changes call
-`manager.refreshAll()`. `onRegionsChanged` connects the shell to the existing
+`refresh()` measures visible windows. Application composition refreshes only
+windows whose visibility changed; scale/viewport changes invalidate all windows
+through the manager. Inventory and Equipment updates render their own screen,
+wallet updates only update currency, and player updates do no screen/layout work.
+A full snapshot updates all relevant consumers. `inventory/domain-updates.ts`
+owns this dispatch after the existing store/protocol validation. `onRegionsChanged` connects the shell to the existing
 interactive-region reporter. Dispose screens/components before disposing their
 manager/reporter. `UiWindow.dispose()` cancels capture/frames, removes its event
 listeners, unregisters and removes its owned markup; a reporter cancels queued
-reports on disposal.
+reports on disposal. `WindowManager.dispose()` is terminal and idempotent;
+subsequent mutations and live handle operations throw `Disposed WindowManager`.
+Queries and repeated disposal remain safe. Manager disposal cancels transients
+and removes every registration even if a cancellation listener throws; screens
+can still dispose their owned markup afterwards.
 
 The type contracts are grouped in `protocol/contracts.ts` (wire/snapshots/native
 Window declarations), `core/window/window-types.ts` (geometry/registration),
@@ -161,7 +174,7 @@ storage.setState({columns: 4, rows: 5, items: storageItems});
 
 The default headless test exercises state replacement, injected actions,
 tooltip content/cancellation, shared drag, activation, scale/clamp, region hooks,
-hiding, close and disposal. The opt-in browser test loads the same compiled
+hiding, close and disposal, including item-to-empty-cell tooltip movement. The opt-in browser test loads the same compiled
 fixture alongside the production page and checks real DOM interactions,
 region reporting, capture, resize/scale and cleanup with both skins.
 
@@ -194,3 +207,18 @@ tree, animation timing or combat balance and is outside default smoke.
 Headless Edge passed this milestone check. These results do not establish native
 CEF transparency/input routing, Vulkan rendering or authenticated live-session
 visual behavior; use the root client for that manual milestone check.
+
+## Cleanup verification and formatting
+
+The cleanup adds six focused runtime tests using emitted JS and real screen
+composition: read-only/terminal manager state, disposal during captured drag,
+selective domain dispatch, opening activation/z-order, malformed Inventory then
+valid Wallet rendering, and Storage tooltip hiding over an empty cell. These run
+with the existing Web UI suites in default smoke (40 tests total). The browser
+fixture also checks item-to-empty-cell tooltip movement with both skins.
+
+Pinned development-only Prettier formats Core UI TypeScript, screen/composition
+modules and the cleanup/Storage fixtures. Run `npm run format` before rebuilding
+static JS and `npm run format:check` to verify; CI enforces the latter. Generated
+template source is excluded. Existing strict TypeScript checks remain the
+correctness gate; this adds no bundler, runtime dependency or event framework.
