@@ -13,6 +13,15 @@ var location: String = "bag"
 var bag_position: int = 0
 var equipment_slot: StringName = &""
 
+## Shared wire/domain format only. Ownership and revision remain server checks.
+static func valid_uid(value: String) -> bool:
+	if value.length() != 32:
+		return false
+	for character: String in value:
+		if not "0123456789abcdef".contains(character):
+			return false
+	return true
+
 static func create(definition: ItemDefinition, owner_id: int, rolls: Array) -> ItemInstance:
 	var item := ItemInstance.new()
 	item.uid = Crypto.new().generate_random_bytes(16).hex_encode()

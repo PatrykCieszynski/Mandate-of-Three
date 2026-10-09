@@ -263,7 +263,7 @@ func request_pickup(uid: String) -> void:
 
 func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 	# Synchronous: another RPC cannot interleave between commit and ground erase.
-	if not ItemStoreSqlite.valid_uid(uid) or not ground.has(uid):
+	if not ItemInstance.valid_uid(uid) or not ground.has(uid):
 		return {"ok": false, "error": "gone"}
 	var drop: Dictionary = ground[uid]
 	if now >= int(drop.expires):

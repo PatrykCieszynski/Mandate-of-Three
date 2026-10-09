@@ -39,21 +39,10 @@ const ACTION_ENTER_WORLD := "enter_world"
 const ACTION_DISCONNECT := "disconnect"
 
 
+## Explicit deployment config; release exports never select an upstream service.
 static func base_url() -> String:
-	if OS.has_feature("ekonia") or OS.has_feature("release"):
-		return "https://ws.ekoniaonline.com"
-	return "http://127.0.0.1:8088"
-
-	# var command_line_arg: String = CmdlineUtils.get_parsed_args().get("api", "")
-	# if command_line_arg:
-	# 	return command_line_arg
-	#
-	# # Check if has default in ProjectSettings
-	# # (set different values for debug/release export presets)).
-	# var value: String = ProjectSettings.get_setting("network/api/base_url", "")
-	# if not value.is_empty():
-	# 	return value
-	# return "http://127.0.0.1:8088"
+	var configured: String = str(ProjectSettings.get_setting("network/api/base_url", "")).strip_edges()
+	return configured if not configured.is_empty() else "http://127.0.0.1:8088"
 
 
 static func get_endpoint(path: String) -> String:

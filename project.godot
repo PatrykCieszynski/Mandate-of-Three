@@ -14,14 +14,14 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="Ekonia"
+config/name="Mandate of Three"
 config/version="0.28.0"
 run/main_scene="res://source/common/main.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="slayhorizon"
 config/features=PackedStringArray("4.6", "Mobile")
 boot_splash/show_image=false
-config/icon="res://assets/project_icon/ekonia_e_logo.png"
+config/icon="res://icon.svg"
 
 [audio]
 
@@ -220,3 +220,7 @@ textures/vram_compression/import_etc2_astc=true
 security/default_permission_policy=0
 storage/data_path="user://mandate-cef-profile"
 performance/max_frame_rate=60
+
+[network]
+
+api/base_url="http://127.0.0.1:8088"

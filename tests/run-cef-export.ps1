@@ -30,13 +30,14 @@ foreach ($taskPreset in @('Windows','ServerWindows','ServerUbuntu')) {
             if ($taskExtensions -match 'godot_cef' -or @($taskNames | Where-Object { $_ -like 'addons/godot_cef/*' }).Count -ne 0) { throw "CEF leaked into $taskPreset" }
         }
     } finally { $taskZip.Dispose() }
-    if ($taskPreset -eq 'ServerWindows') {
-        $taskBootLog = Join-Path $taskLogs 'ServerWindows.boot.log'
+    if ($taskPreset -in @('Windows','ServerWindows')) {
+        $taskBootLog = Join-Path $taskLogs "$taskPreset.boot.log"
         & $taskExe --headless --main-pack $taskPack --mode=world-server res://tests/web_ui_bridge.tscn --quit-after 120 *> $taskBootLog
         $taskOutput = Get-Content -LiteralPath $taskBootLog -Raw
-        if ($LASTEXITCODE -ne 0 -or $taskOutput -notmatch 'WEB_UI_PROTOCOL_OK' -or $taskOutput -match 'SCRIPT ERROR|Assertion failed|VulkanHook|Initialize godot-rust') { throw "Server pack boot failed: $taskBootLog" }
+        if ($LASTEXITCODE -ne 0 -or $taskOutput -notmatch 'WEB_UI_PROTOCOL_OK' -or $taskOutput -match 'SCRIPT ERROR|Assertion failed') { throw "Pack boot failed: $taskBootLog" }
+        if ($taskPreset -eq 'ServerWindows' -and $taskOutput -match 'VulkanHook|Initialize godot-rust') { throw "CEF initialized in server pack: $taskBootLog" }
     }
     Remove-Item -LiteralPath $taskPack -Force
     Write-Output "$taskPreset packaging boundary: PASS"
 }
-Write-Output 'Pack resources and server boot checked; full native executable/client graphics require release verification.'
+Write-Output 'Pack resources and client/shared validation and server boot checked; full native executable/client graphics require release verification.'

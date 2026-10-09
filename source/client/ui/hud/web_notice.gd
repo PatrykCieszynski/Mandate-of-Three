@@ -8,7 +8,7 @@ extends Control
 
 ## Where "Get the full version" sends the player. Opened in a new browser tab on web via
 ## OS.shell_open. TODO: point this at your itch.io download page if you'd rather link there.
-const DOWNLOAD_URL: String = "https://ekoniaonline.com"
+const DOWNLOAD_URL: String = ""
 
 const NOTICE_TEXT: String = """You're playing the browser version, which runs lighter for compatibility. Some effects like weather are turned off and the performance is capped.
 
@@ -69,6 +69,7 @@ func _ready() -> void:
 
 	var download: Button = Button.new()
 	download.text = "Get the full version"
+	download.disabled = DOWNLOAD_URL.is_empty()
 	download.custom_minimum_size = Vector2(0, 40)
 	download.pressed.connect(func() -> void:
 		OS.shell_open(DOWNLOAD_URL)

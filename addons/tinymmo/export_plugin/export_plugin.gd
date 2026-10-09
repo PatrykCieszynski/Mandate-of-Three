@@ -200,13 +200,20 @@ func _generate_stub(path: String) -> String:
 			params.append("%s = null" % str(a.get("name", "arg")))
 		var prefix: String = "static " if (int(m.get("flags", 0)) & METHOD_FLAG_STATIC) else ""
 		out.append("%sfunc %s(%s):" % [prefix, mname, ", ".join(params)])
-		if mname.begins_with("_"):
-			out.append("\treturn null")
-		else:
+		# Constructors and inherited void methods cannot return null, even when
+		# this stub signature is untyped. Inherited Error returns need an enum value.
+		var returns: Dictionary = m.get("return", {})
+		var return_type: int = int(returns.get("type", TYPE_NIL))
+		var return_statement: String = "return null"
+		if mname == "_init" or (return_type == TYPE_NIL and not (int(returns.get("usage", 0)) & PROPERTY_USAGE_NIL_IS_VARIANT)):
+			return_statement = "return"
+		elif returns.get("class_name", &"") == &"Error":
+			return_statement = "return ERR_UNAVAILABLE"
+		if not mname.begins_with("_"):
 			out.append("\tpush_error(\"Client build called server-only %s.%s() — missing an is_server() gate?\")" % [
 				gname if gname != &"" else path.get_file(), mname
 			])
-			out.append("\treturn null")
+		out.append("\t" + return_statement)
 		out.append("")
 
 	return "\n".join(out)
