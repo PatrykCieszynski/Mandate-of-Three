@@ -180,7 +180,7 @@ I opens/closes Inventory and Equipment together. Their close buttons work
 independently; Escape cancels carrying first, then closes the remaining windows.
 Equipment has independent pointer-captured dragging, viewport clamping and the
 same logical UI scale. It reuses Inventory's window chrome. The optional
-`equipment-base` skin is copied exactly from the local legacy cache (156×220),
+`equipment-base` skin is copied exactly from the local legacy cache (156×188),
 with a simple CSS fallback in clean checkouts. No screenshot/concept art is baked
 into the UI and no legacy image is regenerated or resampled.
 

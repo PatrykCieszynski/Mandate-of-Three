@@ -1,11 +1,13 @@
 import {clampWindow} from './placement.js';
 import {icons} from './skin.js';
+// Logical slot rectangles match the native 156×188 legacy reference skin.
 const slots=[
-  ['weapon','Weapon',4,4,96],['head','Helmet',42,4,32],['neck','Necklace',118,4,32],
-  ['armor','Armor',80,42,32],['earrings','Earrings',118,42,32],['bracelet','Bracelet',80,80,32],
-  ['shield','Shield',118,80,32],['feet','Shoes',4,118,32],['belt','Belt',42,118,32],['charm','Charm',80,118,32],
-  ['special1','Special slot I',4,180,32],['special2','Special slot II',42,180,32],
-  ['special3','Special slot III',80,180,32],['special4','Special slot IV',118,180,32]
+  ['weapon','Weapon',4,4,64],['head','Helmet',42,6,32],['neck','Necklace',118,2,32],
+  ['armor','Armor',42,42,64],['earrings','Earrings',118,40,32],['bracelet','Bracelet',80,76,32],
+  ['shield','Shield',4,74,32],['feet','Shoes',42,112,32],['belt','Belt',4,116,32],['charm','Charm',80,116,32],
+  ['ring','Ring',118,112,32],
+  ['special1','Special slot I',4,154,32],['special2','Special slot II',42,154,32],
+  ['special3','Special slot III',80,154,32],['special4','Special slot IV',118,154,32]
 ];
 export function mountEquipment(root,{unequipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
   root.innerHTML=`<section id="equipment-window" class="window-chrome equipment-window" aria-label="Equipment">
