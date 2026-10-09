@@ -1,6 +1,7 @@
 # Optional packaging boundary check, only when changing addon/export integration.
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
+& (Join-Path $taskRoot 'tools/build-web-ui.ps1')
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
 $taskLogs = Join-Path $taskRoot '.godot/verification'
 if (-not (Test-Path (Join-Path $taskRoot 'addons/godot_cef/godot_cef.gdextension'))) { throw 'Install CEF with tools/cef_client/setup.py first' }
@@ -14,6 +15,7 @@ foreach ($taskPreset in @('Windows','ServerWindows','ServerUbuntu')) {
     $taskZip = [IO.Compression.ZipFile]::OpenRead($taskPack)
     try {
         $taskNames = @($taskZip.Entries | ForEach-Object { $_.FullName })
+        if (@($taskNames | Where-Object { $_ -match '^source/client/ui_web/(node_modules|ts|test|\.tests)/' -or $_ -match '^source/client/ui_web/.*\.(ts|mts)$' -or $_ -match '^source/client/ui_web/(package.*|tsconfig.*)\.json$' }).Count -ne 0) { throw "Web UI development files leaked into $taskPreset" }
         $taskEntry = $taskZip.GetEntry('.godot/extension_list.cfg')
         $taskReader = [IO.StreamReader]::new($taskEntry.Open())
         try { $taskExtensions = $taskReader.ReadToEnd() } finally { $taskReader.Dispose() }

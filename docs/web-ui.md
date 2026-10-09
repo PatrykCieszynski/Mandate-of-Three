@@ -14,6 +14,10 @@ The original [CEF spike](cef-ui-spike.md) is historical evidence. This document
 specifies **protocol v1** and the current foundation. Its tests replace the old
 unversioned bridge tests; the standalone spike is retired.
 
+Browser source is TypeScript under `source/client/ui_web/ts`; the static emitted
+JS stays at the existing `web/` paths. See [the build/test contract](../source/client/ui_web/README.md)
+for setup and generated asset ownership. Native IPC remains runtime validated.
+
 ## Official renderer target
 
 Decision accepted 2026-10-08: **CEF Web UI officially targets Vulkan Mobile**.
@@ -37,10 +41,10 @@ this decision does not install CEF in gameplay or server projects.
 - `ui_command_dispatcher.gd`: client application boundary. Explicitly registered
   validators/handlers consume commands; it retains the latest small domain
   sections for snapshots. No reflection, NodePath dispatch or game-wide bus.
-- `web/protocol.js`, `bridge.js`, `store.js`: dependency-free browser framing,
+- `ts/protocol.ts`, `bridge.ts`, `store.ts`: typed, dependency-free browser framing,
   correlated requests and disposable domain state. `web/index.html` is a blank
   transparent shell, not a new gameplay screen.
-- `tests/web_bridge.test.mjs` and `tests/web_ui_bridge.gd`: small headless
+- `source/client/ui_web/test/web_bridge.test.mts` and `tests/web_ui_bridge.gd`: small headless
   transport/application contracts. The standalone mock and diagnostic host are
   retired; no browser layout fixture is part of the default suite.
 

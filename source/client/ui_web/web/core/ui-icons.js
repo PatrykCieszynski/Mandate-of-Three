@@ -1,19 +1,23 @@
-export const uiIconDomains=Object.freeze(['buffs','debuffs','status','skills','actions','currencies','quests','glyphs']);
+export const uiIconDomains = Object.freeze(['buffs', 'debuffs', 'status', 'skills', 'actions', 'currencies', 'quests', 'glyphs']);
 // Global UI presentation icons. Item content has a separate resolver.
 export class UiIconRegistry {
-  constructor(){this.icons=new Map();this.listeners=new Set();}
-  replace(groups={},baseUrl=import.meta.url){
-    const next=new Map();
-    for(const [domain,icons] of Object.entries(groups)){
-      if(!uiIconDomains.includes(domain))throw new Error('Unknown UI icon domain: '+domain);
-      for(const [id,path] of Object.entries(icons)){
-        if(!id||typeof path!=='string'||!path)continue;
-        next.set(domain+'.'+id,new URL(path,baseUrl).href);
-      }
+    constructor() { this.icons = new Map(); this.listeners = new Set(); }
+    replace(groups = {}, baseUrl = import.meta.url) {
+        const next = new Map();
+        for (const [domain, icons] of Object.entries(groups)) {
+            if (!uiIconDomains.some(known => known === domain))
+                throw new Error('Unknown UI icon domain: ' + domain);
+            for (const [id, path] of Object.entries(icons)) {
+                if (!id || typeof path !== 'string' || !path)
+                    continue;
+                next.set(domain + '.' + id, new URL(path, baseUrl).href);
+            }
+        }
+        this.icons = next;
+        for (const listener of this.listeners)
+            listener();
     }
-    this.icons=next;for(const listener of this.listeners)listener();
-  }
-  resolve(id){return this.icons.get(id)||null;}
-  subscribe(listener){this.listeners.add(listener);return ()=>this.listeners.delete(listener);}
+    resolve(id) { return (id === undefined ? null : this.icons.get(id)) || null; }
+    subscribe(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
 }
-export const uiIcons=new UiIconRegistry();
+export const uiIcons = new UiIconRegistry();

@@ -47,3 +47,8 @@ __pycache__/
 
 # Pinned CEF release installed by tools/cef_client/setup.py (native payload, not source)
 /addons/godot_cef/
+
+# TypeScript compiler/test dependencies and emitted declaration/test artifacts
+/source/client/ui_web/node_modules/
+/source/client/ui_web/web/**/*.d.ts
+/source/client/ui_web/.tests/

@@ -1,8 +1,9 @@
-param([switch]$SetupOnly)
+param([switch]$SetupOnly, [string]$NodeExecutable = 'node')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $taskProject = $taskRoot
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
+& (Join-Path $taskRoot 'tools/build-web-ui.ps1') -NodeExecutable $NodeExecutable
 python (Join-Path $PSScriptRoot 'setup.py')
 if ($LASTEXITCODE -ne 0) { throw 'CEF client setup failed' }
 $taskImportLog = Join-Path $taskRoot '.godot/cef-client/import.log'
