@@ -5,7 +5,7 @@ $taskRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $taskGodot = Join-Path $taskRoot '.godot'
 if (-not (Test-Path -LiteralPath $taskGodot)) { return }
 if ((Get-Item -LiteralPath $taskGodot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing cleanup through a redirected .godot directory' }
-$taskTargets = @('verification','cef-client/project/.godot/verification','cef-spike','check-game-inventory.cjs','check-inventory-click.cjs','check-inventory.cjs','inventory-click-carry.png','inventory-preview-small.png','inventory-preview.png','optional-visual-import.log','optional-visual-test.log')
+$taskTargets = @('verification','cef-client/project','cef-spike','check-game-inventory.cjs','check-inventory-click.cjs','check-inventory.cjs','inventory-click-carry.png','inventory-preview-small.png','inventory-preview.png','optional-visual-import.log','optional-visual-test.log')
 foreach ($taskRelative in $taskTargets) {
     $taskPath = [IO.Path]::GetFullPath((Join-Path $taskGodot $taskRelative))
     if (-not $taskPath.StartsWith($taskGodot + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe cleanup target: $taskPath" }
@@ -24,4 +24,4 @@ foreach ($taskRelative in $taskTargets) {
         Write-Output "Removed: $taskRelative"
     }
 }
-Write-Output 'Preserved: engine binaries, imports/editor cache, references, CEF client/plugin cache and game runtime data.'
+Write-Output 'Preserved: engine binaries, imports/editor cache, references, installed root CEF addon/plugin archive cache and game runtime data.'

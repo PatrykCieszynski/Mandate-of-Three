@@ -87,7 +87,7 @@ assets meeting the 2×/150% quality target later; do not enhance legacy graphics
 
 ## Launch and scale
 
-Keep gateway/master/world running from the root CEF-free project, then:
+Keep gateway/master/world running headless from the root project, then:
 
 ```powershell
 & ./tools/cef_client/run.ps1
@@ -95,15 +95,15 @@ Keep gateway/master/world running from the root CEF-free project, then:
 & ./tools/cef_client/run.ps1 -SetupOnly
 ```
 
-This copies source/config/assets/tests into `.godot/cef-client/project`, with
-pinned godot-cef v2.0.0, Godot 4.7.2 and Vulkan Mobile. CEF binaries, profiles,
-reference PNGs and runtime stores remain ignored. The staged client defaults to
-a 1280×720 window with a 1920×1080 design baseline and **disabled canvas stretch**.
-The browser tracks actual window pixels. Root servers/headless builds have no
-CEF dependency; unsupported clients retain native inventory.
+This installs pinned CEF into `addons/godot_cef` and runs the actual root project.
+Native payloads, profiles, reference PNGs and runtime stores remain ignored.
+The project defaults to a 1280×720 window with a 1920×1080 design baseline and
+**disabled canvas stretch**. The browser tracks actual window pixels. Local
+headless runs create no browser; server exports exclude CEF entirely. Unsupported
+clients retain native inventory. See [CEF addon integration](cef-addon-integration.md).
 
 Godot's `InventoryWebController.set_ui_scale()` accepts the contract's scale list.
-For development set project setting `mandate/ui_scale` or launch the staged
+For development set project setting `mandate/ui_scale` or launch the root
 client with `--ui-scale=125`. Scale is selected once and stays independent of
 subsequent window resolution. No settings screen is included in this slice.
 
@@ -128,7 +128,7 @@ The prototype policy now keeps only durable headless contracts by default.
 The browser matrix/native fixtures described below were executed during the
 initial integration and then retired on 2026-10-09. Their results are historical;
 repeat the [UI contract matrix](ui-contract.md) manually at a layout milestone
-using the real staged client. See [testing policy](testing.md).
+using the root client. See [testing policy](testing.md).
 
 Items/grid tests pass: all heights, covered-cell overlap, page boundary, stale
 revision, transaction rollback, v14 migration rollback/repack, cross-page move

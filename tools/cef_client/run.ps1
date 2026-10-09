@@ -1,7 +1,7 @@
 param([switch]$SetupOnly)
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$taskProject = Join-Path $taskRoot '.godot/cef-client/project'
+$taskProject = $taskRoot
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
 python (Join-Path $PSScriptRoot 'setup.py')
 if ($LASTEXITCODE -ne 0) { throw 'CEF client setup failed' }

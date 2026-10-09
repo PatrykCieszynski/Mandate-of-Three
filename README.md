@@ -23,9 +23,9 @@ This repository contains a working technical vertical slice, not a game alpha.
 - Active-character combat stats in RAM; swings do not query SQLite inventory.
   Item pickup and equipment retain immediate DB transactions.
 - An opt-in [Web UI foundation](docs/web-ui.md): protocol v1, explicit commands,
-  domain snapshots and region-based input routing. An optional staged gameplay client uses the new Inventory screen,
-  with real server-authoritative item commands. CEF remains outside the root
-  server/headless project. CEF officially
+  domain snapshots and region-based input routing. The root gameplay client uses the new Inventory screen,
+  with real server-authoritative item commands. CEF is installed into `addons/godot_cef`;
+  server export presets exclude it. CEF officially
   targets Vulkan Mobile; Compatibility is unsupported / best-effort.
 
 Controls: **WASD** to move, **I** for inventory, **hold Space** for a combo in front
@@ -60,13 +60,14 @@ Then start a client, or two clients for multiplayer testing:
 ```
 
 For the new Web Inventory screen (Windows, Vulkan Mobile), keep the
-servers above and launch the optional client:
+servers above and launch the client:
 
 ```powershell
 & ./tools/cef_client/run.ps1
 ```
 
-This prepares an ignored copy of the game with pinned CEF. I opens inventory;
+This installs pinned CEF into the root project and imports it; no game sources
+are copied. Subsequent source edits run directly from this checkout. I opens inventory;
 drag moves items, click picks up/places items and Escape cancels
 carrying before closing. See [inventory UI](docs/inventory-ui-prototype.md).
 The real bag now has four 5×9 pages with authoritative item footprints. Schema
@@ -80,18 +81,14 @@ Accounts and world databases are local runtime data excluded from Git.
 ## Tests and workflow
 
 ```powershell
-& .\tests\run-items.ps1
-& .\tests\run-spike3d.ps1
-& .\tests\run-pve.ps1
-& .\tests\run-combat.ps1
-& .\tests\run-progression.ps1
-& .\tests\run-xp.ps1
-& .\tests\run-yang.ps1
+& .\tests\run-smoke.ps1
 ```
 
-Tests use test databases. PvE, combat, progression, XP and Yang share port 18098;
-run them sequentially. Full login/relog through normal servers is covered in the
-item and PvE documents; these scenarios create local test accounts.
+Default smoke protects persistence and the bridge without opening game windows.
+Choose extended network/gameplay tests only for the affected flow. See
+[testing policy](docs/testing.md). For addon/export changes, optionally run
+`tests/run-cef-export.ps1`; it checks client resources, CEF-free server packs
+and headless server-pack boot. See [CEF setup](docs/cef-addon-integration.md).
 Work on `codex/<topic>` branches, review and verify changes, then merge locally
 with `--no-ff`. See [AGENTS.md](AGENTS.md).
 
@@ -110,6 +107,7 @@ with `--no-ff`. See [AGENTS.md](AGENTS.md).
 - [Warrior compatibility](docs/warrior-compatibility.md)
 - [External legacy asset pipeline history](docs/legacy-asset-pipeline.md)
 - [Web UI foundation](docs/web-ui.md)
+- [CEF addon installation and export boundary](docs/cef-addon-integration.md)
 - [Historical CEF UI spike](docs/cef-ui-spike.md)
 - [Prototype testing and cleanup](docs/testing.md)
 - [CI](docs/ci.md)

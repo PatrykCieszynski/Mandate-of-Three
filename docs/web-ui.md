@@ -5,14 +5,14 @@ Godot's 3D viewport. The goal is a reusable screen-space UI boundary while Godot
 retains client state and the server retains gameplay/economy authority.
 
 The client has a small Web UI boundary. The first integrated screen is the
-[3D Inventory](inventory-ui-prototype.md), available in an isolated
+[3D Inventory](inventory-ui-prototype.md), available in the root
 Vulkan Mobile gameplay client. Other gameplay screens retain native Godot UI. The production source contains no mock inventory or diagnostic
-commands. The addon remains in ignored local staging projects; the root server/headless
-project loads no CEF extension.
+commands. The addon is installed locally in `addons/godot_cef`. Exported servers omit it.
+Local headless runs load the extension but never instantiate a browser.
 
 The original [CEF spike](cef-ui-spike.md) is historical evidence. This document
 specifies **protocol v1** and the current foundation. Its tests replace the old
-unversioned bridge tests while retaining their standalone runner/cache paths.
+unversioned bridge tests; the standalone spike is retired.
 
 ## Official renderer target
 
@@ -206,11 +206,25 @@ fetch (tested), but must not be presented as confinement of local resources.
 Do not load untrusted/mod/downloaded HTML into this runtime. Debug builds expose
 local DevTools on 9229; a non-debug packaged client remains an adoption gate.
 
-No CEF addon, autoload or main-project setting is added to the root. The gameplay
-launcher extracts native binaries into ignored `.godot/cef-client/project` and
-caches the pinned archive in `.godot/cef-client/cache`. Root/headless tests use
-the actual source checkout without a native plugin. The standalone spike project
-and setup dependency have been removed. Server exports must exclude native CEF.
+CEF is a standard GDExtension installed into `addons/godot_cef` by
+`tools/cef_client/setup.py`, using the pinned v2.0.0 release and SHA-256 checksum.
+The release payload stays ignored; the installer/version/hash are committed.
+`.godot/cef-client/cache` stores the archive. The root project uses Vulkan Mobile,
+a 1920×1080 design baseline, 1280×720 initial window and disabled canvas stretch.
+No copied project or config is generated.
+
+`ServerUbuntu` and `ServerWindows` exclude `addons/godot_cef/*` and bundled Web UI.
+The same server preset serves gateway/master/world via `--mode`. Web/Android
+also exclude CEF; this does not imply those legacy targets support the new UI.
+The Windows client includes HTML/CSS/JS and original optional skin PNGs through
+the existing export plugin (CEF cannot read Godot's imported `.ctex` textures).
+Native CEF dependencies are declared in the upstream `.gdextension` manifest.
+
+Export filters apply to exported packages only. Local `--headless --path .`
+loads installed GDExtensions, including CEF's Vulkan hooks, but `WebUiHost`
+rejects browser creation. Local smoke does not require installing CEF; it also
+works when CEF is installed. No headless helper processes were observed.
+See [addon setup and export checks](cef-addon-integration.md).
 
 ## Prototype validation
 
@@ -222,7 +236,7 @@ and setup dependency have been removed. Server exports must exclude native CEF.
 & ./tests/run-web-inventory.ps1
 ```
 
-Use the real staged client for milestone-level native UI checks. The default
+Use the root client for milestone-level native UI checks. The default
 suite asserts transport/application and persistence contracts, not exact DOM,
 window dimensions, animation timing or screenshots. See [testing policy](testing.md).
 The following 2026-10-08 table is historical adoption evidence from the retired
@@ -295,8 +309,8 @@ regions without hiding the global browser. Reload receives the current snapshot.
 Client failures release input and retain native fallback. Headless and
 Compatibility use native UI.
 
-Use `tools/cef_client/run.ps1` for the actual game with CEF. It creates an ignored
-copy of source/assets/config/addons/tests and pinned Windows CEF, with Vulkan
-Mobile and disabled canvas stretch. Servers continue from the root. Refresh
-staging after source edits. This development launcher is not a release export
-or Linux/macOS setup; physical input and packaging gates above remain applicable.
+Use `tools/cef_client/run.ps1` to install/import and start the root game with CEF.
+After setup, the same project can run directly from the editor or Godot CLI.
+There is no staging refresh after source edits. The installer currently supplies
+Windows x64 libraries; Linux/macOS client installation and full release packaging
+remain separate verification gates.

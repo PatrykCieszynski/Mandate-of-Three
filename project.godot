@@ -19,7 +19,7 @@ config/version="0.28.0"
 run/main_scene="res://source/common/main.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="slayhorizon"
-config/features=PackedStringArray("4.6", "GL Compatibility")
+config/features=PackedStringArray("4.6", "Mobile")
 boot_splash/show_image=false
 config/icon="res://assets/project_icon/ekonia_e_logo.png"
 
@@ -45,11 +45,13 @@ gdscript/warnings/unused_signal=0
 
 [display]
 
-window/size/viewport_width=960
-window/size/viewport_height=540
-window/size/window_width_override=960
-window/size/window_height_override=540
-window/stretch/mode="canvas_items"
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="disabled"
+window/size/min_width=1280
+window/size/min_height=720
 
 [editor_plugins]
 
@@ -209,6 +211,12 @@ locale/translations=PackedStringArray("res://data/translations/translations.en_U
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
 textures/vram_compression/import_etc2_astc=true
+
+[godot_cef]
+
+security/default_permission_policy=0
+storage/data_path="user://mandate-cef-profile"
+performance/max_frame_rate=60

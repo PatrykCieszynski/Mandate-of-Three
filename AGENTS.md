@@ -43,5 +43,5 @@ world and creates guest accounts/test characters; use it for login/session chang
 
 Use `tools/clean-dev-artifacts.ps1` to remove disposable verification outputs
 and retired spike caches. Keep imports, editor cache, binaries, references,
-staged client and actual runtime stores. Avoid ad-hoc scripts at the .godot root;
+installed root CEF addon and actual runtime stores. Avoid ad-hoc scripts at the .godot root;
 put temporary diagnostics in .godot/verification and remove them after use.

@@ -5,7 +5,12 @@ var handled: int = 0
 func _ready() -> void:
 	_run.call_deferred()
 func _run() -> void:
-	assert(not ClassDB.class_exists("CefTexture"), "Root headless tests must stay CEF-free")
+	assert(not WebUiHost.supported_client(), "Headless must never compose a browser")
+	if OS.has_feature("dedicated_server"):
+		assert(not ClassDB.class_exists("CefTexture"), "Server export must exclude native CEF")
+	var host := WebUiHost.new()
+	assert(not host.open() and not is_instance_valid(host.browser), "Headless must not create a browser")
+	host.free()
 	var bridge := WebUiBridge.new()
 	var dispatcher := UiCommandDispatcher.new()
 	dispatcher.attach(bridge)
