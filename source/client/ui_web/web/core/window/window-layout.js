@@ -1,5 +1,8 @@
 import { clampWindow } from './geometry.js';
-const defaultPlacement = { kind: 'viewport', anchor: 'top-right' };
+const defaultPlacement = {
+    kind: 'viewport',
+    anchor: 'top-right',
+};
 // Only measured, logical geometry. Screens own dimensions and placement choices.
 export class WindowLayout {
     geometry;
@@ -8,9 +11,17 @@ export class WindowLayout {
         this.geometry = geometry;
     }
     register(id, element, placement = defaultPlacement) {
-        this.entries.set(id, { element, placement, size: null, position: null, manual: false });
+        this.entries.set(id, {
+            element,
+            placement,
+            size: null,
+            position: null,
+            manual: false,
+        });
     }
-    unregister(id) { this.entries.delete(id); }
+    unregister(id) {
+        this.entries.delete(id);
+    }
     entry(id) {
         const entry = this.entries.get(id);
         if (!entry)
@@ -19,13 +30,22 @@ export class WindowLayout {
     }
     measure(entry) {
         if (entry.element.getClientRects().length)
-            entry.size = { width: entry.element.offsetWidth, height: entry.element.offsetHeight };
+            entry.size = {
+                width: entry.element.offsetWidth,
+                height: entry.element.offsetHeight,
+            };
         return entry.size;
     }
     viewportPosition(placement, size) {
         const { viewport, scale } = this.geometry(), offset = placement.offset ?? { x: 0, y: 0 };
-        return { x: (placement.anchor.endsWith('right') ? viewport.width / scale - size.width : 0) + offset.x,
-            y: (placement.anchor.startsWith('bottom') ? viewport.height / scale - size.height : 0) + offset.y };
+        return {
+            x: (placement.anchor.endsWith('right')
+                ? viewport.width / scale - size.width
+                : 0) + offset.x,
+            y: (placement.anchor.startsWith('bottom')
+                ? viewport.height / scale - size.height
+                : 0) + offset.y,
+        };
     }
     clamp(position, size) {
         const { viewport, scale } = this.geometry();
@@ -48,20 +68,38 @@ export class WindowLayout {
                 if (targetSize) {
                     const anchor = this.place(placement.target, visiting), gap = placement.gap ?? 0, offset = placement.offset ?? { x: 0, y: 0 };
                     const horizontal = placement.side === 'left' || placement.side === 'right';
-                    const difference = horizontal ? targetSize.height - size.height : targetSize.width - size.width;
-                    const alignment = placement.align === 'center' ? difference / 2 : placement.align === 'end' ? difference : 0;
+                    const difference = horizontal
+                        ? targetSize.height - size.height
+                        : targetSize.width - size.width;
+                    const alignment = placement.align === 'center'
+                        ? difference / 2
+                        : placement.align === 'end'
+                            ? difference
+                            : 0;
                     switch (placement.side) {
                         case 'left':
-                            position = { x: anchor.x - size.width - gap, y: anchor.y + alignment };
+                            position = {
+                                x: anchor.x - size.width - gap,
+                                y: anchor.y + alignment,
+                            };
                             break;
                         case 'right':
-                            position = { x: anchor.x + targetSize.width + gap, y: anchor.y + alignment };
+                            position = {
+                                x: anchor.x + targetSize.width + gap,
+                                y: anchor.y + alignment,
+                            };
                             break;
                         case 'top':
-                            position = { x: anchor.x + alignment, y: anchor.y - size.height - gap };
+                            position = {
+                                x: anchor.x + alignment,
+                                y: anchor.y - size.height - gap,
+                            };
                             break;
                         case 'bottom':
-                            position = { x: anchor.x + alignment, y: anchor.y + targetSize.height + gap };
+                            position = {
+                                x: anchor.x + alignment,
+                                y: anchor.y + targetSize.height + gap,
+                            };
                             break;
                     }
                     position = { x: position.x + offset.x, y: position.y + offset.y };
@@ -78,5 +116,9 @@ export class WindowLayout {
         entry.position = this.clamp(position, this.measure(entry) ?? { width: 0, height: 0 });
         return { ...entry.position };
     }
-    resetPosition(id) { const entry = this.entry(id); entry.manual = false; entry.position = null; }
+    resetPosition(id) {
+        const entry = this.entry(id);
+        entry.manual = false;
+        entry.position = null;
+    }
 }

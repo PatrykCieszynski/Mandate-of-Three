@@ -10,5 +10,9 @@ export function createWindowShell(root, { id, title, className }) {
     panel.setAttribute('aria-label', title);
     panel.style.left = '0px';
     panel.style.top = '0px';
-    return { panel, header: findElement(panel, '.window-header', 'header'), content: findElement(panel, '.window-content', 'div') };
+    return {
+        panel,
+        header: findElement(panel, '.window-header', 'header'),
+        content: findElement(panel, '.window-content', 'div'),
+    };
 }

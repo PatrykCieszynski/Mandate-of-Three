@@ -2,11 +2,14 @@ import { uiIconDomains } from './types.js';
 export { uiIconDomains } from './types.js';
 // Global UI presentation icons. Item content has a separate resolver.
 export class UiIconRegistry {
-    constructor() { this.icons = new Map(); this.listeners = new Set(); }
+    constructor() {
+        this.icons = new Map();
+        this.listeners = new Set();
+    }
     replace(groups = {}, baseUrl = import.meta.url) {
         const next = new Map();
         for (const [domain, icons] of Object.entries(groups)) {
-            if (!uiIconDomains.some(known => known === domain))
+            if (!uiIconDomains.some((known) => known === domain))
                 throw new Error('Unknown UI icon domain: ' + domain);
             for (const [id, path] of Object.entries(icons)) {
                 if (!id || typeof path !== 'string' || !path)
@@ -18,7 +21,12 @@ export class UiIconRegistry {
         for (const listener of this.listeners)
             listener();
     }
-    resolve(id) { return (id === undefined ? null : this.icons.get(id)) || null; }
-    subscribe(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    resolve(id) {
+        return (id === undefined ? null : this.icons.get(id)) || null;
+    }
+    subscribe(listener) {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
 }
 export const uiIcons = new UiIconRegistry();

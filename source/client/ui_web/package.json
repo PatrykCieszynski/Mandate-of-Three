@@ -9,13 +9,16 @@
     "build:tests": "tsc -p tsconfig.tests.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "precheck": "npm run generate",
-    "prebuild:tests": "npm run build"
+    "prebuild:tests": "npm run build",
+    "format": "prettier --write \"ts/core/**/*.ts\" \"ts/inventory/game.ts\" \"ts/inventory/domain-updates.ts\" \"ts/screens/**/*.ts\" \"test/core_cleanup.test.mts\" \"test/storage.fixture.mts\"",
+    "format:check": "prettier --check \"ts/core/**/*.ts\" \"ts/inventory/game.ts\" \"ts/inventory/domain-updates.ts\" \"ts/screens/**/*.ts\" \"test/core_cleanup.test.mts\" \"test/storage.fixture.mts\""
   },
   "devDependencies": {
-    "typescript": "5.9.3",
+    "@types/jsdom": "21.1.7",
     "@types/node": "24.19.1",
     "jsdom": "26.1.0",
-    "@types/jsdom": "21.1.7",
-    "playwright-core": "1.64.0"
+    "playwright-core": "1.64.0",
+    "prettier": "3.9.9",
+    "typescript": "5.9.3"
   }
 }
