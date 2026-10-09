@@ -340,3 +340,9 @@ updates have a separate bounded 128 KiB output limit: the full 180 + 270 cell
 presentation measured about 91 KiB with representative native display fields.
 CEF still loads static local assets under the existing CSP; no preview controller
 or fixture code is injected in Godot.
+
+Inventory-only moves are excluded from Storage transfer commands/services and
+retain the existing Inventory RPC/transaction. Storage is intentionally accessible
+everywhere in this MVP. The client's `storage_opened` check is a UX guard, not
+server authorization; future NPC/safe-zone/range restrictions must be enforced
+at the World RPC. Opening Storage opens Inventory; closing Inventory closes both.

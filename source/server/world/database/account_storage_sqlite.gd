@@ -42,7 +42,7 @@ func snapshot(character_id: int) -> Dictionary:
 		items.append(display)
 	return {"ok":true,"items":items}
 func transfer(character_id: int, uid: String, revision: int, source: String, destination: String, position: int = -1) -> Dictionary:
-	if source not in ["inventory","storage"] or destination not in ["inventory","storage"] or not ItemInstance.valid_uid(uid) or revision < 0 or position < -1: return {"ok":false,"error":"request"}
+	if (source == "inventory" and destination == "inventory") or source not in ["inventory","storage"] or destination not in ["inventory","storage"] or not ItemInstance.valid_uid(uid) or revision < 0 or position < -1: return {"ok":false,"error":"request"}
 	if not db.query("BEGIN IMMEDIATE;"): return {"ok":false,"error":"storage"}
 	var name: String = account(character_id)
 	if name == "": return _finish(false,"owner")

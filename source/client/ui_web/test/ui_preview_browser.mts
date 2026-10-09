@@ -140,6 +140,29 @@ try {
     .click();
   await storage.getByRole('tab', { name: 'I', exact: true }).click();
   const inventory = ui.locator('#inventory');
+  // With Storage open, a bag-only move must use the normal Inventory command.
+  const bagItem = inventory.locator('[data-id=preview-armor]');
+  const bagOrigin = await bagItem.boundingBox(),
+    bagGrid = await inventory.locator('.inventory-grid').boundingBox();
+  assert.ok(bagOrigin);
+  assert.ok(bagGrid);
+  await page
+    .getByRole('button', { name: 'Clear command log', exact: true })
+    .click();
+  await page.mouse.move(bagOrigin.x + 10, bagOrigin.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(bagGrid.x + 4 * 40 + 10, bagGrid.y + 4 * 40 + 10, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  await page.waitForFunction(() =>
+    document.querySelector('pre')?.textContent?.includes('inventory.move_item'),
+  );
+  assert.equal(await bagItem.evaluate((node) => node.style.left), '161px');
+  assert.equal(
+    (await page.locator('pre').textContent())?.includes('storage.transfer'),
+    false,
+  );
   await inventory
     .locator('[data-id=preview-material]')
     .click({ modifiers: ['Control'] });
@@ -247,6 +270,19 @@ try {
   await page
     .getByText('Ready — production UI with fixture IPC', { exact: true })
     .waitFor();
+  // Preview composition enforces the same lifecycle as the native client.
+  await page
+    .getByRole('button', { name: 'Hide Inventory', exact: true })
+    .click();
+  await ui.locator('#inventory-window').waitFor({ state: 'hidden' });
+  await ui.locator('#storage-window').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Open Storage', exact: true }).click();
+  await ui.locator('#inventory-window').waitFor({ state: 'visible' });
+  await ui.locator('#storage-window').waitFor({ state: 'visible' });
+  await page.locator('#accept').check();
+  await ui.locator('#inventory .window-close').click();
+  await ui.locator('#inventory-window').waitFor({ state: 'hidden' });
+  await ui.locator('#storage-window').waitFor({ state: 'hidden' });
   assert.deepEqual(errors, []);
   console.log(
     'Browser development preview: PASS (CSP, fixtures, selective updates, commands, reload)',

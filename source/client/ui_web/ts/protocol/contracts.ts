@@ -1,10 +1,11 @@
+import type { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES } from '../screens/storage/storage-model.js';
 // Existing native wire contracts; protocol.ts validates unknown input.
 import type {Viewport} from '../core/window/window-types.js';
 import type {ItemPresentation} from '../game-ui/item-types.js';
 export interface InventoryItem extends ItemPresentation { x: number; y: number; page: number }
 export interface EquipmentItem extends ItemPresentation { slot: string }
 export interface InventorySnapshot { columns: number; rows: number; pages: number; items: InventoryItem[] }
-export interface StorageSnapshot { columns:15; rows:9; pages:2; items:InventoryItem[] }
+export interface StorageSnapshot { columns:typeof STORAGE_COLUMNS; rows:typeof STORAGE_ROWS; pages:typeof STORAGE_PAGES; items:InventoryItem[] }
 export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?: number } }
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }

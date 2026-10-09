@@ -1,3 +1,9 @@
+import {
+  STORAGE_COLUMNS,
+  STORAGE_ROWS,
+  STORAGE_PAGES,
+} from '../web/screens/storage/storage-model.js';
+import type { MoveItemCommand } from '../web/protocol/contracts.js';
 import { transfer } from '../web/screens/storage/transfer.js';
 import type {
   StorageSnapshot,
@@ -12,9 +18,9 @@ const receivers: ((raw: unknown) => void)[] = [];
 let accept = false;
 function storageFixture(): StorageSnapshot {
   return {
-    columns: 15,
-    rows: 9,
-    pages: 2,
+    columns: STORAGE_COLUMNS,
+    rows: STORAGE_ROWS,
+    pages: STORAGE_PAGES,
     items: [
       {
         id: 'stored-sword',
@@ -186,6 +192,33 @@ window.sendIpcMessage = (raw) => {
   }
   if (!message.id) return;
   queueMicrotask(() => {
+    if (
+      message.type === 'inventory.move_item' &&
+      state.hud?.storage_open &&
+      state.inventory
+    ) {
+      const p = message.payload;
+      const result = isMove(p)
+        ? transfer(state.inventory, state.inventory, p.id, p.revision, {
+            x: p.x,
+            y: p.y,
+            page: p.page,
+          })
+        : null;
+      if (result) {
+        state.inventory = {
+          ...state.inventory,
+          items: result.destinationItems,
+        };
+        emit('inventory.updated', state.inventory);
+      }
+      emit(
+        'command.result',
+        result ? { ok: true } : { ok: false, error: 'occupied_or_full' },
+        message.id,
+      );
+      return;
+    }
     if (message.type === 'storage.transfer') {
       const p = message.payload;
       if (!isTransfer(p) || !state.inventory || !state.storage) {
@@ -245,13 +278,35 @@ window.sendIpcMessage = (raw) => {
       state.hud = {
         ...state.hud,
         ...(message.type === 'inventory.close'
-          ? { inventory_open: false }
+          ? { inventory_open: false, storage_open: false }
           : { equipment_open: false }),
       };
       emit('hud.updated', state.hud);
     }
   });
 };
+function isMove(p: unknown): p is MoveItemCommand {
+  return (
+    isObject(p) &&
+    Object.keys(p).length === 5 &&
+    typeof p.id === 'string' &&
+    typeof p.revision === 'number' &&
+    Number.isSafeInteger(p.revision) &&
+    p.revision >= 0 &&
+    typeof p.x === 'number' &&
+    Number.isSafeInteger(p.x) &&
+    p.x >= 0 &&
+    p.x < 5 &&
+    typeof p.y === 'number' &&
+    Number.isSafeInteger(p.y) &&
+    p.y >= 0 &&
+    p.y < 9 &&
+    typeof p.page === 'number' &&
+    Number.isSafeInteger(p.page) &&
+    p.page >= 0 &&
+    p.page < 4
+  );
+}
 function isTransfer(p: unknown): p is StorageTransferCommand {
   return (
     isObject(p) &&
@@ -261,6 +316,7 @@ function isTransfer(p: unknown): p is StorageTransferCommand {
     p.revision >= 0 &&
     (p.from === 'inventory' || p.from === 'storage') &&
     (p.to === 'inventory' || p.to === 'storage') &&
+    !(p.from === 'inventory' && p.to === 'inventory') &&
     typeof p.quick === 'boolean' &&
     typeof p.x === 'number' &&
     Number.isSafeInteger(p.x) &&
@@ -314,13 +370,22 @@ window.addEventListener('message', (event) => {
       state = {
         ...state,
         inventory: { columns: 5, rows: 9, pages: 4, items: [] },
-        storage: { columns: 15, rows: 9, pages: 2, items: [] },
+        storage: {
+          columns: STORAGE_COLUMNS,
+          rows: STORAGE_ROWS,
+          pages: STORAGE_PAGES,
+          items: [],
+        },
         equipment: { items: [], stats: { attack: 0 } },
       };
       snapshot();
       break;
     case 'inventory':
-      state.hud = { ...state.hud, inventory_open: request.value };
+      state.hud = {
+        ...state.hud,
+        inventory_open: request.value,
+        ...(!request.value ? { storage_open: false } : {}),
+      };
       emit('hud.updated', state.hud);
       break;
     case 'equipment':
@@ -336,7 +401,11 @@ window.addEventListener('message', (event) => {
       emit('wallet.updated', state.wallet);
       break;
     case 'storage':
-      state.hud = { ...state.hud, storage_open: request.value };
+      state.hud = {
+        ...state.hud,
+        storage_open: request.value,
+        ...(request.value ? { inventory_open: true } : {}),
+      };
       emit('hud.updated', state.hud);
       break;
     case 'accept':

@@ -54,9 +54,22 @@ func _run() -> void:
 		var invalid: Dictionary = storage_command.duplicate()
 		invalid.x=bad
 		assert(not InventoryWebController._valid_storage(invalid))
+	var inventory_route: Dictionary = storage_command.duplicate()
+	inventory_route.merge({"from":"inventory","to":"inventory","x":0,"page":0},true)
+	assert(not InventoryWebController._valid_storage(inventory_route),"Inventory has one authoritative move path")
 	# Independent requests accept out-of-order replies and ignore expired IDs.
 	var controller := InventoryWebController.new()
 	add_child(controller)
+	controller.host=WebUiHost.new()
+	controller.add_child(controller.host)
+	controller.opened=true
+	controller.storage_opened=true
+	controller._close({})
+	assert(not controller.opened and not controller.storage_opened,"Close Inventory closes Storage")
+	controller.opened=true
+	controller.storage_opened=true
+	controller.set_open(false)
+	assert(not controller.opened and not controller.storage_opened,"Inventory shortcut closes both")
 	var first := controller._begin_command()
 	var second := controller._begin_command()
 	controller._operation_finished(second, {"ok":true, "request":"second"})

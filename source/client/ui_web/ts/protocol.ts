@@ -1,3 +1,4 @@
+import { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES, STORAGE_CAPACITY } from './screens/storage/storage-model.js';
 import type {Envelope, RawObject, CommandResult, DomainName, DomainSnapshot, RawDomainState, StateMessage, StorageSnapshot, InventorySnapshot, InventoryItem, EquipmentItem, EquipmentSnapshot, WalletSnapshot, HudSnapshot} from './protocol/contracts.js';
 import type {ItemPresentation} from './game-ui/item-types.js';
 import type {Viewport} from './core/window/window-types.js';
@@ -80,8 +81,8 @@ function isInventory(value: unknown): value is InventorySnapshot {
   return value.items.every(item => item.x < columns && item.y + item.height <= rows && item.page < pages);
 }
 function isStorage(value: unknown): value is StorageSnapshot {
-  if (!isObject(value) || value.columns !== 15 || value.rows !== 9 || value.pages !== 2 || !Array.isArray(value.items) || value.items.length > 270) return false;
-  return value.items.every(item => isItem(item) && isObject(item) && integerRange(item.x,0,14) && integerRange(item.y,0,8) && item.y + item.height <= 9 && integerRange(item.page,0,1));
+  if (!isObject(value) || value.columns !== STORAGE_COLUMNS || value.rows !== STORAGE_ROWS || value.pages !== STORAGE_PAGES || !Array.isArray(value.items) || value.items.length > STORAGE_CAPACITY) return false;
+  return value.items.every(item => isItem(item) && isObject(item) && integerRange(item.x,0,STORAGE_COLUMNS-1) && integerRange(item.y,0,STORAGE_ROWS-1) && item.y + item.height <= STORAGE_ROWS && integerRange(item.page,0,STORAGE_PAGES-1));
 }
 function isEquipment(value: unknown): value is EquipmentSnapshot {
   return isObject(value) && (!('items' in value) || (Array.isArray(value.items) && value.items.every(isEquipmentItem))) &&
@@ -96,7 +97,7 @@ function isViewport(value: unknown): value is Viewport {
   return isObject(value) && integerRange(value.width, 0, MAX_VIEWPORT) && integerRange(value.height, 0, MAX_VIEWPORT);
 }
 function isHud(value: unknown): value is HudSnapshot {
-  return isObject(value) && (!('storage_open' in value) || typeof value.storage_open === 'boolean') && (!('inventory_open' in value) || typeof value.inventory_open === 'boolean') &&
+  return isObject(value) && (value.storage_open !== true || value.inventory_open === true) && (!('storage_open' in value) || typeof value.storage_open === 'boolean') && (!('inventory_open' in value) || typeof value.inventory_open === 'boolean') &&
     (!('equipment_open' in value) || typeof value.equipment_open === 'boolean') &&
     (!('ui_scale' in value) || (finiteRange(value.ui_scale, 0.8, 1.5) && UI_SCALES.includes(value.ui_scale))) &&
     (!('viewport' in value) || isViewport(value.viewport));

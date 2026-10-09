@@ -108,6 +108,11 @@ func _check_storage(database: SQLite, legacy: WorldStoreSqlite, store: ItemStore
 	var foreign: int = legacy.create_player_character("foreign_storage",{"name":"Foreign","skin":1})
 	for character: int in [first,second,foreign]: check(store.initialize_character(character).ok,"Storage starter fixture")
 	var storage := AccountStorageSqlite.new(database)
+	var bag_snapshot: Dictionary = store.inventory(first)
+	var candidate: Dictionary = bag_snapshot.items[0]
+	for combination: Array in [["inventory","inventory"],["equipment","storage"],["storage","equipment"],["unknown","storage"]]:
+		check(storage.transfer(first,candidate.uid,0,combination[0],combination[1],5).error=="request","Storage rejects unrelated container route")
+	check(store.inventory(first)==bag_snapshot,"invalid Storage routes preserve Inventory")
 	var item: Dictionary = store.inventory(first).items[0]
 	check(storage.transfer(first,item.uid,0,"inventory","storage",0).ok,"deposit commits")
 	check(store.inventory(first).items.size()==1,"deposit removes bag placement")

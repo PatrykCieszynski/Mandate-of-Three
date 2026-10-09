@@ -1,9 +1,10 @@
-import type { InventoryItem } from '../protocol/contracts.js';
-import type { ItemContainer } from '../screens/storage/transfer.js';
-import type { WindowManager } from '../core/window/window-manager.js';
-import type { ResolveItemIcon } from '../game-ui/item-types.js';
-import { carriedCell, placement } from '../screens/inventory/placement.js';
-import { paintItemIcon } from '../game-ui/items/item-icon.js';
+import { ITEM_SLOT_SIZE } from './storage-model.js';
+import type { InventoryItem } from '../../protocol/contracts.js';
+import type { ItemContainer } from './transfer.js';
+import type { WindowManager } from '../../core/window/window-manager.js';
+import type { ResolveItemIcon } from '../../game-ui/item-types.js';
+import { carriedCell, placement } from '../inventory/placement.js';
+import { paintItemIcon } from '../../game-ui/items/item-icon.js';
 type ContainerId = 'inventory' | 'storage';
 interface Target {
   container: ContainerId;
@@ -24,7 +25,7 @@ interface Carry {
   moved: boolean;
   latched: boolean;
 }
-export function itemTransfers(options: {
+export function inventoryStorageTransfers(options: {
   manager: WindowManager;
   resolveItemIcon: ResolveItemIcon;
   getState: (id: ContainerId) => ItemContainer;
@@ -100,7 +101,7 @@ export function itemTransfers(options: {
           y: (event.clientY - rect.top) / scale,
         },
         { x: carry.offsetX, y: carry.offsetY },
-        40,
+        ITEM_SLOT_SIZE,
       );
       const valid = placement(
         { ...options.getState(id), items: [...options.getState(id).items] },
@@ -111,9 +112,9 @@ export function itemTransfers(options: {
       ).valid;
       target = { container: id, ...cell, page: page(id), valid };
       marker.className = 'placement-preview' + (valid ? '' : ' invalid');
-      marker.style.left = cell.x * 40 + 'px';
-      marker.style.top = cell.y * 40 + 'px';
-      marker.style.height = carry.item.height * 40 + 'px';
+      marker.style.left = cell.x * ITEM_SLOT_SIZE + 'px';
+      marker.style.top = cell.y * ITEM_SLOT_SIZE + 'px';
+      marker.style.height = carry.item.height * ITEM_SLOT_SIZE + 'px';
       element.append(marker);
     }
   }
@@ -206,8 +207,8 @@ export function itemTransfers(options: {
       node.setPointerCapture(event.pointerId);
       node.classList.add('carried');
       paintItemIcon(ghost, item, { resolveItemIcon: options.resolveItemIcon });
-      ghost.style.width = 40 * scale + 'px';
-      ghost.style.height = item.height * 40 * scale + 'px';
+      ghost.style.width = ITEM_SLOT_SIZE * scale + 'px';
+      ghost.style.height = item.height * ITEM_SLOT_SIZE * scale + 'px';
       ghost.hidden = false;
       surface.hidden = false;
       options.onRegionsChanged();

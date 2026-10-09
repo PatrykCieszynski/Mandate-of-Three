@@ -97,11 +97,12 @@ static func _valid_equipment(payload: Dictionary) -> bool:
 
 static func _valid_storage(p: Dictionary) -> bool:
 	if p.size() != 8 or not p.has_all(["id","revision","from","to","x","y","page","quick"]) or not _valid_identity(p): return false
-	if p.from not in ["inventory","storage"] or p.to not in ["inventory","storage"] or not p.quick is bool: return false
+	if (p.from == "inventory" and p.to == "inventory") or p.from not in ["inventory","storage"] or p.to not in ["inventory","storage"] or not p.quick is bool: return false
 	var columns: int = 15 if p.to == "storage" else 5
 	var pages: int = 2 if p.to == "storage" else 4
 	return WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < columns and p.y >= 0 and p.y < 9 and p.page >= 0 and p.page < pages
 func _storage_transfer(payload: Dictionary) -> Dictionary:
+	# UX guard only. World authorizes account access; Storage currently has no NPC/range restriction.
 	if not storage_opened: return {"ok":false,"error":"closed"}
 	var id: String = _begin_command()
 	world.inventory_endpoint.request_storage.rpc_id(1,payload.id,int(payload.revision),payload.from,payload.to,int(payload.x),int(payload.y),int(payload.page),payload.quick,id)
@@ -152,6 +153,7 @@ func _cancel_pending(reason: String) -> void:
 
 func _close(_payload: Dictionary) -> Dictionary:
 	opened = false
+	storage_opened = false
 	_layout()
 	host.set_modal(false)
 	return {"ok": true}
@@ -163,6 +165,7 @@ func _close_equipment(_payload: Dictionary) -> Dictionary:
 
 func set_open(active: bool) -> void:
 	opened = active
+	if not active: storage_opened = false
 	equipment_opened = active
 	_layout()
 	host.set_modal(false) # Browser stays alive; opening only changes DOM visibility.

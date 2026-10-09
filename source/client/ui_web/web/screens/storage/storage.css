@@ -8,3 +8,5 @@
 .transferred-item .item-icon {width:100%;height:100%;object-fit:contain}
 
 #transfer-surface {position:fixed;inset:0;z-index:2147483646;pointer-events:none}
+
+.storage-status {margin:4px 0 0;font:10px/13px Arial;color:var(--muted)}

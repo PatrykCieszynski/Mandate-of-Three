@@ -63,7 +63,7 @@ there is no separate preview screen or preview carry controller.
 In Godot, **B** toggles account Storage (and opens Inventory). Drag/drop,
 click-to-carry across pages and Ctrl + left click send `storage.transfer`.
 Quick transfer scans all destination pages. The production interaction module
-`ts/game-ui/item-transfers.ts` is shared by CEF and preview; snapshots, not command
+`ts/screens/storage/inventory-storage-transfer.ts` is shared by CEF and preview; snapshots, not command
 acknowledgements, change the rendered domain state. Inventory keeps its existing
 move/equip path when Storage is closed. Storage fixture transfers operate through
 the same bridge command and domain updates, independently of the generic accept
@@ -147,3 +147,12 @@ all regenerate it; CEF does not fetch templates or require Node at runtime.
 Both hosts support transfer cancellation through Escape/right click, close,
 resize or authoritative state replacement. No swapping, rotation or stack
 splitting is included in this stage.
+
+Inventory-only moves use the existing `inventory.move_item` / `move_bag_item`
+path even while Storage is open. Storage services reject inventory-to-inventory.
+Storage operation status is exposed through `setStatus`, separate from capacity.
+There is one StorageSnapshot contract in protocol/contracts.ts, with geometry
+constants in screens/storage/storage-model.ts. `storage_open => inventory_open`
+is enforced by the native composition and fixture host; invalid HUD snapshots
+are rejected at the presentation boundary. Closing Inventory closes Storage.
+See [the UI follow-up TODO](../../../docs/TODO.md) for the transfer controller's limited scope.
