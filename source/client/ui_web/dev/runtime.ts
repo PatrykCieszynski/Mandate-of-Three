@@ -78,7 +78,7 @@ function fixture(): DomainSnapshot {
   };
 }
 let state = fixture();
-const notify = (detail: object) =>
+export const notify = (detail: object) =>
   parent.postMessage(
     { source: 'mandate-ui-preview', ...detail },
     location.origin,
@@ -125,7 +125,7 @@ window.sendIpcMessage = (raw) => {
     }
   });
 };
-function action(value: unknown): PreviewAction | null {
+export function decodePreviewAction(value: unknown): PreviewAction | null {
   if (value === null || typeof value !== 'object' || !('action' in value))
     return null;
   const name = value.action;
@@ -133,7 +133,10 @@ function action(value: unknown): PreviewAction | null {
     return { action: name };
   if (!('value' in value)) return null;
   if (
-    (name === 'inventory' || name === 'equipment' || name === 'accept') &&
+    (name === 'inventory' ||
+      name === 'equipment' ||
+      name === 'storage' ||
+      name === 'accept') &&
     typeof value.value === 'boolean'
   )
     return { action: name, value: value.value };
@@ -155,7 +158,7 @@ function action(value: unknown): PreviewAction | null {
 }
 window.addEventListener('message', (event) => {
   if (event.source !== parent || event.origin !== location.origin) return;
-  const request = action(event.data);
+  const request = decodePreviewAction(event.data);
   if (!request) return;
   switch (request.action) {
     case 'reset':
@@ -186,6 +189,8 @@ window.addEventListener('message', (event) => {
       state.wallet = { balance: request.value, ready: true };
       emit('wallet.updated', state.wallet);
       break;
+    case 'storage':
+      break; // Handled by the development Storage composition.
     case 'accept':
       accept = request.value;
       break;

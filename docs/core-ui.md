@@ -235,3 +235,28 @@ compilation. No Godot, browser automation package or live backend is required.
 This checks presentation and composition. Native CEF embedding, focus/input
 handoff, IPC transport, real settings/snapshots and server effects remain Godot
 integration checks. See the [preview workflow](../source/client/ui_web/README.md#browser-development-without-godot).
+
+## Storage browser screen, first presentation stage
+
+`ts/screens/storage/storage-view.ts` now composes a two-page 15×9 Storage view
+from the existing UiWindow, UiTab, UiItemGrid, UiItemSlot and ItemTooltip. It owns
+page selection and typed StorageSnapshot/StorageItem data. The application
+provides close, item actions, icon resolution and region callbacks. It duplicates
+no window drag, capture, activation, scale, clamp, tooltip positioning or asset
+logic. The original small acceptance fixture remains a separate generic
+composition test.
+
+The development host mounts this screen alongside Inventory/Equipment using
+their application's manager and resolver. The production game module exports
+these two composition dependencies without debug flags or native behavior
+changes. Preview module URLs share the same production entrypoint instance.
+Storage opens/raises explicitly and participates in the manager's scale/resize.
+On narrow viewports the frame fits the viewport and the grid scrolls horizontally
+without changing logical cells or item footprints.
+
+Storage currently runs only in the browser preview. Native production still
+mounts Inventory and Equipment; no Storage wire domain, command, storage
+transfer rules or backend/persistence have been added. Item actions are fixture
+logs. A focused emitted-JS test covers page filtering, actions, empty states,
+tooltip cancellation and disposal; browser acceptance covers shared activation,
+scale, narrow viewport scrolling, close/reopen and fixture item actions.

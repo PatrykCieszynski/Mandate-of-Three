@@ -34,6 +34,18 @@
           Hide Equipment
         </button>
       </div>
+      <div>
+        <button disabled data-action="storage" data-value="true">
+          Open Storage
+        </button>
+        <button disabled data-action="storage" data-value="false">
+          Hide Storage
+        </button>
+      </div>
+      <p>
+        Storage has two 15×9 pages. Item clicks are logged; transfers are not
+        connected.
+      </p>
       <label
         >UI scale
         <select disabled id="scale">
@@ -67,7 +79,10 @@
       <pre aria-label="Command log"></pre>
     </aside>
     <main>
-      <iframe title="Production game UI" src="/inventory/game.html"></iframe>
+      <iframe
+        title="Production game UI"
+        src="/web/inventory/game.html"
+      ></iframe>
     </main>
   </body>
 </html>
