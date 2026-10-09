@@ -193,7 +193,11 @@ revision, slot/swap and free-bag placement, updates runtime stats and sends the
 current authoritative inventory/equipment. Rejections keep that state. Unequip
 uses the first free fitting bag position; cross-window item dragging is not part
 of this slice. The weapon slot is functional. Other visible slots are disabled
-layout placeholders; no armor/accessory systems were added. Equipment and stats
+layout placeholders; no armor/accessory systems were added. The eleven hover
+regions use the original equipment panel's slot layout including its (3,3)
+inset: weapon, helmet, armor, shoes, bracelet, necklace, earrings, shield,
+arrows and two special slots. Empty artwork outside these regions has no
+placeholder tooltip. Layout stays in the screen, not in the skin. Equipment and stats
 recover through ui.ready snapshots. The local preview demonstrates both windows
 and mock equip/unequip without touching game persistence.
 

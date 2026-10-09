@@ -18,7 +18,8 @@ interface EquipmentOptions {
 import { UiEquipmentSlot } from '../../game-ui/equipment/ui-equipment-slot.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { UiWindow } from '../../core/window/ui-window.js';
-// Logical slot rectangles match the native 156×188 legacy reference skin.
+// Layout of the 156×188 reference equipment panel. Coordinates include the
+// original slot container's (3,3) inset; these are screen geometry, not skin data.
 const slots: [
   slot: string,
   label: string,
@@ -26,21 +27,17 @@ const slots: [
   y: number,
   height: number,
 ][] = [
-  ['weapon', 'Weapon', 4, 4, 64],
-  ['head', 'Helmet', 42, 6, 32],
-  ['neck', 'Necklace', 118, 2, 32],
-  ['armor', 'Armor', 42, 42, 64],
-  ['earrings', 'Earrings', 118, 40, 32],
-  ['bracelet', 'Bracelet', 80, 76, 32],
-  ['shield', 'Shield', 4, 74, 32],
-  ['feet', 'Shoes', 42, 112, 32],
-  ['belt', 'Belt', 4, 116, 32],
-  ['charm', 'Charm', 80, 116, 32],
-  ['ring', 'Ring', 118, 112, 32],
-  ['special1', 'Special slot I', 4, 154, 32],
-  ['special2', 'Special slot II', 42, 154, 32],
-  ['special3', 'Special slot III', 80, 154, 32],
-  ['special4', 'Special slot IV', 118, 154, 32],
+  ['weapon', 'Weapon', 6, 6, 96],
+  ['head', 'Helmet', 42, 5, 32],
+  ['neck', 'Necklace', 117, 87, 32],
+  ['armor', 'Armor', 42, 40, 64],
+  ['earrings', 'Earrings', 117, 55, 32],
+  ['bracelet', 'Bracelet', 78, 70, 32],
+  ['shield', 'Shield', 78, 38, 32],
+  ['feet', 'Shoes', 42, 148, 32],
+  ['arrows', 'Arrows', 117, 4, 32],
+  ['special1', 'Special slot I', 5, 116, 32],
+  ['special2', 'Special slot II', 78, 116, 32],
 ];
 export function mountEquipment(
   root: HTMLElement,
