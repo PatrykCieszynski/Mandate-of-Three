@@ -15,12 +15,12 @@ foreach ($taskPreset in @('Windows','ServerWindows','ServerUbuntu')) {
     $taskZip = [IO.Compression.ZipFile]::OpenRead($taskPack)
     try {
         $taskNames = @($taskZip.Entries | ForEach-Object { $_.FullName })
-        if (@($taskNames | Where-Object { $_ -match '^source/client/ui_web/(node_modules|ts|test|\.tests)/' -or $_ -match '^source/client/ui_web/.*\.(ts|mts)$' -or $_ -match '^source/client/ui_web/(package.*|tsconfig.*)\.json$' }).Count -ne 0) { throw "Web UI development files leaked into $taskPreset" }
+        if (@($taskNames | Where-Object { $_ -match '^source/client/ui_web/(node_modules|ts|scripts|test|\.tests)/' -or $_ -match '^source/client/ui_web/.*\.(ts|mts)$' -or $_ -match '^source/client/ui_web/(package.*|tsconfig.*)\.json$' }).Count -ne 0) { throw "Web UI development files leaked into $taskPreset" }
         $taskEntry = $taskZip.GetEntry('.godot/extension_list.cfg')
         $taskReader = [IO.StreamReader]::new($taskEntry.Open())
         try { $taskExtensions = $taskReader.ReadToEnd() } finally { $taskReader.Dispose() }
         if ($taskPreset -eq 'Windows') {
-            foreach ($taskRequired in @('addons/godot_cef/godot_cef.gdextension','source/client/ui_web/web/inventory/game.html','source/client/ui_web/web/inventory/game.js','source/client/ui_web/web/inventory/inventory.css')) {
+            foreach ($taskRequired in @('addons/godot_cef/godot_cef.gdextension','source/client/ui_web/web/inventory/game.html','source/client/ui_web/web/inventory/game.js','source/client/ui_web/web/inventory/inventory.css','source/client/ui_web/web/core/window/ui-window.js','source/client/ui_web/web/core/window/generated/ui-window-template.js')) {
                 if ($taskRequired -notin $taskNames) { throw "Missing client resource: $taskRequired" }
             }
             if ($taskExtensions -notmatch 'godot_cef') { throw 'Client does not register CEF' }

@@ -1,6 +1,6 @@
-import type {WindowId, Point, Viewport, WindowRegistration, WindowHandle, LayoutInvalidation} from './window/window-types.js';
-import {WindowLayout} from './window/window-layout.js';
-export type {WindowPlacement, WindowRegistration, WindowHandle} from './window/window-types.js';
+import type {WindowId, Point, Viewport, WindowRegistration, WindowHandle, LayoutInvalidation} from './window-types.js';
+import {WindowLayout} from './window-layout.js';
+export type {WindowPlacement, WindowRegistration, WindowHandle} from './window-types.js';
 export type WindowHost = Pick<Window, 'innerWidth'|'innerHeight'|'addEventListener'|'removeEventListener'>;
 interface WindowEntry {
   root: HTMLElement;

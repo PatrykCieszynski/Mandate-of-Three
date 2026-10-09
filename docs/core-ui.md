@@ -29,9 +29,13 @@ metadata, with no item-instance schema change.
 ## Window contract
 
 Create a `UiWindow` with an application-owned `WindowManager`, a stable
-`id`, title, content and callbacks. It owns the section/chrome/titlebar,
-close binding, pointer capture, coalesced dragging, shared lifecycle and region
-refresh hooks. It composes `UiTitlebar`/`UiButton`; it does not own screen state.
+`id`, title and callbacks. Append screen content to `contentRoot`. It owns the section/chrome/titlebar,
+close binding, shared lifecycle and region refresh hooks. A composed
+`WindowDragController` owns pointer capture and coalesced dragging. It adds global
+move/up listeners only during a drag and removes them on every termination.
+`templates/ui-window.html` is compiled to a local static module by the build;
+window construction performs no runtime fetch. The content wrapper uses
+`display: contents` to preserve existing logical geometry. It composes `UiTitlebar`/`UiButton`; it does not own screen state.
 `canDrag` lets Inventory suppress window dragging while carrying an item.
 `onCancel` clears screen transients on blur, pointer cancellation, hiding,
 resize, scale changes and disposal. `onActivate` is a presentation callback;
@@ -121,7 +125,7 @@ manager/bridge/resolvers, sets viewport/scale and reports the returned regions.
 A screen can then be almost entirely composition (domain actions are injected):
 
 ```js
-import {UiWindow} from '../core/ui-window.js';
+import {UiWindow} from '../core/window/ui-window.js';
 import {UiTooltip} from '../core/ui-tooltip.js';
 import {UiInventoryGrid} from '../game-ui/ui-inventory-grid.js';
 import {UiItemSlot} from '../game-ui/ui-item-slot.js';
@@ -131,12 +135,13 @@ export function mountStorage(root, {manager, resolveItemIcon, onClose,
   let tooltip;
   const shell = new UiWindow(root, {
     id: 'storage', title: 'Storage', manager,
-    content: '<div class="inventory-grid"></div>',
     placement: {kind: 'viewport', anchor: 'top-right', offset: {x: -16, y: 80}},
     onClose, onRegionsChanged, onCancel: () => tooltip?.hide()
   });
   tooltip = UiTooltip(root, {geometry: () => manager});
-  const element = root.querySelector('.inventory-grid');
+  const element = document.createElement('div');
+  element.className = 'inventory-grid';
+  shell.contentRoot.append(element);
   const slotSize = () => parseFloat(getComputedStyle(element)
     .getPropertyValue('--slot-size'));
   const grid = UiInventoryGrid(element, {slotSize});

@@ -1,6 +1,6 @@
 import type {WebBridge} from '../web/bridge.js';
 import type {ItemIconId, UiIconId, Skin, DomainSnapshot} from '../web/contracts.js';
-import type {WindowManager} from '../web/core/window-manager.js';
+import type {WindowManager} from '../web/core/window/window-manager.js';
 // Negative examples make strict contract regressions fail the test compilation.
 export function checkContracts(bridge: WebBridge,manager: WindowManager,root: HTMLElement) {
   bridge.request('inventory.move_item',{id:'item',revision:1,x:0,y:0,page:0});

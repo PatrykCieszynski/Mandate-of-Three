@@ -1,0 +1,2 @@
+// Generated from templates/ui-window.html. Edit the HTML source.
+export const windowTemplate = "<section class=\"window-chrome\">\n  <i class=\"chrome edge top\"></i><i class=\"chrome edge bottom\"></i><i class=\"chrome edge left\"></i><i class=\"chrome edge right\"></i>\n  <i class=\"chrome corner tl\"></i><i class=\"chrome corner tr\"></i><i class=\"chrome corner bl\"></i><i class=\"chrome corner br\"></i>\n  <header class=\"window-header\"><h1></h1><button type=\"button\" class=\"window-close\">×</button></header>\n  <div class=\"window-content\"></div>\n</section>\n";

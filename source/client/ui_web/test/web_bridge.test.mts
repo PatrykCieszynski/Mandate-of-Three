@@ -78,7 +78,7 @@ test('carried footprint snaps nearest to its origin regardless of grab height',(
  assert.equal(placement(inventory,{id:'sword',height:3},2,7,0).valid,false);
 });
 
-import {WindowManager} from '../web/core/window-manager.js';
+import {WindowManager} from '../web/core/window/window-manager.js';
 test('window placement uses measured neighbors and preserves/clamps manual positions',()=>{
  environment();
  const hiddenLayout=new WindowManager({host:null});

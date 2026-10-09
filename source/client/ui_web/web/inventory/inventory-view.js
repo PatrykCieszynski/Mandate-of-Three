@@ -6,7 +6,7 @@ import { UiItemSlot } from '../game-ui/ui-item-slot.js';
 import { paintItemIcon } from '../game-ui/item-icon.js';
 import { UiTooltip } from '../core/ui-tooltip.js';
 import { UiCurrency } from '../core/ui-currency.js';
-import { UiWindow } from '../core/ui-window.js';
+import { UiWindow } from '../core/window/ui-window.js';
 import { placement, carriedCell } from './placement.js';
 export function mountInventory(root, { manager, resolveItemIcon = () => null, moveItem, equipItem, onClose = () => { }, onRegionsChanged = () => { } }) {
     const shell = new UiWindow(root, { id: 'inventory', title: 'Inventory', className: 'window', manager,
@@ -14,9 +14,10 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
         onClose, canDrag: () => !carry, onCancel: () => cancelCarry(), onRegionsChanged, onGeometry: () => {
             surface.style.width = innerWidth / shell.scale + 'px';
             surface.style.height = innerHeight / shell.scale + 'px';
-        }, content: `<nav class="inventory-tabs" aria-label="Inventory pages"></nav>
+        } });
+    shell.contentRoot.innerHTML = `<nav class="inventory-tabs" aria-label="Inventory pages"></nav>
     <div class="inventory-grid"></div><footer class="wallet"></footer>
-    <p class="inventory-status" role="status"></p>` });
+    <p class="inventory-status" role="status"></p>`;
     root.insertAdjacentHTML('beforeend', `<div id="carry-surface" hidden></div><div class="carried-item" hidden></div>`);
     const panel = findElement(root, '.window', 'section'), grid = findElement(root, '.inventory-grid', 'div'), surface = findElement(root, '#carry-surface', 'div'), ghost = findElement(root, '.carried-item', 'div'), status = findElement(root, '.inventory-status', 'p');
     const tip = UiTooltip(root, { geometry: () => manager }), tooltip = tip.element, currency = UiCurrency(findElement(root, '.wallet', 'footer'), { label: 'Yang', iconId: 'currencies.yang' });

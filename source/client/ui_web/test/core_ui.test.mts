@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {WindowManager} from '../web/core/window-manager.js';
-import {UiWindow} from '../web/core/ui-window.js';
+import {WindowManager} from '../web/core/window/window-manager.js';
+import {UiWindow} from '../web/core/window/ui-window.js';
 import {tooltipPosition} from '../web/core/ui-tooltip.js';
 import {applySkin,skinVariable} from '../web/core/skin.js';
 import {UiIconRegistry,uiIconDomains} from '../web/core/ui-icons.js';
@@ -119,4 +119,29 @@ test('relative placement supports all sides and alignment, reset restores declar
   handle.dispose();handle.dispose();assert.throws(()=>handle.move({x:0,y:0}),/Disposed/);
  }
  const replacement=manager.register({id:'other',element:other});replacement.dispose();manager.dispose();
+});
+
+test('idle windows install no global drag move/up listeners; every termination removes them',()=>{
+ const {doc,host,manager,frames}=environment();
+ const active=new Map<string,Set<EventListenerOrEventListenerObject>>();
+ const add=doc.addEventListener.bind(doc),remove=doc.removeEventListener.bind(doc);
+ doc.addEventListener=(type: string,listener: EventListenerOrEventListenerObject,options?: boolean|AddEventListenerOptions)=>{
+  if(listener&&(type==='pointermove'||type==='pointerup')){
+   let listeners=active.get(type);if(!listeners){listeners=new Set();active.set(type,listeners);}listeners.add(listener);
+  }
+  add(type,listener,options);
+ };
+ doc.removeEventListener=(type: string,listener: EventListenerOrEventListenerObject,options?: boolean|EventListenerOptions)=>{if(listener)active.get(type)?.delete(listener);remove(type,listener,options);};
+ const shells=Array.from({length:20},(_,index)=>{
+  const root=target();doc.body.append(root);const shell=new UiWindow(root,{id:'window-'+index,title:'Test',manager});measure(shell.panel);shell.refresh();
+  capture(findElement(root,'.window-header','header'));return shell;
+ });
+ const shell=shells[0];assert.ok(shell);const header=findElement(shell.root,'.window-header','header');
+ const count=()=>[active.get('pointermove')?.size??0,active.get('pointerup')?.size??0];assert.deepEqual(count(),[0,0]);
+ for(const finish of [()=>fire(doc,'pointerup'),()=>header.releasePointerCapture(1),()=>fire(doc,'pointercancel'),()=>host.dispatchEvent(new host.Event('blur')),()=>manager.setViewport({width:600,height:400})]){
+  fire(header,'pointerdown');assert.deepEqual(count(),[1,1]);fire(doc,'pointermove',150,150);
+  fire(doc,'pointerup',150,150,2);assert.deepEqual(count(),[1,1]);finish();assert.deepEqual(count(),[0,0]);assert.equal(frames.size,0);
+ }
+ fire(header,'pointerdown');fire(doc,'pointermove',140,140);shell.dispose();assert.deepEqual(count(),[0,0]);assert.equal(frames.size,0);
+ for(const entry of shells)entry.dispose();manager.dispose();
 });

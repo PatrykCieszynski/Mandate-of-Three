@@ -119,12 +119,13 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   assert.deepEqual(await page.locator('#inventory-window').evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected HTML window');return {width:node.offsetWidth,height:node.offsetHeight};}),dimensions);
   // A third simple window composes only the shared shell and tooltip.
   const storage=await page.evaluate(async()=>{
-   const shellPath='/core/ui-window.js',managerPath='/core/window-manager.js',tooltipPath='/core/ui-tooltip.js';
-   const {UiWindow}: typeof import('../web/core/ui-window.js')=await import(shellPath);
-   const {WindowManager}: typeof import('../web/core/window-manager.js')=await import(managerPath);
+   const shellPath='/core/window/ui-window.js',managerPath='/core/window/window-manager.js',tooltipPath='/core/ui-tooltip.js';
+   const {UiWindow}: typeof import('../web/core/window/ui-window.js')=await import(shellPath);
+   const {WindowManager}: typeof import('../web/core/window/window-manager.js')=await import(managerPath);
    const {UiTooltip}: typeof import('../web/core/ui-tooltip.js')=await import(tooltipPath);
    const root=document.createElement('main');document.body.append(root);const manager=new WindowManager();manager.setViewport({width:innerWidth,height:innerHeight},1);
-   let closes=0;const shell=new UiWindow(root,{manager,id:'storage',title:'Storage',content:'<p>Storage content</p>',onClose:()=>closes++});
+   let closes=0;const shell=new UiWindow(root,{manager,id:'storage',title:'Storage',onClose:()=>closes++});
+   const content=document.createElement('p');content.textContent='Storage content';shell.contentRoot.append(content);
    const tip=UiTooltip(root,{geometry:()=>manager});shell.refresh();const close=root.querySelector<HTMLButtonElement>('.window-close');if(!close)throw Error('Missing close button');close.click();
    const registered=manager.windows.has('storage');tip.dispose();shell.dispose();close.click();manager.dispose();root.remove();return {registered,closes};
   });assert.deepEqual(storage,{registered:true,closes:1});

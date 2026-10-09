@@ -5,7 +5,7 @@ import {uiIcons} from '../core/ui-icons.js';
 import {ItemIconResolver} from '../content/item-icons.js';
 import {applySkin} from '../core/skin.js';
 import {loadLegacySkin} from '../skins/legacy.js';
-import {WindowManager} from '../core/window-manager.js';
+import {WindowManager} from '../core/window/window-manager.js';
 import {WebBridge,reportInteractiveRegions} from '../bridge.js';
 import {DomainStore} from '../store.js';
 import {mountInventory} from './inventory-view.js';
