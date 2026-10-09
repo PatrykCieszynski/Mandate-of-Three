@@ -173,3 +173,24 @@ Options closes Inventory and owns gameplay input until Close/Escape. The setting
 scales Web UI only; the native options/login layout is unchanged. Startup priority
 is --ui-scale, saved preference, project setting, then viewport default. Auto uses
 the startup defaults again. The CLI override is reapplied at the next launch.
+
+## Equipment window
+
+I opens/closes Inventory and Equipment together. Their close buttons work
+independently; Escape cancels carrying first, then closes the remaining windows.
+Equipment has independent pointer-captured dragging, viewport clamping and the
+same logical UI scale. It reuses Inventory's window chrome. The optional
+`equipment-base` skin is copied exactly from the local legacy cache (156×220),
+with a simple CSS fallback in clean checkouts. No screenshot/concept art is baked
+into the UI and no legacy image is regenerated or resampled.
+
+Right-click a bag item to send `equipment.equip`; click an equipped weapon to send
+`equipment.unequip`. Both payloads contain only id/revision, use existing request
+correlation and the authenticated equipment RPC. Server commits ownership,
+revision, slot/swap and free-bag placement, updates runtime stats and sends the
+current authoritative inventory/equipment. Rejections keep that state. Unequip
+uses the first free fitting bag position; cross-window item dragging is not part
+of this slice. The weapon slot is functional. Other visible slots are disabled
+layout placeholders; no armor/accessory systems were added. Equipment and stats
+recover through ui.ready snapshots. The local preview demonstrates both windows
+and mock equip/unequip without touching game persistence.

@@ -13,7 +13,7 @@ func run_server() -> void:
 		var owner: int = server.connected_players[id].player_id
 		var snapshot: Dictionary = server.database.item_store.inventory(owner)
 		check(snapshot.items.size() == 2 and snapshot.stats.attack == 10 and snapshot.equipment.is_empty(), "private exact inventory after moves")
-		check(snapshot.items.any(func(i: Dictionary) -> bool: return i.bag_position == 15), "RPC bag move persisted")
+		check(snapshot.items.all(func(i: Dictionary) -> bool: return i.location == "bag" and i.bag_position >= 0), "RPC equipment cycle persisted")
 		check(server.runtime_attack(owner) == 10, "runtime attack reconciled")
 	var before: Array = []
 	for id: int in world.characters: before.append(server.database.item_store.inventory(server.connected_players[id].player_id))
@@ -66,6 +66,16 @@ func run_client() -> void:
 	check(result.ok and endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 135), "fourth page persists")
 	result = await command("inventory.move_item", {"id":item.uid,"revision":2,"x":0,"y":3,"page":0})
 	check(result.ok, "return to first page")
+	var current: Dictionary = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
+	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
+	check(result.ok and endpoint.state.equipment.get("weapon") == item.uid, "Web equip commits and publishes equipment")
+	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
+	check(current.location == "equipment", "equipped item leaves bag")
+	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision - 1})
+	check(not result.ok and result.error == "stale", "Web unequip rejects stale revision")
+	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision})
+	check(result.ok and not endpoint.state.equipment.has("weapon"), "Web unequip commits and clears slot")
+	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.location == "bag"), "unequip returns to free bag cells")
 	if not failed: print("WEB_INVENTORY_CLIENT_OK: ", client_number)
 	finished.rpc_id(1)
 	await get_tree().create_timer(0.4).timeout
