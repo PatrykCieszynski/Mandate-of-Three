@@ -2,15 +2,16 @@
 
 The first real Inventory window follows [UI Contract v1](ui-contract.md).
 The actual Metin screenshot guides density and proportions; the Mandate concept
-is a future art-direction reference. This slice implements Inventory only.
-Equipment, Shop, character sheet and the rest of the HUD are outside this screen.
+is a future art-direction reference. Production Inventory and weapon Equipment
+now compose the internal [Core UI](core-ui.md). Shop, the character sheet and
+the rest of the HUD remain outside this screen.
 
 ## Layout and interaction
 
 The window is 266 logical pixels wide, right-anchored by default, with a draggable
 title, close button, I–IV tabs and Yang footer. Each page is 5×9 at 40 px per
 slot. The slot size is a CSS variable. Items occupy 1×1, 1×2 or 1×3, without
-rotation. The current real Iron Sword occupies three vertical cells; the local
+rotation. The real Iron Sword occupies two vertical cells; the local
 preview includes all three sizes without adding mock item definitions to gameplay.
 
 Drag with pointer capture, or click once to carry and click to place. Green/red
@@ -50,8 +51,8 @@ reuse request correlation and await the actual World Server operation reply.
 {"type":"inventory.move_item","payload":{"id":"<uid>","revision":3,"x":2,"y":4,"page":1}}
 ```
 
-The protocol wrapper adds `v: 1` and a correlated request ID. The only other
-screen command is `inventory.close`. Neither exposes arbitrary method calls.
+The protocol wrapper adds `v: 1` and a correlated request ID. Other screen commands are `inventory.close`, `equipment.close`,
+`equipment.equip` and `equipment.unequip`. Neither exposes arbitrary method calls.
 
 World Server validates coordinates, ownership, revision, bag placement,
 page boundaries and every occupied cell. Placement and revision commit in one
@@ -73,8 +74,9 @@ framework. XP and wallet checkpoint policy is unchanged.
 `dev_assets/legacy/ui_cache` into ignored
 `source/client/ui_web/web/inventory/legacy_skin`. It verifies byte-identical
 SHA-256 hashes; there is no resampling. Semantic names include corners, edges,
-fill, title, close states, slot, Yang and item icons. `skin.js` is the replaceable
-asset boundary. Edges tile; icon rasters keep native dimensions. Text is real
+fill, title, close states, slot and Yang. Separate exports hold item content
+icons and global UI icon groups. `skins/legacy.js` adapts these optional files
+to the semantic Core UI skin boundary. Edges tile; icon rasters keep native dimensions. Text is real
 font rendering. No CSS atlas coordinates, CDN, internet asset loading or frontend
 framework is involved. A checkout without local skin uses CSS/text fallbacks; the browser test also
 checks a deliberately unavailable skin module.
@@ -203,7 +205,9 @@ the unmodified legacy background still supplies its painted slot edges.
 
 ## Window and request boundaries
 
-Inventory and Equipment share `WindowLayout`. Each window registers its ID,
+Inventory and Equipment compose `UiWindow` and share `WindowManager`
+([Core UI contract](core-ui.md)). Drag/capture/titlebar/close/resize logic belongs
+to the shared shell/manager, and both screens use the same tooltip positioning. Each window registers its ID,
 preferred anchor and logical default offset. Initial Equipment placement uses the
 measured Inventory rectangle. Manual positions survive state updates, and both
 windows clamp on viewport/scale changes and reopening. Layout never reads a

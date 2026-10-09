@@ -22,7 +22,8 @@ creating a browser. The suite has five small SQLite scenarios and one bridge con
 - XP/level RAM updates and dirty checkpoints, including forced save and crash window.
 - Wallet deltas, immediate critical spend, rollback/checkpoint and relog.
 - Bridge framing, explicit command boundary, readiness, request correlation and
-  full snapshot recovery. No mock inventory or browser rendering is involved.
+  full snapshot recovery; small Core UI lifecycle, skin and icon contracts.
+  No browser rendering or network fixture is involved in default smoke.
 
 Successful runs delete their disposable databases and overwrite a small fixed
 set of logs under `.godot/verification`. Failed runs retain diagnostic state.
@@ -41,6 +42,11 @@ roles and writes guest fixture accounts; use it for actual session/login changes
 changes: client Web assets and CEF registration, CEF-free server packs and
 client/server pack headless boot (including real client UID validation without
 SQLite). It requires the local CEF installation and opens no windows.
+
+`run-core-ui-browser.ps1` is an opt-in [Core UI milestone check](core-ui.md)
+using the production page, controlled IPC and an installed headless browser.
+It checks behavior and broad bounds, with no pixel/exact-tree assertions or downloads.
+It does not replace native root-client CEF verification.
 
 Asset pipeline tests and visual fallback probes remain optional for pipeline
 changes. The small default suite does not install Pillow or Playwright.

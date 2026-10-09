@@ -1,70 +1,10 @@
 /* All geometry below is in logical pixels. Legacy PNGs remain native-sized. */
 
-:root {
-  --slot-size:40px;
-  --skin-window-frame:none;
-  --skin-slot-normal:none;
-  --skin-window-title:none}
-
-* {
-  box-sizing:border-box}
-html,body {
-  margin:0;
-  overflow:hidden;
-  background:transparent;
-  color:var(--ink);
-  font:12px Georgia,serif;
-  user-select:none}
-[hidden] {
-  display:none!important}
-
 .inventory-tabs {
   display:flex;
   height:25px;
   gap:2px;
   margin-bottom:4px}
-.inventory-grid {
-  --cell:var(--slot-size);
-  position:relative;
-  width:calc(var(--slot-size)*5);
-  height:calc(var(--slot-size)*9);
-  touch-action:none;
-  overflow:visible}
-.cell {position:absolute;width:var(--slot-size);height:var(--slot-size)}
-.inventory-item,.carried-item {
-  position:absolute;
-  width:calc(var(--slot-size) - 2px);
-  padding:1px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  color:#ddc588;
-  touch-action:none}
-.inventory-item {
-  border:1px solid #655946;
-  cursor:pointer;
-  z-index:2;
-  background:#11120a38}
-.inventory-item.carried {
-  opacity:.25}
-.item-icon {
-  max-width:32px;
-  max-height:100%;
-  width:auto;
-  height:auto;
-  pointer-events:none}
-.icon-fallback {
-  font:11px Georgia;
-  text-align:center;
-  overflow:hidden}
-.quantity {
-  position:absolute;
-  bottom:1px;
-  right:2px;
-  font:11px Georgia;
-  color:#fff;
-  text-shadow:1px 1px #000}
-
 .placement-preview {
   position:absolute;
   width:var(--slot-size);

@@ -5,7 +5,7 @@ const base = new URL('../source/client/ui_web/web/', import.meta.url);
 const protocolUrl = 'data:text/javascript;base64,' + Buffer.from(await readFile(new URL('protocol.js',base),'utf8')).toString('base64');
 const protocol = await import(protocolUrl);
 const bridgeCode = (await readFile(new URL('bridge.js',base),'utf8')).replace("'./protocol.js'",JSON.stringify(protocolUrl));
-const {WebBridge} = await import('data:text/javascript;base64,'+Buffer.from(bridgeCode).toString('base64'));
+const {WebBridge,reportInteractiveRegions} = await import('data:text/javascript;base64,'+Buffer.from(bridgeCode).toString('base64'));
 const {DomainStore} = await import('data:text/javascript;base64,'+Buffer.from(await readFile(new URL('store.js',base),'utf8')).toString('base64'));
 function fixture(timeoutMs=30) {
  const sent=[];const state=new DomainStore();
@@ -81,10 +81,10 @@ import {WindowManager} from '../source/client/ui_web/web/core/window-manager.js'
 test('window placement uses measured neighbors and preserves/clamps manual positions',()=>{
  const hiddenLayout=new WindowManager({host:null});
  hiddenLayout.setViewport({width:1920,height:1080},1);
- hiddenLayout.register({window_id:'hidden',element:{style:{},getClientRects:()=>[]}});
- hiddenLayout.register({window_id:'visible',element:{style:{},getClientRects:()=>[{}],offsetWidth:220,offsetHeight:400},relativeTo:'hidden',defaultOffset:{x:-16,y:240}});
+ hiddenLayout.register({window_id:'hidden',element:{style:{setProperty(){}},getClientRects:()=>[]}});
+ hiddenLayout.register({window_id:'visible',element:{style:{setProperty(){}},getClientRects:()=>[{}],offsetWidth:220,offsetHeight:400},relativeTo:'hidden',defaultOffset:{x:-16,y:240}});
  const fallback=hiddenLayout.place('visible');assert.ok(Number.isFinite(fallback.x)&&fallback.x+220<=1920);
- const layout=new WindowManager({host:null}),bag={style:{},offsetWidth:260,offsetHeight:480,getClientRects:()=>[{}]},equipment={style:{},offsetWidth:220,offsetHeight:400,getClientRects:()=>[{}]};
+ const layout=new WindowManager({host:null}),bag={style:{setProperty(){}},offsetWidth:260,offsetHeight:480,getClientRects:()=>[{}]},equipment={style:{setProperty(){}},offsetWidth:220,offsetHeight:400,getClientRects:()=>[{}]};
  layout.register({window_id:'inventory',element:bag,defaultOffset:{x:-16,y:240}});
  layout.register({window_id:'equipment',element:equipment,relativeTo:'inventory',relativeOffset:{x:-12,y:0}});
  for(const [width,height,scale] of [[1280,720,.8],[1280,720,.9],[1920,1080,1],[2560,1440,1.1],[3840,2160,1.5]]){
@@ -98,4 +98,14 @@ test('window placement uses measured neighbors and preserves/clamps manual posit
  assert.deepEqual(layout.place('equipment'),{x:40,y:50});
  layout.move('equipment',{x:9999,y:9999});layout.setViewport({width:1280,height:720},.9);
  const clamped=layout.place('equipment');assert.ok(clamped.x+220<=1280/.9&&clamped.y+400<=720/.9);
+});
+
+test('interactive-region teardown cancels queued reports and cannot schedule new ones',()=>{
+ const frames=new Map();let sequence=0,disconnected=false;
+ globalThis.requestAnimationFrame=fn=>{frames.set(++sequence,fn);return sequence;};globalThis.cancelAnimationFrame=id=>frames.delete(id);
+ globalThis.ResizeObserver=class{observe(){} disconnect(){disconnected=true;}};
+ globalThis.window={addEventListener(){},removeEventListener(){}};
+ const sent=[],regions=reportInteractiveRegions({event:(...args)=>sent.push(args)},[]);
+ assert.equal(frames.size,1);regions.dispose();assert.equal(frames.size,0);assert.equal(disconnected,true);
+ regions.refresh();assert.equal(frames.size,0);assert.equal(sent.length,0);
 });

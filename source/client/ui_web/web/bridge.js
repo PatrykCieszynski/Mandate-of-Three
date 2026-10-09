@@ -56,9 +56,10 @@ export class WebBridge {
   }
 }
 export function reportInteractiveRegions(bridge, elements) {
-  let scheduled = false;
+  let frame = 0, disposed = false;
   const report = () => {
-    scheduled = false;
+    frame = 0;
+    if (disposed) return;
     const regions = elements.filter(element => element.getClientRects().length).map(element => {
       const rect = element.getBoundingClientRect();
       const x = Math.max(0, Math.min(innerWidth, rect.left));
@@ -67,11 +68,11 @@ export function reportInteractiveRegions(bridge, elements) {
     });
     bridge.event('ui.interactive_regions', {width: innerWidth, height: innerHeight, regions});
   };
-  const schedule = () => { if (!scheduled) { scheduled = true; requestAnimationFrame(report); } };
+  const schedule = () => { if (!disposed && !frame) frame = requestAnimationFrame(report); };
   const observer = new ResizeObserver(schedule);
   elements.forEach(element => observer.observe(element));
   window.addEventListener('resize', schedule);
   window.addEventListener('scroll', schedule, true);
   schedule();
-  return {refresh: schedule, dispose() { observer.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); }};
+  return {refresh: schedule, dispose() { disposed = true; if (frame) cancelAnimationFrame(frame); frame = 0; observer.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); }};
 }
