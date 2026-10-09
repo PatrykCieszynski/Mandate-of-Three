@@ -12,8 +12,9 @@ git diff --check
 ```
 
 Godot 4.7.2 and Node are required. `-NodeExecutable` can select a bundled Node.
-No running server, CEF addon/download, browser, GUI, network port or production
-accounts. The suite has five small SQLite scenarios and one bridge contract group:
+No running server, browser, GUI, network port or production accounts are required.
+The smoke suite does not install/download CEF. Installing CEF is optional; installed CEF loads in headless without
+creating a browser. The suite has five small SQLite scenarios and one bridge contract group:
 
 - Item identity, ownership, revisions, atomic equip/move and rollback/reopen.
 - Inventory footprints, page bounds, overlap and atomic legacy migration.
@@ -36,6 +37,10 @@ changes; do not run all of them after CSS edits. They share port 18098: run
 sequentially. `run-items.ps1 -WithSession` requires normal gateway/master/world
 roles and writes guest fixture accounts; use it for actual session/login changes.
 
+`run-cef-export.ps1` is an optional packaging-boundary check after addon/export
+changes: client Web assets and CEF registration, CEF-free server packs and server
+pack headless boot. It requires the local CEF installation and opens no windows.
+
 Asset pipeline tests and visual fallback probes remain optional for pipeline
 changes. The small default suite does not install Pillow or Playwright.
 
@@ -43,7 +48,7 @@ The old CEF spike, its mock/diagnostic adapter, its renderer/measurement runners
 and the exact-layout browser matrix test were removed. The original adoption
 results remain in [the historical decision record](cef-ui-spike.md). The inventory
 resolution matrix is a manual milestone checklist in [UI Contract v1](ui-contract.md),
-not a pixel-sensitive CI assertion. Use the real staged client for CEF/input/
+not a pixel-sensitive CI assertion. Use the root client for CEF/input/
 resize/transparency/shutdown checks; no parallel standalone UI mock.
 
 ## CI and cleanup
@@ -57,8 +62,8 @@ verifies the scripts; it does not prove the remote Actions run until published.
 & ./tools/clean-dev-artifacts.ps1
 ```
 
-Cleanup removes `.godot/verification`, retired spike caches and the named old
+Cleanup removes `.godot/verification`, retired spike/copied-client caches and the named old
 scratch files, within checked workspace paths. It preserves `.godot/imported`,
-editor cache, engine binaries, the current CEF client/plugin cache, reference
+editor cache, engine binaries, the installed root CEF addon/plugin archive cache, reference
 checkouts, local asset cache and normal player/account data. Temporary work should
 live under `.godot/verification`, rather than accumulating at the .godot root.

@@ -44,3 +44,6 @@ __pycache__/
 
 # Local reference skin; source layout uses semantic names only
 /source/client/ui_web/web/inventory/legacy_skin/
+
+# Pinned CEF release installed by tools/cef_client/setup.py (native payload, not source)
+/addons/godot_cef/

@@ -35,6 +35,14 @@ var _client_export: bool = false
 func _export_begin(features: PackedStringArray, _is_debug: bool, _path: String, _flags: int) -> void:
 	_client_export = features.has("client")
 	_stub_count = 0
+	if _client_export:
+		# CEF reads raster bytes via FileAccess, not Godot's imported .ctex.
+		# Include the optional local skin originals alongside imported resources.
+		var skin_root := "res://source/client/ui_web/web/inventory/legacy_skin/"
+		for file_name: String in DirAccess.get_files_at(skin_root):
+			if file_name.ends_with(".png"):
+				var path := skin_root + file_name
+				add_file(path, FileAccess.get_file_as_bytes(path), false)
 	if not _client_export:
 		print("Server export: real source/server scripts ship; client autoloads self-free via OS.has_feature(\"client\").")
 

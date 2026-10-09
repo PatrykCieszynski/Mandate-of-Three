@@ -1,69 +1,45 @@
-"""Build an ignored Windows Vulkan/CEF gameplay client; root servers stay CEF-free."""
+"""Install pinned Windows CEF into the real project. No copied gameplay tree."""
 from pathlib import Path
-import shutil, zipfile, re
-ROOT = Path(__file__).resolve().parents[2]
+import importlib.util
+import shutil
+import zlib
+import zipfile
 from plugin import ARCHIVE, ensure_archive
-TARGET = ROOT / '.godot/cef-client/project'
+ROOT = Path(__file__).resolve().parents[2]
+ADDON = ROOT / "addons/godot_cef"
 
 def setup():
     ensure_archive()
-    from importlib.util import spec_from_file_location, module_from_spec
-    skin_spec = spec_from_file_location("stage_ui_skin", ROOT / "tools/dev_assets/stage_ui_skin.py")
-    skin_module = module_from_spec(skin_spec)
-    skin_spec.loader.exec_module(skin_module)
-    skin_module.stage()
-    TARGET.mkdir(parents=True, exist_ok=True)
-    # Refresh bounded copied trees, never touch the source checkout/runtime DBs.
-    for name in ['source', 'assets', 'data', 'addons', 'tests', 'dev_assets']:
-        target = (TARGET / name).resolve()
-        if not target.is_relative_to(TARGET.resolve()):
-            raise RuntimeError('Unsafe staging target')
-        if name != 'addons' and target.exists():
-            shutil.rmtree(target)
-        if not (ROOT / name).is_dir():
-            continue
-        shutil.copytree(ROOT / name, target, dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns('*.db', '*.db-*', '*.log', 'account_collection.tres', 'godot_mcp', '__pycache__'))
-    addon = TARGET / 'addons/godot_cef'
-    prefix = 'dist/addons/godot_cef/'
+    ADDON.mkdir(parents=True, exist_ok=True)
+    prefix = "dist/addons/godot_cef/"
     with zipfile.ZipFile(ARCHIVE) as archive:
         for entry in archive.infolist():
             if not entry.filename.startswith(prefix) or entry.is_dir():
                 continue
             relative = entry.filename[len(prefix):]
-            if relative.startswith('bin/') and not relative.startswith('bin/x86_64-pc-windows-msvc/'):
+            if relative.startswith("bin/") and not relative.startswith("bin/x86_64-pc-windows-msvc/"):
                 continue
-            target = (addon / relative).resolve()
-            if not target.is_relative_to(addon.resolve()):
-                raise RuntimeError('Unsafe archive entry')
+            target = (ADDON / relative).resolve()
+            if not target.is_relative_to(ADDON.resolve()):
+                raise RuntimeError("Unsafe archive entry")
+            # Release checksum protects the archive; compare installed files by CRC
+            # without loading Chromium DLLs into Python memory.
             if target.exists() and target.stat().st_size == entry.file_size:
-                continue
+                crc = 0
+                with target.open("rb") as installed:
+                    for block in iter(lambda: installed.read(1024 * 1024), b""):
+                        crc = zlib.crc32(block, crc)
+                if crc == entry.CRC:
+                    continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(entry) as source, target.open('wb') as dest:
+            with archive.open(entry) as source, target.open("wb") as dest:
                 shutil.copyfileobj(source, dest)
-    imported = ROOT / '.godot/imported'
-    if imported.exists():
-        shutil.copytree(imported, TARGET / '.godot/imported', dirs_exist_ok=True)
-    project = (ROOT / 'project.godot').read_text(encoding='utf-8')
-    project = project.replace('renderer/rendering_method="gl_compatibility"', 'renderer/rendering_method="mobile"')
-    project = project.replace('renderer/rendering_method.mobile="gl_compatibility"', 'renderer/rendering_method.mobile="mobile"')
-    project = project.replace('"GL Compatibility"', '"Mobile"')
-    for key, value in {
-        'window/size/viewport_width': '1920', 'window/size/viewport_height': '1080',
-        'window/size/window_width_override': '1280', 'window/size/window_height_override': '720',
-        'window/stretch/mode': '"disabled"',
-    }.items():
-        project = re.sub(r'^' + re.escape(key) + r'=.*$', key + '=' + value, project, flags=re.M)
-    project = project.replace('[display]', '[display]\nwindow/size/min_width=1280\nwindow/size/min_height=720')
-    project += """
-[godot_cef]
-security/default_permission_policy=0
-storage/data_path="user://mandate-cef-profile"
-performance/max_frame_rate=60
-"""
-    (TARGET / 'project.godot').write_text(project, encoding='utf-8')
-    print('Client staging:', TARGET)
-    print('Root project/addons/server stores unchanged. Refresh staging after source edits.')
+    skin_spec = importlib.util.spec_from_file_location("stage_ui_skin", ROOT / "tools/dev_assets/stage_ui_skin.py")
+    skin = importlib.util.module_from_spec(skin_spec)
+    skin_spec.loader.exec_module(skin)
+    skin.stage()
+    print("CEF installed:", ADDON)
+    print("Run the root project directly; no source/assets/config copy.")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     setup()

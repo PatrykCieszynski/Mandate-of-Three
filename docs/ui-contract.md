@@ -13,7 +13,7 @@ implicitly enlarging the UI. Supported user scales: **80, 90, 100, 110, 125,
 
 Godot supplies viewport dimensions, one global `ui_scale`, and authoritative
 client state. The same DOM uses a single root transform; core UI dimensions
-never use vw/vh or viewport-relative percentages. The staged CEF client disables
+never use vw/vh or viewport-relative percentages. The root CEF client disables
 Godot canvas stretching so its browser surface follows the physical window.
 
 ## Anchors and safe frame

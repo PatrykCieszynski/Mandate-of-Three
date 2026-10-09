@@ -39,3 +39,6 @@ Plugin download/checksum now belongs to `tools/cef_client/plugin.py`; the archiv
 is cached in `.godot/cef-client/cache`. The local API reference checkout moved to
 `.godot/reference/godot-cef`. Duplicate standalone projects and old logs/captures
 were discarded; the supported development client remains available.
+
+The copied gameplay client was also retired on 2026-10-09: the addon is now
+installed in the root project. See [current integration](cef-addon-integration.md).

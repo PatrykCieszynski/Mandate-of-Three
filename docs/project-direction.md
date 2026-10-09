@@ -108,7 +108,15 @@ scope. See [UI contract](ui-contract.md) and [Inventory](inventory-ui-prototype.
 ## Prototype cleanup — 2026-10-09
 
 The standalone CEF spike is retired after production Inventory integration.
-Use the real staged client for native UI checks. Default verification is the
+Use the root client for native UI checks. Default verification is the
 small headless persistence/bridge smoke suite; exact DOM, pixel, animation and
 balance assertions do not gate routine prototype edits. Extended gameplay/asset
 suites remain opt-in. See [testing and scratch cleanup](testing.md).
+
+## Root CEF addon integration — 2026-10-09
+
+Retire the copied CEF gameplay project. Install pinned CEF under `addons/godot_cef`
+and run the actual root project using Vulkan Mobile. Server presets omit CEF;
+local headless may load the extension but must not create a browser/subprocess.
+Keep large upstream native payloads ignored and installation repeatable. This
+supersedes the staged-client setup above. See [integration](cef-addon-integration.md).
