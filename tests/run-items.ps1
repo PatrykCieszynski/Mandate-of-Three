@@ -11,6 +11,7 @@ try {
     $env:APPDATA = Join-Path $taskLogs 'appdata'
     $env:LOCALAPPDATA = Join-Path $taskLogs 'localappdata'
     $taskCases = @([pscustomobject]@{ Name = 'items-unit'; Scene = 'item_instances'; Mode = 'world-server'; Index = 0; Marker = 'ITEM_INSTANCES_OK' })
+    $taskCases += [pscustomobject]@{ Name = "inventory-grid"; Scene = "inventory_grid"; Mode = "world-server"; Index = 0; Marker = "INVENTORY_GRID_OK" }
     if ($WithSession) {
         foreach ($taskIndex in @(1, 2)) {
             $taskCases += [pscustomobject]@{ Name = "items-session-$taskIndex"; Scene = 'items_session'; Mode = 'client'; Index = $taskIndex; Marker = 'ITEM_SESSION_OK' }

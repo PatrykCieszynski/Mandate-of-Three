@@ -1,78 +1,120 @@
-import {icon} from './icons.js';
-// Presentation only. Committed snapshots own placement; command results never do.
-export function mountInventory(root,{moveItem,equipItem=null,onClose=()=>{}}){
- root.innerHTML=`<section class="window equipment" aria-label="Equipment"><header><span class="crest">✦</span><h1>Equipment</h1></header><div class="equipment-body"><div class="silhouette" aria-hidden="true"><div class="head"></div><div class="torso"></div><div class="legs"></div></div><div class="equipment-slots"></div></div><footer><span class="character-name">Lynanel</span><span>Level 12 · Warrior</span></footer></section><section class="window backpack" aria-label="Inventory"><header><span class="crest">✦</span><h1>Inventory</h1><button class="close" aria-label="Close inventory">×</button></header><div class="category"><span class="active">Backpack</span><span class="capacity"></span></div><div class="inventory-grid" aria-label="Inventory grid"><div class="placement-preview"></div></div><div class="wallet"><span class="coin">◉</span><strong></strong><span>Yang</span></div><footer><span>Click to pick up · click to place</span><span>Backpack</span></footer></section><aside class="item-tooltip" hidden></aside><p class="inventory-status" role="status">Select an item to inspect it.</p>`;
- const grid=root.querySelector('.inventory-grid'),preview=root.querySelector('.placement-preview'),tooltip=root.querySelector('.item-tooltip');
- let state=null,drag=null,pending=false,selected=null;
- const ghost=document.createElement('div');ghost.className='carried-item';ghost.hidden=true;root.append(ghost);
- function cancelCarry(){if(drag)drag.node.classList.remove('dragging');drag=null;preview.hidden=true;ghost.hidden=true;}
- function follow(event){
-  if(!drag)return;
-  ghost.style.left=`${event.clientX-drag.offsetX}px`;
-  ghost.style.top=`${event.clientY-drag.offsetY}px`;
-  const r=grid.getBoundingClientRect();
-  drag.x=Math.floor((event.clientX-r.left)/cell());
-  drag.y=Math.floor((event.clientY-r.top)/cell())-drag.offset;
-  const over=event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;
-  preview.hidden=!over;
-  preview.style.left=`${drag.x*cell()}px`;preview.style.top=`${drag.y*cell()}px`;
-  preview.style.height=`${drag.item.height*cell()}px`;
-  preview.classList.toggle('invalid',!allowed(drag.item,drag.x,drag.y));
- }
- async function click(event){
-  if(event.button!==0||pending||root.hidden)return;
-  if(event.target?.closest?.('.close'))return;
-  if(!drag){
-   const node=event.target?.closest?.('.inventory-item');if(!node||!grid.contains(node))return;
-   const item=state.inventory.items.find(i=>i.id===node.dataset.id);inspect(item);
-   const r=node.getBoundingClientRect();
-   drag={item,node,x:item.x,y:item.y,offset:Math.floor((event.clientY-r.top)/cell()),offsetX:event.clientX-r.left,offsetY:event.clientY-r.top};
-   ghost.innerHTML=node.innerHTML;ghost.style.width=`${r.width}px`;ghost.style.height=`${r.height}px`;ghost.hidden=false;node.classList.add('dragging');tooltip.hidden=true;
-   root.querySelector('.inventory-status').textContent='Click a free cell to place · Escape to cancel.';follow(event);return;
+import {placement,clampWindow} from './placement.js';
+import {icons} from './skin.js';
+export function mountInventory(root,{moveItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
+  root.innerHTML=`<section id="inventory-window" class="window window-chrome" aria-label="Inventory">
+    <i class="chrome edge top"></i><i class="chrome edge bottom"></i><i class="chrome edge left"></i><i class="chrome edge right"></i>
+    <i class="chrome corner tl"></i><i class="chrome corner tr"></i><i class="chrome corner bl"></i><i class="chrome corner br"></i>
+    <header class="window-header"><h1>Inventory</h1><button class="window-close" aria-label="Close inventory">×</button></header>
+    <nav class="inventory-tabs" aria-label="Inventory pages">${['I','II','III','IV'].map((label,page)=>`<button role="tab" data-page="${page}">${label}</button>`).join('')}</nav>
+    <div class="inventory-grid"></div><footer class="wallet"><span class="yang-icon">●</span><span>Yang</span><strong>—</strong></footer>
+    <p class="inventory-status" role="status"></p></section><div id="carry-surface" hidden></div>
+    <div class="carried-item" hidden></div><aside class="item-tooltip" hidden><h2></h2><p></p></aside>`;
+  const panel=root.querySelector('.window'),grid=root.querySelector('.inventory-grid'),surface=root.querySelector('#carry-surface'),
+    ghost=root.querySelector('.carried-item'),tooltip=root.querySelector('.item-tooltip'),status=root.querySelector('.inventory-status');
+  let inventory={columns:5,rows:9,pages:4,items:[]},scale=1,page=0,position=null,dragged=false,carry=null,windowDrag=null,pending=false,disposed=false;
+  const viewport=()=>({width:innerWidth,height:innerHeight});
+  const point=e=>({x:e.clientX/scale,y:e.clientY/scale});
+  const cell=()=>parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
+  const size=()=>({width:panel.offsetWidth,height:panel.offsetHeight});
+  function positionWindow() {
+    // Only the unusually small viewport fallback scrolls; core geometry stays fixed.
+    panel.style.maxHeight=innerHeight/scale+"px";
+    const small=panel.scrollHeight+2>innerHeight/scale;
+    panel.style.overflowY=small?"auto":"visible";panel.style.overflowX=small?"hidden":"visible";
+    if(!position||!dragged)position={x:innerWidth/scale-size().width-16,y:240};
+    position=clampWindow(position,size(),viewport(),scale);
+    panel.style.left=position.x+'px';panel.style.top=position.y+'px';
+    surface.style.width=innerWidth/scale+'px';surface.style.height=innerHeight/scale+'px';onRegionsChanged();
   }
-  follow(event);
-  const r=grid.getBoundingClientRect();
-  if(event.clientX<r.left||event.clientX>=r.right||event.clientY<r.top||event.clientY>=r.bottom||!allowed(drag.item,drag.x,drag.y)){
-   root.querySelector('.inventory-status').textContent='Cannot place here. Choose free cells or press Escape.';return;
+  function icon(node,item) {
+    node.replaceChildren();
+    if(icons[item.icon]) {const img=document.createElement('img');img.src=icons[item.icon];img.alt='';img.className='item-icon';node.append(img);}
+    else {const label=document.createElement('span');label.className='icon-fallback';label.textContent=item.name;node.append(label);}
+    if(item.quantity>1){const qty=document.createElement('span');qty.className='quantity';qty.textContent=item.quantity;node.append(qty);}
   }
-  const command={id:drag.item.id,x:drag.x,y:drag.y,revision:drag.item.revision??state.inventory.revision};cancelCarry();pending=true;root.classList.add('pending');
-  try{const result=await moveItem(command);root.querySelector('.inventory-status').textContent=result.ok?'Item moved.':`Placement rejected: ${result.error}.`;}
-  catch{root.querySelector('.inventory-status').textContent='No response. Waiting for authoritative state.';}
-  finally{pending=false;root.classList.remove('pending');}
- }
- function key(event){if(event.key==='Escape'&&drag){event.preventDefault();event.stopImmediatePropagation();cancelCarry();root.querySelector('.inventory-status').textContent='Move cancelled.';}}
- document.addEventListener('pointermove',follow);
- document.addEventListener('click',click);
- document.addEventListener('keydown',key);
- async function equipmentAction(event){
-  const node=event.target?.closest?.('.inventory-item,.equip-slot');
-  if(!equipItem||!node||!root.contains(node)||!node.dataset.id)return;
-  event.preventDefault();if(drag||pending)return;
-  const equipped=node.classList.contains('equip-slot');
-  const item=(equipped?state.equipment.slots:state.inventory.items).find(i=>i.id===node.dataset.id);
-  pending=true;root.classList.add('pending');
-  try{const result=await equipItem({id:item.id,revision:item.revision,action:equipped?'unequip':'equip'});root.querySelector('.inventory-status').textContent=result.ok?'Equipment updated.':`Equipment rejected: ${result.error}.`;}
-  catch{root.querySelector('.inventory-status').textContent='No response. Waiting for authoritative state.';}
-  finally{pending=false;root.classList.remove('pending');}
- }
- root.addEventListener('contextmenu',equipmentAction);
- const cell=()=>parseFloat(getComputedStyle(grid).getPropertyValue('--cell'));
- const allowed=(item,x,y)=>x>=0&&x<state.inventory.columns&&y>=0&&y+item.height<=state.inventory.rows&&!state.inventory.items.some(o=>o.id!==item.id&&o.x===x&&y<o.y+o.height&&y+item.height>o.y);
- function inspect(item){selected=item.id;tooltip.hidden=false;tooltip.replaceChildren();const add=(tag,text,cls)=>{const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;tooltip.append(n);};add('small',item.category??'ITEM','rarity');add('h2',item.name);add('p',item.description??'A useful companion on the road.');if(item.attack)add('p',`Attack ${item.attack}`,'stat');add('p',`Size 1 × ${item.height}`);add('small',equipItem?'Left click to move · right click to equip/unequip':'Click to pick up · click to place');root.querySelectorAll('.inventory-item').forEach(n=>n.classList.toggle('selected',n.dataset.id===selected));}
- function render(){cancelCarry();grid.querySelectorAll('.inventory-item,.cell').forEach(n=>n.remove());grid.style.setProperty('--columns',state.inventory.columns);grid.style.setProperty('--rows',state.inventory.rows);
- for(let y=0;y<state.inventory.rows;y++)for(let x=0;x<state.inventory.columns;x++){const n=document.createElement('div');n.className='cell';n.style.left=`${x*cell()}px`;n.style.top=`${y*cell()}px`;grid.append(n);}
- for(const item of state.inventory.items){const n=document.createElement('button');n.type='button';n.className='inventory-item';n.dataset.id=item.id;n.setAttribute('aria-label',item.name);n.innerHTML=icon(item.icon);if(item.quantity>1){const q=document.createElement('span');q.className='quantity';q.textContent=item.quantity;n.append(q);}n.style.left=`${item.x*cell()+2}px`;n.style.top=`${item.y*cell()+2}px`;n.style.height=`${item.height*cell()-4}px`;n.classList.toggle('selected',selected===item.id);
- n.addEventListener('focus',()=>{if(!drag)inspect(item);});n.addEventListener('pointerenter',()=>{if(!drag)inspect(item);});grid.append(n);}
- root.querySelector('.capacity').textContent=`${state.inventory.items.reduce((n,i)=>n+i.height,0)} / ${state.inventory.columns*state.inventory.rows}`;
- renderInfo();
- const slots=root.querySelector('.equipment-slots');slots.replaceChildren();for(const entry of state.equipment.slots){const n=document.createElement('div');n.className=`equip-slot ${entry.slot}`;n.innerHTML=entry.icon?icon(entry.icon):'';n.title=entry.label;if(entry.id){n.dataset.id=entry.id;n.tabIndex=0;n.setAttribute('role','button');n.setAttribute('aria-label',entry.label);n.addEventListener('pointerenter',()=>{if(!drag)inspect(entry);});}slots.append(n);}if(selected){const i=state.inventory.items.find(i=>i.id===selected);if(i)inspect(i);else tooltip.hidden=true;}
- }
- function renderInfo(){
- root.querySelector('.wallet strong').textContent=state.wallet.ready===false?'—':Number(state.wallet.balance).toLocaleString('en-US');
- root.querySelector('.character-name').textContent=state.player?.name??'Lynanel';
- root.querySelector('.equipment footer span:last-child').textContent=`Level ${state.player?.level??12} · Attack ${state.equipment.attack??'—'}`;
- }
- const observer=new ResizeObserver(()=>{if(state)render();});observer.observe(grid);
- root.querySelector('.close').onclick=()=>{cancelCarry();onClose();};
- return {cancelCarry,setInfo(snapshot){if(!state)return;state.wallet=snapshot.wallet;state.player=snapshot.player;state.equipment.attack=snapshot.equipment.attack;renderInfo();},setState(snapshot){state=structuredClone(snapshot);render();},dispose(){cancelCarry();observer.disconnect();document.removeEventListener('pointermove',follow);document.removeEventListener('click',click);document.removeEventListener('keydown',key);root.removeEventListener('contextmenu',equipmentAction);root.replaceChildren();}};
+  function render() {
+    grid.replaceChildren();
+    for(let y=0;y<inventory.rows;y++)for(let x=0;x<inventory.columns;x++) {
+      const slot=document.createElement('div');slot.className='cell';slot.style.left=x*cell()+'px';slot.style.top=y*cell()+'px';grid.append(slot);
+    }
+    for(const item of inventory.items.filter(i=>i.page===page)) {
+      const node=document.createElement('div');node.className='inventory-item';node.dataset.id=item.id;node.dataset.height=item.height;
+      node.style.left=item.x*cell()+1+'px';node.style.top=item.y*cell()+1+'px';node.style.height=item.height*cell()-2+'px';
+      node.setAttribute('aria-label',item.name);icon(node,item);
+      node.addEventListener('pointerdown',event=>beginCarry(event,item,node));
+      node.addEventListener('pointermove',event=>{if(!carry&&!pending)showTooltip(event,item);});
+      node.addEventListener('pointerleave',()=>tooltip.hidden=true);grid.append(node);
+    }
+    root.querySelectorAll('[data-page]').forEach(tab=>tab.setAttribute('aria-selected',String(Number(tab.dataset.page)===page)));positionWindow();
+  }
+  function showTooltip(event,item) {
+    tooltip.querySelector('h2').textContent=item.name;tooltip.querySelector('p').textContent=item.description||'';tooltip.hidden=false;
+    const p=point(event),width=tooltip.offsetWidth,height=tooltip.offsetHeight;
+    const x=p.x+14+width>innerWidth/scale?p.x-width-14:p.x+14;
+    tooltip.style.left=Math.max(0,Math.min(x,innerWidth/scale-width))+'px';tooltip.style.top=Math.max(0,Math.min(p.y+14,innerHeight/scale-height))+'px';
+  }
+  function releaseCapture(state) {if(state?.node?.hasPointerCapture(state.pointer))state.node.releasePointerCapture(state.pointer);}
+  function cancelCarry() {
+    const old=carry;carry=null;releaseCapture(old);ghost.hidden=true;surface.hidden=true;tooltip.hidden=true;
+    grid.querySelector('.placement-preview')?.remove();grid.querySelectorAll('.carried').forEach(n=>n.classList.remove('carried'));onRegionsChanged();
+  }
+  function beginCarry(event,item,node) {
+    if(event.button!==0||pending||carry)return;event.preventDefault();tooltip.hidden=true;
+    const rect=node.getBoundingClientRect(),p=point(event);
+    carry={item,node,pointer:event.pointerId,start:p,offset:{x:(event.clientX-rect.left)/scale,y:(event.clientY-rect.top)/scale},moved:false,latched:false};
+    node.setPointerCapture(event.pointerId);node.classList.add('carried');icon(ghost,item);ghost.style.height=item.height*cell()-2+'px';ghost.hidden=false;updateCarry(event);
+  }
+  function updateCarry(event) {
+    if(!carry)return;const p=point(event);
+    if(Math.hypot(p.x-carry.start.x,p.y-carry.start.y)>3)carry.moved=true;
+    ghost.style.left=p.x-carry.offset.x+'px';ghost.style.top=p.y-carry.offset.y+'px';
+    const rect=grid.getBoundingClientRect(),x=Math.floor((event.clientX-rect.left)/scale/cell()),y=Math.floor((event.clientY-rect.top)/scale/cell());
+    carry.preview=placement(inventory,carry.item,x,y,page);
+    let preview=grid.querySelector('.placement-preview');if(!preview){preview=document.createElement('div');grid.append(preview);}
+    preview.className='placement-preview'+(carry.preview.valid?'':' invalid');preview.style.left=x*cell()+'px';preview.style.top=y*cell()+'px';preview.style.height=carry.item.height*cell()+'px';
+  }
+  async function submit() {
+    if(!carry||pending)return;const {item,preview}=carry;
+    const command={id:item.id,revision:item.revision,x:preview.x,y:preview.y,page:preview.page};
+    cancelCarry();pending=true;status.textContent='Moving…';
+    try {const result=await moveItem(command);if(!disposed)status.textContent=result.ok?'':`Move rejected: ${result.error||'request'}`;}
+    catch(error){if(!disposed)status.textContent=`Move failed: ${error.message}`;}finally {pending=false;}
+  }
+  function pointerDown(event) {if(carry?.latched&&event.button===0){event.preventDefault();updateCarry(event);if(carry.preview.valid)submit();}}
+  function pointerMove(event) {
+    if(windowDrag&&event.pointerId===windowDrag.pointer){
+      if(!windowDrag.node.hasPointerCapture(windowDrag.pointer))windowDrag=null;
+      else {dragged=true;const p=point(event);position={x:p.x-windowDrag.offset.x,y:p.y-windowDrag.offset.y};positionWindow();}
+    }
+    if(carry)updateCarry(event);
+  }
+  function pointerUp(event) {
+    if(windowDrag&&event.pointerId===windowDrag.pointer){const old=windowDrag;windowDrag=null;releaseCapture(old);}
+    if(!carry||carry.latched||event.pointerId!==carry.pointer)return;updateCarry(event);
+    if(carry.moved){submit();return;}carry.latched=true;releaseCapture(carry);surface.hidden=false;onRegionsChanged();
+  }
+  function keyDown(event) {
+    if(root.hidden||event.repeat)return;
+    if(event.key==='Escape'||event.key.toLowerCase()==='i'){event.preventDefault();if(carry&&event.key==='Escape')cancelCarry();else {cancelCarry();onClose();}}
+  }
+  function cancelled(){cancelCarry();if(windowDrag){const old=windowDrag;windowDrag=null;releaseCapture(old);}}
+  root.querySelector('.window-close').addEventListener('click',()=>{cancelCarry();onClose();});
+  root.querySelectorAll('[data-page]').forEach(tab=>tab.addEventListener('click',()=>{if(!carry?.latched)cancelCarry();page=Number(tab.dataset.page);render();}));
+  root.querySelector('.window-header').addEventListener('pointerdown',event=>{
+    if(event.button!==0||event.target.closest('button')||carry)return;event.preventDefault();const p=point(event);
+    windowDrag={node:event.currentTarget,pointer:event.pointerId,offset:{x:p.x-position.x,y:p.y-position.y}};event.currentTarget.setPointerCapture(event.pointerId);
+  });
+  const resize=()=>{cancelled();positionWindow();};
+  document.addEventListener('pointerdown',pointerDown);document.addEventListener('pointermove',pointerMove);document.addEventListener('pointerup',pointerUp);
+  document.addEventListener('pointercancel',cancelled);document.addEventListener('keydown',keyDown);window.addEventListener('resize',resize);window.addEventListener('blur',cancelled);
+  root.addEventListener('lostpointercapture',event=>{
+    if(carry&&!carry.latched&&carry.pointer===event.pointerId)cancelCarry();
+    if(windowDrag?.pointer===event.pointerId)windowDrag=null;
+  });render();
+  return {regions:[panel,surface],cancelCarry,
+    setState(snapshot){cancelCarry();inventory=structuredClone(snapshot.inventory);render();this.setInfo(snapshot);},
+    setInfo(snapshot){root.querySelector('.wallet strong').textContent=Number(snapshot.wallet?.balance||0).toLocaleString('en-US');
+      const next=Number(snapshot.hud?.ui_scale||scale);if(next!==scale){cancelled();scale=next;root.style.setProperty('--ui-scale',scale);positionWindow();}},
+    dispose(){disposed=true;cancelled();document.removeEventListener('pointerdown',pointerDown);document.removeEventListener('pointermove',pointerMove);document.removeEventListener('pointerup',pointerUp);document.removeEventListener('pointercancel',cancelled);document.removeEventListener('keydown',keyDown);window.removeEventListener('resize',resize);window.removeEventListener('blur',cancelled);}
+  };
 }

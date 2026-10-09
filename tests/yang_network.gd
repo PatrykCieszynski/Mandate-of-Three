@@ -63,16 +63,18 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].error == "distance", "remote pickup denied")
 	set_phase("WAIT")
-	for position: int in range(2,ItemStoreSqlite.BAG_CAPACITY):
+	while server.database.item_store._free_bag_position(owner, ItemDefinitions.IRON_SWORD.inventory_height) >= 0:
+		var position: int = server.database.item_store._free_bag_position(owner, ItemDefinitions.IRON_SWORD.inventory_height)
 		var filler: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD,owner,[])
 		check(server.database.item_store._insert_item(filler,position), "full bag fixture")
+	var full_bag: Dictionary = server.database.item_store.inventory(owner)
 	check(db.query("CREATE TEMP TRIGGER reject_pickup_sql BEFORE UPDATE ON wallets BEGIN SELECT RAISE(ABORT,'currency pickup tried SQL'); END;"), "forbid per-pickup wallet writes")
 	world.characters[hero].position = point + Vector3(0,0,0.8)
 	currency.set_physics_process(true)
 	await wait_until(func() -> bool: return not currency.ground.has(currency_id))
 	currency.set_physics_process(false)
 	check(server.database.wallet_balance(owner) == 30 and sql_balance(owner) == 0 and server.database.runtime_wallets[owner].pending_currency_delta == 30, "autoloot credits RAM without DB write")
-	check(server.database.wallet_balance(other_owner) == 0 and server.database.item_store.inventory(owner).items.size() == 24, "full inventory does not block autoloot or receive currency items")
+	check(server.database.wallet_balance(other_owner) == 0 and server.database.item_store.inventory(owner) == full_bag, "full inventory does not block autoloot or receive currency items")
 	check(currency.pickup_for_peer(hero,currency_id,Time.get_ticks_msec()).error == "gone", "no double pickup")
 	# Public currency: two actual client RPCs race for the same transient entity.
 	currency_id = currency.spawn_currency(point,owner,"",Time.get_ticks_msec())

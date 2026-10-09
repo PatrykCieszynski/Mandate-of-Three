@@ -9,6 +9,9 @@ var opened: bool = false
 var _sequence: int = 0
 var _active_command: String = ""
 var _result: Dictionary = {}
+const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
+var ui_scale: float = 1.0
+var _scale_initialized: bool = false
 
 func setup(game_world: SpikeWorld3D) -> void:
 	world = game_world
@@ -29,72 +32,46 @@ func setup(game_world: SpikeWorld3D) -> void:
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
 	dispatcher.register_command("inventory.move_item", _valid_move, _move)
-	dispatcher.register_command("inventory.equipment", _valid_equipment, _equipment)
 	dispatcher.register_command("inventory.close", func(p: Dictionary) -> bool: return p.is_empty(), _close)
-	bridge.ui_ready.connect(func() -> void: host.set_modal(opened))
+	host.keyboard_owner_changed.connect(func(owner: String) -> void: ClientState.menu_open = owner != "gameplay")
+	host.resized.connect(_layout)
 	host.failure.connect(_failure)
 	world.inventory_endpoint.state_changed.connect(_inventory)
 	world.inventory_endpoint.operation_finished.connect(_operation_finished)
 	world.currency_endpoint.state_changed.connect(_wallet)
-	world.combat_endpoint.state_changed.connect(func(_s: Dictionary) -> void: _player())
 	world.inventory_endpoint.enable_web_ui(true)
 	_inventory(world.inventory_endpoint.state)
 	_wallet(world.currency_endpoint.state)
-	_player()
-	dispatcher.set_domain("hud", {"inventory_open": false})
+	_layout()
 
 func _inventory(snapshot: Dictionary) -> void:
 	if not snapshot.get("ok", false): return
 	var bag: Array = []
-	var slots: Array = [{"slot": "weapon", "label": "Weapon"}]
 	for item: Dictionary in snapshot.items:
-		var display: Dictionary = {"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon": "blade", "height": 1, "quantity": int(item.amount), "attack": str(int(item.stats.get("attack", 0))), "category": "WEAPON", "description": "Weapon attack %d" % int(item.stats.get("attack", 0))}
-		if item.location == "bag":
-			display["x"] = int(item.bag_position) % 6
-			display["y"] = int(item.bag_position) / 6
-			var comparison: Dictionary = world.inventory_endpoint.weapon_comparison(item)
-			display["description"] = "After equipping: %d character attack (%+d)." % [comparison.attack, comparison.delta]
-			bag.append(display)
-		elif item.equipment_slot == "weapon":
-			display["slot"] = "weapon"
-			display["label"] = display.name
-			slots[0] = display
-	dispatcher.set_domain("inventory", {"columns": 6, "rows": 4, "revision": 0, "items": bag})
-	dispatcher.set_domain("equipment", {"slots": slots, "attack": int(snapshot.stats.get("attack", 10))})
+		if item.location != "bag": continue
+		var position: int = int(item.bag_position)
+		var comparison: Dictionary = world.inventory_endpoint.weapon_comparison(item)
+		bag.append({"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon": "iron_sword", "height": int(item.inventory_height), "quantity": int(item.amount), "x": position % InventoryGrid.COLUMNS, "y": (position % InventoryGrid.PAGE_CELLS) / InventoryGrid.COLUMNS, "page": position / InventoryGrid.PAGE_CELLS, "description": "Attack %d. After equipping: %d (%+d)." % [int(item.stats.get("attack", 0)), comparison.attack, comparison.delta]})
+	dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag})
 
 func _wallet(snapshot: Dictionary) -> void:
 	dispatcher.set_domain("wallet", {"balance": int(snapshot.get("balance", 0)), "ready": snapshot.has("balance")})
-
-func _player() -> void:
-	var body: SpikeCharacter3D = world.characters.get(world.local_peer)
-	var name_text: String = body.get_display_name() if body != null else "Character"
-	var progression: Dictionary = world.combat_endpoint.state.get("progression", {})
-	dispatcher.set_domain("player", {"name": name_text, "level": int(progression.get("level", 1))})
 
 static func _valid_identity(payload: Dictionary) -> bool:
 	return payload.get("id") is String and ItemStoreSqlite.valid_uid(payload.id) and WebUiBridge.is_integer(payload.get("revision")) and payload.revision >= 0
 
 static func _valid_move(p: Dictionary) -> bool:
-	return p.size() == 4 and p.has_all(["id", "revision", "x", "y"]) and _valid_identity(p) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and p.x >= 0 and p.x < 6 and p.y >= 0 and p.y < 4
-
-static func _valid_equipment(p: Dictionary) -> bool:
-	return p.size() == 3 and p.has_all(["id", "revision", "action"]) and _valid_identity(p) and p.action in ["equip", "unequip"]
+	return p.size() == 5 and p.has_all(["id", "revision", "x", "y", "page"]) and _valid_identity(p) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and WebUiBridge.is_integer(p.page) and p.page >= 0 and p.page < InventoryGrid.PAGES
 
 func _move(payload: Dictionary) -> Dictionary:
-	return await _submit(payload, "move")
+	return await _submit(payload)
 
-func _equipment(payload: Dictionary) -> Dictionary:
-	return await _submit(payload, str(payload.action))
-
-func _submit(payload: Dictionary, action: String) -> Dictionary:
+func _submit(payload: Dictionary) -> Dictionary:
 	if _active_command != "": return {"ok": false, "error": "pending"}
 	_sequence += 1
 	_active_command = "web-%d" % _sequence
 	_result = {}
-	if action == "move":
-		world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.y) * 6 + int(payload.x), _active_command)
-	else:
-		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), _active_command)
+	world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), _active_command)
 	var deadline: int = Time.get_ticks_msec() + 2500
 	while _result.is_empty() and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.025).timeout
@@ -111,15 +88,14 @@ func _close(_payload: Dictionary) -> Dictionary:
 
 func set_open(active: bool) -> void:
 	opened = active
-	ClientState.menu_open = active
-	dispatcher.set_domain("hud", {"inventory_open": active})
+	_layout()
 	if active:
 		if not host.open():
 			_failure("CEF could not open")
 			return
-		host.set_modal(true) # Click-carried items receive motion beyond the panels.
+		host.set_modal(false)
 	else:
-		host.hide_ui()
+		host.set_modal(false) # Keep the global browser alive; DOM owns visible regions.
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_I:
@@ -137,3 +113,20 @@ func _failure(reason: String) -> void:
 func _exit_tree() -> void:
 	ClientState.menu_open = false
 	if is_instance_valid(host): host.destroy_browser()
+
+func set_ui_scale(value: float) -> void:
+	if value not in UI_SCALES: return
+	ui_scale = value
+	_scale_initialized = true
+	_layout()
+
+func _layout() -> void:
+	if not is_instance_valid(host) or not is_instance_valid(dispatcher): return
+	if not _scale_initialized:
+		ui_scale = 0.9 if host.size.y <= 720 else (1.5 if host.size.y >= 2160 else (1.1 if host.size.y >= 1440 else 1.0))
+		var configured: float = float(ProjectSettings.get_setting("mandate/ui_scale", ui_scale))
+		for argument: String in OS.get_cmdline_args():
+			if argument.begins_with("--ui-scale="): configured = argument.trim_prefix("--ui-scale=").to_float() / 100.0
+		if configured in UI_SCALES: ui_scale = configured
+		_scale_initialized = true
+	dispatcher.set_domain("hud", {"inventory_open": opened, "ui_scale": ui_scale, "viewport": {"width": host.size.x, "height": host.size.y}})

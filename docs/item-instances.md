@@ -1,13 +1,14 @@
 # Item instances - 3D spike
 
-Status: 2026-10-07. The new model works in Spike 3D through existing
+Initial slice: 2026-10-07; inventory grid updated 2026-10-09. The new model works in Spike 3D through existing
 gateway/master/world login. **I** opens the panel; I, Esc or its button closes it.
-An open panel stops movement-direction transmission.
+The native panel gates movement. The CEF Inventory uses region-based input
+ownership; see [Inventory UI](inventory-ui-prototype.md).
 
 ## Model and implemented scope
 
 `ItemDefinition` is a shared Resource with definition ID, name, slot, stack limit,
-base stats and upgrade-level growth. It stores neither owner nor rolled bonuses.
+base stats, inventory height (1–3) and upgrade-level growth. It stores neither owner nor rolled bonuses.
 
 `ItemInstance` describes one instance: UID, definition ID, persistent character
 ID, quantity, upgrade level, affixes, sockets, version and bag/equipment placement.
@@ -22,9 +23,11 @@ The character's first Spike entry grants a one-time technical starter set:
 | Second sword | `iron_sword` | +7 | 17 | 27 |
 
 Base character attack is 10. Starter bonuses are fixed for repeatable instance
-separation tests. The bag has 24 positions and equipment has one `weapon` slot.
-Equipping another weapon puts the previous weapon in the vacated bag position.
-Unequip requires a free position. The panel abbreviates UIDs but sends the full
+separation tests. The bag has four 5×9 pages (180 cells); the Iron Sword occupies 1×3.
+Equipment has one `weapon` slot. Schema v15 migrates old one-cell anchors
+atomically; see [UI Contract v1](ui-contract.md).
+Equipping another weapon uses the vacated position when its footprint fits,
+otherwise the first free footprint. Unequip requires a free footprint. The panel abbreviates UIDs but sends the full
 UID. The model persists +0...+9 upgrade levels and sockets; upgrading, socketing
 and reroll actions are not implemented yet.
 

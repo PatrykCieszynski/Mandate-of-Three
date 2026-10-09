@@ -20,7 +20,8 @@ func _ready() -> void:
 	check(store.initialize_character(first).ok and store.initialize_character(second).ok, "starter")
 	var uid: String = Crypto.new().generate_random_bytes(16).hex_encode()
 	var filler: Array[String] = []
-	for position: int in range(2, 24):
+	while store._free_bag_position(first, ItemDefinitions.IRON_SWORD.inventory_height) >= 0:
+		var position: int = store._free_bag_position(first, ItemDefinitions.IRON_SWORD.inventory_height)
 		var item: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD, first, [])
 		check(store._insert_item(item, position), "fill bag")
 		filler.append(item.uid)

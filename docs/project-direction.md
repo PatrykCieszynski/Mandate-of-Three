@@ -93,3 +93,14 @@ The optional Windows CEF client is staged under `.godot/cef-client`, targets Vul
 Mobile and connects to the normal servers; root/headless/Compatibility retain
 native UI. Click-to-carry is the accepted interaction. Right click equips or
 unequips the exact instance. See [inventory UI](inventory-ui-prototype.md).
+
+## Inventory contract — 2026-10-09
+
+UI Contract v1 supersedes the previous 24-slot integration limit for this slice.
+Implement Inventory only: five columns, nine rows, four pages; 1×1/1×2/1×3
+footprints; no rotation; logical 40px slots; fixed, draggable, clamped window.
+Schema v15 atomically migrates anchors and repacks old collisions while preserving
+unique items. Keep placement/economy writes immediate. Use individual extracted
+legacy PNGs only as temporary local skin, isolated behind semantic asset names.
+Equipment/Shop/full HUD/final art and generic frontend frameworks remain out of
+scope. See [UI contract](ui-contract.md) and [Inventory](inventory-ui-prototype.md).

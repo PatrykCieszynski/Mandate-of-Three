@@ -1,139 +1,154 @@
-# Equipment and backpack visual prototype
+# Production CEF Inventory
 
-A local HTML/CSS/JS preview of the first Mandate inventory design. The browser preview remains an isolated mock. The same view is now connected
-to real Spike 3D inventory in the optional Vulkan/CEF client described below.
-The root client retains a native fallback.
+The first real Inventory window follows [UI Contract v1](ui-contract.md).
+The actual Metin screenshot guides density and proportions; the Mandate concept
+is a future art-direction reference. This slice implements Inventory only.
+Equipment, Shop, character sheet and the rest of the HUD are outside this screen.
 
-## Preview
+## Layout and interaction
 
-From the repository root:
+The window is 266 logical pixels wide, right-anchored by default, with a draggable
+title, close button, I–IV tabs and Yang footer. Each page is 5×9 at 40 px per
+slot. The slot size is a CSS variable. Items occupy 1×1, 1×2 or 1×3, without
+rotation. The current real Iron Sword occupies three vertical cells; the local
+preview includes all three sizes without adding mock item definitions to gameplay.
+
+Drag with pointer capture, or click once to carry and click to place. Green/red
+previews are advisory. A drag may submit an invalid placement and get rejected;
+an invalid click-to-place retains the held item. Escape first cancels carrying,
+then closes. Click-carried items can move between page tabs. Wallet updates do
+not cancel carrying. Authoritative inventory updates, close, resize, scale changes,
+blur and pointer cancellation release transient capture/ghost state. Compact
+hover tooltips flip and clamp to the viewport.
+
+Opening is **not globally modal**. The window reports its physical rectangle.
+A click-carried item temporarily reports a full-screen pointer region, then
+releases it on placement/cancel. Normal button drags retain native host capture.
+Clicks outside UI return keyboard ownership to gameplay. Closing clears focus
+and removes Inventory's regions while leaving the global browser alive, allowing
+future unrelated regions to continue working.
+
+## Authority and persistence
+
+`InventoryWebController` maps private server state; the view has no CEF APIs.
+It renders `ui.snapshot` and `inventory.updated`; `wallet.updated` and
+`hud.updated` refresh information/layout without replacing item state.
+`ui.ready` after reload/recreation receives the current full snapshot. Commands
+reuse request correlation and await the actual World Server operation reply.
+
+```json
+{"type":"inventory.move_item","payload":{"id":"<uid>","revision":3,"x":2,"y":4,"page":1}}
+```
+
+The protocol wrapper adds `v: 1` and a correlated request ID. The only other
+screen command is `inventory.close`. Neither exposes arbitrary method calls.
+
+World Server validates coordinates, ownership, revision, bag placement,
+page boundaries and every occupied cell. Placement and revision commit in one
+immediate SQLite transaction. Rejections republish authoritative state; JS never
+commits a local item move. Native equip/unequip and runtime combat-stat refresh
+retain their existing atomic flow.
+
+Schema **v15** expands bag anchor positions to 0–179 (four 45-cell pages).
+An atomic migration retains UID, owner, stats, affixes and sockets. Old anchors
+are kept when valid; collisions are repacked into the first available footprint,
+with a revision increment. A failed migration rolls back placement/schema/version
+changes. No items are deleted. Pickup/free-slot search and equipment swaps now
+respect footprints. This is a small explicit grid model, not a stat or crafting
+framework. XP and wallet checkpoint policy is unchanged.
+
+## Local skin
+
+`tools/dev_assets/stage_ui_skin.py` copies selected individual PNGs from ignored
+`dev_assets/legacy/ui_cache` into ignored
+`source/client/ui_web/web/inventory/legacy_skin`. It verifies byte-identical
+SHA-256 hashes; there is no resampling. Semantic names include corners, edges,
+fill, title, close states, slot, Yang and item icons. `skin.js` is the replaceable
+asset boundary. Edges tile; icon rasters keep native dimensions. Text is real
+font rendering. No CSS atlas coordinates, CDN, internet asset loading or frontend
+framework is involved. A checkout without local skin uses CSS/text fallbacks; the browser test also
+checks a deliberately unavailable skin module.
+
+Stage the existing extracted cache:
+
+```powershell
+python tools/dev_assets/stage_ui_skin.py
+```
+
+The gameplay launcher also stages the skin automatically. If item icon exports
+are missing, the exact PNG exporter can generate them from the local reference:
+
+```powershell
+python tools/dev_assets/export_ui.py --source-root 'N:/Mandate local/metin2/bin/pack/icon/icon' item/00010.tga item/00020.tga item/27001.tga
+```
+
+Legacy skin remains visibly limited at large scales. Replace it with Mandate
+assets meeting the 2×/150% quality target later; do not enhance legacy graphics.
+
+## Launch and scale
+
+Keep gateway/master/world running from the root CEF-free project, then:
+
+```powershell
+& ./tools/cef_client/run.ps1
+# Prepare/import without opening a game window:
+& ./tools/cef_client/run.ps1 -SetupOnly
+```
+
+This copies source/config/assets/tests into `.godot/cef-client/project`, with
+pinned godot-cef v2.0.0, Godot 4.7.2 and Vulkan Mobile. CEF binaries, profiles,
+reference PNGs and runtime stores remain ignored. The staged client defaults to
+a 1280×720 window with a 1920×1080 design baseline and **disabled canvas stretch**.
+The browser tracks actual window pixels. Root servers/headless builds have no
+CEF dependency; unsupported clients retain native inventory.
+
+Godot's `InventoryWebController.set_ui_scale()` accepts the contract's scale list.
+For development set project setting `mandate/ui_scale` or launch the staged
+client with `--ui-scale=125`. Scale is selected once and stays independent of
+subsequent window resolution. No settings screen is included in this slice.
+
+Local fixture preview:
 
 ```powershell
 python -m http.server 18741 --bind 127.0.0.1
 ```
 
-Open http://127.0.0.1:18741/tools/inventory_preview/ in a browser. Stop the local
-server with Ctrl+C. No npm installation, CDN, frontend framework or remote assets.
-The preview backdrop is illustrative; the reusable UI has no world background.
+Open [inventory preview](http://127.0.0.1:18741/tools/inventory_preview/).
+`?scale=0.9` changes preview scale. Its mock host is never used by the game.
 
-## Layout and interaction
-
-- Separate equipment and backpack panels, aged gold borders and dark surfaces.
-- CSS placeholder character silhouette and editable local SVG item icons.
-- Six-column, seven-row backpack with item heights 1, 2 and 3; no rotation.
-- Click-to-carry: one click picks up an item, the next valid click places it.
-  A cursor ghost and green/red preview show the held item. Invalid placement
-  keeps it held; Escape cancels before closing the inventory. Placement only
-  changes after a committed snapshot update. Resize, close and snapshots cancel
-  the transient carry state.
-- Tooltip on hover/focus, item quantities, occupied-cell count and Yang balance.
-- Close/reopen; Escape closes and I toggles the preview. Narrow layouts wrap panels.
-
-Equipment slots are display-only. Equip/unequip, page tabs, sorting, destruction,
-3D character preview and rich item art are not implemented. All sample values are
-fixture data. Nothing is written to the database.
-
-## Boundary
-
-`source/client/ui_web/web/inventory/inventory-view.js` exports
-`mountInventory(root, {moveItem, onClose})`, returning `setState(snapshot)` and
-`dispose()`. It has no CEF API calls. Snapshot shape:
-
-```javascript
-{
-  inventory: {columns: 6, rows: 7, revision: 1,
-    items: [{id: 'blade', name: 'Bronze Sword +0', icon: 'blade',
-      x: 2, y: 1, height: 2, quantity: 1}]},
-  equipment: {slots: [{slot: 'weapon', label: 'Weapon', icon: 'blade'}]},
-  wallet: {balance: 100090}
-}
-```
-
-Optional item display fields: category, description, attack. Text is inserted via
-textContent; icon paths are selected from a fixed local set. The injected
-moveItem callback accepts `{id, x, y, revision}` and resolves `{ok, error?}`.
-Results display status only. The caller publishes committed/reconciled state
-via setState. A timeout does not infer success or cancel an already sent action.
-
-`tools/inventory_preview/preview.js` is the only sample-data/validation host.
-Its in-memory validator imitates the interaction boundary and is not server
-validation. Live integration must register the actual inventory command, consume
-server updates, map real item/equipment/wallet data and report both panel regions
-through the existing bridge. Browser recreation must receive a full snapshot.
-Do not connect this preview validator to persistence or authoritative gameplay.
-
-## Verification — 2026-10-08
-
-Headless Chromium (installed Edge) checked desktop rendering at 1440×900,
-600×950 layout, valid placement, overlap rejection and unchanged rejected placement,
-close/reopen, Escape/I and absence of JavaScript errors. Both screenshots were
-visually inspected. Existing Web UI protocol/application tests passed (five JS
-tests plus Godot headless checks). No CEF game window was opened. Native CEF,
-physical input, DPI and live server inventory integration remain unverified for
-this new view.
-
-## Gameplay integration
-
-Start master/gateway/world normally from the root, then launch the staged client:
+## Verification — 2026-10-09
 
 ```powershell
-& ./tools/cef_client/run.ps1
-```
-
-The launcher uses Python 3.11+ and the local Godot 4.7.2 executable, verifies the
-pinned CEF v2.0.0 archive and copies the game into `.godot/cef-client/project`.
-The default entry is the normal game login, followed by the existing 3D instance.
-CEF binaries/profile/import caches remain ignored. Root server projects are not
-modified and can still run headless without CEF. `-SetupOnly` prepares/imports the
-client without opening a game window. Refresh staging after editing sources.
-
-I opens the equipment/backpack UI in a Vulkan Mobile client. Left click picks up
-an item; another click places it. Invalid local placement retains the carried
-item. Escape cancels carrying first, then closes. Right click a bag weapon to
-equip; right click the equipped weapon to unequip. Close/I releases gameplay
-input. The displayed name, level, weapon attack/comparison and Yang come from
-current authoritative state, not preview fixture values.
-
-The current real item model has **24 individual bag slots** and only one weapon
-slot. The game view therefore displays **6×4, height-one items**; it does not
-pretend that the 6×7 mock's larger item shapes are authoritative. Other equipment
-slots and multi-cell inventory require an explicit future domain change. The
-silhouette and SVG weapon art remain placeholders.
-
-Bag moves use UID + item revision + destination through authenticated RPCs.
-Ownership, bag-only placement, revision, bounds and occupied cells are validated
-on World Server. Position and revision commit immediately in a single SQLite
-transaction. Rejection republishes the committed inventory. Equip/unequip use the
-existing atomic transaction and runtime-stat refresh. Wallet income/checkpoints
-and combat runtime reads retain their existing policy.
-
-`game.html`, `game.js` and `game.css` are the bundled screen entry; the mock host
-is not used in the game. `InventoryWebController` owns mapping/command correlation
-and UI visibility. The reusable view contains no CEF calls and commits no local
-item mutation. Non-inventory updates do not reset the carried item.
-
-```powershell
+& ./tests/run-items.ps1
 & ./tests/run-web-inventory.ps1
-# After staging is refreshed/imported; opens one final rendered client:
+# Optional headless browser QA; serve the repository on localhost first.
+$env:MANDATE_PLAYWRIGHT = '<path-to-installed-playwright>'
+node tests/inventory_ui.cjs
+# After refreshing/importing staging: one final rendered Vulkan client.
 & ./tests/run-web-inventory.ps1 -WithBrowser
 ```
 
-The two-client test covers real move/equip/unequip RPCs, stale/occupied rejection,
-private snapshots, runtime attack and SQLite reopen. The browser mode additionally
-uses test-only DOM events through actual CEF IPC, periodic-update carry retention,
-reload/snapshot, modal ownership, hide/show, transparent rendering and process
-shutdown. Synthetic DOM events do not prove physical mouse/keyboard input or DPI.
+Items/grid tests pass: all heights, covered-cell overlap, page boundary, stale
+revision, transaction rollback, v14 migration rollback/repack, cross-page move
+and DB reopen. Two real clients pass private-state/UID/revision movement and
+rejection checks. Existing movement, PvE, combat, progression, XP and Yang
+regressions pass, including full-bag pickup and currency independence.
 
-Verified on 2026-10-08: item SQLite tests (including move ownership, stale revision,
-occupied/bounds rejection, injected revision-write rollback and reopen), the
-headless two-client Web inventory scenario, and the Vulkan CEF gameplay scenario
-all pass. The rendered run verified DOM → IPC → World Server move/equip/unequip,
-reload/modal state, an inspected transparent 3D capture and zero owned process
-survivors two seconds after exit. A separate headless browser check covered carry
-retention on player/wallet updates and cancellation on programmatic close.
+Headless Edge/Chromium passes **all ten contract matrix cases**: fixed geometry,
+all three footprint renderings and drag, valid/invalid previews, accepted/rejected
+state, click-to-carry across tabs, wallet updates, pointer capture, window clamp,
+resize, tooltip flip/clamp, close region release and `ui.ready` reload recovery.
+A very small viewport at 150% uses vertical scrolling without changing slots.
 
-Existing items, movement, PvE, combat, progression, XP, Yang and Web bridge tests
-pass. The pre-existing four ObjectDB exit leaks/three resource warnings remain.
-During integration the fixture's non-element click target and readiness race
-were corrected; the adapter's focus release now safely handles scene teardown.
-Physical mouse/keyboard, IME/DPI and release packaging remain manual/release gates.
+The final Windows Vulkan Mobile CEF run passes actual bundled DOM → CEF IPC →
+World Server moves, periodic-update carry retention, reload/full snapshot,
+region-based ownership, repeated close/open and clean shutdown with **zero owned
+process survivors** two seconds after exit. The transparent 3D capture was
+visually inspected; accelerated OSR was reported on RTX 4070. Synthetic DOM
+input in that fixture does not prove physical input-to-photon behavior.
+
+Web protocol tests pass (five JS cases plus headless Godot dispatcher/host
+checks). Root and staged headless imports pass. The existing four ObjectDB exit
+leaks/three resource warnings remain. Physical CEF mouse/keyboard, OS DPI/IME,
+long-session soak and release packaging remain manual/release gates. Other
+platforms are untested; Compatibility remains unsupported/best-effort.

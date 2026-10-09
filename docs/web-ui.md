@@ -5,7 +5,7 @@ Godot's 3D viewport. The goal is a reusable screen-space UI boundary while Godot
 retains client state and the server retains gameplay/economy authority.
 
 The client has a small Web UI boundary. The first integrated screen is the
-[3D equipment/backpack](inventory-ui-prototype.md), available in an isolated
+[3D Inventory](inventory-ui-prototype.md), available in an isolated
 Vulkan Mobile gameplay client. Other gameplay screens retain native Godot UI. The production source contains no mock inventory or diagnostic
 commands. The addon remains in ignored local staging projects; the root server/headless
 project loads no CEF extension.
@@ -275,7 +275,7 @@ The initial new fixture also failed because of a JavaScript syntax mistake and
 then an invalid cross-authority relative module path. Both fixture mistakes were
 corrected. Real Vulkan readiness and IPC now verify the packaged module layout.
 The root production shell's modules use relative paths within the source origin;
-its blank composition remains a foundation fixture; the equipment screen has
+its blank composition remains a foundation fixture; the Inventory screen has
 its own client composition and gameplay integration tests.
 
 These final browser runs execute assertions during the runner's sampling window,
@@ -300,20 +300,22 @@ inventory integration is separately documented.
 ## First gameplay screen
 
 `InventoryWebController` composes the shared host/bridge/dispatcher for Spike 3D.
-It maps private server UID/revision/placement/stat snapshots to the reusable web
-view; wallet/progression updates only refresh displayed information. Explicit
-commands are `inventory.move_item`, `inventory.equipment` and `inventory.close`.
+It maps private server UID/revision/placement/stat snapshots to the reusable
+[Inventory view](inventory-ui-prototype.md), following [UI Contract v1](ui-contract.md).
+Only `inventory.move_item` and `inventory.close` are exposed by this screen.
 Results await correlated World Server replies; results do not replace snapshots.
-The dispatcher now supports synchronous or awaited registered handlers.
+The dispatcher supports synchronous or awaited registered handlers.
 
-The screen opens with I and uses modal ownership while open: movement/combat are
-gated by the existing menu_open state, and click-carried items can move beyond
-panel bounds. Escape first cancels a carried item, then closes. Browser readiness
-restores the latest snapshot and modal state after reload. Client failures release
-input and retain the native fallback. Headless and Compatibility use native UI.
+I opens a right-anchored, draggable 5×9 inventory with four pages. A single
+root `ui_scale` controls logical geometry independently of physical resolution.
+The screen uses region-based ownership, with temporary full-screen pointer
+ownership only while click-carrying. Closing releases focus and removes its
+regions without hiding the global browser. Reload receives the current snapshot.
+Client failures release input and retain native fallback. Headless and
+Compatibility use native UI.
 
 Use `tools/cef_client/run.ps1` for the actual game with CEF. It creates an ignored
 copy of source/assets/config/addons/tests and pinned Windows CEF, with Vulkan
-Mobile settings. Servers continue running from the root project. Changes require
-refreshing staging. This is a development launcher, not a release export or Linux/
-macOS setup. Native packaging/physical input gates above remain applicable.
+Mobile and disabled canvas stretch. Servers continue from the root. Refresh
+staging after source edits. This development launcher is not a release export
+or Linux/macOS setup; physical input and packaging gates above remain applicable.

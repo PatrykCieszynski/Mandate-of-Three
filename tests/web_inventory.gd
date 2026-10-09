@@ -13,8 +13,8 @@ func run_server() -> void:
 	for id: int in world.characters:
 		var owner: int = server.connected_players[id].player_id
 		var snapshot: Dictionary = server.database.item_store.inventory(owner)
-		check(snapshot.items.size() == 2 and snapshot.stats.attack == 10 and snapshot.equipment.is_empty(), "private exact inventory after unequip")
-		check(snapshot.items.any(func(i: Dictionary) -> bool: return i.bag_position == 18), "RPC bag move persisted")
+		check(snapshot.items.size() == 2 and snapshot.stats.attack == 10 and snapshot.equipment.is_empty(), "private exact inventory after moves")
+		check(snapshot.items.any(func(i: Dictionary) -> bool: return i.bag_position == 15), "RPC bag move persisted")
 		check(server.runtime_attack(owner) == 10, "runtime attack reconciled")
 	var before: Array = []
 	for id: int in world.characters: before.append(server.database.item_store.inventory(server.connected_players[id].player_id))
@@ -24,7 +24,7 @@ func run_server() -> void:
 	for id: int in world.characters:
 		check(server.database.item_store.inventory(server.connected_players[id].player_id) == before[index], "relog item state")
 		index += 1
-	if not failed: print("WEB_INVENTORY_SERVER_OK: move/equip/unequip, privacy, runtime stats and reopen")
+	if not failed: print("WEB_INVENTORY_SERVER_OK: page/footprint moves, privacy, runtime stats and reopen")
 	await get_tree().create_timer(0.6).timeout
 	get_tree().quit(1 if failed else 0)
 
@@ -62,45 +62,35 @@ func run_client() -> void:
 	await wait_until(func() -> bool: return phase_name == "GO")
 	var endpoint: SpikeInventory3D = world.inventory_endpoint
 	var item: Dictionary = endpoint.state.items[0].duplicate(true)
-	var result: Dictionary = await command("inventory.move_item", {"id":item.uid,"revision":item.revision,"x":0,"y":3})
+	var result: Dictionary = await command("inventory.move_item", {"id":item.uid,"revision":item.revision,"x":0,"y":3,"page":0})
 	check(result.ok, "web command waits for committed move RPC")
-	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 18 and i.revision == 1), "snapshot after move")
-	result = await command("inventory.move_item", {"id":item.uid,"revision":0,"x":1,"y":3})
+	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 15 and i.revision == 1), "snapshot after move")
+	result = await command("inventory.move_item", {"id":item.uid,"revision":0,"x":1,"y":3,"page":0})
 	check(not result.ok and result.error == "stale", "server rejects stale UI command")
-	result = await command("inventory.move_item", {"id":item.uid,"revision":1,"x":1,"y":0})
+	result = await command("inventory.move_item", {"id":item.uid,"revision":1,"x":1,"y":0,"page":0})
 	check(not result.ok and result.error == "occupied", "server rejects occupied placement")
-	result = await command("inventory.equipment", {"id":item.uid,"revision":1,"action":"equip"})
-	check(result.ok and endpoint.state.stats.attack == 10 + item.stats.attack, "equip changes real combat stats")
-	result = await command("inventory.equipment", {"id":item.uid,"revision":2,"action":"unequip"})
-	check(result.ok and endpoint.state.stats.attack == 10, "unequip restores stats")
-	result = await command("inventory.move_item", {"id":item.uid,"revision":3,"x":0,"y":3})
-	check(result.ok, "move after unequip")
+	result = await command("inventory.move_item", {"id":item.uid,"revision":1,"x":0,"y":7,"page":0})
+	check(not result.ok, "three-cell item cannot cross page boundary")
+	result = await command("inventory.move_item", {"id":item.uid,"revision":1,"x":0,"y":0,"page":3})
+	check(result.ok and endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 135), "fourth page persists")
+	result = await command("inventory.move_item", {"id":item.uid,"revision":2,"x":0,"y":3,"page":0})
+	check(result.ok, "return to first page")
 	if browser_mode:
 		# Test-only DOM events exercise the bundled view -> CEF IPC -> server flow.
 		# Physical input is still a separate manual check.
 		web.host.browser.connect("console_message", func(_level: int, message: String, _source: String, _line: int) -> void: print("CEF_GAME: ", message))
 		await get_tree().create_timer(0.3).timeout
-		web.host.browser.call("eval", "{const n=document.querySelector('.inventory-item');const r=n.getBoundingClientRect();n.dispatchEvent(new MouseEvent('click',{bubbles:true,button:0,clientX:r.x+12,clientY:r.y+12}));}")
-		# Currency/player updates must not remove the held item before the next click.
+		# Pointer events emulate drag through the real page/IPC. Physical input is separate.
+		web.host.browser.call("eval", "{const n=document.querySelector('.inventory-item');const r=n.getBoundingClientRect();n.setPointerCapture=()=>{};n.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:1,clientX:r.x+12,clientY:r.y+12}));document.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,button:0,pointerId:1,clientX:r.x+12,clientY:r.y+12}));}")
 		await get_tree().create_timer(0.8).timeout
-		web.host.browser.call("eval", "{const g=document.querySelector('.inventory-grid').getBoundingClientRect();const c=parseFloat(getComputedStyle(document.querySelector('.inventory-grid')).getPropertyValue('--cell'));document.body.dispatchEvent(new MouseEvent('click',{bubbles:true,button:0,clientX:g.x+5*c+12,clientY:g.y+2*c+12}));}")
-		await wait_until(func() -> bool: return endpoint.state.items.any(func(i: Dictionary) -> bool: return i.bag_position == 17))
-		var moved_uid: String = ""
-		for i: Dictionary in endpoint.state.items:
-			if i.bag_position == 17: moved_uid = str(i.uid)
+		web.host.browser.call("eval", "{const g=document.querySelector('.inventory-grid').getBoundingClientRect();const c=g.width/5;document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:2,clientX:g.x+4*c+12,clientY:g.y+3*c+12}));}")
+		await wait_until(func() -> bool: return endpoint.state.items.any(func(i: Dictionary) -> bool: return i.bag_position == 19))
 		await get_tree().create_timer(0.2).timeout
-		web.host.browser.call("eval", "{const n=document.querySelector('[data-id=\"%s\"]');n.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,button:2}));}" % moved_uid)
-		await wait_until(func() -> bool: return endpoint.state.equipment.get("weapon", "") == moved_uid)
-		await get_tree().create_timer(0.2).timeout
-		web.host.browser.call("eval", "{const n=document.querySelector('.equip-slot[data-id]');n.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,button:2}));}")
-		await wait_until(func() -> bool: return endpoint.state.equipment.is_empty())
-		# The other item retains position 18 throughout the browser actions.
-		await get_tree().create_timer(0.2).timeout
-		web.host.browser.call("eval", "console.log('GAME_INVENTORY_DOM',document.getElementById('inventory').hidden,document.querySelector('.inventory-grid').children.length,document.querySelector('.wallet strong').textContent);")
+		web.host.browser.call("eval", "console.log('GAME_INVENTORY_DOM',document.getElementById('inventory').hidden,document.querySelectorAll('.cell').length,document.querySelector('.wallet strong').textContent);")
 		web.host.reload_ui()
 		await wait_until(func() -> bool: return web.bridge.is_ready)
 		await get_tree().create_timer(0.5).timeout
-		check(web.host.modal and ClientState.menu_open, "reload restores modal ownership")
+		check(not web.host.modal, "reload retains region-based ownership")
 		await RenderingServer.frame_post_draw
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://.godot/verification"))
 		get_viewport().get_texture().get_image().save_png("res://.godot/verification/web-inventory-game.png")
