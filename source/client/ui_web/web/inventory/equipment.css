@@ -1,0 +1,15 @@
+#equipment {position:absolute;left:0;top:0;transform:scale(var(--ui-scale));transform-origin:0 0}
+.equipment-window {--window-width:222px}
+.equipment-body {position:relative;width:156px;height:220px;background:var(--skin-equipment-base,none) center no-repeat,#101211}
+.equipment-silhouette {position:absolute;left:32px;top:34px;width:78px;height:118px;text-align:center;font:100px/118px Georgia;color:#44493b;opacity:.5;pointer-events:none}
+.has-equipment-skin .equipment-silhouette {display:none}
+.equipment-slot {position:absolute;width:32px;padding:1px;border:1px solid #6a6350;background:#0b0d0bd9;color:var(--muted);font:9px Georgia;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.equipment-slot:disabled {cursor:default;border-color:#494838;background:#12141077}
+.equipment-slot.equipped {border-color:#aa9567;background:#11150cab}
+.equipment-slot:not(:disabled):hover {border-color:#e6c580;background:#363222}
+.equipment-slot .item-icon {max-width:30px}
+.equipment-stats {margin:6px 0 0;color:var(--ink);font:12px Georgia}
+.equipment-hint {margin:5px 0 0;font:10px/14px Arial;color:var(--muted)}
+
+/* The exact legacy background already paints empty-slot frames. */
+.has-equipment-skin .equipment-slot:not(.equipped) {border-color:transparent;background:transparent}

@@ -15,6 +15,7 @@ CHROME = {
     'close-normal':'public/close_button_01.sub.png', 'close-hover':'public/close_button_02.sub.png',
     'close-pressed':'public/close_button_03.sub.png', 'slot':'public/slot_base.sub.png',
     'yang':'game/windows/money_icon.sub.png',
+    'equipment-base':'game/windows/equipment_base.sub.png',
 }
 ICONS = {'iron_sword':'item/00010.tga.png', 'short_sword':'item/00020.tga.png', 'potion':'item/27001.tga.png'}
 def stage():

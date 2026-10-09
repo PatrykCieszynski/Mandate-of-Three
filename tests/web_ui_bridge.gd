@@ -40,6 +40,9 @@ func _run() -> void:
 	for invalid: Variant in ["", item_uid.left(31), item_uid.to_upper(), "g".repeat(32), 42]:
 		assert(not InventoryWebController._valid_identity({"id":invalid,"revision":0}))
 	assert(not InventoryWebController._valid_identity({"id":item_uid,"revision":-1}))
+	assert(InventoryWebController._valid_equipment({"id":item_uid,"revision":2}))
+	assert(not InventoryWebController._valid_equipment({"id":item_uid,"revision":2,"action":"quit"}))
+	assert(not InventoryWebController._valid_equipment({"id":"bad","revision":2}))
 	for percent: int in [80,90,100,110,125,140,150]:
 		assert(InventoryWebController._valid_scale({"percent":percent}))
 	for invalid: Variant in [0,79,81,151,100.5,"125",null]:

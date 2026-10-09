@@ -1,6 +1,6 @@
 import {placement,clampWindow,carriedCell} from './placement.js';
 import {icons} from './skin.js';
-export function mountInventory(root,{moveItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
+export function mountInventory(root,{moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
   root.innerHTML=`<section id="inventory-window" class="window window-chrome" aria-label="Inventory">
     <i class="chrome edge top"></i><i class="chrome edge bottom"></i><i class="chrome edge left"></i><i class="chrome edge right"></i>
     <i class="chrome corner tl"></i><i class="chrome corner tr"></i><i class="chrome corner bl"></i><i class="chrome corner br"></i>
@@ -52,7 +52,10 @@ export function mountInventory(root,{moveItem,onClose=()=>{},onRegionsChanged=()
       const node=document.createElement('div');node.className='inventory-item';node.dataset.id=item.id;node.dataset.height=item.height;
       node.style.left=item.x*cell()+1+'px';node.style.top=item.y*cell()+1+'px';node.style.height=item.height*cell()-2+'px';
       node.setAttribute('aria-label',item.name);icon(node,item);
-      node.addEventListener('pointerdown',event=>beginCarry(event,item,node));
+      node.addEventListener('pointerdown',event=>{
+        if(event.button===2&&equipItem&&!carry&&!pending){event.preventDefault();equip(item);}
+        else beginCarry(event,item,node);
+      });
       node.addEventListener('pointermove',event=>{if(!carry&&!pending)showTooltip(event,item);});
       node.addEventListener('pointerleave',()=>tooltip.hidden=true);grid.append(node);
     }
@@ -83,6 +86,11 @@ export function mountInventory(root,{moveItem,onClose=()=>{},onRegionsChanged=()
     carry.preview=placement(inventory,carry.item,x,y,page);
     let preview=grid.querySelector('.placement-preview');if(!preview){preview=document.createElement('div');grid.append(preview);}
     preview.className='placement-preview'+(carry.preview.valid?'':' invalid');preview.style.left=x*cell()+'px';preview.style.top=y*cell()+'px';preview.style.height=carry.item.height*cell()+'px';
+  }
+  async function equip(item) {
+    pending=true;tooltip.hidden=true;status.textContent='Equipping…';
+    try {const result=await equipItem({id:item.id,revision:item.revision});if(!disposed)status.textContent=result.ok?'':`Equip rejected: ${result.error||'request'}`;}
+    catch(error){if(!disposed)status.textContent=`Equip failed: ${error.message}`;}finally {pending=false;}
   }
   async function submit() {
     if(!carry||pending)return;const {item,preview}=carry;

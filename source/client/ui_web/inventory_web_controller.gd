@@ -6,6 +6,7 @@ var bridge: WebUiBridge
 var dispatcher: UiCommandDispatcher
 var world: SpikeWorld3D
 var opened: bool = false
+var equipment_opened: bool = false
 var _sequence: int = 0
 var _active_command: String = ""
 var _result: Dictionary = {}
@@ -33,6 +34,9 @@ func setup(game_world: SpikeWorld3D) -> void:
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
 	dispatcher.register_command("inventory.move_item", _valid_move, _move)
+	dispatcher.register_command("equipment.equip", _valid_equipment, _equip)
+	dispatcher.register_command("equipment.unequip", _valid_equipment, _unequip)
+	dispatcher.register_command("equipment.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_equipment)
 	dispatcher.register_command("inventory.close", func(p: Dictionary) -> bool: return p.is_empty(), _close)
 	host.keyboard_owner_changed.connect(func(owner: String) -> void: ClientState.menu_open = owner != "gameplay")
 	host.resized.connect(_layout)
@@ -52,12 +56,19 @@ func setup(game_world: SpikeWorld3D) -> void:
 func _inventory(snapshot: Dictionary) -> void:
 	if not snapshot.get("ok", false): return
 	var bag: Array = []
+	var equipped: Array = []
 	for item: Dictionary in snapshot.items:
-		if item.location != "bag": continue
-		var position: int = int(item.bag_position)
 		var comparison: Dictionary = world.inventory_endpoint.weapon_comparison(item)
-		bag.append({"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon": "iron_sword", "height": int(item.inventory_height), "quantity": int(item.amount), "x": position % InventoryGrid.COLUMNS, "y": (position % InventoryGrid.PAGE_CELLS) / InventoryGrid.COLUMNS, "page": position / InventoryGrid.PAGE_CELLS, "description": "Attack %d. After equipping: %d (%+d)." % [int(item.stats.get("attack", 0)), comparison.attack, comparison.delta]})
+		var display := {"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon": "iron_sword", "height": int(item.inventory_height), "quantity": int(item.amount), "description": "Attack %d. After equipping: %d (%+d)." % [int(item.stats.get("attack", 0)), comparison.attack, comparison.delta]}
+		if item.location == "equipment":
+			display["slot"] = str(item.equipment_slot)
+			equipped.append(display)
+		elif item.location == "bag":
+			var position: int = int(item.bag_position)
+			display.merge({"x":position % InventoryGrid.COLUMNS, "y":(position % InventoryGrid.PAGE_CELLS) / InventoryGrid.COLUMNS, "page":position / InventoryGrid.PAGE_CELLS})
+			bag.append(display)
 	dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag})
+	dispatcher.set_domain("equipment", {"items":equipped, "stats":snapshot.get("stats", {})})
 
 func _wallet(snapshot: Dictionary) -> void:
 	dispatcher.set_domain("wallet", {"balance": int(snapshot.get("balance", 0)), "ready": snapshot.has("balance")})
@@ -71,15 +82,27 @@ static func _valid_move(p: Dictionary) -> bool:
 static func _valid_scale(payload: Dictionary) -> bool:
 	return payload.size() == 1 and WebUiBridge.is_integer(payload.get("percent")) and float(payload.percent) / 100.0 in UI_SCALES
 
+static func _valid_equipment(payload: Dictionary) -> bool:
+	return payload.size() == 2 and _valid_identity(payload)
+
+func _equip(payload: Dictionary) -> Dictionary:
+	return await _submit(payload, "equip")
+
+func _unequip(payload: Dictionary) -> Dictionary:
+	return await _submit(payload, "unequip")
+
 func _move(payload: Dictionary) -> Dictionary:
 	return await _submit(payload)
 
-func _submit(payload: Dictionary) -> Dictionary:
+func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
 	if _active_command != "": return {"ok": false, "error": "pending"}
 	_sequence += 1
 	_active_command = "web-%d" % _sequence
 	_result = {}
-	world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), _active_command)
+	if action == "move":
+		world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), _active_command)
+	else:
+		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), _active_command)
 	var deadline: int = Time.get_ticks_msec() + 2500
 	while _result.is_empty() and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.025).timeout
@@ -91,11 +114,19 @@ func _operation_finished(id: String, result: Dictionary) -> void:
 	if id == _active_command: _result = result
 
 func _close(_payload: Dictionary) -> Dictionary:
-	set_open(false)
+	opened = false
+	_layout()
+	host.set_modal(false)
 	return {"ok": true}
+
+func _close_equipment(_payload: Dictionary) -> Dictionary:
+	equipment_opened = false
+	_layout()
+	return {"ok":true}
 
 func set_open(active: bool) -> void:
 	opened = active
+	equipment_opened = active
 	_layout()
 	host.set_modal(false) # Browser stays alive; opening only changes DOM visibility.
 
@@ -103,9 +134,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if ClientState.menu_open or not world.input_enabled: return
 	if not event is InputEventKey or not event.pressed or event.echo: return
 	if event.physical_keycode == KEY_I:
-		set_open(not opened)
+		set_open(not (opened or equipment_opened))
 		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_ESCAPE and opened:
+	elif event.keycode == KEY_ESCAPE and (opened or equipment_opened):
 		# Presentation shortcut only: web cancels carry first, otherwise requests close.
 		bridge.send("ui.shortcut", {"key": "Escape"})
 		get_viewport().set_input_as_handled()
@@ -146,4 +177,4 @@ func _layout() -> void:
 			if argument.begins_with("--ui-scale="): configured = argument.trim_prefix("--ui-scale=").to_float() / 100.0
 		if configured in UI_SCALES: ui_scale = configured
 		_scale_initialized = true
-	dispatcher.set_domain("hud", {"inventory_open": opened, "ui_scale": ui_scale, "viewport": {"width": host.size.x, "height": host.size.y}})
+	dispatcher.set_domain("hud", {"inventory_open": opened, "equipment_open":equipment_opened, "ui_scale": ui_scale, "viewport": {"width": host.size.x, "height": host.size.y}})
