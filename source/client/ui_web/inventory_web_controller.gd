@@ -44,6 +44,9 @@ func setup(game_world: SpikeWorld3D) -> void:
 	_inventory(world.inventory_endpoint.state)
 	_wallet(world.currency_endpoint.state)
 	_layout()
+	# Warm the browser/page on world entry. DOM stays hidden until inventory_open.
+	# UI_READY receives the current snapshot, including updates during startup.
+	host.open()
 
 func _inventory(snapshot: Dictionary) -> void:
 	if not snapshot.get("ok", false): return
@@ -90,13 +93,7 @@ func _close(_payload: Dictionary) -> Dictionary:
 func set_open(active: bool) -> void:
 	opened = active
 	_layout()
-	if active:
-		if not host.open():
-			_failure("CEF could not open")
-			return
-		host.set_modal(false)
-	else:
-		host.set_modal(false) # Keep the global browser alive; DOM owns visible regions.
+	host.set_modal(false) # Browser stays alive; opening only changes DOM visibility.
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo: return

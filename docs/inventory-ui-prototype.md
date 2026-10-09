@@ -154,3 +154,12 @@ Item placement preserves the cursor grab offset and snaps the whole footprint to
 its nearest grid origin. Grabbing the bottom of a tall item does not make the
 cursor cell its top slot. Preview and move command use the same snapped origin;
 bounds and overlap remain server-authoritative.
+
+The client starts CEF and loads the bundled Inventory page during world setup,
+after bridge/commands and initial domains are wired. Inventory remains hidden
+(`inventory_open=false`), reports no interactive regions and leaves input with
+gameplay. UI_READY receives the latest snapshot even if inventory/wallet data
+arrives during browser startup. Opening/closing only updates presentation state;
+it does not create a browser. Startup failure still restores the native fallback.
+This moves the cold-start cost to entering the world; it does not eliminate CEF's
+startup time or guarantee readiness if the player opens Inventory immediately.
