@@ -13,8 +13,8 @@ const slots = [
     ['special3', 'Special slot III', 80, 154, 32], ['special4', 'Special slot IV', 118, 154, 32]
 ];
 export function mountEquipment(root, { manager, resolveItemIcon = () => null, unequipItem, onClose = () => { }, onRegionsChanged = () => { } }) {
-    const shell = new UiWindow(root, { window_id: 'equipment', title: 'Equipment', className: 'equipment-window', manager,
-        placement: { preferredAnchor: 'right', defaultOffset: { x: -16, y: 240 }, relativeTo: 'inventory', relativeOffset: { x: -12, y: 0 } }, onClose, onRegionsChanged,
+    const shell = new UiWindow(root, { id: 'equipment', title: 'Equipment', className: 'equipment-window', manager,
+        placement: { kind: 'relative', target: 'inventory', side: 'left', align: 'start', gap: 12, fallback: { kind: 'viewport', anchor: 'top-right', offset: { x: -16, y: 240 } } }, onClose, onRegionsChanged,
         onCancel: () => { tooltip.hidden = true; }, content: `<div class="equipment-body"><div class="equipment-silhouette" aria-hidden="true">♟</div></div>
     <p class="equipment-stats"></p><p class="equipment-hint">Right-click bag items to equip.<br>Click weapon to unequip.</p>
     <p class="inventory-status" role="status"></p>` });

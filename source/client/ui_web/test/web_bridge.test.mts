@@ -84,13 +84,13 @@ test('window placement uses measured neighbors and preserves/clamps manual posit
  const hiddenLayout=new WindowManager({host:null});
  hiddenLayout.setViewport({width:1920,height:1080},1);
  const hidden=target();hidden.hidden=true;const visible=target();measure(visible,220,400);
- hiddenLayout.register({window_id:'hidden',element:hidden});
- hiddenLayout.register({window_id:'visible',element:visible,relativeTo:'hidden',defaultOffset:{x:-16,y:240}});
+ hiddenLayout.register({id:'hidden',element:hidden});
+ hiddenLayout.register({id:'visible',element:visible,placement:{kind:'relative',target:'hidden',side:'left',fallback:{kind:'viewport',anchor:'top-right',offset:{x:-16,y:240}}}});
  const fallback=hiddenLayout.place('visible');assert.ok(Number.isFinite(fallback.x)&&fallback.x+220<=1920);
  const layout=new WindowManager({host:null}),bag=target(),equipment=target();
  const bagSize=measure(bag,260,480);measure(equipment,220,400);
- layout.register({window_id:'inventory',element:bag,defaultOffset:{x:-16,y:240}});
- layout.register({window_id:'equipment',element:equipment,relativeTo:'inventory',relativeOffset:{x:-12,y:0}});
+ layout.register({id:'inventory',element:bag,placement:{kind:'viewport',anchor:'top-right',offset:{x:-16,y:240}}});
+ layout.register({id:'equipment',element:equipment,placement:{kind:'relative',target:'inventory',side:'left',gap:12}});
  for(const [width,height,scale] of [[1280,720,.8],[1280,720,.9],[1920,1080,1],[2560,1440,1.1],[3840,2160,1.5]] satisfies [number,number,number][]){
   layout.setViewport({width,height},scale);
   const right=layout.place('inventory'),left=layout.place('equipment');

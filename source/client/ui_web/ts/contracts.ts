@@ -1,9 +1,7 @@
 // Presentation contracts mirror the existing native Web UI bridge.
-export type WindowId = string;
+export type {WindowId, Point, Size, Viewport} from './core/window/window-types.js';
+import type {Viewport} from './core/window/window-types.js';
 export type ItemIconId = string;
-export interface Point { x: number; y: number }
-export interface Size { width: number; height: number }
-export type Viewport = Size;
 export interface ItemPresentation {
   id: string; revision: number; name: string; icon_id: ItemIconId;
   height: number; quantity: number; description?: string;
