@@ -76,6 +76,18 @@ func run_client() -> void:
 	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision})
 	check(result.ok and not endpoint.state.equipment.has("weapon"), "Web unequip commits and clears slot")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.location == "bag"), "unequip returns to free bag cells")
+	web.storage_opened = true
+	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
+	var transfer_payload: Dictionary = {"id":item.uid,"revision":current.revision,"from":"inventory","to":"storage","x":14,"y":0,"page":1,"quick":false}
+	result = await command("storage.transfer",transfer_payload)
+	check(result.ok and endpoint.state.storage.items.size()==1,"Web deposit commits and publishes Storage")
+	check(not endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid==item.uid),"deposit removes Inventory item")
+	transfer_payload.merge({"from":"storage","to":"inventory","quick":true,"revision":current.revision+1},true)
+	transfer_payload.x=0
+	transfer_payload.page=0
+	result = await command("storage.transfer",transfer_payload)
+	check(result.ok and endpoint.state.storage.items.is_empty(),"Web quick withdrawal clears Storage")
+	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid==item.uid and i.revision==current.revision+2),"withdrawal publishes revised Inventory")
 	if not failed: print("WEB_INVENTORY_CLIENT_OK: ", client_number)
 	finished.rpc_id(1)
 	await get_tree().create_timer(0.4).timeout

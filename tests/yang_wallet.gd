@@ -34,7 +34,7 @@ func _ready() -> void:
 	check(db.query("DROP TABLE wallets;"), "v13 fixture")
 	check(db.query("UPDATE meta SET value='13' WHERE key='schema_version';"), "v13 marker")
 	WorldSchema.ensure_schema(db)
-	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 15, "wallet migration v14")
+	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 16, "wallet migration v14")
 	check(db.query_with_bindings("INSERT INTO wallets VALUES(?,100000),(?,40000);", [a,b]), "initial balances")
 	var persistence := WorldDatabase.new()
 	persistence.db = db

@@ -14,6 +14,7 @@ import { element as findElement } from '../../core/dom.js';
 import { errorMessage } from '../../protocol.js';
 interface InventoryOptions {
   manager: WindowManager;
+  externalCarry?: () => boolean;
   resolveItemIcon?: ResolveItemIcon;
   moveItem: (command: MoveItemCommand) => Promise<CommandResult>;
   equipItem?: (command: ItemCommand) => Promise<CommandResult>;
@@ -42,6 +43,7 @@ export function mountInventory(
   root: HTMLElement,
   {
     manager,
+    externalCarry = () => false,
     resolveItemIcon = () => null,
     moveItem,
     equipItem,
@@ -131,7 +133,7 @@ export function mountInventory(
           if (event.button === 2 && equipItem && !carry && !pending) {
             event.preventDefault();
             equip(item);
-          } else beginCarry(event, item, node);
+          } else if (!externalCarry()) beginCarry(event, item, node);
         });
         node.addEventListener('pointermove', (event) => {
           if (!carry && !pending) showTooltip(event, item);

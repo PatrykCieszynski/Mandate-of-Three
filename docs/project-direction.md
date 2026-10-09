@@ -49,6 +49,8 @@ semantic names. Follow [UI Contract v1](ui-contract.md).
 Production Inventory and the weapon Equipment window compose the small internal
 [Core UI](core-ui.md). Shared shell/chrome, semantic skins and separate UI/item icon
 resolvers reduce repeated window code. Domain state and actions remain in screens;
+Account Storage (15×9×2) is integrated through the same CEF bridge; B opens it,
+with server-authoritative atomic deposit/withdrawal and account access.
 Shop, a full HUD/character sheet and final art remain outside this slice. No frontend framework. Use small headless smoke checks by
 default; extended gameplay/asset/export tests are opt-in. Native UI checks belong
 at meaningful milestones. See [testing policy](testing.md).

@@ -4,5 +4,7 @@
 
 .storage-grid-viewport {overflow-x:auto}
 
-.preview-carried-item {position:fixed;z-index:2147483647;pointer-events:none;background:#181a14b0;border:1px solid #bfa573}
-.preview-carried-item .item-icon {width:100%;height:100%;object-fit:contain}
+.transferred-item {position:fixed;z-index:2147483647;pointer-events:none;background:#181a14b0;border:1px solid #bfa573}
+.transferred-item .item-icon {width:100%;height:100%;object-fit:contain}
+
+#transfer-surface {position:fixed;inset:0;z-index:2147483646;pointer-events:none}

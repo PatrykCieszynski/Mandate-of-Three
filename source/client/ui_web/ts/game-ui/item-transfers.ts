@@ -1,9 +1,9 @@
-import type { InventoryItem } from '../web/protocol/contracts.js';
-import type { ItemContainer } from '../web/screens/storage/transfer.js';
-import type { WindowManager } from '../web/core/window/window-manager.js';
-import type { ResolveItemIcon } from '../web/game-ui/item-types.js';
-import { carriedCell, placement } from '../web/screens/inventory/placement.js';
-import { paintItemIcon } from '../web/game-ui/items/item-icon.js';
+import type { InventoryItem } from '../protocol/contracts.js';
+import type { ItemContainer } from '../screens/storage/transfer.js';
+import type { WindowManager } from '../core/window/window-manager.js';
+import type { ResolveItemIcon } from '../game-ui/item-types.js';
+import { carriedCell, placement } from '../screens/inventory/placement.js';
+import { paintItemIcon } from '../game-ui/items/item-icon.js';
 type ContainerId = 'inventory' | 'storage';
 interface Target {
   container: ContainerId;
@@ -24,7 +24,7 @@ interface Carry {
   moved: boolean;
   latched: boolean;
 }
-export function previewItemTransfer(options: {
+export function itemTransfers(options: {
   manager: WindowManager;
   resolveItemIcon: ResolveItemIcon;
   getState: (id: ContainerId) => ItemContainer;
@@ -33,14 +33,20 @@ export function previewItemTransfer(options: {
     to: ContainerId,
     item: InventoryItem,
     target?: Target,
-  ) => boolean;
+  ) => Promise<boolean>;
+  onRegionsChanged: () => void;
 }) {
   let carry: Carry | null = null;
+  let pending = false;
   let target: Target | null = null;
   const ghost = document.createElement('div');
-  ghost.className = 'preview-carried-item';
+  ghost.className = 'transferred-item';
   ghost.hidden = true;
   document.body.append(ghost);
+  const surface = document.createElement('div');
+  surface.id = 'transfer-surface';
+  surface.hidden = true;
+  document.body.append(surface);
   const marker = document.createElement('div');
   marker.className = 'placement-preview';
   const abort = new AbortController();
@@ -55,6 +61,7 @@ export function previewItemTransfer(options: {
     );
   const available = () => root('storage')?.hidden === false;
   function cancel() {
+    const hadCarry = carry !== null;
     const old = carry;
     carry = null;
     target = null;
@@ -62,7 +69,10 @@ export function previewItemTransfer(options: {
       old.node.releasePointerCapture(old.pointer);
     old?.node.classList.remove('carried');
     ghost.hidden = true;
+    surface.hidden = true;
     marker.remove();
+    options.onRegionsChanged();
+    return hadCarry;
   }
   function update(event: PointerEvent) {
     if (!carry) return;
@@ -107,12 +117,26 @@ export function previewItemTransfer(options: {
       element.append(marker);
     }
   }
+  async function submit(
+    from: ContainerId,
+    to: ContainerId,
+    item: InventoryItem,
+    target?: Target,
+  ) {
+    if (pending) return;
+    pending = true;
+    try {
+      await options.move(from, to, item, target);
+    } finally {
+      pending = false;
+    }
+  }
   function drop() {
     const old = carry,
       destination = target;
     cancel();
     if (old && destination?.valid)
-      options.move(old.container, destination.container, old.item, destination);
+      void submit(old.container, destination.container, old.item, destination);
   }
   document.addEventListener(
     'pointerdown',
@@ -147,7 +171,7 @@ export function previewItemTransfer(options: {
         drop();
         return;
       }
-      if (!available() || !(event.target instanceof Element)) return;
+      if (pending || !available() || !(event.target instanceof Element)) return;
       const node = event.target.closest<HTMLElement>('.ui-item-slot');
       const id = node?.closest('main')?.id;
       if (!node || (id !== 'inventory' && id !== 'storage')) return;
@@ -162,7 +186,7 @@ export function previewItemTransfer(options: {
         .querySelectorAll<HTMLElement>('.ui-tooltip')
         .forEach((tip) => (tip.hidden = true));
       if (event.ctrlKey) {
-        options.move(id, id === 'inventory' ? 'storage' : 'inventory', item);
+        void submit(id, id === 'inventory' ? 'storage' : 'inventory', item);
         return;
       }
       const rect = node.getBoundingClientRect(),
@@ -185,6 +209,8 @@ export function previewItemTransfer(options: {
       ghost.style.width = 40 * scale + 'px';
       ghost.style.height = item.height * 40 * scale + 'px';
       ghost.hidden = false;
+      surface.hidden = false;
+      options.onRegionsChanged();
       update(event);
     },
     { capture: true, signal: abort.signal },
@@ -242,11 +268,13 @@ export function previewItemTransfer(options: {
     { signal: abort.signal },
   );
   return {
+    regions: [surface],
     cancel,
     dispose() {
       cancel();
       abort.abort();
       ghost.remove();
+      surface.remove();
     },
   };
 }

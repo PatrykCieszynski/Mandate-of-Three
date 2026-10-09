@@ -8,6 +8,7 @@ build a generic stats/event framework or autosave the entire profile for each ch
 | --- | --- | --- |
 | XP, level, unspent attribute points | PlayerResource + separate dirty set | Approximately 60-second checkpoint, dirty characters only, one transaction |
 | Equipment and combat stats | Minimal server cache restored on entry | Immediate item transaction; refresh cache after commit |
+| Account Storage deposit/withdrawal | Account placement; receiving character on withdrawal | Immediate atomic item/placement/ownership/revision transaction |
 | ItemInstance: pickup, equip/unequip, ownership, placement | Server validates intent | Immediate atomic persistence |
 | Yang grinding income | Balance + pending delta + wallet dirty | Delta checkpoint around 30 seconds |
 | Economically significant Yang spending | Check affordability against RAM | Immediate transaction including pending income, spending and economic mutation |

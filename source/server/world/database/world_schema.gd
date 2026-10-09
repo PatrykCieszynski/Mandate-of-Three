@@ -65,6 +65,9 @@ static func ensure_schema(db: SQLite) -> void:
 			push_error("Could not migrate inventory grid to v15; existing item state retained.")
 			return
 
+	if version < 16 and not AccountStorageSqlite.ensure_schema(db):
+		push_error("Could not create account Storage schema v16.")
+		return
 
 static func _migration_v1(db: SQLite) -> void:
 	_create_table_if_missing(db, "accounts", {

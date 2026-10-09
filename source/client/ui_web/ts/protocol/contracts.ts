@@ -4,14 +4,15 @@ import type {ItemPresentation} from '../game-ui/item-types.js';
 export interface InventoryItem extends ItemPresentation { x: number; y: number; page: number }
 export interface EquipmentItem extends ItemPresentation { slot: string }
 export interface InventorySnapshot { columns: number; rows: number; pages: number; items: InventoryItem[] }
+export interface StorageSnapshot { columns:15; rows:9; pages:2; items:InventoryItem[] }
 export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?: number } }
 export interface WalletSnapshot { balance?: number; ready?: boolean }
-export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; ui_scale?: number; viewport?: Viewport }
+export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
-  inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
+  storage?: StorageSnapshot; inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
   player?: RawObject; hud?: HudSnapshot;
 }
 export interface Envelope { v: 1; type: string; id?: string; payload: RawObject }
@@ -22,7 +23,10 @@ export interface ShortcutMessage { v: 1; type: 'ui.shortcut'; payload: {key: 'Es
 export interface CommandResultMessage { v: 1; type: 'command.result'; id: string; payload: CommandResult }
 export interface ItemCommand { id: string; revision: number }
 export interface MoveItemCommand extends ItemCommand { x: number; y: number; page: number }
+export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'storage.transfer': StorageTransferCommand;
+  'storage.close': Record<string, never>;
   'inventory.move_item': MoveItemCommand;
   'equipment.equip': ItemCommand;
   'equipment.unequip': ItemCommand;

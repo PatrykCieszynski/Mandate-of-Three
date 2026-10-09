@@ -9,8 +9,6 @@ const devFiles = new Map([
   ['preview.css', path.join(uiRoot, 'dev/preview.css')],
   ['controls.js', path.join(uiRoot, '.dev/controls.js')],
   ['runtime.js', path.join(uiRoot, '.dev/runtime.js')],
-  ['item-transfer.js', path.join(uiRoot, '.dev/item-transfer.js')],
-  ['storage.js', path.join(uiRoot, '.dev/storage.js')],
 ]);
 const mime = {
   '.html': 'text/html; charset=utf-8',
@@ -63,7 +61,7 @@ export function createPreviewServer() {
             .toString('utf8')
             .replace(
               '<script type="module" src="game.js">',
-              '<link rel="stylesheet" href="/web/screens/storage/storage.css"><script type="module" src="/__dev/runtime.js"></script><script type="module" src="/__dev/storage.js"></script><script type="module" src="game.js">',
+              '<script type="module" src="/__dev/runtime.js"></script><script type="module" src="game.js">',
             ),
         );
       res.writeHead(200, {

@@ -1,12 +1,92 @@
+import { transfer } from '../web/screens/storage/transfer.js';
+import type {
+  StorageSnapshot,
+  StorageTransferCommand,
+} from '../web/protocol/contracts.js';
+import { isObject } from '../web/protocol.js';
 // Development-only native stand-in. Production bridge/store/views are unchanged.
 import { decode, encode } from '../web/protocol.js';
 import type { DomainSnapshot, StateType } from '../web/protocol/contracts.js';
 import type { PreviewAction } from './contracts.js';
 const receivers: ((raw: unknown) => void)[] = [];
 let accept = false;
+function storageFixture(): StorageSnapshot {
+  return {
+    columns: 15,
+    rows: 9,
+    pages: 2,
+    items: [
+      {
+        id: 'stored-sword',
+        revision: 1,
+        name: 'Stored iron sword',
+        icon_id: 'iron_sword',
+        height: 3,
+        quantity: 1,
+        x: 0,
+        y: 0,
+        page: 0,
+        description: 'A tall item on Storage page I.',
+      },
+      {
+        id: 'stored-potions',
+        revision: 1,
+        name: 'Stored potions',
+        icon_id: 'potion',
+        height: 1,
+        quantity: 20,
+        x: 7,
+        y: 4,
+        page: 0,
+        description: 'A stack in the middle of page I.',
+      },
+      {
+        id: 'stored-edge',
+        revision: 1,
+        name: 'Corner potion',
+        icon_id: 'potion',
+        height: 1,
+        quantity: 2,
+        x: 14,
+        y: 8,
+        page: 0,
+      },
+      {
+        id: 'stored-page-two',
+        revision: 1,
+        name: 'Page II sword',
+        icon_id: 'short_sword',
+        height: 2,
+        quantity: 1,
+        x: 3,
+        y: 2,
+        page: 1,
+        description: 'A two-cell item on Storage page II.',
+      },
+      {
+        id: 'stored-page-two-stack',
+        revision: 1,
+        name: 'Page II potions',
+        icon_id: 'potion',
+        height: 1,
+        quantity: 8,
+        x: 14,
+        y: 8,
+        page: 1,
+      },
+    ],
+  };
+}
+
 function fixture(): DomainSnapshot {
   return {
-    hud: { inventory_open: true, equipment_open: true, ui_scale: 1 },
+    storage: storageFixture(),
+    hud: {
+      storage_open: true,
+      inventory_open: true,
+      equipment_open: true,
+      ui_scale: 1,
+    },
     wallet: { balance: 12345, ready: true },
     inventory: {
       columns: 5,
@@ -78,17 +158,6 @@ function fixture(): DomainSnapshot {
   };
 }
 let state = fixture();
-export function previewInventory() {
-  return state.inventory;
-}
-export function updatePreviewInventory(
-  items: NonNullable<DomainSnapshot['inventory']>['items'],
-) {
-  if (!state.inventory) return;
-  state.inventory = { ...state.inventory, items };
-  emit('inventory.updated', state.inventory);
-}
-
 export const notify = (detail: object) =>
   parent.postMessage(
     { source: 'mandate-ui-preview', ...detail },
@@ -117,6 +186,53 @@ window.sendIpcMessage = (raw) => {
   }
   if (!message.id) return;
   queueMicrotask(() => {
+    if (message.type === 'storage.transfer') {
+      const p = message.payload;
+      if (!isTransfer(p) || !state.inventory || !state.storage) {
+        emit('command.result', { ok: false, error: 'request' }, message.id);
+        return;
+      }
+      const source = p.from === 'inventory' ? state.inventory : state.storage;
+      const destination =
+        p.to === 'inventory' ? state.inventory : state.storage;
+      const result = transfer(
+        source,
+        destination,
+        p.id,
+        p.revision,
+        p.quick ? undefined : { x: p.x, y: p.y, page: p.page },
+      );
+      if (result) {
+        if (p.from === 'storage' || p.to === 'storage')
+          state.storage = {
+            ...state.storage,
+            items:
+              p.to === 'storage' ? result.destinationItems : result.sourceItems,
+          };
+        if (p.from === 'inventory' || p.to === 'inventory')
+          state.inventory = {
+            ...state.inventory,
+            items:
+              p.to === 'inventory'
+                ? result.destinationItems
+                : result.sourceItems,
+          };
+        emit('storage.updated', state.storage);
+        emit('inventory.updated', state.inventory);
+      }
+      emit(
+        'command.result',
+        result ? { ok: true } : { ok: false, error: 'occupied_or_full' },
+        message.id,
+      );
+      return;
+    }
+    if (message.type === 'storage.close') {
+      state.hud = { ...state.hud, storage_open: false };
+      emit('hud.updated', state.hud);
+      emit('command.result', { ok: true }, message.id);
+      return;
+    }
     emit(
       'command.result',
       accept ? { ok: true } : { ok: false, error: 'preview_rejected' },
@@ -136,6 +252,24 @@ window.sendIpcMessage = (raw) => {
     }
   });
 };
+function isTransfer(p: unknown): p is StorageTransferCommand {
+  return (
+    isObject(p) &&
+    typeof p.id === 'string' &&
+    typeof p.revision === 'number' &&
+    Number.isSafeInteger(p.revision) &&
+    p.revision >= 0 &&
+    (p.from === 'inventory' || p.from === 'storage') &&
+    (p.to === 'inventory' || p.to === 'storage') &&
+    typeof p.quick === 'boolean' &&
+    typeof p.x === 'number' &&
+    Number.isSafeInteger(p.x) &&
+    typeof p.y === 'number' &&
+    Number.isSafeInteger(p.y) &&
+    typeof p.page === 'number' &&
+    Number.isSafeInteger(p.page)
+  );
+}
 export function decodePreviewAction(value: unknown): PreviewAction | null {
   if (value === null || typeof value !== 'object' || !('action' in value))
     return null;
@@ -180,6 +314,7 @@ window.addEventListener('message', (event) => {
       state = {
         ...state,
         inventory: { columns: 5, rows: 9, pages: 4, items: [] },
+        storage: { columns: 15, rows: 9, pages: 2, items: [] },
         equipment: { items: [], stats: { attack: 0 } },
       };
       snapshot();
@@ -201,7 +336,9 @@ window.addEventListener('message', (event) => {
       emit('wallet.updated', state.wallet);
       break;
     case 'storage':
-      break; // Handled by the development Storage composition.
+      state.hud = { ...state.hud, storage_open: request.value };
+      emit('hud.updated', state.hud);
+      break;
     case 'accept':
       accept = request.value;
       break;

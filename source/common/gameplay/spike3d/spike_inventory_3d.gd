@@ -39,6 +39,30 @@ func request_move_item(uid: String, revision: int, x: int, y: int, page: int, co
 	var position: int = page * InventoryGrid.PAGE_CELLS + y * InventoryGrid.COLUMNS + x if x >= 0 and x < InventoryGrid.COLUMNS and y >= 0 and y < InventoryGrid.ROWS and page >= 0 and page < InventoryGrid.PAGES else -1
 	_handle_command("move", uid, revision, position, command_id)
 
+@rpc("any_peer", "call_remote", "reliable", 1)
+func request_storage(uid: String, revision: int, source: String, destination: String, x: int, y: int, page: int, quick: bool, command_id: String) -> void:
+	if not GameMode.is_world_server() or command_id.length() > 80: return
+	var peer_id: int = multiplayer.get_remote_sender_id()
+	if not _world.characters.has(peer_id) or _store() == null: return
+	var now: int = Time.get_ticks_msec()
+	var result: Dictionary = {"ok":false,"error":"too_fast"}
+	if now - _last_action_ms.get(peer_id,-1000) >= 100:
+		_last_action_ms[peer_id] = now
+		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+		var columns: int = AccountStorageSqlite.COLUMNS if destination == "storage" else InventoryGrid.COLUMNS
+		var pages: int = AccountStorageSqlite.PAGES if destination == "storage" else InventoryGrid.PAGES
+		var position: int = page * columns * 9 + y * columns + x
+		if not quick and (x < 0 or x >= columns or y < 0 or y >= 9 or page < 0 or page >= pages):
+			result = {"ok":false,"error":"request"}
+		else:
+			result = AccountStorageSqlite.new(_store().db).transfer(resource.player_id,uid,revision,source,destination,-1 if quick else position)
+	# Active characters of this account on this map receive the new shared state.
+	var actor: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	for other_peer: int in _world.characters:
+		var other: PlayerResource = WorldServer.curr.connected_players.get(other_peer)
+		if other != null and other.account_name == actor.account_name: _send_state(other_peer)
+	if command_id != "": receive_operation.rpc_id(peer_id,command_id,result)
+
 func _handle_command(action: String, uid: String, revision: int, position: int, command_id: String) -> void:
 	if not GameMode.is_world_server() or command_id.length() > 80:
 		return
@@ -67,6 +91,7 @@ func _send_state(peer_id: int, error: String = "") -> void:
 		return
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
 	WorldServer.curr.update_runtime_equipment(resource.player_id, snapshot)
+	snapshot["storage"] = AccountStorageSqlite.new(_store().db).snapshot(resource.player_id)
 	if error != "":
 		snapshot["error"] = error
 	receive_inventory.rpc_id(peer_id, snapshot)
