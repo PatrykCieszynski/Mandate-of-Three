@@ -13,6 +13,8 @@
 [ext_resource type="PackedScene" path="res://source/client/ui/menus/settings/components/setting_option.tscn" id="11_option"]
 [ext_resource type="Shader" path="res://source/client/ui/shared/menu_blur_backdrop.gdshader" id="12_blur"]
 
+[ext_resource type="Script" path="res://source/client/ui/menus/settings/components/setting_ui_scale.gd" id="13_scale"]
+
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_8ix7g"]
 content_margin_left = 24.0
 content_margin_top = 12.0
@@ -231,6 +233,15 @@ horizontal_alignment = 1
 [node name="DisplayLabel" type="Label" parent="MainContainer/Root/HBoxContainer/GraphicsSettings/ScrollContainer/VBoxContainer" unique_id=700000015]
 layout_mode = 2
 text = "Display"
+
+[node name="UiScale" parent="MainContainer/Root/HBoxContainer/GraphicsSettings/ScrollContainer/VBoxContainer" node_paths=PackedStringArray("setting_label", "controller") instance=ExtResource("11_option")]
+layout_mode = 2
+script = ExtResource("13_scale")
+setting_section = &"interface"
+setting_property = &"ui_scale_percent"
+setting_label = NodePath("HBox/SettingName")
+controller = NodePath("HBox/Cell/Options")
+label_override = "UI scale (Web UI)"
 
 [node name="CameraZoom" parent="MainContainer/Root/HBoxContainer/GraphicsSettings/ScrollContainer/VBoxContainer" unique_id=1686564114 instance=ExtResource("3_pt8k0")]
 layout_mode = 2

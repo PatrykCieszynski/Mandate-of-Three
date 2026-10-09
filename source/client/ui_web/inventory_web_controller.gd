@@ -43,6 +43,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	world.inventory_endpoint.enable_web_ui(true)
 	_inventory(world.inventory_endpoint.state)
 	_wallet(world.currency_endpoint.state)
+	ClientState.settings.setting_changed.connect(_setting_changed)
 	_layout()
 	# Warm the browser/page on world entry. DOM stays hidden until inventory_open.
 	# UI_READY receives the current snapshot, including updates during startup.
@@ -66,6 +67,9 @@ static func _valid_identity(payload: Dictionary) -> bool:
 
 static func _valid_move(p: Dictionary) -> bool:
 	return p.size() == 5 and p.has_all(["id", "revision", "x", "y", "page"]) and _valid_identity(p) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and WebUiBridge.is_integer(p.page) and p.page >= 0 and p.page < InventoryGrid.PAGES
+
+static func _valid_scale(payload: Dictionary) -> bool:
+	return payload.size() == 1 and WebUiBridge.is_integer(payload.get("percent")) and float(payload.percent) / 100.0 in UI_SCALES
 
 func _move(payload: Dictionary) -> Dictionary:
 	return await _submit(payload)
@@ -96,6 +100,7 @@ func set_open(active: bool) -> void:
 	host.set_modal(false) # Browser stays alive; opening only changes DOM visibility.
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	if ClientState.menu_open or not world.input_enabled: return
 	if not event is InputEventKey or not event.pressed or event.echo: return
 	if event.physical_keycode == KEY_I:
 		set_open(not opened)
@@ -117,6 +122,13 @@ func _exit_tree() -> void:
 	ClientState.menu_open = false
 	if is_instance_valid(host): host.destroy_browser()
 
+func _setting_changed(section: StringName, property: StringName, value: Variant) -> void:
+	if section != &"interface" or property != &"ui_scale_percent": return
+	if _valid_scale({"percent":value}): set_ui_scale(float(value) / 100.0)
+	elif value == 0:
+		_scale_initialized = false
+		_layout()
+
 func set_ui_scale(value: float) -> void:
 	if value not in UI_SCALES: return
 	ui_scale = value
@@ -128,6 +140,8 @@ func _layout() -> void:
 	if not _scale_initialized:
 		ui_scale = 0.9 if host.size.y <= 720 else (1.5 if host.size.y >= 2160 else (1.1 if host.size.y >= 1440 else 1.0))
 		var configured: float = float(ProjectSettings.get_setting("mandate/ui_scale", ui_scale))
+		var saved: Variant = ClientState.settings.get_value(&"interface", &"ui_scale_percent")
+		if _valid_scale({"percent": saved}): configured = float(saved) / 100.0
 		for argument: String in OS.get_cmdline_args():
 			if argument.begins_with("--ui-scale="): configured = argument.trim_prefix("--ui-scale=").to_float() / 100.0
 		if configured in UI_SCALES: ui_scale = configured

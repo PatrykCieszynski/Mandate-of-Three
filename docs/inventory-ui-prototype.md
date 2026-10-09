@@ -163,3 +163,13 @@ arrives during browser startup. Opening/closing only updates presentation state;
 it does not create a browser. Startup failure still restores the native fallback.
 This moves the cold-start cost to entering the world; it does not eliminate CEF's
 startup time or guarantee readiness if the player opens Inventory immediately.
+
+UI scale is available in Options → Graphics → Display, in the existing native
+Settings menu (also accessible from login). The game status panel has an Options
+button. Values are Auto and 80/90/100/110/125/140/150 percent. Selection saves
+[interface]/ui_scale_percent in client_settings.cfg and immediately updates Web UI
+through the settings signal and hud.updated; no Web settings command is exposed.
+Options closes Inventory and owns gameplay input until Close/Escape. The setting
+scales Web UI only; the native options/login layout is unchanged. Startup priority
+is --ui-scale, saved preference, project setting, then viewport default. Auto uses
+the startup defaults again. The CLI override is reapplied at the next launch.

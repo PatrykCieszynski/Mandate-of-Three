@@ -40,6 +40,11 @@ func _run() -> void:
 	for invalid: Variant in ["", item_uid.left(31), item_uid.to_upper(), "g".repeat(32), 42]:
 		assert(not InventoryWebController._valid_identity({"id":invalid,"revision":0}))
 	assert(not InventoryWebController._valid_identity({"id":item_uid,"revision":-1}))
+	for percent: int in [80,90,100,110,125,140,150]:
+		assert(InventoryWebController._valid_scale({"percent":percent}))
+	for invalid: Variant in [0,79,81,151,100.5,"125",null]:
+		assert(not InventoryWebController._valid_scale({"percent":invalid}))
+	assert(not InventoryWebController._valid_scale({"percent":100,"extra":true}))
 	var configured_url: Variant = ProjectSettings.get_setting("network/api/base_url")
 	ProjectSettings.set_setting("network/api/base_url", "")
 	assert(GatewayAPI.base_url() == "http://127.0.0.1:8088")
