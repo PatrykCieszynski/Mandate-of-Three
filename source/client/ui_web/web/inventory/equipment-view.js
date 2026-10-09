@@ -1,4 +1,4 @@
-import {clampWindow} from './placement.js';
+import {WindowLayout} from './window-layout.js';
 import {icons} from './skin.js';
 // Logical slot rectangles match the native 156×188 legacy reference skin.
 const slots=[
@@ -9,7 +9,7 @@ const slots=[
   ['special1','Special slot I',4,154,32],['special2','Special slot II',42,154,32],
   ['special3','Special slot III',80,154,32],['special4','Special slot IV',118,154,32]
 ];
-export function mountEquipment(root,{unequipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
+export function mountEquipment(root,{layout:windowLayout=new WindowLayout(),unequipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
   root.innerHTML=`<section id="equipment-window" class="window-chrome equipment-window" aria-label="Equipment">
     <i class="chrome edge top"></i><i class="chrome edge bottom"></i><i class="chrome edge left"></i><i class="chrome edge right"></i>
     <i class="chrome corner tl"></i><i class="chrome corner tr"></i><i class="chrome corner bl"></i><i class="chrome corner br"></i>
@@ -18,7 +18,8 @@ export function mountEquipment(root,{unequipItem,onClose=()=>{},onRegionsChanged
     <p class="equipment-stats"></p><p class="equipment-hint">Right-click bag items to equip.<br>Click weapon to unequip.</p>
     <p class="inventory-status" role="status"></p></section><aside class="item-tooltip" hidden><h2></h2><p></p></aside>`;
   const panel=root.querySelector('.equipment-window'),body=root.querySelector('.equipment-body'),status=root.querySelector('[role=status]'),tooltip=root.querySelector('.item-tooltip');
-  let scale=1,position=null,drag=null,dragged=false,frame=0,dimensions=null,pending=false,items=[],disposed=false;
+  let scale=1,position=null,drag=null,frame=0,pending=false,items=[],disposed=false;
+  windowLayout.register({id:'equipment',element:panel,preferredAnchor:'right',defaultOffset:{x:-16,y:240},relativeTo:'inventory',relativeOffset:{x:-12,y:0}});
   const buttons=new Map();
   for(const [slot,label,x,y,height] of slots){
     const button=document.createElement('button');button.type='button';button.className='equipment-slot';button.dataset.slot=slot;
@@ -57,14 +58,11 @@ export function mountEquipment(root,{unequipItem,onClose=()=>{},onRegionsChanged
   function layout(){
     if(root.hidden)return;
     flush();panel.style.maxHeight=innerHeight/scale+'px';panel.style.overflowY=panel.scrollHeight>innerHeight/scale?'auto':'visible';
-    dimensions={width:panel.offsetWidth,height:panel.offsetHeight};
-    const bagWidth=parseFloat(getComputedStyle(root).getPropertyValue('--window-width'));
-    if(!position||!dragged)position={x:innerWidth/scale-bagWidth-12-dimensions.width-16,y:240};
-    position=clampWindow(position,dimensions,{width:innerWidth,height:innerHeight},scale);paint();
+    windowLayout.setViewport({width:innerWidth,height:innerHeight},scale);position=windowLayout.place('equipment');paint();
   }
   function stop(){flush();panel.style.willChange='auto';const old=drag;drag=null;if(old?.node.hasPointerCapture(old.id))old.node.releasePointerCapture(old.id);}
   function move(event){if(!drag||event.pointerId!==drag.id)return;
-    dragged=true;position=clampWindow({x:event.clientX/scale-drag.x,y:event.clientY/scale-drag.y},dimensions,{width:innerWidth,height:innerHeight},scale);
+    position=windowLayout.move('equipment',{x:event.clientX/scale-drag.x,y:event.clientY/scale-drag.y});
     if(!frame)frame=requestAnimationFrame(()=>{frame=0;if(!disposed)paint();});
   }
   const header=root.querySelector('.window-header');header.addEventListener('pointerdown',event=>{
@@ -82,5 +80,5 @@ export function mountEquipment(root,{unequipItem,onClose=()=>{},onRegionsChanged
     if(root.hidden)stop();
     const next=Number(state.hud?.ui_scale||scale);if(next!==scale){stop();scale=next;root.style.setProperty('--ui-scale',scale);}
     tooltip.hidden=true;items=state.equipment?.items||[];render();root.querySelector('.equipment-stats').textContent='Attack '+Number(state.equipment?.stats?.attack||0);layout();
-  },dispose(){disposed=true;stop();document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);document.removeEventListener('pointercancel',stop);window.removeEventListener('resize',resize);window.removeEventListener('blur',stop);}};
+  },dispose(){disposed=true;stop();windowLayout.unregister('equipment');document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);document.removeEventListener('pointercancel',stop);window.removeEventListener('resize',resize);window.removeEventListener('blur',stop);}};
 }

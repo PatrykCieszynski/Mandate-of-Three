@@ -74,7 +74,7 @@ func run_server() -> void:
 	check(store.inventory(owner_id).stats.attack == 23 and store.inventory(owner_id).items.size() == 3, "pickup does not equip automatically")
 	set_phase("COMPARE", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(replies[hero].ok, "UI comparison, pickup marker and immutable snapshot")
+	check(replies[hero].ok, "weapon comparison, picked item and immutable snapshot")
 	check(db.query("CREATE TEMP TRIGGER fail_runtime_equip BEFORE INSERT ON item_placements BEGIN SELECT RAISE(ABORT,'intentional runtime equip failure'); END;"), "failed equip fixture")
 	set_phase("FAIL_EQUIP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
@@ -113,7 +113,7 @@ func run_server() -> void:
 
 func equip_and_report(item: Dictionary) -> void:
 	var inventory: SpikeInventory3D = world.inventory_endpoint
-	inventory._act("equip", str(item.uid), int(item.revision))
+	inventory.request_equipment.rpc_id(1, "equip", str(item.uid), int(item.revision))
 	await inventory.state_changed
 	report.rpc_id(1, {"ok": not inventory.state.has("error") and inventory.state.equipment.get("weapon", "") == item.uid})
 
@@ -156,23 +156,14 @@ func _process(delta: float) -> void:
 		if inventory.state.items.size() != 3: return
 		attempted = true
 		var before: Dictionary = inventory.state.duplicate(true)
-		var ok: bool = inventory._new_item_uid == drop_uid and inventory._pickup_notice.contains("19")
+		var ok: bool = inventory.state.items.any(func(i: Dictionary) -> bool: return i.uid == drop_uid and i.stats.attack == 19)
 		for item: Dictionary in inventory.state.items:
 			var preview: Dictionary = inventory.weapon_comparison(item)
 			if item.uid == drop_uid:
 				ok = ok and preview.attack == 29 and preview.delta == 6
-				var label: Label = inventory._rows.get_node("Item_" + drop_uid + "/Comparison")
-				ok = ok and label.text.contains("29") and label.text.contains("+6")
 			elif item.location == "equipment":
 				ok = ok and preview.attack == 23 and preview.delta == 0
 		ok = ok and inventory.state == before
-		if CmdlineUtils.get_parsed_args().has("preview"):
-			inventory._toggle_panel(true)
-			await RenderingServer.frame_post_draw
-			var screenshot: Image = get_viewport().get_texture().get_image()
-			ok = ok and screenshot.save_png("res://.godot/verification/item-progression-preview.png") == OK
-			if ok: print("PROGRESSION_PREVIEW_OK: item-progression-preview.png")
-			inventory._toggle_panel(false)
 		report.rpc_id(1, {"ok": ok})
 	elif phase_name in ["BETTER", "FAIL_EQUIP"]:
 		attempted = true

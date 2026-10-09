@@ -57,9 +57,6 @@ The later schema v13 refactor removes those XP receipts; current behavior is in
 # Isolated database, server and two clients; normal servers not required.
 & .\tests\run-progression.ps1
 
-# Same test with a rendered client panel.
-& .\tests\run-progression.ps1 -Preview
-
 # Full login, comparisons and relog; requires gateway/master/world.
 & .\tests\run-items.ps1 -WithSession
 
@@ -85,3 +82,6 @@ the new-sword comparison and equip button are visible without scrolling. Full
 sessions also generate `pve-item-comparison-preview.png` and
 `pve-item-equipped-preview.png`. All 873 source scripts/scenes/resources loaded
 without parse errors. Earlier certificate-store and exit-resource diagnostics remain.
+
+The retired native inventory renderer and its screenshot checks are removed.
+The progression runner is headless; item state, RPCs and persistence checks remain.

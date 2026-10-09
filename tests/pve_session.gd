@@ -93,18 +93,10 @@ func run() -> void:
 	if comparison.attack != 10 + int(picked.stats.attack) or comparison.delta != comparison.attack - 27:
 		fail("picked item comparison")
 		return
-	if CmdlineUtils.get_parsed_args().has("preview"):
-		inventory._toggle_panel(true)
-		await capture("pve-item-comparison-preview.png")
-		inventory._toggle_panel(false)
 	await action("equip", picked)
 	if inventory.state.equipment.weapon != uid or inventory.state.stats.attack != comparison.attack:
 		fail("picked item exact equip and stats")
 		return
-	if CmdlineUtils.get_parsed_args().has("preview"):
-		inventory._toggle_panel(true)
-		await capture("pve-item-equipped-preview.png")
-		inventory._toggle_panel(false)
 	var persisted: Dictionary = inventory.state.duplicate(true)
 	while int(combat.state.progression.experience) == 0 and int(combat.state.progression.level) == 1:
 		await get_tree().process_frame

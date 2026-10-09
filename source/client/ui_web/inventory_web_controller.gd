@@ -8,8 +8,8 @@ var world: SpikeWorld3D
 var opened: bool = false
 var equipment_opened: bool = false
 var _sequence: int = 0
-var _active_command: String = ""
-var _result: Dictionary = {}
+var _pending_commands: Dictionary[String, Dictionary] = {}
+var _request_epoch: String = Crypto.new().generate_random_bytes(8).hex_encode()
 const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
 var ui_scale: float = 1.0
 var _scale_initialized: bool = false
@@ -30,6 +30,9 @@ func setup(game_world: SpikeWorld3D) -> void:
 	add_child(dispatcher)
 	host.message_received.connect(bridge.receive)
 	host.navigation_started.connect(bridge.reset_transport)
+	host.navigation_started.connect(func() -> void: _cancel_pending("ui_reload"))
+	Client.connection_changed.connect(func(connected: bool) -> void:
+		if not connected: _cancel_pending("disconnected"))
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
@@ -44,7 +47,6 @@ func setup(game_world: SpikeWorld3D) -> void:
 	world.inventory_endpoint.state_changed.connect(_inventory)
 	world.inventory_endpoint.operation_finished.connect(_operation_finished)
 	world.currency_endpoint.state_changed.connect(_wallet)
-	world.inventory_endpoint.enable_web_ui(true)
 	_inventory(world.inventory_endpoint.state)
 	_wallet(world.currency_endpoint.state)
 	ClientState.settings.setting_changed.connect(_setting_changed)
@@ -94,24 +96,35 @@ func _unequip(payload: Dictionary) -> Dictionary:
 func _move(payload: Dictionary) -> Dictionary:
 	return await _submit(payload)
 
-func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
-	if _active_command != "": return {"ok": false, "error": "pending"}
+func _begin_command() -> String:
 	_sequence += 1
-	_active_command = "web-%d" % _sequence
-	_result = {}
+	var id: String = "web-%s-%d" % [_request_epoch, _sequence]
+	_pending_commands[id] = {"result":{}}
+	return id
+
+func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
+	var id: String = _begin_command()
 	if action == "move":
-		world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), _active_command)
+		world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), id)
 	else:
-		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), _active_command)
-	var deadline: int = Time.get_ticks_msec() + 2500
-	while _result.is_empty() and Time.get_ticks_msec() < deadline:
+		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id)
+	return await _wait_command(id)
+
+func _wait_command(id: String, timeout_ms: int = 2500) -> Dictionary:
+	var deadline: int = Time.get_ticks_msec() + timeout_ms
+	while _pending_commands.has(id) and _pending_commands[id].result.is_empty() and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.025).timeout
-	var result: Dictionary = _result.duplicate()
-	_active_command = ""
-	return result if not result.is_empty() else {"ok": false, "error": "timeout"}
+	var result: Dictionary = _pending_commands.get(id, {"result":{}}).result.duplicate(true)
+	_pending_commands.erase(id)
+	return result if not result.is_empty() else {"ok":false, "error":"timeout"}
 
 func _operation_finished(id: String, result: Dictionary) -> void:
-	if id == _active_command: _result = result
+	if _pending_commands.has(id) and _pending_commands[id].result.is_empty():
+		_pending_commands[id].result = result.duplicate(true)
+
+func _cancel_pending(reason: String) -> void:
+	for entry: Dictionary in _pending_commands.values():
+		if entry.result.is_empty(): entry.result = {"ok":false, "error":reason}
 
 func _close(_payload: Dictionary) -> Dictionary:
 	opened = false
@@ -142,14 +155,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _failure(reason: String) -> void:
-	push_warning("Web inventory unavailable; native inventory retained: " + reason)
 	opened = false
 	ClientState.menu_open = false
+	_cancel_pending("ui_unavailable")
 	host.destroy_browser()
-	world.inventory_endpoint.enable_web_ui(false)
+	equipment_opened = false
+	world.show_ui_failure(reason)
 	set_process_unhandled_key_input(false)
 
 func _exit_tree() -> void:
+	_cancel_pending("teardown")
 	ClientState.menu_open = false
 	if is_instance_valid(host): host.destroy_browser()
 

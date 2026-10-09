@@ -76,3 +76,28 @@ test('carried footprint snaps nearest to its origin regardless of grab height',(
  assert.equal(placement(inventory,{id:'sword',height:3},2,3,0).valid,false);
  assert.equal(placement(inventory,{id:'sword',height:3},2,7,0).valid,false);
 });
+
+const placementUrl='data:text/javascript;base64,'+Buffer.from(await readFile(new URL('inventory/placement.js',base),'utf8')).toString('base64');
+const layoutCode=(await readFile(new URL('inventory/window-layout.js',base),'utf8')).replace("'./placement.js'",JSON.stringify(placementUrl));
+const {WindowLayout}=await import('data:text/javascript;base64,'+Buffer.from(layoutCode).toString('base64'));
+test('window placement uses measured neighbors and preserves/clamps manual positions',()=>{
+ const hiddenLayout=new WindowLayout();
+ hiddenLayout.setViewport({width:1920,height:1080},1);
+ hiddenLayout.register({id:'hidden',element:{getClientRects:()=>[]}});
+ hiddenLayout.register({id:'visible',element:{getClientRects:()=>[{}],offsetWidth:220,offsetHeight:400},relativeTo:'hidden',defaultOffset:{x:-16,y:240}});
+ const fallback=hiddenLayout.place('visible');assert.ok(Number.isFinite(fallback.x)&&fallback.x+220<=1920);
+ const layout=new WindowLayout(),bag={offsetWidth:260,offsetHeight:480,getClientRects:()=>[{}]},equipment={offsetWidth:220,offsetHeight:400,getClientRects:()=>[{}]};
+ layout.register({id:'inventory',element:bag,defaultOffset:{x:-16,y:240}});
+ layout.register({id:'equipment',element:equipment,relativeTo:'inventory',relativeOffset:{x:-12,y:0}});
+ for(const [width,height,scale] of [[1280,720,.8],[1280,720,.9],[1920,1080,1],[2560,1440,1.1],[3840,2160,1.5]]){
+  layout.setViewport({width,height},scale);
+  const right=layout.place('inventory'),left=layout.place('equipment');
+  assert.equal(left.x+equipment.offsetWidth+12,right.x);
+  assert.ok(right.y+bag.offsetHeight<=height/scale);
+ }
+ bag.offsetWidth=330;assert.equal(layout.place('equipment').x+220+12,layout.place('inventory').x);
+ layout.move('equipment',{x:40,y:50});bag.offsetWidth=250;
+ assert.deepEqual(layout.place('equipment'),{x:40,y:50});
+ layout.move('equipment',{x:9999,y:9999});layout.setViewport({width:1280,height:720},.9);
+ const clamped=layout.place('equipment');assert.ok(clamped.x+220<=1280/.9&&clamped.y+400<=720/.9);
+});

@@ -275,8 +275,9 @@ root `ui_scale` controls logical geometry independently of physical resolution.
 The screen uses region-based ownership, with temporary full-screen pointer
 ownership only while click-carrying. Closing releases focus and removes its
 regions without hiding the global browser. Reload receives the current snapshot.
-Client failures release input and retain native fallback. Headless and
-Compatibility use native UI.
+Client failures release input and show a technical UI-unavailable message.
+Headless creates no browser or inventory panel; unsupported renderers show the
+same technical message. Inventory has no native rendering fallback.
 
 Use `tools/cef_client/run.ps1` to install/import and start the root game with CEF.
 After setup, the same project can run directly from the editor or Godot CLI.
@@ -291,3 +292,12 @@ This also keeps outbound snapshot IPC outside the native signal emission stack.
 A headless contract fixture covers that event ordering. An isolated native Vulkan
 Mobile probe confirmed eager startup, I-key opening, gameplay focus and a visible
 Inventory DOM; it does not cover a full authenticated login or visual frame pacing.
+
+Production inventory composition uses a pending-command map, not a shared active
+command. Each RPC ID owns its result/timeout and unresolved requests are cancelled
+on navigation, disconnect and teardown. The Web bridge keeps its existing request
+correlation and UI_READY full-snapshot recovery.
+
+Inventory and Equipment share a small `WindowLayout` module: registration metadata,
+measured logical rectangles, viewport/uiScale, initial anchors and drag clamping.
+CEF and CSS presentation stay outside the authenticated inventory endpoint.

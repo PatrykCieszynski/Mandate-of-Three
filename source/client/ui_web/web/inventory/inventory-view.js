@@ -1,6 +1,7 @@
-import {placement,clampWindow,carriedCell} from './placement.js';
+import {WindowLayout} from './window-layout.js';
+import {placement,carriedCell} from './placement.js';
 import {icons} from './skin.js';
-export function mountInventory(root,{moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
+export function mountInventory(root,{layout=new WindowLayout(),moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
   root.innerHTML=`<section id="inventory-window" class="window window-chrome" aria-label="Inventory">
     <i class="chrome edge top"></i><i class="chrome edge bottom"></i><i class="chrome edge left"></i><i class="chrome edge right"></i>
     <i class="chrome corner tl"></i><i class="chrome corner tr"></i><i class="chrome corner bl"></i><i class="chrome corner br"></i>
@@ -11,11 +12,11 @@ export function mountInventory(root,{moveItem,equipItem,onClose=()=>{},onRegions
     <div class="carried-item" hidden></div><aside class="item-tooltip" hidden><h2></h2><p></p></aside>`;
   const panel=root.querySelector('.window'),grid=root.querySelector('.inventory-grid'),surface=root.querySelector('#carry-surface'),
     ghost=root.querySelector('.carried-item'),tooltip=root.querySelector('.item-tooltip'),status=root.querySelector('.inventory-status');
-  let inventory={columns:5,rows:9,pages:4,items:[]},scale=1,page=0,position=null,dragged=false,carry=null,windowDrag=null,windowFrame=0,windowSize=null,pending=false,disposed=false;
+  let inventory={columns:5,rows:9,pages:4,items:[]},scale=1,page=0,position=null,carry=null,windowDrag=null,windowFrame=0,pending=false,disposed=false;
   const viewport=()=>({width:innerWidth,height:innerHeight});
   const point=e=>({x:e.clientX/scale,y:e.clientY/scale});
   const cell=()=>parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
-  const size=()=>({width:panel.offsetWidth,height:panel.offsetHeight});
+  layout.register({id:'inventory',element:panel,preferredAnchor:'right',defaultOffset:{x:-16,y:240}});
   panel.style.left='0px';panel.style.top='0px';
   function paintWindow() {
     panel.style.transform=`translate3d(${position.x}px,${position.y}px,0)`;onRegionsChanged();
@@ -31,9 +32,7 @@ export function mountInventory(root,{moveItem,equipItem,onClose=()=>{},onRegions
     panel.style.maxHeight=innerHeight/scale+"px";
     const small=panel.scrollHeight+2>innerHeight/scale;
     panel.style.overflowY=small?"auto":"visible";panel.style.overflowX=small?"hidden":"visible";
-    windowSize=size();
-    if(!position||!dragged)position={x:innerWidth/scale-windowSize.width-16,y:240};
-    position=clampWindow(position,windowSize,viewport(),scale);
+    layout.setViewport(viewport(),scale);position=layout.place('inventory');
     paintWindow();
     surface.style.width=innerWidth/scale+'px';surface.style.height=innerHeight/scale+'px';onRegionsChanged();
   }
@@ -103,8 +102,8 @@ export function mountInventory(root,{moveItem,equipItem,onClose=()=>{},onRegions
   function pointerMove(event) {
     if(windowDrag&&event.pointerId===windowDrag.pointer){
       if(!windowDrag.node.hasPointerCapture(windowDrag.pointer))windowDrag=null;
-      else {dragged=true;const p=point(event);
-        position=clampWindow({x:p.x-windowDrag.offset.x,y:p.y-windowDrag.offset.y},windowSize,viewport(),scale);
+      else {const p=point(event);
+        position=layout.move('inventory',{x:p.x-windowDrag.offset.x,y:p.y-windowDrag.offset.y});
         if(!windowFrame)windowFrame=requestAnimationFrame(()=>{windowFrame=0;if(!disposed)paintWindow();});
       }
     }
@@ -140,6 +139,6 @@ export function mountInventory(root,{moveItem,equipItem,onClose=()=>{},onRegions
       const next=Number(snapshot.hud?.ui_scale||scale);if(next!==scale){cancelled();scale=next;root.style.setProperty('--ui-scale',scale);}
       // Opening and Godot viewport snapshots also clamp; native resize events may lag.
       positionWindow();},
-    dispose(){disposed=true;cancelled();document.removeEventListener('pointerdown',pointerDown);document.removeEventListener('pointermove',pointerMove);document.removeEventListener('pointerup',pointerUp);document.removeEventListener('pointercancel',cancelled);document.removeEventListener('keydown',keyDown);window.removeEventListener('resize',resize);window.removeEventListener('blur',cancelled);}
+    dispose(){disposed=true;cancelled();layout.unregister('inventory');document.removeEventListener('pointerdown',pointerDown);document.removeEventListener('pointermove',pointerMove);document.removeEventListener('pointerup',pointerUp);document.removeEventListener('pointercancel',cancelled);document.removeEventListener('keydown',keyDown);window.removeEventListener('resize',resize);window.removeEventListener('blur',cancelled);}
   };
 }

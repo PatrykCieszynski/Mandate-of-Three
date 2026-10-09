@@ -2,8 +2,8 @@
 
 Initial slice: 2026-10-07; inventory grid updated 2026-10-09. The new model works in Spike 3D through existing
 gateway/master/world login. **I** opens the panel; I, Esc or its button closes it.
-The native panel gates movement. The CEF Inventory uses region-based input
-ownership; see [Inventory UI](inventory-ui-prototype.md).
+The CEF Inventory uses region-based input ownership; the old native panel has
+been removed. Browser startup failures show a technical message; see [Inventory UI](inventory-ui-prototype.md).
 
 ## Model and implemented scope
 
