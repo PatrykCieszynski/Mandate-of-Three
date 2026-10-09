@@ -67,8 +67,12 @@ func run_client() -> void:
 	result = await command("inventory.move_item", {"id":item.uid,"revision":2,"x":0,"y":3,"page":0})
 	check(result.ok, "return to first page")
 	var current: Dictionary = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
-	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
-	check(result.ok and endpoint.state.equipment.get("weapon") == item.uid, "Web equip commits and publishes equipment")
+	var before_activation: Dictionary = endpoint.state.duplicate(true)
+	result = await command("item.activate", {"id":item.uid,"revision":current.revision - 1})
+	check(not result.ok and result.error == "stale" and endpoint.state.items == before_activation.items and endpoint.state.equipment == before_activation.equipment and endpoint.state.stats == before_activation.stats, "stale activation preserves authoritative snapshot")
+	result = await command("item.activate", {"id":item.uid,"revision":current.revision})
+	check(result.ok and endpoint.state.equipment.get("weapon") == item.uid, "Web activation commits and publishes equipment")
+	check(not endpoint.state.items.any(func(i: Dictionary) -> bool: return i.has("primary_action")), "action stays outside presentation snapshots")
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
 	check(current.location == "equipment", "equipped item leaves bag")
 	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision - 1})
@@ -76,6 +80,12 @@ func run_client() -> void:
 	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision})
 	check(result.ok and not endpoint.state.equipment.has("weapon"), "Web unequip commits and clears slot")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.location == "bag"), "unequip returns to free bag cells")
+	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
+	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
+	check(result.ok and endpoint.state.equipment.get("weapon") == item.uid, "explicit equip still commits")
+	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
+	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision})
+	check(result.ok and endpoint.state.stats.attack == 10, "explicit unequip restores runtime stats")
 	web.storage_opened = true
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
 	var transfer_payload: Dictionary = {"id":item.uid,"revision":current.revision,"from":"inventory","to":"storage","x":14,"y":0,"page":1,"quick":false}

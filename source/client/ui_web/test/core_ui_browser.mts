@@ -71,8 +71,9 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   const dimensions=await page.locator('#inventory-window').evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected HTML window');return {width:node.offsetWidth,height:node.offsetHeight};});
   assert.equal(await page.locator('html').evaluate(node=>node.classList.contains('has-close-asset')),!fallback);
   await clear();await page.locator('.inventory-item').click({button:'right'});
-  await page.waitForFunction(()=>sent.some(message=>message.type==='equipment.equip'));
+  await page.waitForFunction(()=>sent.some(message=>message.type==='item.activate'));
   assert.deepEqual((await commands())[0]?.payload,{id:'bag-item',revision:3});
+  assert.equal((await commands()).some(message=>message.type==='equipment.equip'),false);
   await page.locator('.equipment-slot[data-slot=weapon]').click();
   assert.deepEqual((await commands()).at(-1)?.payload,{id:'equipped-item',revision:4});
   // A rejected command does not remove the item before an authoritative update.

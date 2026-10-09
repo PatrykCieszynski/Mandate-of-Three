@@ -73,7 +73,7 @@ const view = mountInventory(root, {
     externalCarry: () => !storageRoot.hidden,
     manager,
     resolveItemIcon,
-    equipItem: (payload) => bridge.request('equipment.equip', payload),
+    activateItem: (payload) => bridge.request('item.activate', payload),
     moveItem: (payload) => bridge.request('inventory.move_item', payload),
     onClose: () => bridge.request('inventory.close', {}).catch(() => { }),
     onRegionsChanged: () => regions?.refresh(),

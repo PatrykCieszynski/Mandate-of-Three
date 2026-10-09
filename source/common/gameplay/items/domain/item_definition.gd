@@ -2,6 +2,9 @@ class_name ItemDefinition
 extends Resource
 ## Shared immutable content. Rolled values and ownership belong to ItemInstance.
 
+enum PrimaryAction { NONE, EQUIP, USE }
+@export var primary_action: PrimaryAction = PrimaryAction.NONE
+
 @export var definition_id: StringName
 @export var item_name: String
 @export var icon_id: StringName

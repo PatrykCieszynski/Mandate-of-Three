@@ -35,6 +35,10 @@ func request_equipment(action: String, uid: String, revision: int, command_id: S
 	_handle_command(action, uid, revision, -1, command_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
+func request_activate_item(uid: String, revision: int, command_id: String) -> void:
+	_handle_command("activate", uid, revision, -1, command_id)
+
+@rpc("any_peer", "call_remote", "reliable", 1)
 func request_move_item(uid: String, revision: int, x: int, y: int, page: int, command_id: String) -> void:
 	var position: int = page * InventoryGrid.PAGE_CELLS + y * InventoryGrid.COLUMNS + x if x >= 0 and x < InventoryGrid.COLUMNS and y >= 0 and y < InventoryGrid.ROWS and page >= 0 and page < InventoryGrid.PAGES else -1
 	_handle_command("move", uid, revision, position, command_id)
@@ -79,7 +83,10 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 	else:
 		_last_action_ms[peer_id] = now
 		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
-		result = _store().move_bag_item(resource.player_id, uid, revision, position) if action == "move" else _store().change_equipment(resource.player_id, uid, revision, action)
+		if action == "activate":
+			result = _store().activate_item(resource.player_id,uid,revision)
+		else:
+			result = _store().move_bag_item(resource.player_id, uid, revision, position) if action == "move" else _store().change_equipment(resource.player_id, uid, revision, action)
 	_send_state(peer_id, "" if result.ok else str(result.error))
 	if command_id != "":
 		receive_operation.rpc_id(peer_id, command_id, result)

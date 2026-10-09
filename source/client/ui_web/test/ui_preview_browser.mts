@@ -67,7 +67,7 @@ try {
     .waitFor();
   assert.match(
     (await page.locator('pre').textContent()) ?? '',
-    /equipment.equip/,
+    /item.activate/,
   );
   await page.locator('#accept').check();
   await ui.locator('#inventory .window-close').click();
