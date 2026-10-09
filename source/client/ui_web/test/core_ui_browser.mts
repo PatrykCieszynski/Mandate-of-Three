@@ -8,9 +8,15 @@ import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
 import type {Browser, BrowserType} from 'playwright-core';
 import type {Envelope, DomainSnapshot, RawObject} from '../web/protocol/contracts.js';
+import type {WindowManager} from '../web/core/window/window-manager.js';
+import type {mountStorageFixture} from './storage.fixture.mjs';
 import {bagItem,equippedItem} from './fixtures.mjs';
 declare global {
- interface Window { sent: Envelope[]; emit(type: string,payload: object,id?: string): void }
+ interface Window {
+  storageFixture?: ReturnType<typeof mountStorageFixture>; storageManager?: WindowManager;
+  storageActions: string[]; storageCloses: number; storageReports: number;
+  storageReporter?: ReturnType<typeof import('../web/bridge.js').reportInteractiveRegions>;
+  sent: Envelope[]; emit(type: string,payload: object,id?: string): void }
  interface HTMLElement { testPointer?: number }
  var sent: Envelope[];
  function emit(type: string,payload: object,id?: string): void;
@@ -22,9 +28,14 @@ const {chromium}: {chromium: BrowserType}=createRequire(import.meta.url)(playwri
 const root=fileURLToPath(new URL('../web/',import.meta.url)).replace(/[\\/]$/,'');
 const server=createServer(async(req,res)=>{
  try {
-  const file=path.resolve(root,'.'+decodeURIComponent((req.url ?? '/').split('?')[0] ?? '/'));
-  if(!file.startsWith(root+path.sep))throw Error('Outside UI root');
-  const types: Record<string,string>={'.js':'text/javascript','.css':'text/css','.png':'image/png','.html':'text/html'};
+  let pathname=decodeURIComponent((req.url ?? '/').split('?')[0] ?? '/');
+  // This single compiled fixture is served only by the opt-in test server. Its
+  // relative ../web imports use the same committed runtime as the production page.
+  const fixture=pathname==='/__fixtures/storage.fixture.mjs';
+  if(pathname.startsWith('/web/'))pathname=pathname.slice(4);
+  const file=fixture?fileURLToPath(new URL('./storage.fixture.mjs',import.meta.url)):path.resolve(root,'.'+pathname);
+  if(!fixture&&!file.startsWith(root+path.sep))throw Error('Outside UI root');
+  const types: Record<string,string>={'.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.png':'image/png','.html':'text/html'};
   res.setHeader('Content-Type',types[path.extname(file)]||'application/octet-stream');res.end(await readFile(file));
  }catch{res.statusCode=404;res.end();}
 });
@@ -117,18 +128,39 @@ async function verify(browser: Browser,url: string,fallback: boolean){
    await applySkin(document.documentElement,{assets:{'button.close.normal':'/missing.png','inventory.columns':'/missing.png'}});});
   assert.equal(await page.locator('html').evaluate(node=>node.classList.contains('has-close-asset')),false);
   assert.deepEqual(await page.locator('#inventory-window').evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected HTML window');return {width:node.offsetWidth,height:node.offsetHeight};}),dimensions);
-  // A third simple window composes only the shared shell and tooltip.
-  const storage=await page.evaluate(async()=>{
-   const shellPath='/core/window/ui-window.js',managerPath='/core/window/window-manager.js',tooltipPath='/core/primitives/ui-tooltip.js';
-   const {UiWindow}: typeof import('../web/core/window/ui-window.js')=await import(shellPath);
+  // Storage uses the same typed composition fixture as the default headless test.
+  await page.evaluate(async()=>{
+   const fixturePath='/__fixtures/storage.fixture.mjs',managerPath='/core/window/window-manager.js',bridgePath='/bridge.js';
+   const {mountStorageFixture}: typeof import('./storage.fixture.mjs')=await import(fixturePath);
    const {WindowManager}: typeof import('../web/core/window/window-manager.js')=await import(managerPath);
-   const {UiTooltip}: typeof import('../web/core/primitives/ui-tooltip.js')=await import(tooltipPath);
-   const root=document.createElement('main');document.body.append(root);const manager=new WindowManager();manager.setViewport({width:innerWidth,height:innerHeight},1);
-   let closes=0;const shell=new UiWindow(root,{manager,id:'storage',title:'Storage',onClose:()=>closes++});
-   const content=document.createElement('p');content.textContent='Storage content';shell.contentRoot.append(content);
-   const tip=UiTooltip(root,{geometry:()=>manager});shell.refresh();const close=root.querySelector<HTMLButtonElement>('.window-close');if(!close)throw Error('Missing close button');close.click();
-   const registered=manager.windows.has('storage');tip.dispose();shell.dispose();close.click();manager.dispose();root.remove();return {registered,closes};
-  });assert.deepEqual(storage,{registered:true,closes:1});
+   const {reportInteractiveRegions}: typeof import('../web/bridge.js')=await import(bridgePath);
+   const root=document.createElement('main');root.id='storage';document.body.append(root);
+   const manager=new WindowManager();manager.setViewport({width:innerWidth,height:innerHeight},1);
+   window.storageActions=[];window.storageCloses=0;window.storageReports=0;window.storageManager=manager;
+   const fixture=mountStorageFixture(root,{manager,resolveItemIcon:()=>null,onClose:()=>{window.storageCloses++;},
+    onItemAction:(_event,item)=>window.storageActions.push(item.id),onRegionsChanged:()=>window.storageReporter?.refresh()});
+   window.storageFixture=fixture;window.storageReporter=reportInteractiveRegions({event:()=>{window.storageReports++;}},fixture.regions);
+   fixture.setState({columns:4,rows:5,items:[{id:'stored-material',name:'Stored material',icon_id:'material',height:2,quantity:7,x:1,y:1,description:'Storage description'}]});
+  });await frame();
+  const stored=page.locator('#storage .ui-item-slot');await stored.click();assert.deepEqual(await page.evaluate(()=>window.storageActions),['stored-material']);
+  await stored.hover();assert.equal(await page.locator('#storage .item-tooltip').isVisible(),true);
+  assert.equal(await page.locator('#storage .item-tooltip p').textContent(),'Storage description');
+  assert.ok(await page.evaluate(()=>window.storageReports>0));
+  const storageHeader=page.locator('#storage .window-header');
+  await storageHeader.evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected header');node.addEventListener('pointerdown',event=>{node.testPointer=event.pointerId;},{once:true});});
+  const header=await storageHeader.boundingBox();assert.ok(header);await page.mouse.move(header.x+header.width/2,header.y+header.height/2);await page.mouse.down();
+  assert.equal(await storageHeader.evaluate(node=>node instanceof HTMLElement&&node.testPointer!==undefined&&node.hasPointerCapture(node.testPointer)),true);
+  await page.mouse.move(300,200,{steps:3});await page.mouse.up();await frame();
+  assert.equal(await page.evaluate(()=>window.storageManager?.activeWindowId),'storage');
+  await page.setViewportSize({width:960,height:720});await page.evaluate(()=>window.storageManager?.setScale(1.25));await frame();
+  const box=await page.locator('#storage-window').boundingBox();assert.ok(box);assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=960+.01&&box.y+box.height<=720+.01);
+  assert.equal(await page.locator('#storage .item-tooltip').isVisible(),false);
+  await page.evaluate(()=>window.storageFixture?.setState({columns:4,rows:5,items:[{id:'updated-material',name:'Updated material',icon_id:'material',height:1,quantity:9,x:2,y:2}]}));
+  assert.equal(await stored.getAttribute('data-id'),'updated-material');assert.equal(await stored.locator('.quantity').textContent(),'9');
+  await page.locator('#storage .window-close').click();assert.equal(await page.evaluate(()=>window.storageCloses),1);
+  await page.evaluate(()=>{window.storageFixture?.dispose();window.storageReporter?.dispose();window.storageManager?.dispose();document.getElementById('storage')?.remove();});
+  assert.equal(await page.evaluate(()=>window.storageManager?.windows.size),0);
+  await page.setViewportSize({width:1920,height:1080});
   await send(snapshot);await clear();await page.locator('#inventory .window-close').click();
   assert.equal((await commands()).at(-1)?.type,'inventory.close');
   await send({...snapshot,hud:{...snapshot.hud,inventory_open:false}});await clear();await page.locator('#equipment .window-close').click();

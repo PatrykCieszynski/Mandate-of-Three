@@ -23,6 +23,12 @@ foreach ($taskPreset in @('Windows','ServerWindows','ServerUbuntu')) {
             foreach ($taskRequired in @('addons/godot_cef/godot_cef.gdextension','source/client/ui_web/web/inventory/game.html','source/client/ui_web/web/inventory/game.js','source/client/ui_web/web/inventory/inventory.css','source/client/ui_web/web/core/window/ui-window.js','source/client/ui_web/web/core/window/generated/ui-window-template.js')) {
                 if ($taskRequired -notin $taskNames) { throw "Missing client resource: $taskRequired" }
             }
+            # Every local runtime module must survive packaging, including moved screens
+            # and the generated template. Development sources remain excluded above.
+            foreach ($taskModule in Get-ChildItem -LiteralPath (Join-Path $taskRoot 'source/client/ui_web/web') -Filter '*.js' -Recurse -File) {
+                $taskModuleName = $taskModule.FullName.Substring($taskRoot.Length + 1).Replace('\','/')
+                if ($taskModuleName -notin $taskNames) { throw "Missing Web UI runtime module: $taskModuleName" }
+            }
             if ($taskExtensions -notmatch 'godot_cef') { throw 'Client does not register CEF' }
             $taskSkin = Join-Path $taskRoot 'source/client/ui_web/web/inventory/legacy_skin'
             foreach ($taskImage in Get-ChildItem -LiteralPath $taskSkin -Filter '*.png' -File) {
