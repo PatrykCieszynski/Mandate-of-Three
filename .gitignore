@@ -55,3 +55,6 @@ __pycache__/
 
 # HTML source generates this local TypeScript module during Web UI build.
 /source/client/ui_web/ts/core/window/generated/
+
+# Browser-only development preview output
+source/client/ui_web/.dev/

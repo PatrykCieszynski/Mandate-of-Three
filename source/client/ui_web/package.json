@@ -10,8 +10,10 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "precheck": "npm run generate",
     "prebuild:tests": "npm run build",
-    "format": "prettier --write \"ts/core/**/*.ts\" \"ts/inventory/game.ts\" \"ts/inventory/domain-updates.ts\" \"ts/screens/**/*.ts\" \"test/core_cleanup.test.mts\" \"test/storage.fixture.mts\"",
-    "format:check": "prettier --check \"ts/core/**/*.ts\" \"ts/inventory/game.ts\" \"ts/inventory/domain-updates.ts\" \"ts/screens/**/*.ts\" \"test/core_cleanup.test.mts\" \"test/storage.fixture.mts\""
+    "format": "prettier --write \"ts/core/**/*.ts\" \"ts/inventory/game.ts\" \"ts/inventory/domain-updates.ts\" \"ts/screens/**/*.ts\" \"test/core_cleanup.test.mts\" \"test/storage.fixture.mts\" \"dev/**/*.{ts,html,css}\" \"scripts/dev.mjs\" \"scripts/preview-server.mjs\" \"test/ui_preview_browser.mts\" \"scripts/preview-server.d.mts\"",
+    "format:check": "prettier --check \"ts/core/**/*.ts\" \"ts/inventory/game.ts\" \"ts/inventory/domain-updates.ts\" \"ts/screens/**/*.ts\" \"test/core_cleanup.test.mts\" \"test/storage.fixture.mts\" \"dev/**/*.{ts,html,css}\" \"scripts/dev.mjs\" \"scripts/preview-server.mjs\" \"test/ui_preview_browser.mts\" \"scripts/preview-server.d.mts\"",
+    "dev": "node scripts/dev.mjs",
+    "build:dev": "tsc -p tsconfig.dev.json"
   },
   "devDependencies": {
     "@types/jsdom": "21.1.7",

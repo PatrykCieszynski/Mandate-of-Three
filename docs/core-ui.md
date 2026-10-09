@@ -222,3 +222,16 @@ modules and the cleanup/Storage fixtures. Run `npm run format` before rebuilding
 static JS and `npm run format:check` to verify; CI enforces the latter. Generated
 template source is excluded. Existing strict TypeScript checks remain the
 correctness gate; this adds no bundler, runtime dependency or event framework.
+
+## Daily browser development
+
+Run `npm --prefix source/client/ui_web run dev` from the repository root and
+open `http://127.0.0.1:4173/`. Production UI renders in an iframe with development
+fixture IPC, the same Core UI, screen composition, assets and production CSP.
+The surrounding development panel supplies fixture state, visibility, scale,
+Wallet changes and command results/logs. TypeScript watches files; reload after
+compilation. No Godot, browser automation package or live backend is required.
+
+This checks presentation and composition. Native CEF embedding, focus/input
+handoff, IPC transport, real settings/snapshots and server effects remain Godot
+integration checks. See the [preview workflow](../source/client/ui_web/README.md#browser-development-without-godot).

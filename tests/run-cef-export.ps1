@@ -15,7 +15,7 @@ foreach ($taskPreset in @('Windows','ServerWindows','ServerUbuntu')) {
     $taskZip = [IO.Compression.ZipFile]::OpenRead($taskPack)
     try {
         $taskNames = @($taskZip.Entries | ForEach-Object { $_.FullName })
-        if (@($taskNames | Where-Object { $_ -match '^source/client/ui_web/(node_modules|ts|scripts|test|\.tests)/' -or $_ -match '^source/client/ui_web/.*\.(ts|mts)$' -or $_ -match '^source/client/ui_web/(package.*|tsconfig.*)\.json$' }).Count -ne 0) { throw "Web UI development files leaked into $taskPreset" }
+        if (@($taskNames | Where-Object { $_ -match '^source/client/ui_web/(node_modules|ts|scripts|test|dev|\.dev|\.tests)/' -or $_ -match '^source/client/ui_web/.*\.(ts|mts)$' -or $_ -match '^source/client/ui_web/(package.*|tsconfig.*)\.json$' }).Count -ne 0) { throw "Web UI development files leaked into $taskPreset" }
         $taskEntry = $taskZip.GetEntry('.godot/extension_list.cfg')
         $taskReader = [IO.StreamReader]::new($taskEntry.Open())
         try { $taskExtensions = $taskReader.ReadToEnd() } finally { $taskReader.Dispose() }

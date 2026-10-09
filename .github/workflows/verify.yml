@@ -41,6 +41,8 @@ jobs:
         shell: pwsh
         run: |
           & ./tools/build-web-ui.ps1 -Tests
+          node ./source/client/ui_web/node_modules/typescript/bin/tsc -p ./source/client/ui_web/tsconfig.dev.json --noEmit
+          if ($LASTEXITCODE -ne 0) { throw 'Browser preview TypeScript check failed' }
           $generatedChanges = git status --porcelain -- source/client/ui_web/web
           if ($LASTEXITCODE -ne 0 -or $generatedChanges) { throw "Generated Web UI assets are out of date: $generatedChanges" }
       - name: Install the project's Godot editor
