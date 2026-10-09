@@ -1,3 +1,5 @@
+import { ITEM_SLOT_SIZE } from '../../game-ui/items/item-geometry.js';
+import { OwnedItemDragSubject, ownedItemPayload, itemWindowControls, } from '../../game-ui/items/item-drag-policy.js';
 import { element as findElement } from '../../core/dom.js';
 import { errorMessage } from '../../protocol.js';
 import { UiEquipmentSlot } from '../../game-ui/equipment/ui-equipment-slot.js';
@@ -18,7 +20,7 @@ const slots = [
     ['special1', 'Special slot I', 5, 116, 32],
     ['special2', 'Special slot II', 78, 116, 32],
 ];
-export function mountEquipment(root, { manager, resolveItemIcon = () => null, unequipItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
+export function mountEquipment(root, { manager, drag, equipItem, resolveItemIcon = () => null, unequipItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
     const shell = new UiWindow(root, {
         id: 'equipment',
         title: 'Equipment',
@@ -40,7 +42,9 @@ export function mountEquipment(root, { manager, resolveItemIcon = () => null, un
         onRegionsChanged,
         onCancel: () => {
             tooltip.hidden = true;
+            drag?.cancel();
         },
+        canDrag: () => !drag?.active,
     });
     shell.contentRoot.innerHTML = `<div class="equipment-body"><div class="equipment-silhouette" aria-hidden="true">♟</div></div>
     <p class="equipment-stats"></p><p class="equipment-hint">Right-click bag items to equip.<br>Click weapon to unequip.</p>
@@ -49,6 +53,8 @@ export function mountEquipment(root, { manager, resolveItemIcon = () => null, un
     const tip = ItemTooltip(root, { geometry: () => manager }), tooltip = tip.element;
     let pending = false, disposed = false;
     let items = [];
+    const bindings = itemWindowControls(drag, root);
+    const sourceBindings = [];
     const buttons = new Map();
     for (const [slot, label, x, y, height] of slots) {
         const tile = UiEquipmentSlot({
@@ -62,55 +68,118 @@ export function mountEquipment(root, { manager, resolveItemIcon = () => null, un
         }), button = tile.element;
         shell.listen(button, 'pointermove', (event) => showTooltip(event, slot));
         shell.listen(button, 'pointerleave', () => (tooltip.hidden = true));
-        shell.listen(button, 'click', async () => {
-            const item = items.find((item) => item.slot === slot);
-            if (!item || pending)
+        shell.listen(button, 'click', (event) => {
+            if (drag && event.detail !== 0)
                 return;
-            pending = true;
-            tooltip.hidden = true;
-            render();
-            status.textContent = 'Unequipping…';
-            try {
-                const result = await unequipItem({
-                    id: item.id,
-                    revision: item.revision,
-                });
-                if (!disposed)
-                    status.textContent = result.ok
-                        ? ''
-                        : `Unequip rejected: ${result.error || 'request'}`;
-            }
-            catch (error) {
-                if (!disposed)
-                    status.textContent = `Unequip failed: ${errorMessage(error)}`;
-            }
-            finally {
-                pending = false;
-                if (!disposed)
-                    render();
+            const item = items.find((item) => item.slot === slot);
+            if (item)
+                void unequip(item);
+        });
+        shell.listen(button, 'pointerdown', (event) => {
+            if (event.button !== 2 || drag?.active)
+                return;
+            const item = items.find((item) => item.slot === slot);
+            if (item) {
+                event.preventDefault();
+                void unequip(item);
             }
         });
+        if (drag)
+            bindings.push(drag.registerTarget({
+                element: button,
+                preview: (payload) => {
+                    const subject = payload.subject instanceof OwnedItemDragSubject
+                        ? payload.subject
+                        : null;
+                    // Only the currently implemented weapon slot accepts bag drops. The World
+                    // remains responsible for definition/slot compatibility and revision checks.
+                    const valid = !!subject &&
+                        subject.container === 'inventory' &&
+                        slot === 'weapon' &&
+                        !!equipItem &&
+                        !pending;
+                    const highlight = document.createElement('div');
+                    highlight.className =
+                        'item-drop-highlight' + (valid ? '' : ' invalid');
+                    return {
+                        valid,
+                        data: subject,
+                        visual: { element: highlight, parent: button },
+                    };
+                },
+                drop: async (_payload, preview) => {
+                    if (preview.data)
+                        await equip(preview.data.item);
+                },
+            }));
         buttons.set(slot, tile);
         body.append(button);
     }
     function showTooltip(event, slot) {
         const item = items.find((item) => item.slot === slot);
-        if (!item || pending || shell.drag)
+        if (!item || pending || shell.drag || drag?.active)
             return;
         tip.show(event, item);
     }
+    async function action(item, command, label, pendingText) {
+        if (pending || disposed)
+            return;
+        pending = true;
+        tooltip.hidden = true;
+        render();
+        status.textContent = pendingText;
+        try {
+            const result = await command({ id: item.id, revision: item.revision });
+            if (!disposed)
+                status.textContent = result.ok
+                    ? ''
+                    : `${label} rejected: ${result.error || 'request'}`;
+        }
+        catch (error) {
+            if (!disposed)
+                status.textContent = `${label} failed: ${errorMessage(error)}`;
+        }
+        finally {
+            pending = false;
+            if (!disposed)
+                render();
+        }
+    }
+    function unequip(item) {
+        return action(item, unequipItem, 'Unequip', 'Unequipping…');
+    }
+    async function equip(item) {
+        if (equipItem)
+            await action(item, equipItem, 'Equip', 'Equipping…');
+    }
     function render() {
+        sourceBindings.forEach((binding) => binding.dispose());
+        sourceBindings.length = 0;
         for (const [slot, tile] of buttons) {
             const item = items.find((item) => item.slot === slot);
             tile.setItem(item, { enabled: slot === 'weapon' && !!item && !pending });
+            if (drag && item && slot === 'weapon' && !pending)
+                sourceBindings.push(drag.registerSource({
+                    element: tile.element,
+                    payload: () => {
+                        shell.handle.activate();
+                        tip.hide();
+                        return ownedItemPayload('equipment', item, ITEM_SLOT_SIZE, resolveItemIcon);
+                    },
+                    onClick: () => {
+                        void unequip(item);
+                    },
+                }));
         }
     }
     return {
         regions: [panel],
         close: onClose,
+        unequip,
         refresh: () => shell.refresh(),
         activate: () => shell.handle.activate(),
         setState(state) {
+            drag?.cancel();
             tooltip.hidden = true;
             items = state.equipment?.items || [];
             render();
@@ -119,7 +188,11 @@ export function mountEquipment(root, { manager, resolveItemIcon = () => null, un
             shell.refresh();
         },
         dispose() {
+            if (disposed)
+                return;
             disposed = true;
+            sourceBindings.forEach((binding) => binding.dispose());
+            bindings.forEach((binding) => binding.dispose());
             shell.dispose();
             tip.dispose();
         },

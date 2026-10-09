@@ -1,5 +1,5 @@
 import type { InventoryItem } from '../../protocol/contracts.js';
-import { placement } from '../inventory/placement.js';
+import { placement, firstFittingPlacement } from '../inventory/placement.js';
 export interface ItemContainer {
   columns: number;
   rows: number;
@@ -27,17 +27,7 @@ export function transfer(
   const same = source === destination;
   if (!same && destination.items.some((other) => other.id === id)) return null;
   const model = { ...destination, items: [...destination.items] };
-  let location = target;
-  if (!location) {
-    search: for (let page = 0; page < destination.pages; page++)
-      for (let y = 0; y < destination.rows; y++)
-        for (let x = 0; x < destination.columns; x++) {
-          if (placement(model, item, x, y, page).valid) {
-            location = { x, y, page };
-            break search;
-          }
-        }
-  }
+  const location = target ?? firstFittingPlacement(model, item);
   if (
     !location ||
     !placement(model, item, location.x, location.y, location.page).valid

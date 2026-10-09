@@ -23,3 +23,15 @@ export function placement(inventory, item, x, y, page) {
             y + item.height > other.y);
     return { x, y, page, valid };
 }
+// Advisory receiving preview. Absence of a requested position means first fit;
+// authoritative placement and transactions remain exclusively in World.
+export function firstFittingPlacement(inventory, item) {
+    for (let page = 0; page < inventory.pages; page++)
+        for (let y = 0; y < inventory.rows; y++)
+            for (let x = 0; x < inventory.columns; x++) {
+                const candidate = placement(inventory, item, x, y, page);
+                if (candidate.valid)
+                    return candidate;
+            }
+    return null;
+}
