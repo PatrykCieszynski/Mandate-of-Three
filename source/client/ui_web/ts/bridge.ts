@@ -1,4 +1,4 @@
-import type {CommandPayloads, CommandResult, StateMessage, EventPayloads} from './contracts.js';
+import type {CommandPayloads, CommandResult, StateMessage, EventPayloads} from './protocol/contracts.js';
 interface BridgeOptions {
   send?: (message: string) => void;
   subscribe?: (callback: (message: unknown) => void) => void;

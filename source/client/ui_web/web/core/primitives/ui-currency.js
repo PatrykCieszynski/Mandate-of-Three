@@ -1,5 +1,5 @@
-import { uiIcons } from './ui-icons.js';
-import { loadImage } from './skin.js';
+import { uiIcons } from '../assets/ui-icons.js';
+import { loadImage } from '../assets/skin.js';
 export function UiCurrency(element = document.createElement('footer'), { label = '', iconId, icons = uiIcons, loadAsset = loadImage } = {}) {
     element.classList.add('ui-currency');
     element.replaceChildren();

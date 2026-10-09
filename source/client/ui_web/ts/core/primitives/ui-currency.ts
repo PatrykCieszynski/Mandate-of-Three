@@ -1,7 +1,7 @@
-import type {AssetLoader, UiIconId} from '../contracts.js';
-import type {UiIconRegistry} from './ui-icons.js';
-import {uiIcons} from './ui-icons.js';
-import {loadImage} from './skin.js';
+import type {AssetLoader, UiIconId} from '../assets/types.js';
+import type {UiIconRegistry} from '../assets/ui-icons.js';
+import {uiIcons} from '../assets/ui-icons.js';
+import {loadImage} from '../assets/skin.js';
 export function UiCurrency(element=document.createElement('footer'),{label='',iconId,icons=uiIcons,loadAsset=loadImage}: {label?: string; iconId?: UiIconId; icons?: UiIconRegistry; loadAsset?: AssetLoader}={}) {
   element.classList.add('ui-currency');element.replaceChildren();
   const icon=document.createElement('span'),caption=document.createElement('span'),amount=document.createElement('strong');

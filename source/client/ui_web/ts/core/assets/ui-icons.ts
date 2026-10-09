@@ -1,5 +1,6 @@
-import type {UiIconGroups, UiIconId, UiIconDomain} from '../contracts.js';
-export const uiIconDomains: readonly UiIconDomain[]=Object.freeze(['buffs','debuffs','status','skills','actions','currencies','quests','glyphs']);
+import type {UiIconGroups, UiIconId} from './types.js';
+import {uiIconDomains} from './types.js';
+export {uiIconDomains} from './types.js';
 // Global UI presentation icons. Item content has a separate resolver.
 export class UiIconRegistry {
   declare icons: Map<string, string>;

@@ -1,9 +1,9 @@
-import type {ItemIconId} from '../contracts.js';
+import type {ItemIconId} from '../game-ui/item-types.js';
 import {element as findElement} from '../core/dom.js';
 import {readDomainSnapshot} from '../protocol.js';
-import {uiIcons} from '../core/ui-icons.js';
+import {uiIcons} from '../core/assets/ui-icons.js';
 import {ItemIconResolver} from '../content/item-icons.js';
-import {applySkin} from '../core/skin.js';
+import {applySkin} from '../core/assets/skin.js';
 import {loadLegacySkin} from '../skins/legacy.js';
 import {WindowManager} from '../core/window/window-manager.js';
 import {WebBridge,reportInteractiveRegions} from '../bridge.js';

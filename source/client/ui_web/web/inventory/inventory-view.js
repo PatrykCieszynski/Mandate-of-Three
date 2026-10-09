@@ -1,11 +1,11 @@
 import { element as findElement } from '../core/dom.js';
 import { errorMessage } from '../protocol.js';
-import { UiTab } from '../core/ui-tab.js';
+import { UiTab } from '../core/primitives/ui-tab.js';
 import { UiInventoryGrid } from '../game-ui/ui-inventory-grid.js';
 import { UiItemSlot } from '../game-ui/ui-item-slot.js';
 import { paintItemIcon } from '../game-ui/item-icon.js';
-import { UiTooltip } from '../core/ui-tooltip.js';
-import { UiCurrency } from '../core/ui-currency.js';
+import { ItemTooltip } from '../game-ui/items/item-tooltip.js';
+import { UiCurrency } from '../core/primitives/ui-currency.js';
 import { UiWindow } from '../core/window/ui-window.js';
 import { placement, carriedCell } from './placement.js';
 export function mountInventory(root, { manager, resolveItemIcon = () => null, moveItem, equipItem, onClose = () => { }, onRegionsChanged = () => { } }) {
@@ -20,7 +20,7 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
     <p class="inventory-status" role="status"></p>`;
     root.insertAdjacentHTML('beforeend', `<div id="carry-surface" hidden></div><div class="carried-item" hidden></div>`);
     const panel = findElement(root, '.window', 'section'), grid = findElement(root, '.inventory-grid', 'div'), surface = findElement(root, '#carry-surface', 'div'), ghost = findElement(root, '.carried-item', 'div'), status = findElement(root, '.inventory-status', 'p');
-    const tip = UiTooltip(root, { geometry: () => manager }), tooltip = tip.element, currency = UiCurrency(findElement(root, '.wallet', 'footer'), { label: 'Yang', iconId: 'currencies.yang' });
+    const tip = ItemTooltip(root, { geometry: () => manager }), tooltip = tip.element, currency = UiCurrency(findElement(root, '.wallet', 'footer'), { label: 'Yang', iconId: 'currencies.yang' });
     const tabs = ['I', 'II', 'III', 'IV'].map((label, index) => {
         const tab = UiTab({ label, onSelect: () => { if (!carry?.latched)
                 cancelCarry(); page = index; render(); } });

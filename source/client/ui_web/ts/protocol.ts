@@ -1,5 +1,6 @@
-import type {Envelope, RawObject, CommandResult, DomainName, DomainSnapshot, RawDomainState,
-  StateMessage, InventorySnapshot, InventoryItem, ItemPresentation, EquipmentItem, EquipmentSnapshot, WalletSnapshot, HudSnapshot, Viewport} from './contracts.js';
+import type {Envelope, RawObject, CommandResult, DomainName, DomainSnapshot, RawDomainState, StateMessage, InventorySnapshot, InventoryItem, EquipmentItem, EquipmentSnapshot, WalletSnapshot, HudSnapshot} from './protocol/contracts.js';
+import type {ItemPresentation} from './game-ui/item-types.js';
+import type {Viewport} from './core/window/window-types.js';
 export const VERSION = 1;
 export const MAX_BYTES = 16384;
 const bytes = (value: string) => new TextEncoder().encode(value).length;

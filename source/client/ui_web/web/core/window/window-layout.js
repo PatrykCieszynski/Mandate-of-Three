@@ -1,4 +1,4 @@
-import { clampWindow } from '../geometry.js';
+import { clampWindow } from './geometry.js';
 const defaultPlacement = { kind: 'viewport', anchor: 'top-right' };
 // Only measured, logical geometry. Screens own dimensions and placement choices.
 export class WindowLayout {

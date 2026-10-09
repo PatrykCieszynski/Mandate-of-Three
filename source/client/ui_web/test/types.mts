@@ -1,5 +1,8 @@
 import type {WebBridge} from '../web/bridge.js';
-import type {ItemIconId, UiIconId, Skin, DomainSnapshot} from '../web/contracts.js';
+import type {ItemIconId} from '../web/game-ui/item-types.js';
+import type {UiIconId, Skin} from '../web/core/assets/types.js';
+import type {DomainSnapshot} from '../web/protocol/contracts.js';
+import {UiWindow} from '../web/core/window/ui-window.js';
 import type {WindowManager} from '../web/core/window/window-manager.js';
 // Negative examples make strict contract regressions fail the test compilation.
 export function checkContracts(bridge: WebBridge,manager: WindowManager,root: HTMLElement) {
@@ -10,6 +13,12 @@ export function checkContracts(bridge: WebBridge,manager: WindowManager,root: HT
   bridge.request('get_tree().quit',{});
   // @ts-expect-error Stable window identity is required.
   manager.register({element:root});
+  // @ts-expect-error Registration has no renderer callback contract.
+  manager.register({id:'test',element:root,paint:()=>{}});
+  // @ts-expect-error Content is composed through contentRoot.
+  new UiWindow(root,{id:'test',title:'Test',manager,content:'<p>Test</p>'});
+  // @ts-expect-error Relative placement requires an explicit side.
+  manager.register({id:'test',element:root,placement:{kind:'relative',target:'inventory'}});
   // @ts-expect-error Geometry is numeric.
   manager.setViewport({width:'1920',height:1080});
   const itemId: ItemIconId='sword';

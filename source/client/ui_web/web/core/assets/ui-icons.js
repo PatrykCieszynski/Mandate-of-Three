@@ -1,4 +1,5 @@
-export const uiIconDomains = Object.freeze(['buffs', 'debuffs', 'status', 'skills', 'actions', 'currencies', 'quests', 'glyphs']);
+import { uiIconDomains } from './types.js';
+export { uiIconDomains } from './types.js';
 // Global UI presentation icons. Item content has a separate resolver.
 export class UiIconRegistry {
     constructor() { this.icons = new Map(); this.listeners = new Set(); }

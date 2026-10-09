@@ -1,6 +1,6 @@
 import type {WindowId, Point, WindowPlacement, WindowHandle} from './window-types.js';
 import type {WindowManager} from './window-manager.js';
-import {UiTitlebar} from '../ui-titlebar.js';
+import {UiTitlebar} from '../primitives/ui-titlebar.js';
 import {WindowDragController} from './window-drag.js';
 import {createWindowShell} from './window-shell.js';
 export interface UiWindowOptions {

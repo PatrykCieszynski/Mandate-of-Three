@@ -1,6 +1,6 @@
 import {JSDOM} from 'jsdom';
 import {WindowManager} from '../web/core/window/window-manager.js';
-import type {InventoryItem, EquipmentItem} from '../web/contracts.js';
+import type {InventoryItem, EquipmentItem} from '../web/protocol/contracts.js';
 export const bagItem: InventoryItem={id:'bag-item',revision:3,name:'Sword',icon_id:'iron_sword',x:0,y:0,page:0,height:3,quantity:2,description:'Example'};
 export const equippedItem: EquipmentItem={id:'equipped-item',revision:4,name:'Equipped sword',icon_id:'iron_sword',slot:'weapon',height:3,quantity:1};
 export function environment(){

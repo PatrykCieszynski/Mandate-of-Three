@@ -1,5 +1,5 @@
 import type {Point, Size, Viewport, WindowId, WindowPlacement, ViewportPlacement} from './window-types.js';
-import {clampWindow} from '../geometry.js';
+import {clampWindow} from './geometry.js';
 interface LayoutEntry {
   element: HTMLElement; placement: WindowPlacement; size: Size | null;
   position: Point | null; manual: boolean;

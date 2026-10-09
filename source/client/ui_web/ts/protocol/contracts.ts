@@ -1,11 +1,6 @@
-// Presentation contracts mirror the existing native Web UI bridge.
-export type {WindowId, Point, Size, Viewport} from './core/window/window-types.js';
-import type {Viewport} from './core/window/window-types.js';
-export type ItemIconId = string;
-export interface ItemPresentation {
-  id: string; revision: number; name: string; icon_id: ItemIconId;
-  height: number; quantity: number; description?: string;
-}
+// Existing native wire contracts; protocol.ts validates unknown input.
+import type {Viewport} from '../core/window/window-types.js';
+import type {ItemPresentation} from '../game-ui/item-types.js';
 export interface InventoryItem extends ItemPresentation { x: number; y: number; page: number }
 export interface EquipmentItem extends ItemPresentation { slot: string }
 export interface InventorySnapshot { columns: number; rows: number; pages: number; items: InventoryItem[] }
@@ -40,16 +35,6 @@ export interface InteractiveRegion { id: string; x: number; y: number; w: number
 export interface InteractiveRegions { width: number; height: number; regions: InteractiveRegion[] }
 export interface EventPayloads { 'ui.ready': Record<string, never>; 'ui.interactive_regions': InteractiveRegions }
 export type EventMessage = {[K in keyof EventPayloads]: {v: 1; type: K; payload: EventPayloads[K]}}[keyof EventPayloads];
-export type ResolveItemIcon = (id: ItemIconId) => string | null;
-export type AssetPaths = Record<string, string>;
-export type AssetLoader = (url: string) => Promise<boolean>;
-export type UiIconDomain = 'buffs' | 'debuffs' | 'status' | 'skills' | 'actions' | 'currencies' | 'quests' | 'glyphs';
-export type UiIconId = `${UiIconDomain}.${string}`;
-export type UiIconGroups = Partial<Record<UiIconDomain, AssetPaths>>;
-export type SkinKey = 'window.frame' | 'window.title' | `window.frame.corner.${'tl'|'tr'|'bl'|'br'}` |
-  `window.frame.edge.${'top'|'bottom'|'left'|'right'}` | `button.close.${'normal'|'hover'|'pressed'}` |
-  'slot.normal' | 'tab.normal' | 'tab.active' | 'currency.yang' | 'equipment.background';
-export interface Skin { assets?: Partial<Record<SkinKey, string>> }
 declare global {
   interface Window {
     sendIpcMessage(message: string): void;

@@ -1,4 +1,5 @@
-import type {Point, InventoryItem, InventorySnapshot} from '../contracts.js';
+import type {Point} from '../core/window/window-types.js';
+import type {InventoryItem, InventorySnapshot} from '../protocol/contracts.js';
 export type PlacementInventory = Omit<InventorySnapshot, 'items'> & {items: Pick<InventoryItem, 'id'|'height'|'x'|'y'|'page'>[]};
 export type Placement = ReturnType<typeof placement>;
 // Advisory preview only. The authenticated world server decides every move.

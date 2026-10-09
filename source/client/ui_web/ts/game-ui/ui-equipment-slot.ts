@@ -1,5 +1,6 @@
-import type {EquipmentItem, ResolveItemIcon} from '../contracts.js';
-import {UiSlot} from '../core/ui-slot.js';
+import type {EquipmentItem} from '../protocol/contracts.js';
+import type {ResolveItemIcon} from './item-types.js';
+import {UiSlot} from '../core/primitives/ui-slot.js';
 import {paintItemIcon} from './item-icon.js';
 export function UiEquipmentSlot({slot,label,x,y,height,resolveItemIcon,title=label}: {slot: string; label: string; x: number; y: number; height: number; resolveItemIcon: ResolveItemIcon; title?: string}) {
   const element=UiSlot({tag:'button',className:'equipment-slot',label});element.dataset.slot=slot;

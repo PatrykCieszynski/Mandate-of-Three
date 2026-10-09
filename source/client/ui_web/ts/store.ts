@@ -1,4 +1,4 @@
-import type {Envelope, RawDomainState} from './contracts.js';
+import type {Envelope, RawDomainState} from './protocol/contracts.js';
 import {isDomainName, isValidDomainState, isValidDomainValue} from './protocol.js';
 export class DomainStore {
   state: RawDomainState = {};

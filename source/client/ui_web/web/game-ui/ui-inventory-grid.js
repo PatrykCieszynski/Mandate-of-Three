@@ -1,4 +1,4 @@
-import { UiSlot } from '../core/ui-slot.js';
+import { UiSlot } from '../core/primitives/ui-slot.js';
 // Screen-owned grid dimensions and item footprints, independent of the skin.
 export function UiInventoryGrid(element, { slotSize }) {
     return { element, render(inventory, page, createItem) {

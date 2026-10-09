@@ -1,4 +1,5 @@
-import type {AssetPaths, ItemIconId} from '../contracts.js';
+import type {AssetPaths} from '../core/assets/types.js';
+import type {ItemIconId} from '../game-ui/item-types.js';
 // Content identity comes from ItemDefinition.icon_id, independently of UI glyphs.
 export class ItemIconResolver {
   declare icons: Map<ItemIconId, string>;

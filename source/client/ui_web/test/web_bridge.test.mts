@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as protocol from '../web/protocol.js';
 import {WebBridge,reportInteractiveRegions} from '../web/bridge.js';
 import {DomainStore} from '../web/store.js';
-import type {Envelope, MoveItemCommand} from '../web/contracts.js';
+import type {Envelope, MoveItemCommand} from '../web/protocol/contracts.js';
 import {environment,measure,target,TestResizeObserver,bagItem} from './fixtures.mjs';
 const inventory={columns:5,rows:9,pages:4,items:[bagItem]};
 const command: MoveItemCommand={id:'item',revision:1,x:1,y:0,page:0};
