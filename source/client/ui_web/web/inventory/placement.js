@@ -1,4 +1,9 @@
 // Advisory preview only. The authenticated world server decides every move.
+export function carriedCell(pointer, grabOffset, slotSize) {
+  // Snap the whole footprint to the nearest grid origin, preserving the grab point.
+  return {x: Math.round((pointer.x - grabOffset.x) / slotSize),
+          y: Math.round((pointer.y - grabOffset.y) / slotSize)};
+}
 export function placement(inventory, item, x, y, page) {
   const valid = Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(page) &&
     x >= 0 && x < inventory.columns && y >= 0 && y + item.height <= inventory.rows &&

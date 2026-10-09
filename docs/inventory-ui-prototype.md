@@ -149,3 +149,8 @@ Initial browser/native results are preserved in
 [historical validation](history/inventory-validation-2026-10-09.md). Physical
 input/DPI/IME, full release packaging and long-session soak remain release gates;
 headless checks do not prove those behaviors.
+
+Item placement preserves the cursor grab offset and snaps the whole footprint to
+its nearest grid origin. Grabbing the bottom of a tall item does not make the
+cursor cell its top slot. Preview and move command use the same snapped origin;
+bounds and overlap remain server-authoritative.
