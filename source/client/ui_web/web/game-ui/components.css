@@ -43,3 +43,9 @@
 .equipment-slot.equipped {border-color:transparent;background:transparent}
 .equipment-slot:not(:disabled):hover {border-color:transparent;background:transparent}
 .equipment-slot .item-icon {max-width:30px}
+
+.carried-item {position:fixed;z-index:2147483647;pointer-events:none;background:#181a14b0;border:1px solid #bfa573}
+#carry-surface {position:fixed;inset:0;z-index:2147483646;pointer-events:none;touch-action:none}
+.item-drop-highlight {position:absolute;inset:0;pointer-events:none;border:2px solid #71d487;background:#38ad4d55;z-index:3}
+.item-drop-highlight.invalid {border-color:#ef685c;background:#c32e3155}
+.equipment-slot.carried {opacity:.25}

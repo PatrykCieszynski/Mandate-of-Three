@@ -29,6 +29,11 @@ export interface ItemDragSource {
 export interface ItemDropTarget<T> {
   element: HTMLElement;
   preview: (payload: ItemDragPayload, pointer: DragPointer) => DropPreview<T>;
-  drop: (payload: ItemDragPayload, preview: DropPreview<T>) => void | Promise<void>;
+  drop: (
+    payload: ItemDragPayload,
+    preview: DropPreview<T>,
+  ) => void | Promise<void>;
 }
-export interface DragRegistration { dispose(): void }
+export interface DragRegistration {
+  dispose(): void;
+}

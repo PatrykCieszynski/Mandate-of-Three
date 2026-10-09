@@ -1,4 +1,4 @@
-import { inventoryStorageTransfers } from '../screens/storage/inventory-storage-transfer.js';
+import { ItemDragRuntime } from '../game-ui/drag/item-drag-runtime.js';
 import { mountStorage } from '../screens/storage/storage-view.js';
 import { updateGameViews } from './domain-updates.js';
 import type { ItemIconId } from '../game-ui/item-types.js';
@@ -27,7 +27,7 @@ const root = findElement(document, '#inventory', 'main'),
 let regions: ReturnType<typeof reportInteractiveRegions> | undefined;
 const bridge = new WebBridge({
   onShortcut: () => {
-    if (transfers.cancel()) return;
+    if (drag.cancel()) return;
     if (!storageRoot.hidden) {
       void bridge.request('storage.close', {}).catch(() => {});
       return;
@@ -43,9 +43,10 @@ const bridge = new WebBridge({
       message.type === 'ui.snapshot' ||
       message.type === 'inventory.updated' ||
       message.type === 'storage.updated' ||
+      message.type === 'equipment.updated' ||
       message.type === 'hud.updated'
     )
-      transfers.cancel();
+      drag.cancel();
     if (
       (message.type === 'ui.snapshot' || message.type === 'storage.updated') &&
       state.storage
@@ -74,8 +75,16 @@ const bridge = new WebBridge({
     });
   },
 });
+const drag = new ItemDragRuntime({
+  scale: () => manager.scale,
+  onRegionsChanged: () => regions?.refresh(),
+});
 const view = mountInventory(root, {
-  externalCarry: () => !storageRoot.hidden,
+  drag,
+  quickDeposit: (item) =>
+    storageRoot.hidden ? Promise.resolve() : storage.receiveFromInventory(item),
+  withdrawItem: (item, position) => storage.withdrawToInventory(item, position),
+  receiveEquipped: (item) => equipment.unequip(item),
   manager,
   resolveItemIcon,
   activateItem: (payload) => bridge.request('item.activate', payload),
@@ -84,6 +93,8 @@ const view = mountInventory(root, {
   onRegionsChanged: () => regions?.refresh(),
 });
 const equipment = mountEquipment(equipmentRoot, {
+  drag,
+  equipItem: (payload) => bridge.request('equipment.equip', payload),
   manager,
   resolveItemIcon,
   unequipItem: (payload) => bridge.request('equipment.unequip', payload),
@@ -91,68 +102,24 @@ const equipment = mountEquipment(equipmentRoot, {
   onRegionsChanged: () => regions?.refresh(),
 });
 const storage = mountStorage(storageRoot, {
+  drag,
+  transfer: (payload) => bridge.request('storage.transfer', payload),
   manager,
   resolveItemIcon,
   onClose: () => {
-    transfers.cancel();
+    drag.cancel();
     void bridge.request('storage.close', {}).catch(() => {});
   },
-  onItemAction: () => {},
   onRegionsChanged: () => regions?.refresh(),
-});
-const transfers = inventoryStorageTransfers({
-  manager,
-  resolveItemIcon,
-  onRegionsChanged: () => regions?.refresh(),
-  getState(id) {
-    const state = readDomainSnapshot(store.state);
-    const container = id === 'storage' ? state?.storage : state?.inventory;
-    if (!container) throw Error('Missing item domain');
-    return container;
-  },
-  async move(from, to, item, target) {
-    if (from === 'inventory' && to === 'inventory' && !target) {
-      storage.setStatus('Inventory move requires a target');
-      return false;
-    }
-    try {
-      const result =
-        from === 'inventory' && to === 'inventory' && target
-          ? await bridge.request('inventory.move_item', {
-              id: item.id,
-              revision: item.revision,
-              x: target.x,
-              y: target.y,
-              page: target.page,
-            })
-          : await bridge.request('storage.transfer', {
-              id: item.id,
-              revision: item.revision,
-              from,
-              to,
-              x: target?.x ?? 0,
-              y: target?.y ?? 0,
-              page: target?.page ?? 0,
-              quick: !target,
-            });
-      storage.setStatus(
-        result.ok ? '' : `Transfer rejected: ${result.error ?? 'request'}`,
-      );
-      return result.ok;
-    } catch {
-      storage.setStatus('Transfer failed');
-      return false;
-    }
-  },
 });
 regions = reportInteractiveRegions(bridge, [
   ...view.regions,
   ...equipment.regions,
   ...storage.regions,
-  ...transfers.regions,
+  ...drag.regions,
 ]);
 window.addEventListener('pagehide', () => {
-  transfers.dispose();
+  drag.dispose();
   storage.dispose();
   view.dispose();
   equipment.dispose();

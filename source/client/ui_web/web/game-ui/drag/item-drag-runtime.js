@@ -21,45 +21,62 @@ export class ItemDragRuntime {
         this.surface.id = 'carry-surface';
         this.surface.hidden = true;
         document.body.append(this.ghost, this.surface);
-        this.listen(document, 'pointerdown', event => this.down(event), true);
-        this.listen(document, 'pointermove', event => {
-            if (!this.session || (!this.session.latched && event.pointerId !== this.session.pointerId))
+        this.listen(document, 'pointerdown', (event) => this.down(event), true);
+        this.listen(document, 'pointermove', (event) => {
+            if (!this.session ||
+                (!this.session.latched && event.pointerId !== this.session.pointerId))
                 return;
             event.stopImmediatePropagation();
             this.update(event);
         }, true);
-        this.listen(document, 'pointerup', event => this.up(event), true);
-        this.listen(document, 'click', event => {
+        this.listen(document, 'pointerup', (event) => this.up(event), true);
+        this.listen(document, 'click', (event) => {
             if (!this.suppressClick || event.detail === 0)
                 return;
             this.suppressClick = false;
             event.preventDefault();
             event.stopImmediatePropagation();
         }, true);
-        this.listen(document, 'keydown', event => {
+        this.listen(document, 'keydown', (event) => {
             if (event.key === 'Escape' && this.cancel()) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
             }
         }, true);
-        this.listen(document, 'contextmenu', event => { if (this.active)
-            event.preventDefault(); });
+        this.listen(document, 'contextmenu', (event) => {
+            if (this.active)
+                event.preventDefault();
+        });
         this.listen(document, 'pointercancel', () => this.cancel());
-        this.listen(document, 'lostpointercapture', event => {
-            if (this.session && !this.session.latched && this.session.pointerId === event.pointerId)
+        this.listen(document, 'lostpointercapture', (event) => {
+            if (this.session &&
+                !this.session.latched &&
+                this.session.pointerId === event.pointerId)
                 this.cancel();
         });
         this.listen(window, 'blur', () => this.cancel());
         this.listen(window, 'resize', () => this.cancel());
     }
-    get active() { return this.session !== null; }
-    get latched() { return this.session?.latched ?? false; }
-    get regions() { return [this.surface]; }
-    get registrationCount() { this.prune(); return this.sources.size + this.targets.size + this.controls.size; }
+    get active() {
+        return this.session !== null;
+    }
+    get latched() {
+        return this.session?.latched ?? false;
+    }
+    get regions() {
+        return [this.surface];
+    }
+    get registrationCount() {
+        this.prune();
+        return this.sources.size + this.targets.size + this.controls.size;
+    }
     registerSource(source) {
         this.ensureLive();
+        if (this.sources.has(source.element))
+            throw Error('Duplicate drag source');
         this.sources.set(source.element, source);
-        return { dispose: () => {
+        return {
+            dispose: () => {
                 if (this.sources.get(source.element) !== source)
                     return;
                 this.sources.delete(source.element);
@@ -72,30 +89,54 @@ export class ItemDragRuntime {
                         this.session.source = null;
                     }
                 }
-            } };
+            },
+        };
     }
     registerTarget(target) {
         this.ensureLive();
-        const binding = { element: target.element, resolve: (payload, pointer) => {
+        if (this.targets.has(target.element))
+            throw Error('Duplicate drop target');
+        const binding = {
+            element: target.element,
+            resolve: (payload, pointer) => {
                 const preview = target.preview(payload, pointer);
-                return { valid: preview.valid, ...(preview.visual ? { visual: preview.visual } : {}), drop: () => target.drop(payload, preview) };
-            } };
+                return {
+                    valid: preview.valid,
+                    ...(preview.visual ? { visual: preview.visual } : {}),
+                    drop: () => {
+                        if (this.targets.get(target.element) === binding &&
+                            this.visible(target.element))
+                            return target.drop(payload, preview);
+                    },
+                };
+            },
+        };
         this.targets.set(target.element, binding);
-        return { dispose: () => {
+        return {
+            dispose: () => {
                 if (this.targets.get(target.element) !== binding)
                     return;
                 this.targets.delete(target.element);
                 if (this.activeTarget === binding)
                     this.clearPreview();
-            } };
+            },
+        };
     }
     registerControl(element, behavior) {
         this.ensureLive();
+        if (this.controls.has(element))
+            throw Error('Duplicate drag control');
         this.controls.set(element, behavior);
-        return { dispose: () => { this.controls.delete(element); } };
+        return {
+            dispose: () => {
+                this.controls.delete(element);
+            },
+        };
     }
     // A page can repaint while carrying a detached payload; stale markers never survive.
-    refreshPreview() { this.clearPreview(); }
+    refreshPreview() {
+        this.clearPreview();
+    }
     cancel() {
         const old = this.session;
         this.session = null;
@@ -111,7 +152,11 @@ export class ItemDragRuntime {
             this.options.onRegionsChanged();
         return old !== null;
     }
-    clearPreview() { this.resolution?.visual?.element.remove(); this.resolution = null; this.activeTarget = null; }
+    clearPreview() {
+        this.resolution?.visual?.element.remove();
+        this.resolution = null;
+        this.activeTarget = null;
+    }
     release(session) {
         if (session.node?.hasPointerCapture(session.pointerId))
             session.node.releasePointerCapture(session.pointerId);
@@ -170,8 +215,20 @@ export class ItemDragRuntime {
             event.preventDefault();
             event.stopImmediatePropagation();
             this.suppressClick = true;
-            this.session = { payload, source, node: source.element, pointerId: event.pointerId,
-                start: { x: event.clientX, y: event.clientY }, offset: { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale }, scale, moved: false, latched: false };
+            this.session = {
+                payload,
+                source,
+                node: source.element,
+                pointerId: event.pointerId,
+                start: { x: event.clientX, y: event.clientY },
+                offset: {
+                    x: (event.clientX - rect.left) / scale,
+                    y: (event.clientY - rect.top) / scale,
+                },
+                scale,
+                moved: false,
+                latched: false,
+            };
             source.element.setPointerCapture(event.pointerId);
             source.element.classList.add('carried');
             payload.presentation.render(this.ghost);
@@ -217,7 +274,8 @@ export class ItemDragRuntime {
             this.cancel();
             return;
         }
-        if (Math.hypot(event.clientX - session.start.x, event.clientY - session.start.y) > 3 * scale)
+        if (Math.hypot(event.clientX - session.start.x, event.clientY - session.start.y) >
+            3 * scale)
             session.moved = true;
         this.ghost.style.left = event.clientX - session.offset.x * scale + 'px';
         this.ghost.style.top = event.clientY - session.offset.y * scale + 'px';
@@ -230,7 +288,11 @@ export class ItemDragRuntime {
             if (!target || !this.visible(ancestor))
                 continue;
             this.activeTarget = target;
-            this.resolution = target.resolve(session.payload, { point: { x: event.clientX, y: event.clientY }, grabOffset: session.offset, scale });
+            this.resolution = target.resolve(session.payload, {
+                point: { x: event.clientX, y: event.clientY },
+                grabOffset: session.offset,
+                scale,
+            });
             const visual = this.resolution.visual;
             if (visual)
                 visual.parent.append(visual.element);
@@ -243,9 +305,19 @@ export class ItemDragRuntime {
         if (!resolution?.valid || this.pending)
             return;
         this.pending = true;
-        void Promise.resolve().then(() => resolution.drop()).catch(error => this.options.onError?.(error)).finally(() => { this.pending = false; });
+        void Promise.resolve()
+            .then(() => {
+            if (!this.disposed)
+                return resolution.drop();
+        })
+            .catch((error) => this.options.onError?.(error))
+            .finally(() => {
+            this.pending = false;
+        });
     }
-    visible(element) { return element.isConnected && !element.closest('[hidden]'); }
+    visible(element) {
+        return element.isConnected && !element.closest('[hidden]');
+    }
     prune() {
         for (const [element] of this.sources)
             if (!element.isConnected) {
@@ -265,8 +337,10 @@ export class ItemDragRuntime {
         if (this.session?.node && !this.visible(this.session.node))
             this.cancel();
     }
-    ensureLive() { if (this.disposed)
-        throw Error('Disposed ItemDragRuntime'); }
+    ensureLive() {
+        if (this.disposed)
+            throw Error('Disposed ItemDragRuntime');
+    }
     listen(target, type, callback, capture = false) {
         target.addEventListener(type, callback, capture);
         this.removals.push(() => target.removeEventListener(type, callback, capture));

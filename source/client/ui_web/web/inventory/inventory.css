@@ -23,16 +23,3 @@
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis}
-
-.carried-item {
-  z-index:25;
-  pointer-events:none;
-  background:#181a14b0;
-  border:1px solid #bfa573}
-#carry-surface {
-  position:absolute;
-  left:0;
-  top:0;
-  z-index:20;
-  touch-action:none;
-  pointer-events:none}

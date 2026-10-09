@@ -1,14 +1,14 @@
+import { ownedItemPayload, itemGridPreview, itemWindowControls, } from '../../game-ui/items/item-drag-policy.js';
 import { element as findElement } from '../../core/dom.js';
 import { errorMessage } from '../../protocol.js';
 import { UiTab } from '../../core/primitives/ui-tab.js';
 import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
-import { paintItemIcon } from '../../game-ui/items/item-icon.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
 import { UiWindow } from '../../core/window/ui-window.js';
-import { placement, carriedCell } from './placement.js';
-export function mountInventory(root, { manager, externalCarry = () => false, resolveItemIcon = () => null, moveItem, activateItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
+import { firstFittingPlacement } from './placement.js';
+export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem, receiveEquipped, resolveItemIcon = () => null, moveItem, activateItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
     const shell = new UiWindow(root, {
         id: 'inventory',
         title: 'Inventory',
@@ -22,19 +22,14 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
         scrollBorder: 2,
         hideHorizontalOverflow: true,
         onClose,
-        canDrag: () => !carry,
+        canDrag: () => !drag?.active,
         onCancel: () => cancelCarry(),
         onRegionsChanged,
-        onGeometry: () => {
-            surface.style.width = innerWidth / shell.scale + 'px';
-            surface.style.height = innerHeight / shell.scale + 'px';
-        },
     });
     shell.contentRoot.innerHTML = `<nav class="inventory-tabs" aria-label="Inventory pages"></nav>
     <div class="inventory-grid"></div><footer class="wallet"></footer>
     <p class="inventory-status" role="status"></p>`;
-    root.insertAdjacentHTML('beforeend', `<div id="carry-surface" hidden></div><div class="carried-item" hidden></div>`);
-    const panel = findElement(root, '.window', 'section'), grid = findElement(root, '.inventory-grid', 'div'), surface = findElement(root, '#carry-surface', 'div'), ghost = findElement(root, '.carried-item', 'div'), status = findElement(root, '.inventory-status', 'p');
+    const panel = findElement(root, '.window', 'section'), grid = findElement(root, '.inventory-grid', 'div'), status = findElement(root, '.inventory-status', 'p');
     const tip = ItemTooltip(root, { geometry: () => manager }), tooltip = tip.element, currency = UiCurrency(findElement(root, '.wallet', 'footer'), {
         label: 'Yang',
         iconId: 'currencies.yang',
@@ -43,8 +38,9 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
         const tab = UiTab({
             label,
             onSelect: () => {
-                if (!carry?.latched)
+                if (!drag?.latched)
                     cancelCarry();
+                drag?.refreshPreview();
                 page = index;
                 render();
             },
@@ -58,13 +54,15 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
         pages: 4,
         items: [],
     }, page = 0, pending = false, disposed = false;
-    let carry = null;
-    const point = (e) => shell.point(e);
+    const sourceBindings = [];
+    const bindings = itemWindowControls(drag, root);
     const cell = () => parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
     const positionWindow = () => shell.refresh();
     const gridView = UiItemGrid(grid, { slotSize: cell });
-    const icon = (node, item) => paintItemIcon(node, item, { resolveItemIcon });
     function render() {
+        for (const binding of sourceBindings)
+            binding.dispose();
+        sourceBindings.length = 0;
         gridView.render({
             columns: inventory.columns,
             rows: inventory.rows,
@@ -72,16 +70,29 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
         }, (item) => {
             const node = UiItemSlot({ item, slotSize: cell(), resolveItemIcon });
             node.classList.add('inventory-item');
+            if (drag)
+                sourceBindings.push(drag.registerSource({
+                    element: node,
+                    payload: (event) => {
+                        if (pending)
+                            return null;
+                        shell.handle.activate();
+                        tip.hide();
+                        if (event.ctrlKey && quickDeposit) {
+                            void quickDeposit(item);
+                            return null;
+                        }
+                        return ownedItemPayload('inventory', item, cell(), resolveItemIcon);
+                    },
+                }));
             node.addEventListener('pointerdown', (event) => {
-                if (event.button === 2 && activateItem && !carry && !pending) {
+                if (event.button === 2 && activateItem && !drag?.active && !pending) {
                     event.preventDefault();
                     activate(item);
                 }
-                else if (!externalCarry())
-                    beginCarry(event, item, node);
             });
             node.addEventListener('pointermove', (event) => {
-                if (!carry && !pending)
+                if (!drag?.active && !pending)
                     showTooltip(event, item);
             });
             node.addEventListener('pointerleave', () => (tooltip.hidden = true));
@@ -93,71 +104,9 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
     function showTooltip(event, item) {
         tip.show(event, item);
     }
-    function releaseCapture(state) {
-        if (state?.node?.hasPointerCapture(state.pointer))
-            state.node.releasePointerCapture(state.pointer);
-    }
     function cancelCarry() {
-        const old = carry;
-        carry = null;
-        releaseCapture(old);
-        ghost.hidden = true;
-        surface.hidden = true;
-        tooltip.hidden = true;
-        grid.querySelector('.placement-preview')?.remove();
-        grid
-            .querySelectorAll('.carried')
-            .forEach((n) => n.classList.remove('carried'));
-        onRegionsChanged();
-    }
-    function beginCarry(event, item, node) {
-        if (event.button !== 0 || pending || carry)
-            return;
-        event.preventDefault();
-        tooltip.hidden = true;
-        const rect = node.getBoundingClientRect(), p = point(event);
-        carry = {
-            item,
-            node,
-            pointer: event.pointerId,
-            start: p,
-            offset: {
-                x: (event.clientX - rect.left) / shell.scale,
-                y: (event.clientY - rect.top) / shell.scale,
-            },
-            moved: false,
-            latched: false,
-        };
-        node.setPointerCapture(event.pointerId);
-        node.classList.add('carried');
-        icon(ghost, item);
-        ghost.style.height = item.height * cell() - 2 + 'px';
-        ghost.hidden = false;
-        updateCarry(event);
-    }
-    function updateCarry(event) {
-        if (!carry)
-            return;
-        const p = point(event);
-        if (Math.hypot(p.x - carry.start.x, p.y - carry.start.y) > 3)
-            carry.moved = true;
-        ghost.style.left = p.x - carry.offset.x + 'px';
-        ghost.style.top = p.y - carry.offset.y + 'px';
-        const rect = grid.getBoundingClientRect(), { x, y } = carriedCell({
-            x: (event.clientX - rect.left) / shell.scale,
-            y: (event.clientY - rect.top) / shell.scale,
-        }, carry.offset, cell());
-        carry.preview = placement(inventory, carry.item, x, y, page);
-        let preview = grid.querySelector('.placement-preview');
-        if (!preview) {
-            preview = document.createElement('div');
-            grid.append(preview);
-        }
-        preview.className =
-            'placement-preview' + (carry.preview.valid ? '' : ' invalid');
-        preview.style.left = x * cell() + 'px';
-        preview.style.top = y * cell() + 'px';
-        preview.style.height = carry.item.height * cell() + 'px';
+        drag?.cancel();
+        tip.hide();
     }
     async function activate(item) {
         if (!activateItem)
@@ -183,22 +132,19 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
             pending = false;
         }
     }
-    async function submit() {
-        if (!carry || pending || !carry.preview)
+    async function move(item, preview) {
+        if (pending)
             return;
-        const { item, preview } = carry;
-        const command = {
-            id: item.id,
-            revision: item.revision,
-            x: preview.x,
-            y: preview.y,
-            page: preview.page,
-        };
-        cancelCarry();
         pending = true;
         status.textContent = 'Moving…';
         try {
-            const result = await moveItem(command);
+            const result = await moveItem({
+                id: item.id,
+                revision: item.revision,
+                x: preview.x,
+                y: preview.y,
+                page: preview.page,
+            });
             if (!disposed)
                 status.textContent = result.ok
                     ? ''
@@ -212,33 +158,55 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
             pending = false;
         }
     }
-    function pointerDown(event) {
-        if (carry?.latched && event.button === 0) {
-            event.preventDefault();
-            updateCarry(event);
-            if (carry.preview?.valid)
-                submit();
-        }
+    if (drag) {
+        bindings.push(drag.registerControl(findElement(root, '.inventory-tabs', 'nav'), 'preserve'));
+        bindings.push(drag.registerTarget({
+            element: grid,
+            preview: (payload, pointer) => {
+                const preview = itemGridPreview(grid, inventory, page, cell(), payload, pointer);
+                if (pending || !preview.data) {
+                    preview.visual?.element.classList.add('invalid');
+                    return { ...preview, valid: false };
+                }
+                const subject = preview.data.subject;
+                if (subject.container === 'equipment') {
+                    // The existing unequip wire command receives automatically, with no coordinates.
+                    const valid = !!receiveEquipped &&
+                        firstFittingPlacement(inventory, subject.item) !== null;
+                    const highlight = document.createElement('div');
+                    highlight.className =
+                        'item-drop-highlight' + (valid ? '' : ' invalid');
+                    return {
+                        ...preview,
+                        valid,
+                        visual: { element: highlight, parent: grid },
+                    };
+                }
+                const valid = preview.valid &&
+                    (subject.container === 'inventory' || !!withdrawItem);
+                if (!valid)
+                    preview.visual?.element.classList.add('invalid');
+                return { ...preview, valid };
+            },
+            drop: async (_payload, preview) => {
+                const data = preview.data;
+                if (!data)
+                    return;
+                if (data.subject.container === 'inventory')
+                    await move(data.subject.item, data.position);
+                else if (data.subject.container === 'storage')
+                    await receiveFromStorage(data.subject.item, data.position);
+                else
+                    await receiveEquipped?.(data.subject.item);
+            },
+        }));
     }
-    function pointerMove(event) {
-        if (carry)
-            updateCarry(event);
-    }
-    function pointerUp(event) {
-        if (!carry || carry.latched || event.pointerId !== carry.pointer)
-            return;
-        updateCarry(event);
-        if (carry.moved) {
-            submit();
-            return;
-        }
-        carry.latched = true;
-        releaseCapture(carry);
-        surface.hidden = false;
-        onRegionsChanged();
+    // Supplied position is exact; absence requests authoritative first-fitting receipt.
+    function receiveFromStorage(item, position) {
+        return withdrawItem?.(item, position) ?? Promise.resolve();
     }
     function cancelOrClose() {
-        if (carry)
+        if (drag?.active)
             cancelCarry();
         else
             onClose();
@@ -256,19 +224,13 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
             }
         }
     }
-    shell.listen(document, 'pointerdown', pointerDown);
-    shell.listen(document, 'pointermove', pointerMove);
-    shell.listen(document, 'pointerup', pointerUp);
     shell.listen(document, 'keydown', keyDown);
-    shell.listen(root, 'lostpointercapture', (event) => {
-        if (carry && !carry.latched && carry.pointer === event.pointerId)
-            cancelCarry();
-    });
     render();
     return {
-        regions: [panel, surface],
+        regions: [panel],
         cancelCarry,
         cancelOrClose,
+        receiveFromStorage,
         setState(snapshot) {
             cancelCarry();
             inventory = structuredClone(snapshot.inventory);
@@ -280,7 +242,11 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
         refresh: () => shell.refresh(),
         activate: () => shell.handle.activate(),
         dispose() {
+            if (disposed)
+                return;
             disposed = true;
+            sourceBindings.forEach((binding) => binding.dispose());
+            bindings.forEach((binding) => binding.dispose());
             shell.dispose();
             tabs.forEach((tab) => tab.dispose());
             tip.dispose();
