@@ -102,6 +102,29 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   await page.mouse.move(grid.x+3*size+size/2,grid.y+4*size+item.height-5,{steps:4});await page.mouse.up();
   await page.waitForFunction(()=>sent.some(message=>message.type==='inventory.move_item'));
   assert.deepEqual((await commands()).at(-1)?.payload,{id:'bag-item',revision:3,x:3,y:4,page:0});
+  // Reference artwork hover targets remain aligned at every supported UI scale.
+  const equipmentProbes = [
+    [22, 86, 'Weapon'], [58, 21, 'Helmet'], [58, 72, 'Armor'],
+    [94, 54, 'Shield'], [94, 86, 'Bracelet'], [133, 20, 'Arrows'],
+    [133, 71, 'Earrings'], [133, 103, 'Necklace'], [58, 164, 'Shoes'],
+    [21, 132, 'Special slot I'], [94, 132, 'Special slot II'],
+    [133, 170, null],
+  ] satisfies [number, number, string | null][];
+  for (const scale of [.8, .9, 1, 1.1, 1.25, 1.4, 1.5]) {
+    await send({...snapshot, hud: {...snapshot.hud, ui_scale: scale}});
+    await frame();
+    const targets = await page.locator('.equipment-body').evaluate((body, probes) => {
+      const bounds = body.getBoundingClientRect();
+      if (!(body instanceof HTMLElement)) throw Error('Expected equipment body');
+      return probes.map(([x, y]) => document.elementFromPoint(
+        bounds.x + x * bounds.width / body.offsetWidth,
+        bounds.y + y * bounds.height / body.offsetHeight,
+      )?.closest('.equipment-slot')?.getAttribute('aria-label') ?? null);
+    }, equipmentProbes);
+    assert.deepEqual(targets, equipmentProbes.map(([, , label]) => label));
+  }
+  await send(snapshot);
+  await frame();
   // Dragging from either outer side of the title row works for every shared shell.
   for (const id of ['inventory', 'equipment']) {
     const header = page.locator('#' + id + ' .window-header');
