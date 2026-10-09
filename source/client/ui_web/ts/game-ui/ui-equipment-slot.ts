@@ -7,5 +7,6 @@ export function UiEquipmentSlot({slot,label,x,y,height,resolveItemIcon,title=lab
   return {element,setItem(item: EquipmentItem | undefined,{enabled=false}: {enabled?: boolean}={}){
     element.replaceChildren();element.disabled=!enabled;element.classList.toggle('equipped',!!item);
     if(item){element.removeAttribute('title');paintItemIcon(element,item,{resolveItemIcon,alt:item.name,fallbackClass:null,quantity:false});}
+    else element.title=title;
   }};
 }

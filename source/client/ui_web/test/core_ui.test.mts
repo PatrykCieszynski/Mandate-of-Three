@@ -84,6 +84,7 @@ test('item icons preserve labels and quantity on missing images; equipment inter
  assert.equal(element.children[0]?.textContent,item.name);assert.equal(element.children[1]?.textContent,'5');
  const tile=UiEquipmentSlot({slot:'any-slot',label:'Any',height:32,x:0,y:0,resolveItemIcon:()=>null});
  tile.setItem(item);assert.equal(tile.element.disabled,true);tile.setItem(item,{enabled:true});assert.equal(tile.element.disabled,false);assert.equal(tile.element.children[0]?.textContent,item.name);
+ assert.equal(tile.element.hasAttribute('title'),false);tile.setItem(undefined);assert.equal(tile.element.title,'Any');assert.equal(tile.element.disabled,true);
 });
 
 test('currency uses semantic UI icons, refreshes on replacement and unsubscribes on disposal',async()=>{
