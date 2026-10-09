@@ -19,6 +19,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	layer.layer = 10
 	add_child(layer)
 	host = WebUiHost.new()
+	host.capture_keyboard_on_click = false
 	host.entry_path = "res://source/client/ui_web/web/inventory/game.html"
 	layer.add_child(host)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -98,8 +99,13 @@ func set_open(active: bool) -> void:
 		host.set_modal(false) # Keep the global browser alive; DOM owns visible regions.
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_I:
+	if not event is InputEventKey or not event.pressed or event.echo: return
+	if event.physical_keycode == KEY_I:
 		set_open(not opened)
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_ESCAPE and opened:
+		# Presentation shortcut only: web cancels carry first, otherwise requests close.
+		bridge.send("ui.shortcut", {"key": "Escape"})
 		get_viewport().set_input_as_handled()
 
 func _failure(reason: String) -> void:

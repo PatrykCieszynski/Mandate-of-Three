@@ -9,6 +9,8 @@ signal keyboard_owner_changed(owner: String)
 var browser: Control
 var accelerated: bool = true
 var entry_path: String = "res://source/client/ui_web/web/index.html"
+## Pointer-only screens keep gameplay keys; text/modal screens opt into web focus.
+var capture_keyboard_on_click: bool = true
 var keyboard_owner: String = "gameplay"
 var modal: bool = false
 var _regions: Array[Rect2] = []
@@ -70,7 +72,7 @@ func _input(event: InputEvent) -> void:
 			var bit: int = 1 << (event.button_index - 1)
 			if event.pressed:
 				if owns: _held |= bit
-				set_keyboard_owner("web" if owns else "gameplay")
+				set_keyboard_owner("web" if owns and capture_keyboard_on_click else "gameplay")
 			else:
 				_held &= ~bit
 				# Keep STOP through GUI delivery of this release; next mouse event recomputes.

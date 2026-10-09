@@ -162,7 +162,9 @@ from an owned button press through release so dragging beyond a panel still reac
 Chromium. Wheel events never latch capture. Resize clears old rectangles until a
 fresh layout report; an active drag retains capture through its release.
 
-A click in a web region sets keyboard owner `web`; a click outside releases
+By default a click in a web region sets keyboard owner `web`. Pointer-only
+compositions set `capture_keyboard_on_click=false` (Inventory does), retaining
+gameplay keys while CEF handles mouse events. A click outside releases
 browser/descendant IME-proxy focus and sets `gameplay`. Application calls
 `host.set_modal(true)` to own pointer/keyboard across the viewport. Web cannot
 unilaterally set modal ownership. Closing via `set_modal(false)`, hiding, reload
@@ -253,6 +255,11 @@ Full non-debug client packaging/launch, physical input/IME/DPI/alt-tab, helper
 crash handling, long soak and target-device budgets remain release gates.
 Non-Windows client runtime has not been validated. Resource-pack checks and
 headless boot do not prove native rendering or a distributable executable.
+
+Godot may send the fixed `ui.shortcut` event with `{key: "Escape"}` to the Web
+presentation. It has no request ID and does not mutate domain state. Inventory
+uses it to cancel carrying before requesting close while leaving gameplay keys
+outside CEF. It is not an additional Web-to-Godot command.
 
 ## First gameplay screen
 
