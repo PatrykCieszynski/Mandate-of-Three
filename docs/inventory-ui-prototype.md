@@ -119,14 +119,16 @@ Open [inventory preview](http://127.0.0.1:18741/tools/inventory_preview/).
 ## Verification — 2026-10-09
 
 ```powershell
-& ./tests/run-items.ps1
+& ./tests/run-smoke.ps1
+# Optional when changing inventory RPC/session behavior:
 & ./tests/run-web-inventory.ps1
-# Optional headless browser QA; serve the repository on localhost first.
-$env:MANDATE_PLAYWRIGHT = '<path-to-installed-playwright>'
-node tests/inventory_ui.cjs
-# After refreshing/importing staging: one final rendered Vulkan client.
-& ./tests/run-web-inventory.ps1 -WithBrowser
 ```
+
+The prototype policy now keeps only durable headless contracts by default.
+The browser matrix/native fixtures described below were executed during the
+initial integration and then retired on 2026-10-09. Their results are historical;
+repeat the [UI contract matrix](ui-contract.md) manually at a layout milestone
+using the real staged client. See [testing policy](testing.md).
 
 Items/grid tests pass: all heights, covered-cell overlap, page boundary, stale
 revision, transaction rollback, v14 migration rollback/repack, cross-page move

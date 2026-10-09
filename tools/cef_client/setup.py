@@ -1,17 +1,12 @@
 """Build an ignored Windows Vulkan/CEF gameplay client; root servers stay CEF-free."""
 from pathlib import Path
-import hashlib, shutil, sys, zipfile
+import shutil, zipfile, re
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / 'tools/cef_ui_spike'))
-from setup import ARCHIVE, SHA256, setup as setup_spike
+from plugin import ARCHIVE, ensure_archive
 TARGET = ROOT / '.godot/cef-client/project'
 
 def setup():
-    if not ARCHIVE.exists():
-        setup_spike()
-    with ARCHIVE.open('rb') as stream:
-        if hashlib.file_digest(stream, 'sha256').hexdigest() != SHA256:
-            raise RuntimeError('Pinned CEF archive checksum mismatch')
+    ensure_archive()
     from importlib.util import spec_from_file_location, module_from_spec
     skin_spec = spec_from_file_location("stage_ui_skin", ROOT / "tools/dev_assets/stage_ui_skin.py")
     skin_module = module_from_spec(skin_spec)
@@ -58,7 +53,6 @@ def setup():
         'window/size/window_width_override': '1280', 'window/size/window_height_override': '720',
         'window/stretch/mode': '"disabled"',
     }.items():
-        import re
         project = re.sub(r'^' + re.escape(key) + r'=.*$', key + '=' + value, project, flags=re.M)
     project = project.replace('[display]', '[display]\nwindow/size/min_width=1280\nwindow/size/min_height=720')
     project += """

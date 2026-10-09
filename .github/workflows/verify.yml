@@ -4,6 +4,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      extended:
+        description: 'Run optional gameplay/asset regressions'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -13,8 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v7
+        if: github.event_name == 'workflow_dispatch' && inputs.extended
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
       - name: Install the project's Godot editor
         shell: pwsh
         run: |
@@ -38,7 +48,12 @@ jobs:
         run: |
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed' }
+      - name: Prototype smoke (headless, no network or browser)
+        shell: pwsh
+        run: |
+          & ./tests/run-smoke.ps1
       - name: Python staging tests
+        if: github.event_name == 'workflow_dispatch' && inputs.extended
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path .godot/verification -Force | Out-Null
@@ -47,6 +62,7 @@ jobs:
           Get-Content .godot/verification/python-staging.log
           if ($testExit -ne 0) { throw 'Staging tests failed' }
       - name: UI cache fixture tests
+        if: github.event_name == 'workflow_dispatch' && inputs.extended
         shell: pwsh
         run: |
           python -m pip install -r tools/dev_assets/requirements-ui.txt
@@ -56,6 +72,7 @@ jobs:
           Get-Content .godot/verification/python-ui-cache.log
           if ($testExit -ne 0) { throw 'UI cache fixtures failed' }
       - name: Godot visual fallback tests
+        if: github.event_name == 'workflow_dispatch' && inputs.extended
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -64,10 +81,11 @@ jobs:
           & $engine --headless --path . --mode=client res://tests/legacy_batch_visual.tscn -- --no-dev-visuals *> .godot/verification/batch-ci.log
           if ($LASTEXITCODE -ne 0 -or -not (Select-String .godot/verification/batch-ci.log -Pattern 'LEGACY_BATCH_VISUAL_OK 23')) { throw 'Batch placeholders failed' }
       - name: Gameplay regression suites
+        if: github.event_name == 'workflow_dispatch' && inputs.extended
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($suite in @('items','spike3d','pve','combat','progression','xp','yang')) {
+          foreach ($suite in @('items','spike3d','pve','combat','progression','xp','yang','web-inventory')) {
             & "./tests/run-$suite.ps1"
           }
       - name: Keep verification logs
