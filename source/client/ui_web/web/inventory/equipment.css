@@ -5,8 +5,8 @@
 .has-equipment-skin .equipment-silhouette {display:none}
 .equipment-slot {position:absolute;width:32px;padding:1px;border:1px solid #6a6350;background:#0b0d0bd9;color:var(--muted);font:9px Georgia;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .equipment-slot:disabled {cursor:default;border-color:#494838;background:#12141077}
-.equipment-slot.equipped {border-color:#aa9567;background:#11150cab}
-.equipment-slot:not(:disabled):hover {border-color:#e6c580;background:#363222}
+.equipment-slot.equipped {border-color:transparent;background:transparent}
+.equipment-slot:not(:disabled):hover {border-color:transparent;background:transparent}
 .equipment-slot .item-icon {max-width:30px}
 .equipment-stats {margin:6px 0 0;color:var(--ink);font:12px Georgia}
 .equipment-hint {margin:5px 0 0;font:10px/14px Arial;color:var(--muted)}

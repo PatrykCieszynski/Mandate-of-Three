@@ -21,8 +21,9 @@ func _ready() -> void:
 	var store := ItemStoreSqlite.new(db)
 	check(store.initialize_character(owner).ok, "starter")
 	var before: Dictionary = store.inventory(owner)
+	check(ItemDefinitions.IRON_SWORD.inventory_height == 2 and before.items.all(func(i: Dictionary) -> bool: return i.inventory_height == 2), "one-handed swords use two cells")
 	var moved: String = before.items[1].uid
-	# Recreate the previous narrow table and a legal v14 layout that overlaps at height 3.
+	# Recreate the previous narrow table and a legal v14 layout that overlaps for a multi-cell item.
 	check(db.query("DROP INDEX item_bag_position; DROP INDEX item_equipment_slot; ALTER TABLE item_placements RENAME TO placements_fixture; CREATE TABLE item_placements(item_uid TEXT PRIMARY KEY,owner_character_id INTEGER,location TEXT,bag_position INTEGER CHECK(bag_position BETWEEN -1 AND 23),equipment_slot TEXT); INSERT INTO item_placements SELECT * FROM placements_fixture; DROP TABLE placements_fixture; CREATE UNIQUE INDEX item_bag_position ON item_placements(owner_character_id,bag_position) WHERE location='bag'; CREATE UNIQUE INDEX item_equipment_slot ON item_placements(owner_character_id,equipment_slot) WHERE location='equipment'; UPDATE meta SET value='14' WHERE key='schema_version';"), "v14 fixture")
 	check(db.query_with_bindings("UPDATE item_placements SET bag_position=5 WHERE item_uid=?;", [moved]), "legacy one-cell layout")
 	check(db.query("CREATE TEMP TRIGGER reject_migration BEFORE UPDATE ON item_instances BEGIN SELECT RAISE(ABORT,'migration rollback fixture'); END;"), "inject migration fault")
@@ -35,7 +36,7 @@ func _ready() -> void:
 	check(after.items.size() == 2 and after.items[0].uid == before.items[0].uid and after.items[1].uid == moved, "migration preserves identities")
 	check(after.items[1].bag_position == 1 and after.items[1].revision == 1 and after.items[1].stats == before.items[1].stats, "collision repacked with revision; stats intact")
 	check(store.move_bag_item(owner,moved,1,5).get("error", "") == "occupied", "covered non-anchor cell rejected")
-	check(store.move_bag_item(owner,moved,1,39).get("error", "") == "request", "page-crossing sword rejected")
+	check(store.move_bag_item(owner,moved,1,(InventoryGrid.ROWS - ItemDefinitions.IRON_SWORD.inventory_height + 1) * InventoryGrid.COLUMNS + 4).get("error", "") == "request", "page-crossing sword rejected")
 	check(store.move_bag_item(owner,moved,1,135).ok, "cross-page move")
 	check(db.close_db() and db.open_db(), "reopen")
 	check(store.inventory(owner).items.any(func(i: Dictionary) -> bool: return i.uid == moved and i.bag_position == 135), "page and footprint survive relog")
