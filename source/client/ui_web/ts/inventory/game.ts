@@ -84,7 +84,7 @@ const view = mountInventory(root, {
   quickDeposit: (item) =>
     storageRoot.hidden ? Promise.resolve() : storage.receiveFromInventory(item),
   withdrawItem: (item, position) => storage.withdrawToInventory(item, position),
-  receiveEquipped: (item) => equipment.unequip(item),
+  receiveEquipped: (item, position) => equipment.unequip(item, position),
   manager,
   resolveItemIcon,
   activateItem: (payload) => bridge.request('item.activate', payload),

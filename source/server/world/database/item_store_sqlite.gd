@@ -133,8 +133,8 @@ func activate_item(owner_id: int, uid: String, expected_revision: int) -> Dictio
 		_:
 			return _error("no_action")
 
-func change_equipment(owner_id: int, uid: String, expected_revision: int, action: String) -> Dictionary:
-	if action not in ["equip", "unequip"] or not ItemInstance.valid_uid(uid) or expected_revision < 0:
+func change_equipment(owner_id: int, uid: String, expected_revision: int, action: String, requested_position: int = -1) -> Dictionary:
+	if action not in ["equip", "unequip"] or not ItemInstance.valid_uid(uid) or expected_revision < 0 or requested_position < -1 or requested_position >= InventoryGrid.CAPACITY or (action != "unequip" and requested_position != -1):
 		return _error("request")
 	if not db.query("BEGIN IMMEDIATE;"):
 		return _error("storage")
@@ -150,10 +150,18 @@ func change_equipment(owner_id: int, uid: String, expected_revision: int, action
 	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
 	if definition == null or definition.equipment_slot == &"":
 		return _rollback("slot")
+	if action == "unequip" and item.location == "bag" and requested_position != -1: return _rollback("placement")
 	if (action == "equip" and item.location == "equipment") or (action == "unequip" and item.location == "bag"):
 		return _commit()
 	if action == "unequip":
-		var position: int = _free_bag_position(owner_id, definition.inventory_height)
+		var position: int = requested_position
+		if position == -1:
+			position = _free_bag_position(owner_id, definition.inventory_height)
+		else:
+			if InventoryGrid.cells(position, definition.inventory_height).is_empty(): return _rollback("request")
+			var occupied: Dictionary = _occupied(owner_id)
+			if occupied.has("error"): return _rollback("storage")
+			if not InventoryGrid.fits(position, definition.inventory_height, occupied): return _rollback("occupied")
 		if position == -2:
 			return _rollback("storage")
 		if position == -1:

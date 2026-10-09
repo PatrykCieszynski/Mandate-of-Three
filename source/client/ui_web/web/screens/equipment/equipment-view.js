@@ -47,7 +47,7 @@ export function mountEquipment(root, { manager, drag, equipItem, resolveItemIcon
         canDrag: () => !drag?.active,
     });
     shell.contentRoot.innerHTML = `<div class="equipment-body"><div class="equipment-silhouette" aria-hidden="true">♟</div></div>
-    <p class="equipment-stats"></p><p class="equipment-hint">Right-click bag items to equip.<br>Click weapon to unequip.</p>
+    <p class="equipment-stats"></p><p class="equipment-hint">Right-click bag items to equip.<br>Right-click weapon to unequip.</p>
     <p class="inventory-status" role="status"></p>`;
     const panel = findElement(root, '.equipment-window', 'section'), body = findElement(root, '.equipment-body', 'div'), status = findElement(root, '[role=status]', 'p');
     const tip = ItemTooltip(root, { geometry: () => manager }), tooltip = tip.element;
@@ -121,7 +121,7 @@ export function mountEquipment(root, { manager, drag, equipItem, resolveItemIcon
             return;
         tip.show(event, item);
     }
-    async function action(item, command, label, pendingText) {
+    async function action(command, label, pendingText) {
         if (pending || disposed)
             return;
         pending = true;
@@ -129,7 +129,7 @@ export function mountEquipment(root, { manager, drag, equipItem, resolveItemIcon
         render();
         status.textContent = pendingText;
         try {
-            const result = await command({ id: item.id, revision: item.revision });
+            const result = await command();
             if (!disposed)
                 status.textContent = result.ok
                     ? ''
@@ -145,12 +145,18 @@ export function mountEquipment(root, { manager, drag, equipItem, resolveItemIcon
                 render();
         }
     }
-    function unequip(item) {
-        return action(item, unequipItem, 'Unequip', 'Unequipping…');
+    function unequip(item, position) {
+        return action(() => unequipItem({
+            id: item.id,
+            revision: item.revision,
+            ...(position
+                ? { x: position.x, y: position.y, page: position.page }
+                : {}),
+        }), 'Unequip', 'Unequipping…');
     }
     async function equip(item) {
         if (equipItem)
-            await action(item, equipItem, 'Equip', 'Equipping…');
+            await action(() => equipItem({ id: item.id, revision: item.revision }), 'Equip', 'Equipping…');
     }
     function render() {
         sourceBindings.forEach((binding) => binding.dispose());
@@ -165,9 +171,6 @@ export function mountEquipment(root, { manager, drag, equipItem, resolveItemIcon
                         shell.handle.activate();
                         tip.hide();
                         return ownedItemPayload('equipment', item, ITEM_SLOT_SIZE, resolveItemIcon);
-                    },
-                    onClick: () => {
-                        void unequip(item);
                     },
                 }));
         }

@@ -7,7 +7,6 @@ import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
 import { UiWindow } from '../../core/window/ui-window.js';
-import { firstFittingPlacement } from './placement.js';
 export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem, receiveEquipped, resolveItemIcon = () => null, moveItem, activateItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
     const shell = new UiWindow(root, {
         id: 'inventory',
@@ -169,21 +168,11 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
                     return { ...preview, valid: false };
                 }
                 const subject = preview.data.subject;
-                if (subject.container === 'equipment') {
-                    // The existing unequip wire command receives automatically, with no coordinates.
-                    const valid = !!receiveEquipped &&
-                        firstFittingPlacement(inventory, subject.item) !== null;
-                    const highlight = document.createElement('div');
-                    highlight.className =
-                        'item-drop-highlight' + (valid ? '' : ' invalid');
-                    return {
-                        ...preview,
-                        valid,
-                        visual: { element: highlight, parent: grid },
-                    };
-                }
                 const valid = preview.valid &&
-                    (subject.container === 'inventory' || !!withdrawItem);
+                    (subject.container === 'inventory' ||
+                        (subject.container === 'equipment'
+                            ? !!receiveEquipped
+                            : !!withdrawItem));
                 if (!valid)
                     preview.visual?.element.classList.add('invalid');
                 return { ...preview, valid };
@@ -197,7 +186,7 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
                 else if (data.subject.container === 'storage')
                     await receiveFromStorage(data.subject.item, data.position);
                 else
-                    await receiveEquipped?.(data.subject.item);
+                    await receiveEquipped?.(data.subject.item, data.position);
             },
         }));
     }

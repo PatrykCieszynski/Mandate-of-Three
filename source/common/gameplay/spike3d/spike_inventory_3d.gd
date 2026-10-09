@@ -31,8 +31,8 @@ func remove_peer(peer_id: int) -> void:
 	_last_action_ms.erase(peer_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
-func request_equipment(action: String, uid: String, revision: int, command_id: String = "") -> void:
-	_handle_command(action, uid, revision, -1, command_id)
+func request_equipment(action: String, uid: String, revision: int, command_id: String = "", requested_position: int = -1) -> void:
+	_handle_command(action, uid, revision, requested_position, command_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_activate_item(uid: String, revision: int, command_id: String) -> void:
@@ -86,7 +86,7 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 		if action == "activate":
 			result = _store().activate_item(resource.player_id,uid,revision)
 		else:
-			result = _store().move_bag_item(resource.player_id, uid, revision, position) if action == "move" else _store().change_equipment(resource.player_id, uid, revision, action)
+			result = _store().move_bag_item(resource.player_id, uid, revision, position) if action == "move" else _store().change_equipment(resource.player_id, uid, revision, action, position)
 	_send_state(peer_id, "" if result.ok else str(result.error))
 	if command_id != "":
 		receive_operation.rpc_id(peer_id, command_id, result)

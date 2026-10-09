@@ -362,3 +362,12 @@ path; a successful acknowledgement alone never changes browser domain state.
 Shared production item gestures and screen drop policies are described in
 [ItemDragRuntime v1](item-drag-runtime.md); the command wire format and server
 authority remain unchanged.
+
+
+`equipment.unequip` supports `{id, revision}` for automatic first-fitting receipt
+and `{id, revision, x, y, page}` for exact Equipment-to-Inventory drops. All three
+coordinates must be present together and pass bounded integer validation. World
+checks the full footprint and occupancy inside the equipment transaction;
+invalid/occupied exact targets are rejected without a first-free fallback.
+Right-click Equipment uses automatic receipt; left click carries and drag/drop
+selects an exact position. Inventory right-click remains `item.activate`.

@@ -27,9 +27,10 @@ shop or changing the runtime to recognize offers.
   `equipment.equip`. Definition/slot compatibility is checked by World; the
   preview is advisory. Direct Storage-to-Equipment is rejected.
 - Equipped weapons can be dragged into Inventory through `equipment.unequip`.
-  Its existing wire contract supplies no coordinates, so Inventory presents a
-  receive highlight and the server chooses the first fitting position. Short
-  clicking still unequips, and right-click/keyboard activation remain explicit.
+  Drag supplies exact `x/y/page` and uses the normal footprint preview. The World
+  validates that exact position inside the equipment transaction, with no free-cell
+  fallback. Right-click/keyboard unequip omits coordinates and receives at the
+  first fitting position. Short left-click latches the equipped item for carry.
 
 Inventory's `receiveFromStorage(item, requestedPosition?)` API distinguishes
 exact placement from automatic receiving. Target drops supply a position;
@@ -56,8 +57,10 @@ Disposal removes listeners/DOM, is idempotent and prevents queued drop dispatch.
 Drop clears the gesture immediately and awaits the policy action. Command
 results do not place items optimistically. Only validated domain snapshots
 replace screen state. Relevant domain/HUD updates cancel stale carries; unrelated
-wallet updates preserve the gesture. Native bridge validation, command
-correlation, server ownership/revision checks and transactions are unchanged.
+wallet updates preserve the gesture. Native bridge validation accepts either
+the two-field automatic unequip payload or all five fields for an exact placement; partial coordinates are rejected.
+The same command correlation and server ownership/revision checks apply. Exact
+unequip validates footprint/occupancy in the existing equipment transaction.
 
 ## Authoritative Inventory receiving reuse point
 

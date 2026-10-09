@@ -1,3 +1,4 @@
+import type { Placement } from '../inventory/placement.js';
 import { ITEM_SLOT_SIZE } from '../../game-ui/items/item-geometry.js';
 import type { ItemDragRuntime } from '../../game-ui/drag/item-drag-runtime.js';
 import type { DragRegistration } from '../../game-ui/drag/item-drag-types.js';
@@ -11,6 +12,7 @@ import type {
   DomainSnapshot,
   EquipmentItem,
   ItemCommand,
+  UnequipItemCommand,
   CommandResult,
 } from '../../protocol/contracts.js';
 import type { ResolveItemIcon } from '../../game-ui/item-types.js';
@@ -22,7 +24,7 @@ interface EquipmentOptions {
   drag?: ItemDragRuntime;
   equipItem?: (command: ItemCommand) => Promise<CommandResult>;
   resolveItemIcon?: ResolveItemIcon;
-  unequipItem: (command: ItemCommand) => Promise<CommandResult>;
+  unequipItem: (command: UnequipItemCommand) => Promise<CommandResult>;
   onClose?: () => void;
   onRegionsChanged?: () => void;
 }
@@ -88,7 +90,7 @@ export function mountEquipment(
     canDrag: () => !drag?.active,
   });
   shell.contentRoot.innerHTML = `<div class="equipment-body"><div class="equipment-silhouette" aria-hidden="true">♟</div></div>
-    <p class="equipment-stats"></p><p class="equipment-hint">Right-click bag items to equip.<br>Click weapon to unequip.</p>
+    <p class="equipment-stats"></p><p class="equipment-hint">Right-click bag items to equip.<br>Right-click weapon to unequip.</p>
     <p class="inventory-status" role="status"></p>`;
   const panel = findElement(root, '.equipment-window', 'section'),
     body = findElement(root, '.equipment-body', 'div'),
@@ -167,8 +169,7 @@ export function mountEquipment(
     tip.show(event, item);
   }
   async function action(
-    item: ItemPresentation,
-    command: (command: ItemCommand) => Promise<CommandResult>,
+    command: () => Promise<CommandResult>,
     label: string,
     pendingText: string,
   ) {
@@ -178,7 +179,7 @@ export function mountEquipment(
     render();
     status.textContent = pendingText;
     try {
-      const result = await command({ id: item.id, revision: item.revision });
+      const result = await command();
       if (!disposed)
         status.textContent = result.ok
           ? ''
@@ -191,11 +192,27 @@ export function mountEquipment(
       if (!disposed) render();
     }
   }
-  function unequip(item: ItemPresentation) {
-    return action(item, unequipItem, 'Unequip', 'Unequipping…');
+  function unequip(item: ItemPresentation, position?: Placement) {
+    return action(
+      () =>
+        unequipItem({
+          id: item.id,
+          revision: item.revision,
+          ...(position
+            ? { x: position.x, y: position.y, page: position.page }
+            : {}),
+        }),
+      'Unequip',
+      'Unequipping…',
+    );
   }
   async function equip(item: ItemPresentation) {
-    if (equipItem) await action(item, equipItem, 'Equip', 'Equipping…');
+    if (equipItem)
+      await action(
+        () => equipItem({ id: item.id, revision: item.revision }),
+        'Equip',
+        'Equipping…',
+      );
   }
   function render() {
     sourceBindings.forEach((binding) => binding.dispose());
@@ -216,9 +233,6 @@ export function mountEquipment(
                 ITEM_SLOT_SIZE,
                 resolveItemIcon,
               );
-            },
-            onClick: () => {
-              void unequip(item);
             },
           }),
         );

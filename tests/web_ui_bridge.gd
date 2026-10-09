@@ -43,6 +43,17 @@ func _run() -> void:
 	assert(InventoryWebController._valid_equipment({"id":item_uid,"revision":2}))
 	assert(not InventoryWebController._valid_equipment({"id":item_uid,"revision":2,"action":"quit"}))
 	assert(not InventoryWebController._valid_equipment({"id":"bad","revision":2}))
+	assert(InventoryWebController._valid_unequip({"id":item_uid,"revision":2}))
+	var exact_unequip: Dictionary = {"id":item_uid,"revision":2,"x":2,"y":3,"page":1}
+	assert(InventoryWebController._valid_unequip(exact_unequip))
+	for coordinate: String in ["x","y","page"]:
+		for bad: Variant in [NAN,INF,-1,1.5,1000000,"1"]:
+			var malformed: Dictionary = exact_unequip.duplicate()
+			malformed[coordinate] = bad
+			assert(not InventoryWebController._valid_unequip(malformed))
+		var partial: Dictionary = exact_unequip.duplicate()
+		partial.erase(coordinate)
+		assert(not InventoryWebController._valid_unequip(partial))
 	for percent: int in [80,90,100,110,125,140,150]:
 		assert(InventoryWebController._valid_scale({"percent":percent}))
 	for invalid: Variant in [0,79,81,151,100.5,"125",null]:
