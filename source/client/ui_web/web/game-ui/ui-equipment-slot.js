@@ -16,5 +16,7 @@ export function UiEquipmentSlot({ slot, label, x, y, height, resolveItemIcon, ti
                 element.removeAttribute('title');
                 paintItemIcon(element, item, { resolveItemIcon, alt: item.name, fallbackClass: null, quantity: false });
             }
+            else
+                element.title = title;
         } };
 }
