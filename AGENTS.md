@@ -10,7 +10,11 @@ dirty checkpoints; item/economy changes remain immediate atomic transactions.
 - Before merging, inspect the diff and run checks appropriate to the change.
 - Merge completed branches locally with `git merge --no-ff` so the topic remains
   visible in history. Do not rewrite published history or force-push.
-- Push the topic branch and the integrated `main` when the user asks to publish.
+- When the user asks to publish, push the integrated `main`. Push a topic branch
+  only when explicitly requested.
+- After merging a topic, delete its local branch. Once the merge is published on
+  remote `main`, delete the corresponding remote topic branch if present. Never
+  delete unmerged branches; `--no-ff` preserves merged topic history.
 - Keep runtime databases, accounts, logs, engine binaries and reference checkouts
   in their ignored locations; commit source, documentation and repeatable tests.
 
