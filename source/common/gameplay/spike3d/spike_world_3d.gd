@@ -16,6 +16,7 @@ var _input_accum: float = 0.0
 var _snapshot_accum: float = 0.0
 var _camera: Camera3D
 var _options: Navigator
+var _ui_failure_label: Label
 var _status: Label
 var inventory_endpoint: SpikeInventory3D
 var combat_endpoint: SpikeCombat3D
@@ -41,6 +42,8 @@ func _ready() -> void:
 			web_inventory.name = "WebInventory"
 			add_child(web_inventory)
 			web_inventory.setup(self)
+		elif DisplayServer.get_name() != "headless":
+			show_ui_failure("CEF requires Vulkan Mobile and the installed addon")
 		join_world.rpc_id.call_deferred(1)
 
 func _build_arena() -> void:
@@ -124,6 +127,12 @@ func _build_camera_and_ui() -> void:
 	options_button.text = "Options"
 	options_button.focus_mode = Control.FOCUS_NONE
 	controls.add_child(options_button)
+	_ui_failure_label = Label.new()
+	_ui_failure_label.custom_minimum_size.x = 300
+	_ui_failure_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_ui_failure_label.add_theme_font_size_override("font_size", 12)
+	_ui_failure_label.hide()
+	controls.add_child(_ui_failure_label)
 	var options_layer := CanvasLayer.new()
 	options_layer.layer = 20
 	add_child(options_layer)
@@ -132,13 +141,18 @@ func _build_camera_and_ui() -> void:
 	options_layer.add_child(_options)
 	_options.visibility_changed.connect(func() -> void:
 		if _options.visible:
-			inventory_endpoint.enable_web_ui(inventory_endpoint.web_ui_active)
 			var inventory: Node = get_node_or_null("WebInventory")
 			if inventory != null: inventory.set_open(false)
 		ClientState.menu_open = _options.visible
 		input_enabled = not _options.visible
 		if not _options.visible: get_viewport().gui_release_focus())
 	options_button.pressed.connect(func() -> void: _options.show())
+
+func show_ui_failure(reason: String) -> void:
+	push_warning("Web inventory unavailable: " + reason)
+	if not is_instance_valid(_ui_failure_label): return
+	_ui_failure_label.text = "Inventory UI unavailable. " + reason
+	_ui_failure_label.show()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if is_instance_valid(_options) and _options.visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:

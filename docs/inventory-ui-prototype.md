@@ -110,7 +110,7 @@ Native payloads, profiles, reference PNGs and runtime stores remain ignored.
 The project defaults to a 1280×720 window with a 1920×1080 design baseline and
 **disabled canvas stretch**. The browser tracks actual window pixels. Local
 headless runs create no browser; server exports exclude CEF entirely. Unsupported
-clients retain native inventory. See [CEF addon integration](cef-addon-integration.md).
+clients show a technical UI-unavailable message without a second inventory renderer. See [CEF addon integration](cef-addon-integration.md).
 
 Godot's `InventoryWebController.set_ui_scale()` accepts the contract's scale list.
 For development set project setting `mandate/ui_scale` or launch the root
@@ -160,7 +160,7 @@ after bridge/commands and initial domains are wired. Inventory remains hidden
 (`inventory_open=false`), reports no interactive regions and leaves input with
 gameplay. UI_READY receives the latest snapshot even if inventory/wallet data
 arrives during browser startup. Opening/closing only updates presentation state;
-it does not create a browser. Startup failure still restores the native fallback.
+it does not create a browser. Startup failure releases input and shows a technical UI-unavailable message.
 This moves the cold-start cost to entering the world; it does not eliminate CEF's
 startup time or guarantee readiness if the player opens Inventory immediately.
 
@@ -200,3 +200,22 @@ server. The grid still supports 1×3 for future taller items. Existing placement
 keep their anchors and UIDs: shrinking the footprint releases cells and requires
 no database migration. Equipped icons have no extra CSS frame or hover fill;
 the unmodified legacy background still supplies its painted slot edges.
+
+## Window and request boundaries
+
+Inventory and Equipment share `WindowLayout`. Each window registers its ID,
+preferred anchor and logical default offset. Initial Equipment placement uses the
+measured Inventory rectangle. Manual positions survive state updates, and both
+windows clamp on viewport/scale changes and reopening. Layout never reads a
+neighbor's CSS width variable. Hidden windows retain their last measured geometry;
+unmeasured neighbors fall back to the preferred anchor until visible.
+
+The controller tracks independent RPC results by generated command ID with a
+per-controller epoch. Replies may arrive out of order. Each request has its own
+2.5-second timeout; reload, disconnect and teardown cancel unresolved waiters.
+Server rate limits, revisions and transactional validation still apply; removing
+single-flight transport does not authorize conflicting economic operations.
+
+`SpikeInventory3D` retains networking, snapshots, public weapon replication and
+the existing sword comparison helper. Its native panel/buttons are removed.
+A general item presenter is deferred until the first additional item type.
