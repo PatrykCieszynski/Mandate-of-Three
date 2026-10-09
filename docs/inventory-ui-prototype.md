@@ -194,3 +194,9 @@ of this slice. The weapon slot is functional. Other visible slots are disabled
 layout placeholders; no armor/accessory systems were added. Equipment and stats
 recover through ui.ready snapshots. The local preview demonstrates both windows
 and mock equip/unequip without touching game persistence.
+
+One-handed Iron Swords now occupy 1×2 bag cells, driven by ItemDefinition on the
+server. The grid still supports 1×3 for future taller items. Existing placements
+keep their anchors and UIDs: shrinking the footprint releases cells and requires
+no database migration. Equipped icons have no extra CSS frame or hover fill;
+the unmodified legacy background still supplies its painted slot edges.

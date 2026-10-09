@@ -4,8 +4,8 @@ import {placement} from '../../source/client/ui_web/web/inventory/placement.js';
 const state={inventory:{columns:5,rows:9,pages:4,items:[
 {id:'potion',revision:0,name:'Red Potion',icon:'potion',quantity:15,height:1,x:0,y:0,page:0,description:'Mock consumable.'},
 {id:'short',revision:0,name:'Short Sword +0',icon:'short_sword',height:2,x:1,y:0,page:0,description:'Mock 1 × 2 item.'},
-{id:'sword',revision:0,name:'Iron Sword +0',icon:'iron_sword',height:3,x:2,y:0,page:0,description:'Mock 1 × 3 item.'},
-{id:'other',revision:0,name:'Iron Sword +1',icon:'iron_sword',height:3,x:0,y:0,page:1,description:'Second page.'}
+{id:'sword',revision:0,name:'Iron Sword +0',icon:'iron_sword',height:2,x:2,y:0,page:0,description:'Mock one-handed sword · 1 × 2.'},
+{id:'other',revision:0,name:'Iron Sword +1',icon:'iron_sword',height:2,x:0,y:0,page:1,description:'Second page.'}
 ]},equipment:{items:[],stats:{attack:10}},wallet:{balance:100090},hud:{ui_scale:Number(new URLSearchParams(location.search).get('scale')||1)}};
 const root=document.getElementById('inventory'),reopen=document.getElementById('reopen');
 const view=mountInventory(root,{async equipItem(payload){
