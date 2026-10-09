@@ -21,6 +21,45 @@ screen/composition modules, then rebuild their committed JS. The formatter is a
 pinned development dependency; generated template source is excluded. CI checks
 formatting alongside strict TypeScript and generated asset ownership.
 
+## Browser development without Godot
+
+From this directory, run:
+
+```powershell
+npm run dev
+```
+
+Open `http://127.0.0.1:4173/` in Edge/Chrome or the Codex browser. From the
+repository root the equivalent is `npm --prefix source/client/ui_web run dev`.
+For another port, use `npm run dev -- --port 4174`. Ctrl+C stops the host and
+compiler watches. No Godot, Playwright, account or game server is needed.
+
+The command builds production and preview TypeScript, then watches both. Window
+HTML templates also regenerate on edits. Reload the page after compilation;
+there is no hot-reload framework or additional runtime dependency. CSS is served
+directly from the production tree. `web/` JS remains generated and committed as
+usual; `.dev/` is ignored development output.
+
+The preview iframe loads the real `web/inventory/game.html`, Core UI and screen
+composition, including the unchanged production CSP and skin adapter. A local
+response injects a separate development IPC stand-in before the game entrypoint;
+the production HTML, bridge, store and views contain no preview flag or fallback.
+The server binds only to loopback and serves the runtime and explicit preview
+files. Development source/output is excluded from game export presets.
+
+The panel supplies populated/empty fixtures, visibility, the seven supported
+UI scales, Wallet updates, an Escape shortcut and outgoing command inspection.
+Commands reject by default. Accept mode returns successful command results and
+hides closed windows, but does not implement item placement, equip eligibility,
+economy or other server rules. Item state changes come from fixtures. This host
+is for browser UI work, not a simulated authoritative game backend.
+
+Use Godot for native CEF embedding/transparency, IPC transport, focus/input
+handoff, settings-derived scale and live snapshots/server command effects. The
+browser host can exercise the presentation behavior of those contracts only.
+The optional browser runner also tests the real preview host without injecting
+an alternate test bridge; default headless smoke remains unchanged.
+
 From the repository root:
 
 ```powershell

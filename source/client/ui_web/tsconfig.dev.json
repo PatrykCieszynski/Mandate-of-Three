@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "dev",
+    "outDir": ".dev",
+    "declaration": false
+  },
+  "include": [
+    "dev/**/*.ts"
+  ]
+}
