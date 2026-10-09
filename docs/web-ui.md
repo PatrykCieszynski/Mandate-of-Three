@@ -40,9 +40,9 @@ this decision does not install CEF in gameplay or server projects.
 - `web/protocol.js`, `bridge.js`, `store.js`: dependency-free browser framing,
   correlated requests and disposable domain state. `web/index.html` is a blank
   transparent shell, not a new gameplay screen.
-- `tests/cef_ui/`: mock inventory model/controller, HTML/CSS/JS, diagnostic host
-  subclass, synthetic inputs and assertions. `test.report` exists only in this
-  fixture's explicit registration. Production host has no `eval()` API.
+- `tests/web_bridge.test.mjs` and `tests/web_ui_bridge.gd`: small headless
+  transport/application contracts. The standalone mock and diagnostic host are
+  retired; no browser layout fixture is part of the default suite.
 
 A client composition root creates host/bridge/dispatcher nodes and connects:
 
@@ -187,9 +187,9 @@ Pinned plugin is [godot-cef v2.0.0](https://github.com/dsh0416/godot-cef/release
 source `f8027f610c60a9740ceb8a263f144962ff6d5f62`, tested Godot 4.7.2 Windows x64.
 The source/API were inspected, including native input_routing/focus_state and
 scheme registration. Host alone uses CefTexture, popup/permission/background
-properties, IPC, load signals and `reload()`. Test host alone adds `eval()` and
-native diagnostic property reads. See the historical spike for archive checksum
-and hardware/performance baseline.
+properties, IPC, load signals and `reload()`. The old diagnostic host and its
+`eval()` helpers were removed with the spike. The client bootstrap pins and
+verifies the archive checksum; the historical record retains performance evidence.
 
 Local HTML/CSS/JS only; CSP denies connect/frame/object/form/base access, no CDN,
 web server or frontend dependencies. Native popup policy is block, permission
@@ -206,46 +206,27 @@ fetch (tested), but must not be presented as confinement of local resources.
 Do not load untrusted/mod/downloaded HTML into this runtime. Debug builds expose
 local DevTools on 9229; a non-debug packaged client remains an adoption gate.
 
-No CEF addon, autoload or main-project setting is added to the root. Setup extracts native
-binaries only into ignored `.godot/cef-spike/project`; its headless baseline has
-no addon. Host guards headless/unavailable classes and creates no browser. Server
-exports must continue to exclude native CEF and UI setup. No server/client release
-export is produced or claimed here.
+No CEF addon, autoload or main-project setting is added to the root. The gameplay
+launcher extracts native binaries into ignored `.godot/cef-client/project` and
+caches the pinned archive in `.godot/cef-client/cache`. Root/headless tests use
+the actual source checkout without a native plugin. The standalone spike project
+and setup dependency have been removed. Server exports must exclude native CEF.
 
-Modules in the fixture are copied from production sources into its bundled
-`web/shared` during setup. Standard URL resolution treats `tests` in `res://tests/`
-as an authority; relative `../../../source` cannot traverse that authority.
-Keeping shared modules on the fixture origin avoids that invalid import layout
-without weakening web security or adding runtime loaders. Production modules
-already reside together on `res://source/`. Setup refreshes copied directories so
-removed old scripts cannot survive under obsolete UIDs in the isolated project.
-
-## Repeatable validation
-
-From repository root, Python 3.11+ and Node.js (no npm install):
+## Prototype validation
 
 ```powershell
-python tools/cef_ui_spike/setup.py
-# Default: no browser or GUI window.
+& ./tests/run-smoke.ps1
+# Bridge only, no CEF setup or browser:
 & ./tests/run-web-ui.ps1
-# Explicit final integration check (opens the standalone fixture).
-& ./tests/run-web-ui.ps1 -WithBrowser -Mode Vulkan
-& ./tests/run-cef-ui.ps1 -Mode Vulkan
+# Optional real two-client headless Inventory RPC regression:
+& ./tests/run-web-inventory.ps1
 ```
 
-`-NodeExecutable` can point at a bundled Node binary. Re-run setup after changing
-source because the fixture uses copies. Native runner retains its historical
-name and records only descendants of its own launch, early survivors and live
-orphan PIDs up to ten seconds after shutdown. Logs/profiles/metrics/screenshots
-stay ignored. GUI evaluation and engine-injected input are test-only.
-
-Tests cover strict protocol/whitelist/payload rejection/byte limit, request IDs,
-timeout and late results, separation of results and state, full snapshot and
-independent domain updates, reload pending reset, rectangle scaling and bounds,
-button capture/wheel, hide/show, modal focus and headless creation guard. Real CEF
-checks cover readiness, inventory rejection, reload/recreation, repeated open/close,
-resize/transparency, drag previews, text/Tab, gameplay pass-through, modal close,
-CSP fetch denial, navigation guard and application/helper shutdown.
+Use the real staged client for milestone-level native UI checks. The default
+suite asserts transport/application and persistence contracts, not exact DOM,
+window dimensions, animation timing or screenshots. See [testing policy](testing.md).
+The following 2026-10-08 table is historical adoption evidence from the retired
+fixture, not a list of current automated CI checks.
 
 ## Current validation and readiness
 

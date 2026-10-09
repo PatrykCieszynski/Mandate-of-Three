@@ -14,26 +14,34 @@ dirty checkpoints; item/economy changes remain immediate atomic transactions.
 - Keep runtime databases, accounts, logs, engine binaries and reference checkouts
   in their ignored locations; commit source, documentation and repeatable tests.
 
-## Current verification commands
+## Prototype verification policy
 
-Run from the repository root in PowerShell:
+Keep the default checks small, headless and based on durable contracts:
+item ownership/revision/rollback, inventory footprints/migration, progression
+checkpoints, wallet delta/spend transactions and explicit Web bridge commands.
+Do not add pixel snapshots, exact DOM/geometry, animation timings or hardcoded
+combat balance assertions for routine prototype changes. Native/manual checks
+belong at a milestone or when changing CEF/input/rendering integration.
+
+Default checks from the repository root in PowerShell:
 
 ```powershell
 git diff --check
-& .\tests\run-items.ps1
-& .\tests\run-spike3d.ps1
-& .\tests\run-pve.ps1
-& .\tests\run-combat.ps1
-& .\tests\run-progression.ps1
-& .\tests\run-xp.ps1
-& .\tests\run-yang.ps1
+& .\tests\run-smoke.ps1
 ```
 
-Run PvE, combat, progression, XP and Yang tests sequentially: all use port 18098.
-Progression accepts `-Preview` to render its inventory comparison during the test.
-XP also accepts `-Preview` to render its HUD and level-up notice.
+The smoke runner needs Godot and Node (`-NodeExecutable` accepts a bundled path),
+no running servers, plugin download, browser, port or real player accounts.
+It keeps fixed-name diagnostic logs and removes its disposable DBs after success.
 
-Full item-session integration additionally uses `& .\tests\run-items.ps1 -WithSession`.
-It requires running gateway/master/world roles and creates local
-guest accounts and test characters. Use it when session/persistence changes need
-verification, with awareness that it writes to the local runtime stores.
+Existing extended suites are optional. Run the relevant one for changes to its
+network/gameplay flow: run-spike3d, run-pve, run-combat, run-progression, run-xp,
+run-yang, run-web-inventory. PvE-derived network suites use port 18098 and must
+run sequentially. Do not run every extended suite after a small UI/style change.
+Full item-session integration (`run-items.ps1 -WithSession`) needs gateway/master/
+world and creates guest accounts/test characters; use it for login/session changes.
+
+Use `tools/clean-dev-artifacts.ps1` to remove disposable verification outputs
+and retired spike caches. Keep imports, editor cache, binaries, references,
+staged client and actual runtime stores. Avoid ad-hoc scripts at the .godot root;
+put temporary diagnostics in .godot/verification and remove them after use.

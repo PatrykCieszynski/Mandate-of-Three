@@ -104,3 +104,11 @@ unique items. Keep placement/economy writes immediate. Use individual extracted
 legacy PNGs only as temporary local skin, isolated behind semantic asset names.
 Equipment/Shop/full HUD/final art and generic frontend frameworks remain out of
 scope. See [UI contract](ui-contract.md) and [Inventory](inventory-ui-prototype.md).
+
+## Prototype cleanup — 2026-10-09
+
+The standalone CEF spike is retired after production Inventory integration.
+Use the real staged client for native UI checks. Default verification is the
+small headless persistence/bridge smoke suite; exact DOM, pixel, animation and
+balance assertions do not gate routine prototype edits. Extended gameplay/asset
+suites remain opt-in. See [testing and scratch cleanup](testing.md).

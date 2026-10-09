@@ -111,6 +111,7 @@ with `--no-ff`. See [AGENTS.md](AGENTS.md).
 - [External legacy asset pipeline history](docs/legacy-asset-pipeline.md)
 - [Web UI foundation](docs/web-ui.md)
 - [Historical CEF UI spike](docs/cef-ui-spike.md)
+- [Prototype testing and cleanup](docs/testing.md)
 - [CI](docs/ci.md)
 - [Cleanup and remaining dependencies](docs/repository-cleanup.md)
 - [Open-MT2 reference analysis](docs/open-mt2-analysis.md)

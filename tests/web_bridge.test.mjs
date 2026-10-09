@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const base = new URL('../../source/client/ui_web/web/', import.meta.url);
+const base = new URL('../source/client/ui_web/web/', import.meta.url);
 const protocolUrl = 'data:text/javascript;base64,' + Buffer.from(await readFile(new URL('protocol.js',base),'utf8')).toString('base64');
 const protocol = await import(protocolUrl);
 const bridgeCode = (await readFile(new URL('bridge.js',base),'utf8')).replace("'./protocol.js'",JSON.stringify(protocolUrl));

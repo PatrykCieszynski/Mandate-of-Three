@@ -48,7 +48,7 @@ prefer 2× raster sources where practical, with browser downscale. Use SVG for
 geometric ornaments and high-resolution raster for painted ornaments. Legacy
 textures do not satisfy the final-art quality target; they are not final assets.
 
-## Required verification matrix
+## Required milestone verification matrix
 
 | Viewport | UI scale |
 | --- | --- |
@@ -57,6 +57,9 @@ textures do not satisfy the final-art quality target; they are not final assets.
 | 2560×1440 | 100%, 110%, 125% |
 | 3440×1440 | 100%, 110% |
 | 3840×2160 | 125%, 150% |
+
+The matrix is checked manually at UI milestones during prototyping. Exact
+geometry/DOM assertions are not part of the default CI suite.
 
 Responsiveness is limited to edge clamping, tooltip flipping, chat width,
 unusually small viewport fallback and ultrawide safe-frame handling. Core
