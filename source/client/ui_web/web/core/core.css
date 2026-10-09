@@ -5,7 +5,7 @@
   position:absolute;
   width:var(--window-width);
   padding:8px var(--window-inset) 12px;
-  background:var(--skin-window-fill,none),var(--panel);
+  background:var(--skin-window-frame,none),var(--panel);
   border:1px solid var(--frame);
   box-shadow:0 2px 6px #000b}
 
@@ -19,19 +19,19 @@
 .corner.tl {
   left:-1px;
   top:-1px;
-  background:var(--skin-corner-tl,none)}
+  background:var(--skin-window-frame-corner-tl,none)}
 .corner.tr {
   right:-1px;
   top:-1px;
-  background:var(--skin-corner-tr,none)}
+  background:var(--skin-window-frame-corner-tr,none)}
 .corner.bl {
   left:-1px;
   bottom:-1px;
-  background:var(--skin-corner-bl,none)}
+  background:var(--skin-window-frame-corner-bl,none)}
 .corner.br {
   right:-1px;
   bottom:-1px;
-  background:var(--skin-corner-br,none)}
+  background:var(--skin-window-frame-corner-br,none)}
 
 .edge.top,.edge.bottom {
   height:32px;
@@ -40,10 +40,10 @@
   background-repeat:repeat-x}
 .edge.top {
   top:-1px;
-  background-image:var(--skin-edge-top,none)}
+  background-image:var(--skin-window-frame-edge-top,none)}
 .edge.bottom {
   bottom:-1px;
-  background-image:var(--skin-edge-bottom,none)}
+  background-image:var(--skin-window-frame-edge-bottom,none)}
 .edge.left,.edge.right {
   width:32px;
   top:31px;
@@ -51,16 +51,16 @@
   background-repeat:repeat-y}
 .edge.left {
   left:-1px;
-  background-image:var(--skin-edge-left,none)}
+  background-image:var(--skin-window-frame-edge-left,none)}
 .edge.right {
   right:-1px;
-  background-image:var(--skin-edge-right,none)}
+  background-image:var(--skin-window-frame-edge-right,none)}
 
 .window-header {
   height:26px;
   margin:0 -12px 4px;
   position:relative;
-  background:var(--skin-title-center,none),linear-gradient(#542a1d,#1d120e);
+  background:var(--skin-window-title,none),linear-gradient(#542a1d,#1d120e);
   background-repeat:repeat-x;
   border:1px solid #776347;
   cursor:move;
@@ -78,16 +78,16 @@
   width:15px;
   height:15px;
   border:0;
-  background:var(--skin-close-normal,none),#31312f;
+  background:var(--skin-button-close-normal,none),#31312f;
   padding:0;
   color:#ddd;
   cursor:pointer;
   font:14px/15px Arial}
 .window-close:hover {
-  background-image:var(--skin-close-hover,none)}
+  background-image:var(--skin-button-close-hover,var(--skin-button-close-normal,none))}
 .window-close:active {
-  background-image:var(--skin-close-pressed,none)}
-.has-skin .window-close {
+  background-image:var(--skin-button-close-pressed,var(--skin-button-close-normal,none))}
+.has-close-asset .window-close {
   color:transparent}
 
 .wallet {
@@ -103,7 +103,7 @@
 .yang-icon {
   width:16px;
   height:16px;
-  background:var(--skin-yang,none) center no-repeat;
+  background:var(--skin-currency-yang,none) center no-repeat;
   color:#d5b963}
 .wallet strong {
   margin-left:auto;
@@ -129,17 +129,17 @@
   flex:1;
   padding:0;
   border:1px solid #55544c;
-  background:linear-gradient(#30312e,#101110);
+  background:var(--skin-tab-normal,none),linear-gradient(#30312e,#101110);
   color:var(--muted);
   font:12px Georgia;
   cursor:pointer}
 .ui-tab[aria-selected=true] {
-  background:linear-gradient(#654735,#281a13);
+  background:var(--skin-tab-active,none),linear-gradient(#654735,#281a13);
   border-color:#a38b65;
   color:#eee0c6}
 
 .ui-slot {
   border:1px solid #494740;
-  background:var(--skin-slot,none),linear-gradient(#181b19,#080a09);
+  background:var(--skin-slot-normal,none),linear-gradient(#181b19,#080a09);
   background-repeat:no-repeat;
   background-position:center}

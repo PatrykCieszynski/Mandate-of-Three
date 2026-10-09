@@ -4,8 +4,7 @@ import {UiTooltip} from '../core/ui-tooltip.js';
 import {UiCurrency} from '../core/ui-currency.js';
 import {UiWindow} from '../core/ui-window.js';
 import {placement,carriedCell} from './placement.js';
-import {icons} from './skin.js';
-export function mountInventory(root,{manager,moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
+export function mountInventory(root,{manager,resolveItemIcon=()=>null,moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
   const shell=new UiWindow(root,{window_id:'inventory',title:'Inventory',className:'window',manager,
     placement:{preferredAnchor:'right',defaultOffset:{x:-16,y:240}},scrollBorder:2,hideHorizontalOverflow:true,
     onClose,canDrag:()=>!carry,onCancel:()=>cancelCarry(),onRegionsChanged,onGeometry:()=>{
@@ -27,7 +26,7 @@ export function mountInventory(root,{manager,moveItem,equipItem,onClose=()=>{},o
   const positionWindow=()=>shell.refresh();
   function icon(node,item) {
     node.replaceChildren();
-    if(icons[item.icon]) {const img=document.createElement('img');img.src=icons[item.icon];img.alt='';img.className='item-icon';node.append(img);}
+    if(resolveItemIcon(item.icon)) {const img=document.createElement('img');img.src=resolveItemIcon(item.icon);img.alt='';img.className='item-icon';node.append(img);}
     else {const label=document.createElement('span');label.className='icon-fallback';label.textContent=item.name;node.append(label);}
     if(item.quantity>1){const qty=document.createElement('span');qty.className='quantity';qty.textContent=item.quantity;node.append(qty);}
   }
