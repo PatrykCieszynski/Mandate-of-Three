@@ -1,14 +1,7 @@
 /* All geometry below is in logical pixels. Legacy PNGs remain native-sized. */
 
 :root {
-  --ui-scale:1;
   --slot-size:40px;
-  --window-width:266px;
-  --window-inset:32px;
-  --ink:#ded5bd;
-  --muted:#aaa18a;
-  --frame:#71654e;
-  --panel:#111212;
   --skin-window-fill:none;
   --skin-slot:none;
   --skin-title-center:none}
@@ -25,120 +18,11 @@ html,body {
 [hidden] {
   display:none!important}
 
-#inventory {
-  position:absolute;
-  left:0;
-  top:0;
-  transform:scale(var(--ui-scale));
-  transform-origin:0 0}
-
-.window-chrome {
-  position:absolute;
-  width:var(--window-width);
-  padding:8px var(--window-inset) 12px;
-  background:var(--skin-window-fill,none),var(--panel);
-  border:1px solid var(--frame);
-  box-shadow:0 2px 6px #000b}
-
-.chrome {
-  position:absolute;
-  pointer-events:none;
-  z-index:4}
-.corner {
-  width:32px;
-  height:32px}
-.corner.tl {
-  left:-1px;
-  top:-1px;
-  background:var(--skin-corner-tl,none)}
-.corner.tr {
-  right:-1px;
-  top:-1px;
-  background:var(--skin-corner-tr,none)}
-.corner.bl {
-  left:-1px;
-  bottom:-1px;
-  background:var(--skin-corner-bl,none)}
-.corner.br {
-  right:-1px;
-  bottom:-1px;
-  background:var(--skin-corner-br,none)}
-
-.edge.top,.edge.bottom {
-  height:32px;
-  left:31px;
-  right:31px;
-  background-repeat:repeat-x}
-.edge.top {
-  top:-1px;
-  background-image:var(--skin-edge-top,none)}
-.edge.bottom {
-  bottom:-1px;
-  background-image:var(--skin-edge-bottom,none)}
-.edge.left,.edge.right {
-  width:32px;
-  top:31px;
-  bottom:31px;
-  background-repeat:repeat-y}
-.edge.left {
-  left:-1px;
-  background-image:var(--skin-edge-left,none)}
-.edge.right {
-  right:-1px;
-  background-image:var(--skin-edge-right,none)}
-
-.window-header {
-  height:26px;
-  margin:0 -12px 4px;
-  position:relative;
-  background:var(--skin-title-center,none),linear-gradient(#542a1d,#1d120e);
-  background-repeat:repeat-x;
-  border:1px solid #776347;
-  cursor:move;
-  touch-action:none;
-  z-index:5}
-.window-header h1 {
-  font:13px/24px Georgia;
-  text-align:center;
-  margin:0;
-  font-weight:normal}
-.window-close {
-  position:absolute;
-  right:3px;
-  top:4px;
-  width:15px;
-  height:15px;
-  border:0;
-  background:var(--skin-close-normal,none),#31312f;
-  padding:0;
-  color:#ddd;
-  cursor:pointer;
-  font:14px/15px Arial}
-.window-close:hover {
-  background-image:var(--skin-close-hover,none)}
-.window-close:active {
-  background-image:var(--skin-close-pressed,none)}
-.has-skin .window-close {
-  color:transparent}
-
 .inventory-tabs {
   display:flex;
   height:25px;
   gap:2px;
   margin-bottom:4px}
-.inventory-tabs button {
-  flex:1;
-  padding:0;
-  border:1px solid #55544c;
-  background:linear-gradient(#30312e,#101110);
-  color:var(--muted);
-  font:12px Georgia;
-  cursor:pointer}
-.inventory-tabs button[aria-selected=true] {
-  background:linear-gradient(#654735,#281a13);
-  border-color:#a38b65;
-  color:#eee0c6}
-
 .inventory-grid {
   --cell:var(--slot-size);
   position:relative;
@@ -146,14 +30,7 @@ html,body {
   height:calc(var(--slot-size)*9);
   touch-action:none;
   overflow:visible}
-.cell {
-  position:absolute;
-  width:var(--slot-size);
-  height:var(--slot-size);
-  border:1px solid #494740;
-  background:var(--skin-slot,none),linear-gradient(#181b19,#080a09);
-  background-repeat:no-repeat;
-  background-position:center}
+.cell {position:absolute;width:var(--slot-size);height:var(--slot-size)}
 .inventory-item,.carried-item {
   position:absolute;
   width:calc(var(--slot-size) - 2px);
@@ -198,24 +75,6 @@ html,body {
 .placement-preview.invalid {
   border-color:#ef685c;
   background:#c32e3155}
-.wallet {
-  height:25px;
-  display:flex;
-  align-items:center;
-  gap:5px;
-  margin-top:6px;
-  background:#060707;
-  border:1px solid #534d3f;
-  padding:0 4px;
-  font:12px Georgia}
-.yang-icon {
-  width:16px;
-  height:16px;
-  background:var(--skin-yang,none) center no-repeat;
-  color:#d5b963}
-.wallet strong {
-  margin-left:auto;
-  font-weight:normal}
 .inventory-status {
   height:13px;
   margin:4px 0 0;
@@ -225,23 +84,6 @@ html,body {
   overflow:hidden;
   text-overflow:ellipsis}
 
-.item-tooltip {
-  position:absolute;
-  z-index:30;
-  width:200px;
-  padding:8px;
-  border:1px solid var(--frame);
-  background:#0a0c0bf5;
-  box-shadow:0 2px 5px #0009;
-  pointer-events:none}
-.item-tooltip h2 {
-  margin:0 0 5px;
-  font:13px Georgia;
-  color:#e3cb91}
-.item-tooltip p {
-  margin:0;
-  font:11px/15px Arial;
-  color:#c5c2b8}
 .carried-item {
   z-index:25;
   pointer-events:none;

@@ -1,3 +1,4 @@
+import {UiTitlebar,titlebarMarkup} from './ui-titlebar.js';
 // Composed shell only. The screen supplies content, placement and actions.
 export class UiWindow {
   constructor(root,{window_id,title,className='',content='',manager,placement={},onClose=()=>{},canDrag=()=>true,onCancel=()=>{},onRegionsChanged=()=>{},onGeometry=()=>{},onActivate=()=>{},scrollBorder=0,hideHorizontalOverflow=false}={}) {
@@ -6,11 +7,12 @@ export class UiWindow {
     root.innerHTML=`<section class="window-chrome ${className}">
       <i class="chrome edge top"></i><i class="chrome edge bottom"></i><i class="chrome edge left"></i><i class="chrome edge right"></i>
       <i class="chrome corner tl"></i><i class="chrome corner tr"></i><i class="chrome corner bl"></i><i class="chrome corner br"></i>
-      <header class="window-header"><h1></h1><button type="button" class="window-close">×</button></header>${content}</section>`;
+      ${titlebarMarkup}${content}</section>`;
+    root.setAttribute('data-ui-window',window_id);
     this.panel=root.querySelector('section');this.panel.id=window_id+'-window';this.panel.setAttribute('aria-label',title);
     this.panel.style.left='0px';this.panel.style.top='0px';root.style.setProperty('--ui-scale',manager.scale);
-    const header=root.querySelector('.window-header'),close=root.querySelector('.window-close');
-    header.querySelector('h1').textContent=title;close.setAttribute('aria-label','Close '+title.toLowerCase());
+    const titlebar=UiTitlebar(root.querySelector('.window-header'),{title,onClose:()=>{this.cancel();onClose();}}),header=titlebar.element;
+    this.listeners.push(()=>titlebar.dispose());
     this.paint=position=>{this.position=position;this.panel.style.transform=`translate3d(${position.x}px,${position.y}px,0)`;onGeometry();onRegionsChanged();};
     this.cancel=()=>{this.stopDrag();onCancel();};
     manager.register({window_id,element:this.panel,root,...placement,onActivate,cancel:this.cancel,paint:this.paint,prepare:()=>{
@@ -20,7 +22,6 @@ export class UiWindow {
     }});
     this.listen(this.panel,'pointerdown',()=>manager.activate(window_id));
     this.listen(this.panel,'focusin',()=>manager.activate(window_id));
-    this.listen(close,'click',()=>{this.cancel();onClose();});
     this.listen(header,'pointerdown',event=>{
       if(event.button!==0||event.target.closest('button')||!canDrag()||!this.position)return;
       event.preventDefault();const p=this.point(event);this.panel.style.willChange='transform';
