@@ -21,8 +21,11 @@ The preview backdrop is illustrative; the reusable UI has no world background.
 - Separate equipment and backpack panels, aged gold borders and dark surfaces.
 - CSS placeholder character silhouette and editable local SVG item icons.
 - Six-column, seven-row backpack with item heights 1, 2 and 3; no rotation.
-- Pointer capture, green/red placement preview, overlap/bounds rejection and
-  committed-state restoration. Placement only changes after a snapshot update.
+- Click-to-carry: one click picks up an item, the next valid click places it.
+  A cursor ghost and green/red preview show the held item. Invalid placement
+  keeps it held; Escape cancels before closing the inventory. Placement only
+  changes after a committed snapshot update. Resize, close and snapshots cancel
+  the transient carry state.
 - Tooltip on hover/focus, item quantities, occupied-cell count and Yang balance.
 - Close/reopen; Escape closes and I toggles the preview. Narrow layouts wrap panels.
 
@@ -62,7 +65,7 @@ Do not connect this preview validator to persistence or authoritative gameplay.
 ## Verification — 2026-10-08
 
 Headless Chromium (installed Edge) checked desktop rendering at 1440×900,
-600×950 layout, valid drag, overlap rejection and unchanged rejected placement,
+600×950 layout, valid placement, overlap rejection and unchanged rejected placement,
 close/reopen, Escape/I and absence of JavaScript errors. Both screenshots were
 visually inspected. Existing Web UI protocol/application tests passed (five JS
 tests plus Godot headless checks). No CEF game window was opened. Native CEF,
