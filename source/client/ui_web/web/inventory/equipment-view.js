@@ -1,7 +1,6 @@
 import {UiSlot} from '../core/ui-slot.js';
 import {UiTooltip} from '../core/ui-tooltip.js';
 import {UiWindow} from '../core/ui-window.js';
-import {icons} from './skin.js';
 // Logical slot rectangles match the native 156×188 legacy reference skin.
 const slots=[
   ['weapon','Weapon',4,4,64],['head','Helmet',42,6,32],['neck','Necklace',118,2,32],
@@ -11,7 +10,7 @@ const slots=[
   ['special1','Special slot I',4,154,32],['special2','Special slot II',42,154,32],
   ['special3','Special slot III',80,154,32],['special4','Special slot IV',118,154,32]
 ];
-export function mountEquipment(root,{manager,unequipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
+export function mountEquipment(root,{manager,resolveItemIcon=()=>null,unequipItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
   const shell=new UiWindow(root,{window_id:'equipment',title:'Equipment',className:'equipment-window',manager,
     placement:{preferredAnchor:'right',defaultOffset:{x:-16,y:240},relativeTo:'inventory',relativeOffset:{x:-12,y:0}},onClose,onRegionsChanged,
     onCancel:()=>{tooltip.hidden=true;},content:`<div class="equipment-body"><div class="equipment-silhouette" aria-hidden="true">♟</div></div>
@@ -45,7 +44,7 @@ export function mountEquipment(root,{manager,unequipItem,onClose=()=>{},onRegion
       const item=items.find(item=>item.slot===slot);button.replaceChildren();button.disabled=slot!=='weapon'||!item||pending;
       button.classList.toggle('equipped',!!item);
       if(item){button.removeAttribute('title');
-        if(icons[item.icon]){const img=document.createElement('img');img.src=icons[item.icon];img.alt=item.name;img.className='item-icon';button.append(img);}
+        if(resolveItemIcon(item.icon)){const img=document.createElement('img');img.src=resolveItemIcon(item.icon);img.alt=item.name;img.className='item-icon';button.append(img);}
         else button.textContent=item.name;
       }
     }

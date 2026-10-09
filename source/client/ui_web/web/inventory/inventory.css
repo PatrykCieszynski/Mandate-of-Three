@@ -2,9 +2,9 @@
 
 :root {
   --slot-size:40px;
-  --skin-window-fill:none;
-  --skin-slot:none;
-  --skin-title-center:none}
+  --skin-window-frame:none;
+  --skin-slot-normal:none;
+  --skin-window-title:none}
 
 * {
   box-sizing:border-box}

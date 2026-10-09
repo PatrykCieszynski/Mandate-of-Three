@@ -62,3 +62,16 @@ test('tooltip geometry flips and stays reachable at all scales and in small view
  }
  assert.deepEqual(tooltipPosition({x:20,y:20},{width:200,height:80},{width:50,height:50},1),{x:0,y:0});
 });
+
+import {applySkin,skinVariable} from '../source/client/ui_web/web/core/skin.js';
+test('skin swapping clears stale assets, detects missing images and cannot change geometry',async()=>{
+ const values=new Map(),classes=new Map();const root={style:{setProperty:(key,value)=>values.set(key,value)},classList:{toggle:(key,value)=>classes.set(key,value)}};
+ const options={baseUrl:'https://example.test/skin/',loadAsset:async url=>!url.includes('missing')};
+ await applySkin(root,{assets:{'window.frame':'frame.png','button.close.normal':'close.png','equipment.background':'missing.png','inventory.columns':'999'}},options);
+ assert.ok(values.get(skinVariable('window.frame')).includes('frame.png'));assert.equal(classes.get('has-close-asset'),true);
+ assert.equal(values.get(skinVariable('button.close.hover')),values.get(skinVariable('button.close.normal')));
+ assert.equal(values.get(skinVariable('equipment.background')),'none');assert.equal(values.has('--skin-inventory-columns'),false);
+ await applySkin(root,{assets:{'window.frame':'replacement.png'}},options);
+ assert.ok(values.get(skinVariable('window.frame')).includes('replacement.png'));assert.equal(classes.get('has-close-asset'),false);
+ assert.equal(values.get(skinVariable('button.close.normal')),'none');
+});
