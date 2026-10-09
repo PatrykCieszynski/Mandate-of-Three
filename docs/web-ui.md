@@ -283,3 +283,11 @@ After setup, the same project can run directly from the editor or Godot CLI.
 There is no staging refresh after source edits. The installer currently supplies
 Windows x64 libraries; Linux/macOS client installation and full release packaging
 remain separate verification gates.
+
+CEF v2 queues IPC separately from load events and drains IPC first. The adapter
+connects `ipc_message` with Godot's CONNECT_DEFERRED so navigation reset completes
+before UI_READY is delivered, including when both arrive in one native batch.
+This also keeps outbound snapshot IPC outside the native signal emission stack.
+A headless contract fixture covers that event ordering. An isolated native Vulkan
+Mobile probe confirmed eager startup, I-key opening, gameplay focus and a visible
+Inventory DOM; it does not cover a full authenticated login or visual frame pacing.

@@ -43,7 +43,9 @@ func open() -> bool:
 	browser.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	browser.focus_mode = Control.FOCUS_NONE
 	browser.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	browser.connect("ipc_message", func(message: String) -> void: message_received.emit(message))
+	# CEF drains IPC before loading signals in one native batch. Deliver IPC after
+	# navigation reset, and avoid calling back into CEF from its signal stack.
+	browser.connect("ipc_message", _on_ipc_message, CONNECT_DEFERRED)
 	browser.connect("load_started", _on_load_started)
 	browser.connect("load_finished", func(url: String, status: int) -> void: browser_loaded.emit(url, status))
 	add_child(browser)
@@ -131,6 +133,9 @@ func destroy_browser() -> void:
 
 func send(message: String) -> void:
 	if is_instance_valid(browser): browser.call("send_ipc_message", message)
+
+func _on_ipc_message(message: String) -> void:
+	message_received.emit(message)
 
 func _on_load_started(url: String) -> void:
 	_reset_input()
