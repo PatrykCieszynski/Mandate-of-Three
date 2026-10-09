@@ -1,10 +1,10 @@
-import type {DomainSnapshot, InventorySnapshot, InventoryItem, MoveItemCommand, ItemCommand, CommandResult} from '../protocol/contracts.js';
-import type {Point} from '../core/window/window-types.js';
-import type {ResolveItemIcon} from '../game-ui/item-types.js';
-import type {WindowManager} from '../core/window/window-manager.js';
+import type {DomainSnapshot, InventorySnapshot, InventoryItem, MoveItemCommand, ItemCommand, CommandResult} from '../../protocol/contracts.js';
+import type {Point} from '../../core/window/window-types.js';
+import type {ResolveItemIcon} from '../../game-ui/item-types.js';
+import type {WindowManager} from '../../core/window/window-manager.js';
 import type {Placement} from './placement.js';
-import {element as findElement} from '../core/dom.js';
-import {errorMessage} from '../protocol.js';
+import {element as findElement} from '../../core/dom.js';
+import {errorMessage} from '../../protocol.js';
 interface InventoryOptions {
   manager: WindowManager; resolveItemIcon?: ResolveItemIcon;
   moveItem: (command: MoveItemCommand) => Promise<CommandResult>;
@@ -15,13 +15,13 @@ interface Carry {
   item: InventoryItem; node: HTMLElement; pointer: number; start: Point; offset: Point;
   moved: boolean; latched: boolean; preview?: Placement;
 }
-import {UiTab} from '../core/primitives/ui-tab.js';
-import {UiInventoryGrid} from '../game-ui/ui-inventory-grid.js';
-import {UiItemSlot} from '../game-ui/ui-item-slot.js';
-import {paintItemIcon} from '../game-ui/item-icon.js';
-import {ItemTooltip} from '../game-ui/items/item-tooltip.js';
-import {UiCurrency} from '../core/primitives/ui-currency.js';
-import {UiWindow} from '../core/window/ui-window.js';
+import {UiTab} from '../../core/primitives/ui-tab.js';
+import {UiItemGrid} from '../../game-ui/items/ui-item-grid.js';
+import {UiItemSlot} from '../../game-ui/items/ui-item-slot.js';
+import {paintItemIcon} from '../../game-ui/items/item-icon.js';
+import {ItemTooltip} from '../../game-ui/items/item-tooltip.js';
+import {UiCurrency} from '../../core/primitives/ui-currency.js';
+import {UiWindow} from '../../core/window/ui-window.js';
 import {placement,carriedCell} from './placement.js';
 export function mountInventory(root: HTMLElement,{manager,resolveItemIcon=()=>null,moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}: InventoryOptions) {
   const shell=new UiWindow(root,{id:'inventory',title:'Inventory',className:'window',manager,
@@ -45,11 +45,11 @@ export function mountInventory(root: HTMLElement,{manager,resolveItemIcon=()=>nu
   const point=(e: PointerEvent)=>shell.point(e);
   const cell=()=>parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
   const positionWindow=()=>shell.refresh();
-  const gridView=UiInventoryGrid(grid,{slotSize:cell});
+  const gridView=UiItemGrid(grid,{slotSize:cell});
   const icon=(node: HTMLElement,item: InventoryItem)=>paintItemIcon(node,item,{resolveItemIcon});
   function render() {
-    gridView.render(inventory,page,item=>{
-      const node=UiItemSlot({item,slotSize:cell(),resolveItemIcon});
+    gridView.render({columns:inventory.columns,rows:inventory.rows,items:inventory.items.filter(item=>item.page===page)},item=>{
+      const node=UiItemSlot({item,slotSize:cell(),resolveItemIcon});node.classList.add('inventory-item');
       node.addEventListener('pointerdown',event=>{
         if(event.button===2&&equipItem&&!carry&&!pending){event.preventDefault();equip(item);}
         else beginCarry(event,item,node);

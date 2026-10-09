@@ -60,7 +60,7 @@ test('presentation Escape shortcut is explicit and cannot mutate state',()=>{
  assert.deepEqual(keys,['Escape']);
 });
 
-import {carriedCell,placement} from '../web/inventory/placement.js';
+import {carriedCell,placement} from '../web/screens/inventory/placement.js';
 test('carried footprint snaps nearest to its origin regardless of grab height',()=>{
  for(const height of [1,2,3]) {
   const inventory={columns:5,rows:9,pages:4,items:[]},item={id:'sword',height};

@@ -1,19 +1,20 @@
-import { UiSlot } from '../core/primitives/ui-slot.js';
-// Screen-owned grid dimensions and item footprints, independent of the skin.
-export function UiInventoryGrid(element, { slotSize }) {
-    return { element, render(inventory, page, createItem) {
+import { UiSlot } from '../../core/primitives/ui-slot.js';
+// A rectangular item grid. The caller selects items and supplies their presentation.
+export function UiItemGrid(element, { slotSize }) {
+    element.classList.add('ui-item-grid');
+    return { element, render(model, createItem) {
             const size = slotSize();
             element.replaceChildren();
-            element.style.width = inventory.columns * size + 'px';
-            element.style.height = inventory.rows * size + 'px';
-            for (let y = 0; y < inventory.rows; y++)
-                for (let x = 0; x < inventory.columns; x++) {
+            element.style.width = model.columns * size + 'px';
+            element.style.height = model.rows * size + 'px';
+            for (let y = 0; y < model.rows; y++)
+                for (let x = 0; x < model.columns; x++) {
                     const cell = UiSlot({ className: 'cell' });
                     cell.style.left = x * size + 'px';
                     cell.style.top = y * size + 'px';
                     element.append(cell);
                 }
-            for (const item of inventory.items.filter(item => item.page === page)) {
+            for (const item of model.items) {
                 const node = createItem(item);
                 node.style.left = item.x * size + 1 + 'px';
                 node.style.top = item.y * size + 1 + 'px';

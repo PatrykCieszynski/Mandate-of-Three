@@ -1,5 +1,5 @@
-import { UiSlot } from '../core/primitives/ui-slot.js';
-import { paintItemIcon } from './item-icon.js';
+import { UiSlot } from '../../core/primitives/ui-slot.js';
+import { paintItemIcon } from '../items/item-icon.js';
 export function UiEquipmentSlot({ slot, label, x, y, height, resolveItemIcon, title = label }) {
     const element = UiSlot({ tag: 'button', className: 'equipment-slot', label });
     element.dataset.slot = slot;

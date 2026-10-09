@@ -2,6 +2,7 @@ import type {WebBridge} from '../web/bridge.js';
 import type {ItemIconId} from '../web/game-ui/item-types.js';
 import type {UiIconId, Skin} from '../web/core/assets/types.js';
 import type {DomainSnapshot} from '../web/protocol/contracts.js';
+import {UiItemSlot} from '../web/game-ui/items/ui-item-slot.js';
 import {UiWindow} from '../web/core/window/ui-window.js';
 import type {WindowManager} from '../web/core/window/window-manager.js';
 // Negative examples make strict contract regressions fail the test compilation.
@@ -21,6 +22,8 @@ export function checkContracts(bridge: WebBridge,manager: WindowManager,root: HT
   manager.register({id:'test',element:root,placement:{kind:'relative',target:'inventory'}});
   // @ts-expect-error Geometry is numeric.
   manager.setViewport({width:'1920',height:1080});
+  // Slot presentation deliberately has no revision, coordinates or page.
+  UiItemSlot({item:{id:'content',name:'Sword',icon_id:'sword',height:3,quantity:1},slotSize:40,resolveItemIcon:()=>null});
   const itemId: ItemIconId='sword';
   // @ts-expect-error Content identifiers do not become UI icon identifiers.
   const uiId: UiIconId=itemId;
