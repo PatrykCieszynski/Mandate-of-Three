@@ -47,12 +47,24 @@ explicitly supplied installed module/browser and downloads no browser.
 `contracts.ts` describes the existing IPC payloads, domain/view models, commands,
 geometry, skin keys and icon identifiers. `protocol.ts` validates native input:
 `JSON.parse` is assigned to `unknown`, then passed to `decodeAndValidate`.
-Command results keep their existing exact-field checks. The store retains its
-existing shallow domain-object acceptance and disposable snapshot semantics;
-`readDomainSnapshot` validates fields/arrays consumed by views before they are
-used. Invalid presentation data is ignored instead of being asserted into a
-trusted view model. This checks data shapes, not gameplay eligibility or server
-rules. Extra domain fields remain allowed; item/economy authority stays native.
+Command results keep their existing exact-field checks. Domain fields consumed by the views
+are validated before the store clones/replaces them; a malformed update retains that
+domain's last known valid state, so unrelated updates can still render. Full
+snapshots are validated atomically before replacing disposable state. The store
+and `readDomainSnapshot` use the same domain validation, including numeric bounds.
+
+Inventory dimensions are positive integers capped at the current native 5×9×4
+contract; item heights are 1–3 and coordinates/footprints fit the supplied grid.
+Item count cannot exceed grid capacity. Revisions are nonnegative safe integers;
+quantities are positive safe integers. Wallet balance is an integer from zero to
+native `WalletStoreSqlite.MAX_YANG` (9,000,000,000,000,000). Attack is finite,
+nonnegative and at most `Number.MAX_SAFE_INTEGER`; fractions remain valid because
+native equipment stats are floats. HUD scale uses the seven existing native
+values (0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.5). Viewport dimensions are integers from
+zero (hidden/minimized host) to a presentation safety ceiling of 16,384 pixels.
+Extra domain fields remain allowed; player data remains opaque until a screen
+consumes a concrete player contract. These guards do not decide ownership,
+equipment eligibility, transactions or other server gameplay rules.
 
 The optional legacy asset manifest is generated local asset data, loaded as
 `unknown` and checked by its adapter. Skin/item icon paths stay in that adapter

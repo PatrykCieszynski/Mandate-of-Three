@@ -4,7 +4,8 @@ import * as protocol from '../web/protocol.js';
 import {WebBridge,reportInteractiveRegions} from '../web/bridge.js';
 import {DomainStore} from '../web/store.js';
 import type {Envelope, MoveItemCommand} from '../web/contracts.js';
-import {environment,measure,target,TestResizeObserver} from './fixtures.mjs';
+import {environment,measure,target,TestResizeObserver,bagItem} from './fixtures.mjs';
+const inventory={columns:5,rows:9,pages:4,items:[bagItem]};
 const command: MoveItemCommand={id:'item',revision:1,x:1,y:0,page:0};
 function latest(sent: Envelope[]): Envelope {const result=sent.at(-1);assert.ok(result);return result;}
 function fixture(timeoutMs=30) {
@@ -19,19 +20,19 @@ test('strict v1 framing and UTF8 byte limit',()=>{
 test('correlation, late results, domain update separate from results',async()=>{
  const {bridge,sent,state}=fixture();const pending=bridge.request('inventory.move_item',command);const id=latest(sent).id;
  bridge.receive(protocol.encode('command.result',{ok:true},'unknown'));assert.equal(bridge.pending.size,1);
- bridge.receive(protocol.encode('inventory.updated',{revision:2}));
+ bridge.receive(protocol.encode('inventory.updated',inventory));
  bridge.receive(protocol.encode('command.result',{ok:true},id));assert.deepEqual(await pending,{ok:true});
- assert.deepEqual(state.state,{inventory:{revision:2}});
+ assert.deepEqual(state.state,{inventory});
  bridge.receive(protocol.encode('command.result',{ok:false},id));assert.equal(bridge.pending.size,0);
 });
 test('ready cancels pending; snapshot replaces disposable state',async()=>{
  const {bridge,sent,state}=fixture();const pending=bridge.request('inventory.move_item',command);const id=latest(sent).id;
  const cancelled=assert.rejects(pending,/reload/);bridge.ready();await cancelled;
  assert.equal(latest(sent).type,'ui.ready');assert.equal(bridge.pending.size,0);
- bridge.receive(protocol.encode('ui.snapshot',{inventory:{revision:7},wallet:{yang:90}}));
- bridge.receive(protocol.encode('ui.snapshot',{inventory:{revision:8}}));
+ bridge.receive(protocol.encode('ui.snapshot',{inventory,wallet:{balance:90}}));
+ bridge.receive(protocol.encode('ui.snapshot',{inventory:{...inventory,items:[]}}));
  bridge.receive(protocol.encode('command.result',{ok:true},id));
- assert.deepEqual(state.state,{inventory:{revision:8}});
+ assert.deepEqual(state.state,{inventory:{...inventory,items:[]}});
 });
 test('timeout and invalid result cannot mutate state',async()=>{
  const {bridge,sent,state}=fixture(5);const pending=bridge.request('inventory.move_item',command);
