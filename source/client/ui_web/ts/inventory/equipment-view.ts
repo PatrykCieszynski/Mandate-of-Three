@@ -1,5 +1,5 @@
 import type {DomainSnapshot, EquipmentItem, ResolveItemIcon, ItemCommand, CommandResult} from '../contracts.js';
-import type {WindowManager} from '../core/window-manager.js';
+import type {WindowManager} from '../core/window/window-manager.js';
 import {element as findElement} from '../core/dom.js';
 import {errorMessage} from '../protocol.js';
 interface EquipmentOptions {
@@ -9,7 +9,7 @@ interface EquipmentOptions {
 }
 import {UiEquipmentSlot} from '../game-ui/ui-equipment-slot.js';
 import {UiTooltip} from '../core/ui-tooltip.js';
-import {UiWindow} from '../core/ui-window.js';
+import {UiWindow} from '../core/window/ui-window.js';
 // Logical slot rectangles match the native 156×188 legacy reference skin.
 const slots: [slot: string,label: string,x: number,y: number,height: number][]=[
   ['weapon','Weapon',4,4,64],['head','Helmet',42,6,32],['neck','Necklace',118,2,32],
@@ -22,9 +22,10 @@ const slots: [slot: string,label: string,x: number,y: number,height: number][]=[
 export function mountEquipment(root: HTMLElement,{manager,resolveItemIcon=()=>null,unequipItem,onClose=()=>{},onRegionsChanged=()=>{}}: EquipmentOptions) {
   const shell=new UiWindow(root,{id:'equipment',title:'Equipment',className:'equipment-window',manager,
     placement:{kind:'relative',target:'inventory',side:'left',align:'start',gap:12,fallback:{kind:'viewport',anchor:'top-right',offset:{x:-16,y:240}}},onClose,onRegionsChanged,
-    onCancel:()=>{tooltip.hidden=true;},content:`<div class="equipment-body"><div class="equipment-silhouette" aria-hidden="true">♟</div></div>
+    onCancel:()=>{tooltip.hidden=true;}});
+  shell.contentRoot.innerHTML=`<div class="equipment-body"><div class="equipment-silhouette" aria-hidden="true">♟</div></div>
     <p class="equipment-stats"></p><p class="equipment-hint">Right-click bag items to equip.<br>Click weapon to unequip.</p>
-    <p class="inventory-status" role="status"></p>`});
+    <p class="inventory-status" role="status"></p>`;
   const panel=findElement(root,'.equipment-window','section'),body=findElement(root,'.equipment-body','div'),status=findElement(root,'[role=status]','p');
   const tip=UiTooltip(root,{geometry:()=>manager}),tooltip=tip.element;
   let pending=false,disposed=false;

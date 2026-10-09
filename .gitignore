@@ -52,3 +52,6 @@ __pycache__/
 /source/client/ui_web/node_modules/
 /source/client/ui_web/web/**/*.d.ts
 /source/client/ui_web/.tests/
+
+# HTML source generates this local TypeScript module during Web UI build.
+/source/client/ui_web/ts/core/window/generated/

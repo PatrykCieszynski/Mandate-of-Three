@@ -4,6 +4,8 @@ $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskUi = Join-Path $taskRoot 'source/client/ui_web'
 $taskCompiler = Join-Path $taskUi 'node_modules/typescript/bin/tsc'
 if (-not (Test-Path -LiteralPath $taskCompiler)) { throw 'Install Web UI development dependencies first: cd source/client/ui_web; npm ci' }
+& $NodeExecutable (Join-Path $taskUi 'scripts/generate-window-template.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Web UI window template generation failed' }
 & $NodeExecutable $taskCompiler -p (Join-Path $taskUi 'tsconfig.json')
 if ($LASTEXITCODE -ne 0) { throw 'Production Web UI TypeScript build failed' }
 if ($Tests) {

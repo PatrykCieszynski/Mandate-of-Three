@@ -13,6 +13,7 @@ html,body {
 /* Shared chrome, unchanged logical geometry and CSS fallback. */
 :root {--ui-scale:1;--window-width:266px;--window-inset:32px;--ink:#ded5bd;--muted:#aaa18a;--frame:#71654e;--panel:#111212}
 [data-ui-window] {position:absolute;left:0;top:0;transform:scale(var(--ui-scale));transform-origin:0 0}
+.window-content {display:contents}
 .window-chrome {
   position:absolute;
   width:var(--window-width);

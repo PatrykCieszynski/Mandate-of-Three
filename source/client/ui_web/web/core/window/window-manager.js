@@ -1,4 +1,4 @@
-import { WindowLayout } from './window/window-layout.js';
+import { WindowLayout } from './window-layout.js';
 // Registration, activation and layout invalidation; rendering belongs to UiWindow.
 export class WindowManager {
     windows = new Map();

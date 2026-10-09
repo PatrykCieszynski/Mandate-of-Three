@@ -1,5 +1,5 @@
 import type {DomainSnapshot, InventorySnapshot, InventoryItem, Point, ResolveItemIcon, MoveItemCommand, ItemCommand, CommandResult} from '../contracts.js';
-import type {WindowManager} from '../core/window-manager.js';
+import type {WindowManager} from '../core/window/window-manager.js';
 import type {Placement} from './placement.js';
 import {element as findElement} from '../core/dom.js';
 import {errorMessage} from '../protocol.js';
@@ -19,16 +19,17 @@ import {UiItemSlot} from '../game-ui/ui-item-slot.js';
 import {paintItemIcon} from '../game-ui/item-icon.js';
 import {UiTooltip} from '../core/ui-tooltip.js';
 import {UiCurrency} from '../core/ui-currency.js';
-import {UiWindow} from '../core/ui-window.js';
+import {UiWindow} from '../core/window/ui-window.js';
 import {placement,carriedCell} from './placement.js';
 export function mountInventory(root: HTMLElement,{manager,resolveItemIcon=()=>null,moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}: InventoryOptions) {
   const shell=new UiWindow(root,{id:'inventory',title:'Inventory',className:'window',manager,
     placement:{kind:'viewport',anchor:'top-right',offset:{x:-16,y:240}},scrollBorder:2,hideHorizontalOverflow:true,
     onClose,canDrag:()=>!carry,onCancel:()=>cancelCarry(),onRegionsChanged,onGeometry:()=>{
       surface.style.width=innerWidth/shell.scale+'px';surface.style.height=innerHeight/shell.scale+'px';
-    },content:`<nav class="inventory-tabs" aria-label="Inventory pages"></nav>
+    }});
+  shell.contentRoot.innerHTML=`<nav class="inventory-tabs" aria-label="Inventory pages"></nav>
     <div class="inventory-grid"></div><footer class="wallet"></footer>
-    <p class="inventory-status" role="status"></p>`});
+    <p class="inventory-status" role="status"></p>`;
   root.insertAdjacentHTML('beforeend',`<div id="carry-surface" hidden></div><div class="carried-item" hidden></div>`);
   const panel=findElement(root,'.window','section'),grid=findElement(root,'.inventory-grid','div'),surface=findElement(root,'#carry-surface','div'),
     ghost=findElement(root,'.carried-item','div'),status=findElement(root,'.inventory-status','p');

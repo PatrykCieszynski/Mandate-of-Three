@@ -70,3 +70,8 @@ The optional legacy asset manifest is generated local asset data, loaded as
 `unknown` and checked by its adapter. Skin/item icon paths stay in that adapter
 and the existing resolvers. The TypeScript migration changes no visual design,
 window/component architecture, persistence policy or command wire format.
+
+The build first embeds `ts/core/window/templates/ui-window.html` in an ignored,
+generated TypeScript module. The emitted template JS is committed with the
+other runtime modules. `npm run build`, `npm run check` and the PowerShell build
+all regenerate it; CEF does not fetch templates or require Node at runtime.
