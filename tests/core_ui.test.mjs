@@ -20,7 +20,7 @@ function environment(){
  return {host,doc,manager,frames};
 }
 function shellRoot(){
- const title=target(),header=target({querySelector:()=>title}),close=target(),panel=target();
+ const title=target(),header=target({querySelector:selector=>selector==='h1'?title:close}),close=target(),panel=target();
  const root=target({querySelector:selector=>selector==='section'?panel:selector==='.window-header'?header:close});
  return {root,panel,header,close,title};
 }
@@ -49,4 +49,16 @@ test('shared shell captures drag, cancels on lifecycle changes and removes all l
  close.fire('click');assert.equal(closes,1);assert.ok(cancels>0);
  shell.dispose();shell.dispose();assert.equal(doc.count(),0);assert.equal(header.count(),0);assert.equal(close.count(),0);assert.equal(panel.count(),0);
  assert.equal(manager.windows.size,0);manager.dispose();assert.equal(host.count(),0);
+});
+
+import {tooltipPosition} from '../source/client/ui_web/web/core/ui-tooltip.js';
+test('tooltip geometry flips and stays reachable at all scales and in small viewports',()=>{
+ for(const scale of [.8,.9,1,1.1,1.25,1.4,1.5]){
+  const viewport={width:1280,height:720},size={width:200,height:80};
+  const near={x:viewport.width/scale-5,y:viewport.height/scale-5};
+  const p=tooltipPosition(near,size,viewport,scale);
+  assert.ok(p.x<near.x&&p.x>=0&&p.x+size.width<=viewport.width/scale);
+  assert.ok(p.y>=0&&p.y+size.height<=viewport.height/scale);
+ }
+ assert.deepEqual(tooltipPosition({x:20,y:20},{width:200,height:80},{width:50,height:50},1),{x:0,y:0});
 });

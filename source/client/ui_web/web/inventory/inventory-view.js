@@ -1,3 +1,7 @@
+import {UiTab} from '../core/ui-tab.js';
+import {UiSlot} from '../core/ui-slot.js';
+import {UiTooltip} from '../core/ui-tooltip.js';
+import {UiCurrency} from '../core/ui-currency.js';
 import {UiWindow} from '../core/ui-window.js';
 import {placement,carriedCell} from './placement.js';
 import {icons} from './skin.js';
@@ -6,12 +10,17 @@ export function mountInventory(root,{manager,moveItem,equipItem,onClose=()=>{},o
     placement:{preferredAnchor:'right',defaultOffset:{x:-16,y:240}},scrollBorder:2,hideHorizontalOverflow:true,
     onClose,canDrag:()=>!carry,onCancel:()=>cancelCarry(),onRegionsChanged,onGeometry:()=>{
       surface.style.width=innerWidth/shell.scale+'px';surface.style.height=innerHeight/shell.scale+'px';
-    },content:`<nav class="inventory-tabs" aria-label="Inventory pages">${['I','II','III','IV'].map((label,page)=>`<button role="tab" data-page="${page}">${label}</button>`).join('')}</nav>
+    },content:`<nav class="inventory-tabs" aria-label="Inventory pages"></nav>
     <div class="inventory-grid"></div><footer class="wallet"><span class="yang-icon">●</span><span>Yang</span><strong>—</strong></footer>
     <p class="inventory-status" role="status"></p>`});
-  root.insertAdjacentHTML('beforeend',`<div id="carry-surface" hidden></div><div class="carried-item" hidden></div><aside class="item-tooltip" hidden><h2></h2><p></p></aside>`);
+  root.insertAdjacentHTML('beforeend',`<div id="carry-surface" hidden></div><div class="carried-item" hidden></div>`);
   const panel=root.querySelector('.window'),grid=root.querySelector('.inventory-grid'),surface=root.querySelector('#carry-surface'),
-    ghost=root.querySelector('.carried-item'),tooltip=root.querySelector('.item-tooltip'),status=root.querySelector('.inventory-status');
+    ghost=root.querySelector('.carried-item'),status=root.querySelector('.inventory-status');
+  const tip=UiTooltip(root,{geometry:()=>manager}),tooltip=tip.element,currency=UiCurrency(root.querySelector('.wallet'));
+  const tabs=['I','II','III','IV'].map((label,index)=>{
+    const tab=UiTab({label,onSelect:()=>{if(!carry?.latched)cancelCarry();page=index;render();}});
+    root.querySelector('.inventory-tabs').append(tab.element);return tab;
+  });
   let inventory={columns:5,rows:9,pages:4,items:[]},page=0,carry=null,pending=false,disposed=false;
   const point=e=>shell.point(e);
   const cell=()=>parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
@@ -25,7 +34,7 @@ export function mountInventory(root,{manager,moveItem,equipItem,onClose=()=>{},o
   function render() {
     grid.replaceChildren();
     for(let y=0;y<inventory.rows;y++)for(let x=0;x<inventory.columns;x++) {
-      const slot=document.createElement('div');slot.className='cell';slot.style.left=x*cell()+'px';slot.style.top=y*cell()+'px';grid.append(slot);
+      const slot=UiSlot({className:'cell'});slot.style.left=x*cell()+'px';slot.style.top=y*cell()+'px';grid.append(slot);
     }
     for(const item of inventory.items.filter(i=>i.page===page)) {
       const node=document.createElement('div');node.className='inventory-item';node.dataset.id=item.id;node.dataset.height=item.height;
@@ -38,13 +47,10 @@ export function mountInventory(root,{manager,moveItem,equipItem,onClose=()=>{},o
       node.addEventListener('pointermove',event=>{if(!carry&&!pending)showTooltip(event,item);});
       node.addEventListener('pointerleave',()=>tooltip.hidden=true);grid.append(node);
     }
-    root.querySelectorAll('[data-page]').forEach(tab=>tab.setAttribute('aria-selected',String(Number(tab.dataset.page)===page)));positionWindow();
+    tabs.forEach((tab,index)=>tab.setSelected(index===page));positionWindow();
   }
   function showTooltip(event,item) {
-    tooltip.querySelector('h2').textContent=item.name;tooltip.querySelector('p').textContent=item.description||'';tooltip.hidden=false;
-    const p=point(event),width=tooltip.offsetWidth,height=tooltip.offsetHeight;
-    const x=p.x+14+width>innerWidth/shell.scale?p.x-width-14:p.x+14;
-    tooltip.style.left=Math.max(0,Math.min(x,innerWidth/shell.scale-width))+'px';tooltip.style.top=Math.max(0,Math.min(p.y+14,innerHeight/shell.scale-height))+'px';
+    tip.show(event,item);
   }
   function releaseCapture(state) {if(state?.node?.hasPointerCapture(state.pointer))state.node.releasePointerCapture(state.pointer);}
   function cancelCarry() {
@@ -91,7 +97,6 @@ export function mountInventory(root,{manager,moveItem,equipItem,onClose=()=>{},o
     if(root.hidden||event.repeat)return;
     if(event.key==='Escape'||event.key.toLowerCase()==='i'){event.preventDefault();if(event.key==='Escape')cancelOrClose();else {cancelCarry();onClose();}}
   }
-  root.querySelectorAll('[data-page]').forEach(tab=>tab.addEventListener('click',()=>{if(!carry?.latched)cancelCarry();page=Number(tab.dataset.page);render();}));
   shell.listen(document,'pointerdown',pointerDown);shell.listen(document,'pointermove',pointerMove);shell.listen(document,'pointerup',pointerUp);
   shell.listen(document,'keydown',keyDown);
   shell.listen(root,'lostpointercapture',event=>{
@@ -99,10 +104,10 @@ export function mountInventory(root,{manager,moveItem,equipItem,onClose=()=>{},o
   });render();
   return {regions:[panel,surface],cancelCarry,cancelOrClose,
     setState(snapshot){cancelCarry();inventory=structuredClone(snapshot.inventory);render();this.setInfo(snapshot);},
-    setInfo(snapshot){root.querySelector('.wallet strong').textContent=Number(snapshot.wallet?.balance||0).toLocaleString('en-US');
+    setInfo(snapshot){currency.setValue(snapshot.wallet?.balance);
       manager.setScale(Number(snapshot.hud?.ui_scale||shell.scale));
       // Opening and Godot viewport snapshots also clamp; native resize events may lag.
       positionWindow();},
-    dispose(){disposed=true;shell.dispose();}
+    dispose(){disposed=true;shell.dispose();tabs.forEach(tab=>tab.dispose());tip.dispose();}
   };
 }
