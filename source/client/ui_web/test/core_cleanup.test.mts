@@ -1,3 +1,4 @@
+import { transfer } from '../web/screens/storage/transfer.js';
 import { mountStorage } from '../web/screens/storage/storage-view.js';
 import type { StorageSnapshot } from '../web/screens/storage/storage-types.js';
 import test from 'node:test';
@@ -388,4 +389,54 @@ test('Storage owns two independent pages and composes item actions, tooltips and
     view.dispose();
     manager.dispose();
   }
+});
+
+test('Storage transfers preserve footprints and reject stale, full and occupied targets without mutating state', () => {
+  const item = { ...bagItem, id: 'source', x: 0, y: 0, page: 0, revision: 4 };
+  const source = { columns: 5, rows: 9, pages: 4, items: [item] };
+  const occupied = { ...item, id: 'occupied', x: 0, y: 0, page: 0 };
+  const destination = { columns: 15, rows: 9, pages: 2, items: [occupied] };
+  const original = structuredClone({ source, destination });
+  assert.equal(transfer(source, destination, item.id, 3), null);
+  assert.equal(
+    transfer(source, destination, item.id, 4, { x: 0, y: 1, page: 0 }),
+    null,
+  );
+  assert.equal(
+    transfer(source, destination, item.id, 4, { x: 14, y: 8, page: 0 }),
+    null,
+  );
+  const moved = transfer(source, destination, item.id, 4);
+  assert.ok(moved);
+  assert.equal(moved.sourceItems.length, 0);
+  assert.deepEqual(moved.destinationItems.at(-1), {
+    ...item,
+    x: 1,
+    y: 0,
+    revision: 5,
+  });
+  assert.deepEqual({ source, destination }, original);
+  const full = {
+    columns: 1,
+    rows: 3,
+    pages: 2,
+    items: [occupied, { ...occupied, id: 'second', page: 1 }],
+  };
+  assert.equal(transfer(source, full, item.id, 4), null);
+  const secondPage = transfer(
+    source,
+    { ...full, items: [occupied] },
+    item.id,
+    4,
+  );
+  assert.equal(secondPage?.destinationItems.at(-1)?.page, 1);
+  const target = { x: 2, y: 2, page: 3, container: 'inventory', valid: true };
+  const same = transfer(source, source, item.id, 4, target);
+  assert.equal(same?.destinationItems.length, 1);
+  assert.equal(same?.destinationItems[0]?.page, 3);
+  assert.equal(
+    Object.hasOwn(same?.destinationItems[0] ?? {}, 'container'),
+    false,
+  );
+  assert.equal(Object.hasOwn(same?.destinationItems[0] ?? {}, 'valid'), false);
 });

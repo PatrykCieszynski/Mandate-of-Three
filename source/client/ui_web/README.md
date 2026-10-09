@@ -134,3 +134,13 @@ The build first embeds `ts/core/window/templates/ui-window.html` in an ignored,
 generated TypeScript module. The emitted template JS is committed with the
 other runtime modules. `npm run build`, `npm run check` and the PowerShell build
 all regenerate it; CEF does not fetch templates or require Node at runtime.
+
+Storage preview now supports drag/drop and click-to-carry within/between the two
+containers and between pages. Ctrl + left click transfers the whole item/stack
+to the first fitting free cell, scanning destination pages then rows/columns.
+Occupied, out-of-bounds, full and stale-revision moves leave fixtures intact.
+Escape/right click, close, resize, scale or fixture reset cancels carrying.
+The dev interaction controller reuses production footprint/snapping and item
+icon presentation; it is mounted only by the preview host, with Storage open.
+The native Inventory interaction and IPC contract remain unchanged. These
+fixture operations are independent of the accept-command checkbox.

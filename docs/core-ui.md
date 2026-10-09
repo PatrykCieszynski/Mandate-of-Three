@@ -260,3 +260,20 @@ transfer rules or backend/persistence have been added. Item actions are fixture
 logs. A focused emitted-JS test covers page filtering, actions, empty states,
 tooltip cancellation and disposal; browser acceptance covers shared activation,
 scale, narrow viewport scrolling, close/reopen and fixture item actions.
+
+### Storage fixture transfers
+
+The browser host's shared `dev/item-transfer.ts` controller handles drag/drop,
+click-to-carry and Ctrl + left click across Inventory and Storage. It delegates
+footprint/snapping to the existing Inventory placement helper and item icon
+painting to the common presenter. `screens/storage/transfer.ts` is a pure
+preview transfer operation: validates source revision and target occupancy,
+returns replacement item arrays, preserves item data and increments revision.
+Quick transfer scans all destination pages in row-major order; full destinations
+leave both snapshots intact. No swaps, rotation or stack splitting are added.
+
+The preview commits Inventory changes through its existing validated fixture IPC
+and Storage through its typed local snapshot. Both screens render their own
+state. Cancel/close/resize/reset never commits a carried item. This is presentation
+acceptance before a server Storage command/domain exists; native runtime keeps
+its current authoritative Inventory move/equip commands and behavior.

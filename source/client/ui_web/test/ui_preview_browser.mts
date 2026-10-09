@@ -95,7 +95,7 @@ try {
   await storage.getByRole('tab', { name: 'II', exact: true }).click();
   assert.equal(await storage.locator('.ui-tooltip').isVisible(), false);
   assert.equal(await storage.locator('.ui-item-slot').count(), 2);
-  await storage.locator('[data-id=stored-page-two]').click();
+  await storage.locator('[data-id=stored-page-two]').click({ button: 'right' });
   await page.waitForFunction(() =>
     document.querySelector('pre')?.textContent?.includes('storage.item_action'),
   );
@@ -136,12 +136,122 @@ try {
   await storage.locator('.storage-grid-viewport').evaluate((node) => {
     node.scrollLeft = node.scrollWidth;
   });
-  await storage.locator('[data-id=stored-page-two-stack]').click();
+  await storage
+    .locator('[data-id=stored-page-two-stack]')
+    .click({ button: 'right' });
   await page.waitForFunction(() =>
     document
       .querySelector('pre')
       ?.textContent?.includes('stored-page-two-stack'),
   );
+  // Restore full viewport for transfer gestures; scaled narrow-grid scrolling checked above.
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.selectOption('#scale', '1');
+  await page
+    .getByRole('button', { name: 'Reset fixtures', exact: true })
+    .click();
+  await storage.getByRole('tab', { name: 'I', exact: true }).click();
+  const inventory = ui.locator('#inventory');
+  await inventory
+    .locator('[data-id=preview-material]')
+    .click({ modifiers: ['Control'] });
+  await storage.locator('[data-id=preview-material]').waitFor();
+  assert.equal(
+    await inventory.locator('[data-id=preview-material]').count(),
+    0,
+  );
+  await storage
+    .locator('[data-id=preview-material]')
+    .click({ modifiers: ['Control'] });
+  await inventory.locator('[data-id=preview-material]').waitFor();
+  assert.equal(await storage.locator('[data-id=preview-material]').count(), 0);
+  const sword = storage.locator('[data-id=stored-sword]');
+  async function dragToCell(x: number, y: number) {
+    const origin = await sword.boundingBox(),
+      destination = await storage.locator('.storage-grid').boundingBox();
+    assert.ok(origin);
+    assert.ok(destination);
+    await page.mouse.move(origin.x + 10, origin.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(
+      destination.x + x * 40 + 10,
+      destination.y + y * 40 + 10,
+      { steps: 5 },
+    );
+    await page.mouse.up();
+  }
+  // Tall footprint cannot cross bottom edge; item remains anchored.
+  await dragToCell(4, 8);
+  assert.equal(await sword.evaluate((node) => node.style.left), '1px');
+  await dragToCell(4, 3);
+  assert.equal(await sword.evaluate((node) => node.style.left), '161px');
+  // Click-to-carry, change page, then click a valid cell.
+  await sword.click({ position: { x: 10, y: 10 } });
+  await storage.getByRole('tab', { name: 'II', exact: true }).click();
+  const gridBox = await storage.locator('.storage-grid').boundingBox();
+  assert.ok(gridBox);
+  await page.mouse.click(gridBox.x + 5 * 40 + 10, gridBox.y + 1 * 40 + 10);
+  await storage.locator('[data-id=stored-sword]').waitFor();
+  assert.equal(await sword.evaluate((node) => node.style.top), '41px');
+  // Cross-window drag uses the same footprint and updates both snapshots.
+  const material = inventory.locator('[data-id=preview-material]');
+  const materialBox = await material.boundingBox(),
+    storageBox = await storage.locator('.storage-grid').boundingBox();
+  assert.ok(materialBox);
+  assert.ok(storageBox);
+  await page.mouse.move(materialBox.x + 10, materialBox.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(storageBox.x + 8 * 40 + 10, storageBox.y + 10, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await storage.locator('[data-id=preview-material]').waitFor();
+  assert.equal(
+    await inventory.locator('[data-id=preview-material]').count(),
+    0,
+  );
+  await page.selectOption('#scale', '1.25');
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('iframe')
+        ?.contentDocument?.querySelector<HTMLElement>('#storage')
+        ?.style.getPropertyValue('--ui-scale') === '1.25',
+  );
+  const scaledSword = await sword.boundingBox(),
+    scaledGrid = await storage.locator('.storage-grid').boundingBox();
+  assert.ok(scaledSword);
+  assert.ok(scaledGrid);
+  await page.mouse.move(scaledSword.x + 10 * 1.25, scaledSword.y + 10 * 1.25);
+  await page.mouse.down();
+  await page.mouse.move(
+    scaledGrid.x + (9 * 40 + 10) * 1.25,
+    scaledGrid.y + (2 * 40 + 10) * 1.25,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+  assert.equal(await sword.evaluate((node) => node.style.left), '361px');
+  await storage
+    .locator('[data-id=preview-material]')
+    .click({ modifiers: ['Control'] });
+  await inventory.locator('[data-id=preview-material]').waitFor();
+  await page.selectOption('#scale', '1');
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('iframe')
+        ?.contentDocument?.querySelector<HTMLElement>('#storage')
+        ?.style.getPropertyValue('--ui-scale') === '1',
+  );
+  // Escape cancels before applying a transfer.
+  await sword.click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press('Escape');
+  assert.equal(await ui.locator('.preview-carried-item').isVisible(), false);
+  assert.equal(await sword.evaluate((node) => node.style.top), '81px');
+  await sword.click({ position: { x: 10, y: 10 } });
+  await storage.locator('.window-close').click();
+  assert.equal(await ui.locator('.preview-carried-item').isVisible(), false);
+  await ui.locator('#storage-window').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Hide Storage', exact: true }).click();
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });
   await page.setViewportSize({ width: 1600, height: 1000 });
