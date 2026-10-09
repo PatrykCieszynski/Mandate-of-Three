@@ -15,6 +15,7 @@ var _sequence: int = 0
 var _input_accum: float = 0.0
 var _snapshot_accum: float = 0.0
 var _camera: Camera3D
+var _options: Navigator
 var _status: Label
 var inventory_endpoint: SpikeInventory3D
 var combat_endpoint: SpikeCombat3D
@@ -116,7 +117,33 @@ func _build_camera_and_ui() -> void:
 	_status = Label.new()
 	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · I — ekwipunek\nŁączenie ze światem…"
 	_status.add_theme_font_size_override("font_size", 18)
-	panel.add_child(_status)
+	var controls := VBoxContainer.new()
+	panel.add_child(controls)
+	controls.add_child(_status)
+	var options_button := Button.new()
+	options_button.text = "Options"
+	options_button.focus_mode = Control.FOCUS_NONE
+	controls.add_child(options_button)
+	var options_layer := CanvasLayer.new()
+	options_layer.layer = 20
+	add_child(options_layer)
+	_options = load("res://source/client/ui/menus/settings/settings_menu.tscn").instantiate() as Navigator
+	_options.hide()
+	options_layer.add_child(_options)
+	_options.visibility_changed.connect(func() -> void:
+		if _options.visible:
+			inventory_endpoint.enable_web_ui(inventory_endpoint.web_ui_active)
+			var inventory: Node = get_node_or_null("WebInventory")
+			if inventory != null: inventory.set_open(false)
+		ClientState.menu_open = _options.visible
+		input_enabled = not _options.visible
+		if not _options.visible: get_viewport().gui_release_focus())
+	options_button.pressed.connect(func() -> void: _options.show())
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if is_instance_valid(_options) and _options.visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_options.hide()
+		get_viewport().set_input_as_handled()
 
 @rpc("any_peer", "call_remote", "reliable", 0)
 func join_world() -> void:
