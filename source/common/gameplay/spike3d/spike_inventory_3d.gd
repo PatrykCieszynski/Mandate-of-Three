@@ -46,7 +46,8 @@ func request_equipment(action: String, uid: String, revision: int, command_id: S
 	_handle_command(action, uid, revision, -1, command_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
-func request_move_item(uid: String, revision: int, position: int, command_id: String) -> void:
+func request_move_item(uid: String, revision: int, x: int, y: int, page: int, command_id: String) -> void:
+	var position: int = page * InventoryGrid.PAGE_CELLS + y * InventoryGrid.COLUMNS + x if x >= 0 and x < InventoryGrid.COLUMNS and y >= 0 and y < InventoryGrid.ROWS and page >= 0 and page < InventoryGrid.PAGES else -1
 	_handle_command("move", uid, revision, position, command_id)
 
 func _handle_command(action: String, uid: String, revision: int, position: int, command_id: String) -> void:
@@ -193,12 +194,12 @@ func _render_items() -> void:
 		return
 	var bag_count: int = 0
 	for item: Dictionary in state.items:
-		if item.location == "bag": bag_count += 1
+		if item.location == "bag": bag_count += int(item.get("inventory_height", 1))
 	var weapon_name: String = "Brak broni"
 	for item: Dictionary in state.items:
 		if str(item.uid) == str(state.equipment.get("weapon", "")):
 			weapon_name = str(item.item_name)
-	_summary.text = "Atak postaci: %d · Torba: %d / 24\nBroń: %s" % [int(state.stats.get("attack", 10)), bag_count, weapon_name]
+	_summary.text = "Atak postaci: %d · Pola torby: %d / 180\nBroń: %s" % [int(state.stats.get("attack", 10)), bag_count, weapon_name]
 	var error: String = str(state.get("error", ""))
 	_message.text = _error_message(error) if error != "" or _pickup_notice == "" else _pickup_notice
 	var display_items: Array = state.items.duplicate()

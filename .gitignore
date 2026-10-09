@@ -41,3 +41,6 @@ source/server/master/account_collection.tres
 /tools/dev_assets/local.json
 __pycache__/
 /tools/legacy_assets/local.json
+
+# Local reference skin; source layout uses semantic names only
+/source/client/ui_web/web/inventory/legacy_skin/

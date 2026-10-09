@@ -195,7 +195,8 @@ func run_server() -> void:
 	check(replies[other_peer].get("error", "") == "reserved" and combat.ground.has(drop_uid), "non-owner denied, ground retained")
 	var owner_id: int = server.connected_players[owner_peer].player_id
 	var filler: Array[String] = []
-	for position: int in range(2, 24):
+	while server.database.item_store._free_bag_position(owner_id, ItemDefinitions.IRON_SWORD.inventory_height) >= 0:
+		var position: int = server.database.item_store._free_bag_position(owner_id, ItemDefinitions.IRON_SWORD.inventory_height)
 		var item: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD, owner_id, [])
 		check(server.database.item_store._insert_item(item, position), "full bag fixture")
 		filler.append(item.uid)

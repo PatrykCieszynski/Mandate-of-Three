@@ -60,6 +60,11 @@ static func ensure_schema(db: SQLite) -> void:
 		else:
 			push_error("Could not create Yang wallet schema in v14.")
 
+	if version < 15:
+		if not ItemStoreSqlite.migrate_grid(db):
+			push_error("Could not migrate inventory grid to v15; existing item state retained.")
+			return
+
 
 static func _migration_v1(db: SQLite) -> void:
 	_create_table_if_missing(db, "accounts", {

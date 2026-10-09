@@ -8,3 +8,5 @@ extends Resource
 @export var stack_limit: int = 1
 @export var base_stats: Dictionary[StringName, float] = {}
 @export var stats_per_upgrade: Dictionary[StringName, float] = {}
+
+@export_range(1, 3) var inventory_height: int = 1

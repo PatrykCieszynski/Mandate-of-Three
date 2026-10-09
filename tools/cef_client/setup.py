@@ -12,6 +12,11 @@ def setup():
     with ARCHIVE.open('rb') as stream:
         if hashlib.file_digest(stream, 'sha256').hexdigest() != SHA256:
             raise RuntimeError('Pinned CEF archive checksum mismatch')
+    from importlib.util import spec_from_file_location, module_from_spec
+    skin_spec = spec_from_file_location("stage_ui_skin", ROOT / "tools/dev_assets/stage_ui_skin.py")
+    skin_module = module_from_spec(skin_spec)
+    skin_spec.loader.exec_module(skin_module)
+    skin_module.stage()
     TARGET.mkdir(parents=True, exist_ok=True)
     # Refresh bounded copied trees, never touch the source checkout/runtime DBs.
     for name in ['source', 'assets', 'data', 'addons', 'tests', 'dev_assets']:
@@ -48,6 +53,14 @@ def setup():
     project = project.replace('renderer/rendering_method="gl_compatibility"', 'renderer/rendering_method="mobile"')
     project = project.replace('renderer/rendering_method.mobile="gl_compatibility"', 'renderer/rendering_method.mobile="mobile"')
     project = project.replace('"GL Compatibility"', '"Mobile"')
+    for key, value in {
+        'window/size/viewport_width': '1920', 'window/size/viewport_height': '1080',
+        'window/size/window_width_override': '1280', 'window/size/window_height_override': '720',
+        'window/stretch/mode': '"disabled"',
+    }.items():
+        import re
+        project = re.sub(r'^' + re.escape(key) + r'=.*$', key + '=' + value, project, flags=re.M)
+    project = project.replace('[display]', '[display]\nwindow/size/min_width=1280\nwindow/size/min_height=720')
     project += """
 [godot_cef]
 security/default_permission_policy=0

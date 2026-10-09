@@ -8,3 +8,5 @@ equipment_slot = &"weapon"
 stack_limit = 1
 base_stats = Dictionary[StringName, float]({&"attack": 10.0})
 stats_per_upgrade = Dictionary[StringName, float]({&"attack": 2.0})
+
+inventory_height = 3
