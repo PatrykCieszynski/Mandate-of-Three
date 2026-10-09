@@ -43,9 +43,7 @@ enum ZoneModifiers {
 @export_group("")
 @export var replicated_props_container: ReplicatedPropsContainer
 @export var map_background_color: Color = Color(0,0,0)
-## Looping background music for this map, crossfaded in when the local player enters
-## the instance (see Client._on_instance_changed). Leave empty to keep whatever track
-## is already playing — e.g. a small building inherits the overworld's music.
+## Legacy map metadata; Mandate does not play background music.
 @export var music: AudioStream
 @export_group("Camera limits")
 ## Per-edge camera clamp (world px), mirroring Camera2D's own limit_* properties. On entry
