@@ -51,6 +51,12 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   const clear=()=>page.evaluate(()=>{sent=[];});
   const frame=()=>page.evaluate(()=>new Promise<number>(resolve=>requestAnimationFrame(resolve)));
   await send(snapshot);await frame();
+  // A bad domain cannot suppress subsequent rendering of a valid unrelated update.
+  await page.evaluate(()=>emit('inventory.updated',{columns:1e100,rows:9,pages:4,items:[]}));
+  await page.evaluate(()=>emit('wallet.updated',{balance:4321}));
+  assert.equal(await page.locator('.wallet strong').textContent(),'4,321');
+  assert.equal(await page.locator('.inventory-item').getAttribute('data-id'),'bag-item');
+  await send(snapshot);await frame();
   const dimensions=await page.locator('#inventory-window').evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected HTML window');return {width:node.offsetWidth,height:node.offsetHeight};});
   assert.equal(await page.locator('html').evaluate(node=>node.classList.contains('has-close-asset')),!fallback);
   await clear();await page.locator('.inventory-item').click({button:'right'});
