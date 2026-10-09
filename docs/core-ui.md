@@ -29,7 +29,7 @@ metadata, with no item-instance schema change.
 ## Window contract
 
 Create a `UiWindow` with an application-owned `WindowManager`, a stable
-`window_id`, title, content and callbacks. It owns the section/chrome/titlebar,
+`id`, title, content and callbacks. It owns the section/chrome/titlebar,
 close binding, pointer capture, coalesced dragging, shared lifecycle and region
 refresh hooks. It composes `UiTitlebar`/`UiButton`; it does not own screen state.
 `canDrag` lets Inventory suppress window dragging while carrying an item.
@@ -38,7 +38,13 @@ resize, scale changes and disposal. `onActivate` is a presentation callback;
 activation does not request native keyboard ownership.
 
 `WindowManager` registers IDs, tracks `activeWindowId` and bounded z-order,
-measures logical rectangles, places/clamps windows and owns browser resize.
+owns viewport/scale and browser resize, and invalidates layout. Registration
+returns a `WindowHandle` with activate/place/move/resetPosition/dispose methods
+and layout/activation hooks; it takes no renderer callbacks.
+`WindowLayout` owns measurement, placement, clamping and manual positions.
+Placement is either a viewport corner with an offset, or a relative target with
+explicit side, alignment, gap and offset. An optional viewport fallback preserves
+standalone placement before a relative target has ever been measured.
 `setViewport(physicalViewport, scale)` handles snapshot/viewport changes;
 `setScale(scale)` updates every registered root and re-clamps. Pointer-down
 or focus inside a window raises its root; hidden windows cannot activate.
@@ -124,9 +130,9 @@ export function mountStorage(root, {manager, resolveItemIcon, onClose,
   onItemPointer, onRegionsChanged}) {
   let tooltip;
   const shell = new UiWindow(root, {
-    window_id: 'storage', title: 'Storage', manager,
+    id: 'storage', title: 'Storage', manager,
     content: '<div class="inventory-grid"></div>',
-    placement: {preferredAnchor: 'right', defaultOffset: {x: -16, y: 80}},
+    placement: {kind: 'viewport', anchor: 'top-right', offset: {x: -16, y: 80}},
     onClose, onRegionsChanged, onCancel: () => tooltip?.hide()
   });
   tooltip = UiTooltip(root, {geometry: () => manager});

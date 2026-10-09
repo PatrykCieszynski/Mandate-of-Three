@@ -1,8 +1,8 @@
 import type {WindowId, Point} from '../contracts.js';
-import type {WindowManager, WindowPlacement} from './window-manager.js';
+import type {WindowManager, WindowPlacement, WindowHandle} from './window-manager.js';
 import {element as findElement} from './dom.js';
 export interface UiWindowOptions {
-  window_id: WindowId; title: string; manager: WindowManager;
+  id: WindowId; title: string; manager: WindowManager;
   className?: string; content?: string; placement?: WindowPlacement;
   onClose?: () => void; canDrag?: () => boolean; onCancel?: () => void; onRegionsChanged?: () => void;
   onGeometry?: () => void; onActivate?: () => void; scrollBorder?: number; hideHorizontalOverflow?: boolean;
@@ -10,6 +10,7 @@ export interface UiWindowOptions {
 import {UiTitlebar,titlebarMarkup} from './ui-titlebar.js';
 // Composed shell only. The screen supplies content, placement and actions.
 export class UiWindow {
+  declare handle: WindowHandle;
   declare onRegionsChanged: () => void;
   declare root: HTMLElement;
   declare id: WindowId;
@@ -22,27 +23,32 @@ export class UiWindow {
   declare position: Point | undefined;
   declare paint: (position: Point) => void;
   declare cancel: () => void;
-  constructor(root: HTMLElement,{window_id,title,className='',content='',manager,placement={},onClose=()=>{},canDrag=()=>true,onCancel=()=>{},onRegionsChanged=()=>{},onGeometry=()=>{},onActivate=()=>{},scrollBorder=0,hideHorizontalOverflow=false}: UiWindowOptions) {
-    if(!manager||typeof window_id!=='string'||!window_id)throw new Error('UiWindow requires manager and stable window_id');
-    this.onRegionsChanged=onRegionsChanged;this.root=root;this.id=window_id;this.manager=manager;this.drag=null;this.frame=0;this.disposed=false;this.listeners=[];
+  constructor(root: HTMLElement,{id,title,className='',content='',manager,placement,onClose=()=>{},canDrag=()=>true,onCancel=()=>{},onRegionsChanged=()=>{},onGeometry=()=>{},onActivate=()=>{},scrollBorder=0,hideHorizontalOverflow=false}: UiWindowOptions) {
+    if(!manager||typeof id!=='string'||!id)throw new Error('UiWindow requires manager and stable id');
+    this.onRegionsChanged=onRegionsChanged;this.root=root;this.id=id;this.manager=manager;this.drag=null;this.frame=0;this.disposed=false;this.listeners=[];
     root.innerHTML=`<section class="window-chrome ${className}">
       <i class="chrome edge top"></i><i class="chrome edge bottom"></i><i class="chrome edge left"></i><i class="chrome edge right"></i>
       <i class="chrome corner tl"></i><i class="chrome corner tr"></i><i class="chrome corner bl"></i><i class="chrome corner br"></i>
       ${titlebarMarkup}${content}</section>`;
-    root.setAttribute('data-ui-window',window_id);
-    this.panel=findElement(root,'section','section');this.panel.id=window_id+'-window';this.panel.setAttribute('aria-label',title);
+    root.setAttribute('data-ui-window',id);
+    this.panel=findElement(root,'section','section');this.panel.id=id+'-window';this.panel.setAttribute('aria-label',title);
     this.panel.style.left='0px';this.panel.style.top='0px';root.style.setProperty('--ui-scale',String(manager.scale));
     const titlebar=UiTitlebar(findElement(root,'.window-header','header'),{title,onClose:()=>{this.cancel();onClose();}}),header=titlebar.element;
     this.listeners.push(()=>titlebar.dispose());
     this.paint=position=>{this.position=position;this.panel.style.transform=`translate3d(${position.x}px,${position.y}px,0)`;onGeometry();onRegionsChanged();};
     this.cancel=()=>{this.stopDrag();onCancel();};
-    manager.register({...placement,window_id,element:this.panel,root,onActivate,cancel:this.cancel,paint:this.paint,prepare:()=>{
+    this.handle=manager.register({id,element:this.panel,root,...(placement?{placement}:{})});
+    this.listeners.push(this.handle.onActivate(onActivate));
+    this.listeners.push(this.handle.onLayoutChanged(({cancelTransient})=>{
+      if(cancelTransient)this.cancel();
+      if(root.hidden||this.disposed)return;
       const height=manager.viewport.height/this.scale;this.panel.style.maxHeight=height+'px';
       const small=this.panel.scrollHeight+scrollBorder>height;this.panel.style.overflowY=small?'auto':'visible';
       if(hideHorizontalOverflow)this.panel.style.overflowX=small?'hidden':'visible';
-    }});
-    this.listen(this.panel,'pointerdown',()=>manager.activate(window_id));
-    this.listen(this.panel,'focusin',()=>manager.activate(window_id));
+      this.paint(this.handle.place());
+    }));
+    this.listen(this.panel,'pointerdown',()=>manager.activate(id));
+    this.listen(this.panel,'focusin',()=>manager.activate(id));
     this.listen(header,'pointerdown',event=>{
       if(event.button!==0||(event.target instanceof Element && event.target.closest('button'))||!canDrag()||!this.position)return;
       event.preventDefault();const p=this.point(event);this.panel.style.willChange='transform';
@@ -53,7 +59,7 @@ export class UiWindow {
     this.listen(document,'pointermove',event=>{
       if(!this.drag||event.pointerId!==this.drag.pointer)return;
       if(!header.hasPointerCapture(this.drag.pointer)){this.stopDrag();return;}
-      const p=this.point(event);this.position=manager.move(window_id,{x:p.x-this.drag.offset.x,y:p.y-this.drag.offset.y});
+      const p=this.point(event);this.position=manager.move(id,{x:p.x-this.drag.offset.x,y:p.y-this.drag.offset.y});
       if(!this.frame)this.frame=requestAnimationFrame(()=>{this.frame=0;if(!this.disposed&&this.position)this.paint(this.position);});
     });
     this.listen(document,'pointerup',event=>{if(this.drag?.pointer===event.pointerId)this.stopDrag();});

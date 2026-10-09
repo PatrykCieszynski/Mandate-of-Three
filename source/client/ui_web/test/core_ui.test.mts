@@ -14,8 +14,9 @@ import {environment,target,measure,capture,fire,equippedItem} from './fixtures.m
 
 test('registration, activation, hidden windows, resize and scale stay in the manager',()=>{
  const {host,manager}=environment(),one=target(),two=target();let cancelled=0,activated=0;
- manager.register({window_id:'one',element:one,cancel:()=>{cancelled++;},onActivate:()=>{activated++;}});
- manager.register({window_id:'two',element:two});assert.throws(()=>manager.register({window_id:'one',element:one}),/Duplicate/);
+ const handle=manager.register({id:'one',element:one});
+ handle.onLayoutChanged(event=>{if(event.cancelTransient)cancelled++;});handle.onActivate(()=>{activated++;});
+ manager.register({id:'two',element:two});assert.throws(()=>manager.register({id:'one',element:one}),/Duplicate/);
  manager.activate('one');assert.equal(manager.activeWindowId,'one');assert.ok(Number(one.style.zIndex)>Number(two.style.zIndex));assert.equal(activated,1);
  one.hidden=true;manager.refresh('one');assert.equal(manager.activeWindowId,'two');assert.ok(cancelled>0);
  one.hidden=false;manager.move('one',{x:9999,y:9999});manager.setScale(1.5);Object.defineProperties(host,{innerWidth:{value:600,configurable:true},innerHeight:{value:500,configurable:true}});host.dispatchEvent(new host.Event('resize'));
@@ -27,7 +28,7 @@ test('registration, activation, hidden windows, resize and scale stay in the man
 test('shared shell captures drag, cancels on lifecycle changes and removes listeners',()=>{
  const {host,doc,manager,frames}=environment(),root=target();let regions=0,closes=0,cancels=0;
  doc.body.append(root);
- const shell=new UiWindow(root,{manager,window_id:'storage',title:'Storage',onClose:()=>{closes++;},onCancel:()=>{cancels++;},onRegionsChanged:()=>{regions++;}});
+ const shell=new UiWindow(root,{manager,id:'storage',title:'Storage',onClose:()=>{closes++;},onCancel:()=>{cancels++;},onRegionsChanged:()=>{regions++;}});
  const {panel}=shell,header=findElement(root,'.window-header','header'),close=findElement(root,'.window-close','button');measure(panel);capture(header);
  shell.refresh();fire(header,'pointerdown');assert.ok(header.hasPointerCapture(1));
  fire(doc,'pointermove',250,150,2);assert.equal(frames.size,0);
@@ -98,7 +99,24 @@ test('currency uses semantic UI icons, refreshes on replacement and unsubscribes
 test('relative placement rejects cycles and unknown or empty IDs',()=>{
  environment();const manager=new WindowManager({host:null});manager.setViewport({width:1200,height:800});
  // @ts-expect-error The missing identity is deliberately invalid at the runtime boundary.
- assert.throws(()=>manager.register({element:target()}),/stable window_id/);
- manager.register({window_id:'a',element:target(),relativeTo:'b'});manager.register({window_id:'b',element:target(),relativeTo:'a'});
+ assert.throws(()=>manager.register({element:target()}),/stable id/);
+ manager.register({id:'a',element:target(),placement:{kind:'relative',target:'b',side:'left'}});manager.register({id:'b',element:target(),placement:{kind:'relative',target:'a',side:'left'}});
  assert.throws(()=>manager.place('a'),/Cyclic/);assert.throws(()=>manager.place('missing'),/Unknown/);manager.dispose();
+});
+
+test('relative placement supports all sides and alignment, reset restores declared placement',()=>{
+ const {manager}=environment(),anchor=target(),other=target();measure(anchor,200,100);measure(other,80,40);
+ manager.register({id:'anchor',element:anchor,placement:{kind:'viewport',anchor:'top-left',offset:{x:300,y:250}}});
+ const cases=[
+  ['left','start',{x:208,y:250}],['left','center',{x:208,y:280}],['left','end',{x:208,y:310}],
+  ['right','end',{x:512,y:310}],['top','center',{x:360,y:198}],['bottom','end',{x:420,y:362}]
+ ] satisfies [import('../web/core/window/window-types.js').RelativePlacement['side'],import('../web/core/window/window-types.js').RelativePlacement['align'],{x:number;y:number}][];
+ for(const [side,align,expected] of cases){
+  const handle=manager.register({id:'other',element:other,placement:{kind:'relative',target:'anchor',side,align,gap:12}});
+  assert.deepEqual(handle.place(),expected);handle.move({x:20,y:30});assert.deepEqual(handle.place(),{x:20,y:30});
+  handle.resetPosition();assert.deepEqual(handle.place(),expected);
+  anchor.hidden=true;assert.deepEqual(handle.place(),expected,'cached target geometry survives hiding');anchor.hidden=false;
+  handle.dispose();handle.dispose();assert.throws(()=>handle.move({x:0,y:0}),/Disposed/);
+ }
+ const replacement=manager.register({id:'other',element:other});replacement.dispose();manager.dispose();
 });

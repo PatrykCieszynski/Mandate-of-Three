@@ -22,8 +22,8 @@ import {UiCurrency} from '../core/ui-currency.js';
 import {UiWindow} from '../core/ui-window.js';
 import {placement,carriedCell} from './placement.js';
 export function mountInventory(root: HTMLElement,{manager,resolveItemIcon=()=>null,moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}: InventoryOptions) {
-  const shell=new UiWindow(root,{window_id:'inventory',title:'Inventory',className:'window',manager,
-    placement:{preferredAnchor:'right',defaultOffset:{x:-16,y:240}},scrollBorder:2,hideHorizontalOverflow:true,
+  const shell=new UiWindow(root,{id:'inventory',title:'Inventory',className:'window',manager,
+    placement:{kind:'viewport',anchor:'top-right',offset:{x:-16,y:240}},scrollBorder:2,hideHorizontalOverflow:true,
     onClose,canDrag:()=>!carry,onCancel:()=>cancelCarry(),onRegionsChanged,onGeometry:()=>{
       surface.style.width=innerWidth/shell.scale+'px';surface.style.height=innerHeight/shell.scale+'px';
     },content:`<nav class="inventory-tabs" aria-label="Inventory pages"></nav>

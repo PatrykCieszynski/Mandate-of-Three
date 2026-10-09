@@ -124,7 +124,7 @@ async function verify(browser: Browser,url: string,fallback: boolean){
    const {WindowManager}: typeof import('../web/core/window-manager.js')=await import(managerPath);
    const {UiTooltip}: typeof import('../web/core/ui-tooltip.js')=await import(tooltipPath);
    const root=document.createElement('main');document.body.append(root);const manager=new WindowManager();manager.setViewport({width:innerWidth,height:innerHeight},1);
-   let closes=0;const shell=new UiWindow(root,{manager,window_id:'storage',title:'Storage',content:'<p>Storage content</p>',onClose:()=>closes++});
+   let closes=0;const shell=new UiWindow(root,{manager,id:'storage',title:'Storage',content:'<p>Storage content</p>',onClose:()=>closes++});
    const tip=UiTooltip(root,{geometry:()=>manager});shell.refresh();const close=root.querySelector<HTMLButtonElement>('.window-close');if(!close)throw Error('Missing close button');close.click();
    const registered=manager.windows.has('storage');tip.dispose();shell.dispose();close.click();manager.dispose();root.remove();return {registered,closes};
   });assert.deepEqual(storage,{registered:true,closes:1});
