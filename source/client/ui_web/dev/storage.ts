@@ -4,7 +4,14 @@ import { mountStorage } from '../web/screens/storage/storage-view.js';
 import type { StorageSnapshot } from '../web/screens/storage/storage-types.js';
 import { reportInteractiveRegions } from '../web/bridge.js';
 import { encode } from '../web/protocol.js';
-import { decodePreviewAction, notify } from './runtime.js';
+import {
+  decodePreviewAction,
+  notify,
+  previewInventory,
+  updatePreviewInventory,
+} from './runtime.js';
+import { previewItemTransfer } from './item-transfer.js';
+import { transfer } from '../web/screens/storage/transfer.js';
 function fixture(): StorageSnapshot {
   return {
     columns: 15,
@@ -76,8 +83,11 @@ const root = document.createElement('main');
 root.id = 'storage';
 root.hidden = true;
 document.body.append(root);
+let storageState = fixture();
+let interaction: ReturnType<typeof previewItemTransfer> | undefined;
 let reporter: ReturnType<typeof reportInteractiveRegions> | undefined;
 function show(visible: boolean) {
+  if (!visible) interaction?.cancel();
   const opened = root.hidden && visible;
   root.hidden = !visible;
   storage.refresh();
@@ -108,20 +118,79 @@ reporter = reportInteractiveRegions(
   },
   storage.regions,
 );
-storage.setState(fixture());
+storage.setState(storageState);
+interaction = previewItemTransfer({
+  manager,
+  resolveItemIcon,
+  getState(id) {
+    if (id === 'storage') return storageState;
+    const inventory = previewInventory();
+    if (!inventory) throw Error('Missing preview Inventory');
+    return inventory;
+  },
+  move(from, to, item, target) {
+    const inventory = previewInventory();
+    if (!inventory) return false;
+    const source = from === 'storage' ? storageState : inventory;
+    const destination = to === 'storage' ? storageState : inventory;
+    const result = transfer(
+      source,
+      destination,
+      item.id,
+      item.revision,
+      target,
+    );
+    notify({
+      message: {
+        preview: 'storage.transfer',
+        from,
+        to,
+        id: item.id,
+        ok: !!result,
+        quick: !target,
+      },
+    });
+    if (!result) {
+      capacityStatus('No room for this item.');
+      return false;
+    }
+    const storageItems =
+      to === 'storage' ? result.destinationItems : result.sourceItems;
+    const inventoryItems =
+      to === 'inventory' ? result.destinationItems : result.sourceItems;
+    if (from === 'storage' || to === 'storage') {
+      storageState = { ...storageState, items: storageItems };
+      storage.setState(storageState);
+    }
+    if (from === 'inventory' || to === 'inventory')
+      updatePreviewInventory(inventoryItems);
+    capacityStatus('135 slots per page · 2 pages');
+    return true;
+  },
+});
+function capacityStatus(text: string) {
+  const label = root.querySelector('.storage-capacity');
+  if (label) label.textContent = text;
+}
 show(true);
 window.addEventListener('message', (event) => {
   if (event.source !== parent || event.origin !== location.origin) return;
   const request = decodePreviewAction(event.data);
   if (!request) return;
+  if (request.action !== 'wallet' && request.action !== 'accept')
+    interaction?.cancel();
   if (request.action === 'storage') show(request.value);
   else if (request.action === 'reset') {
-    storage.setState(fixture());
+    storageState = fixture();
+    storage.setState(storageState);
     show(true);
-  } else if (request.action === 'empty')
-    storage.setState({ columns: 15, rows: 9, pages: 2, items: [] });
+  } else if (request.action === 'empty') {
+    storageState = { columns: 15, rows: 9, pages: 2, items: [] };
+    storage.setState(storageState);
+  }
 });
 window.addEventListener('pagehide', () => {
+  interaction?.dispose();
   storage.dispose();
   reporter?.dispose();
   root.remove();

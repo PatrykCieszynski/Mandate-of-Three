@@ -9,6 +9,7 @@ const devFiles = new Map([
   ['preview.css', path.join(uiRoot, 'dev/preview.css')],
   ['controls.js', path.join(uiRoot, '.dev/controls.js')],
   ['runtime.js', path.join(uiRoot, '.dev/runtime.js')],
+  ['item-transfer.js', path.join(uiRoot, '.dev/item-transfer.js')],
   ['storage.js', path.join(uiRoot, '.dev/storage.js')],
 ]);
 const mime = {

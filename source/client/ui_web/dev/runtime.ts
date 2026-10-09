@@ -78,6 +78,17 @@ function fixture(): DomainSnapshot {
   };
 }
 let state = fixture();
+export function previewInventory() {
+  return state.inventory;
+}
+export function updatePreviewInventory(
+  items: NonNullable<DomainSnapshot['inventory']>['items'],
+) {
+  if (!state.inventory) return;
+  state.inventory = { ...state.inventory, items };
+  emit('inventory.updated', state.inventory);
+}
+
 export const notify = (detail: object) =>
   parent.postMessage(
     { source: 'mandate-ui-preview', ...detail },
