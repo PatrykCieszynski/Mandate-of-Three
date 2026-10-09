@@ -88,15 +88,17 @@ html,body {
 .window-close {
   position:absolute;
   right:3px;
-  top:4px;
-  width:15px;
-  height:15px;
+  top:2px;
+  width:19px;
+  height:19px;
   border:0;
   background:var(--skin-button-close-normal,none),#31312f;
+  background-size:100% 100%;
+  background-repeat:no-repeat;
   padding:0;
   color:#ddd;
   cursor:pointer;
-  font:14px/15px Arial}
+  font:16px/19px Arial}
 .window-close:hover {
   background-image:var(--skin-button-close-hover,var(--skin-button-close-normal,none))}
 .window-close:active {
