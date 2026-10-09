@@ -1,12 +1,12 @@
-import { element as findElement } from '../core/dom.js';
-import { errorMessage } from '../protocol.js';
-import { UiTab } from '../core/primitives/ui-tab.js';
-import { UiInventoryGrid } from '../game-ui/ui-inventory-grid.js';
-import { UiItemSlot } from '../game-ui/ui-item-slot.js';
-import { paintItemIcon } from '../game-ui/item-icon.js';
-import { ItemTooltip } from '../game-ui/items/item-tooltip.js';
-import { UiCurrency } from '../core/primitives/ui-currency.js';
-import { UiWindow } from '../core/window/ui-window.js';
+import { element as findElement } from '../../core/dom.js';
+import { errorMessage } from '../../protocol.js';
+import { UiTab } from '../../core/primitives/ui-tab.js';
+import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
+import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
+import { paintItemIcon } from '../../game-ui/items/item-icon.js';
+import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
+import { UiCurrency } from '../../core/primitives/ui-currency.js';
+import { UiWindow } from '../../core/window/ui-window.js';
 import { placement, carriedCell } from './placement.js';
 export function mountInventory(root, { manager, resolveItemIcon = () => null, moveItem, equipItem, onClose = () => { }, onRegionsChanged = () => { } }) {
     const shell = new UiWindow(root, { id: 'inventory', title: 'Inventory', className: 'window', manager,
@@ -32,11 +32,12 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
     const point = (e) => shell.point(e);
     const cell = () => parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
     const positionWindow = () => shell.refresh();
-    const gridView = UiInventoryGrid(grid, { slotSize: cell });
+    const gridView = UiItemGrid(grid, { slotSize: cell });
     const icon = (node, item) => paintItemIcon(node, item, { resolveItemIcon });
     function render() {
-        gridView.render(inventory, page, item => {
+        gridView.render({ columns: inventory.columns, rows: inventory.rows, items: inventory.items.filter(item => item.page === page) }, item => {
             const node = UiItemSlot({ item, slotSize: cell(), resolveItemIcon });
+            node.classList.add('inventory-item');
             node.addEventListener('pointerdown', event => {
                 if (event.button === 2 && equipItem && !carry && !pending) {
                     event.preventDefault();

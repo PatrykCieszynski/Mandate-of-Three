@@ -12,9 +12,9 @@ same static `web/` module paths. See [build and test instructions](../source/cli
 - `source/client/ui_web/ts/core/`: domain-agnostic window shell, geometry,
   chrome primitives (`core/primitives/`), semantic assets (`core/assets/`)
   and window behavior (`core/window/`).
-- `game-ui/`: proven inventory grid, item and equipment slot presentation.
+- `game-ui/`: item grid (`game-ui/items/`), item tooltip/icon/slot and equipment slot presentation.
   These components accept data and dimensions; they make no gameplay decisions.
-- `inventory/`: Inventory/Equipment composition, page/carry/pending state,
+- `screens/inventory/` and `screens/equipment/`: composition, page/carry/pending state,
   equipment layout, advisory placement and injected domain actions.
 - `content/item-icons.ts`: resolver for item content identity.
 - `skins/legacy.ts`: adapter for the optional, exact legacy PNG manifest.
@@ -86,10 +86,11 @@ and scale. `game-ui/items/ItemTooltip` supplies the item name/description adapte
 icon ID; its value and domain actions stay in the screen. Buttons/tabs/currency
 subscriptions have explicit disposal. Shared base/chrome CSS is `core/core.css`.
 
-`UiInventoryGrid`, `UiItemSlot` and `UiEquipmentSlot` live in `game-ui/` with
-`components.css`. InventoryGrid consumes the screen's columns/rows/page/item
-positions and renders visible items supplied by a factory. ItemSlot presents
-name/icon/quantity/footprint. EquipmentSlot takes its rectangle and enabled state
+`UiItemGrid`, `UiItemSlot` and `UiEquipmentSlot` live in `game-ui/` with
+`components.css`. ItemGrid takes `{columns, rows, items}` and a factory for positioned items
+(`x`, `y`, `height`). It has no page, carry, transfer or domain-state contract;
+Inventory filters its own page before rendering. ItemSlot accepts only
+`id/name/icon_id/height/quantity`, without revision or inventory coordinates. EquipmentSlot takes its rectangle and enabled state
 from the screen. Equipment's silhouette and slot coordinates remain its own
 composition. Missing item images fall back to the item label without losing
 quantity. There are no hotbar/status widgets until a real screen needs them.
@@ -137,8 +138,8 @@ A screen can then be almost entirely composition (domain actions are injected):
 ```js
 import {UiWindow} from '../core/window/ui-window.js';
 import {ItemTooltip} from '../game-ui/items/item-tooltip.js';
-import {UiInventoryGrid} from '../game-ui/ui-inventory-grid.js';
-import {UiItemSlot} from '../game-ui/ui-item-slot.js';
+import {UiItemGrid} from '../game-ui/items/ui-item-grid.js';
+import {UiItemSlot} from '../game-ui/items/ui-item-slot.js';
 
 export function mountStorage(root, {manager, resolveItemIcon, onClose,
   onItemPointer, onRegionsChanged}) {
@@ -154,11 +155,11 @@ export function mountStorage(root, {manager, resolveItemIcon, onClose,
   shell.contentRoot.append(element);
   const slotSize = () => parseFloat(getComputedStyle(element)
     .getPropertyValue('--slot-size'));
-  const grid = UiInventoryGrid(element, {slotSize});
+  const grid = UiItemGrid(element, {slotSize});
   return {
     regions: [shell.panel],
-    setItems(bag, page = 0) {
-      grid.render(bag, page, item => {
+    setItems(model) {
+      grid.render(model, item => {
         const node = UiItemSlot({item, slotSize: slotSize(), resolveItemIcon});
         node.addEventListener('pointerdown', event => onItemPointer(event, item));
         node.addEventListener('pointermove', event => tooltip.show(event, item));

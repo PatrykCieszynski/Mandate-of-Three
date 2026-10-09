@@ -4,3 +4,9 @@ export interface ItemPresentation {
   height: number; quantity: number; description?: string;
 }
 export type ResolveItemIcon = (id: ItemIconId) => string | null;
+
+// Slot content has no inventory coordinates, page, revision or equipment location.
+export type ItemSlotPresentation = Pick<ItemPresentation,'id'|'name'|'icon_id'|'height'|'quantity'>;
+export type ItemIconPresentation = Pick<ItemPresentation,'name'|'icon_id'|'quantity'>;
+export interface PositionedItem { x: number; y: number; height: number }
+export interface ItemGridModel<T extends PositionedItem> { columns: number; rows: number; items: readonly T[] }

@@ -6,8 +6,10 @@ import {UiTooltip,tooltipPosition} from '../web/core/primitives/ui-tooltip.js';
 import {applySkin,skinVariable} from '../web/core/assets/skin.js';
 import {UiIconRegistry,uiIconDomains} from '../web/core/assets/ui-icons.js';
 import {ItemIconResolver} from '../web/content/item-icons.js';
-import {paintItemIcon} from '../web/game-ui/item-icon.js';
-import {UiEquipmentSlot} from '../web/game-ui/ui-equipment-slot.js';
+import {paintItemIcon} from '../web/game-ui/items/item-icon.js';
+import {UiEquipmentSlot} from '../web/game-ui/equipment/ui-equipment-slot.js';
+import {UiItemGrid} from '../web/game-ui/items/ui-item-grid.js';
+import {UiItemSlot} from '../web/game-ui/items/ui-item-slot.js';
 import {ItemTooltip} from '../web/game-ui/items/item-tooltip.js';
 import {UiCurrency} from '../web/core/primitives/ui-currency.js';
 import {element as findElement} from '../web/core/dom.js';
@@ -159,4 +161,17 @@ test('core tooltip accepts arbitrary DOM content; item adapter escapes and repla
  assert.equal(findElement(item.element,'h2','h2').textContent,'<Sword>');assert.equal(item.element.querySelector('img'),null);
  item.show({clientX:100,clientY:100},{name:'Other'});assert.equal(findElement(item.element,'p','p').textContent,'');
  item.dispose();manager.dispose();
+});
+
+test('item grid renders exactly the caller-selected models and slots need no domain state',()=>{
+ environment();const element=target(),grid=UiItemGrid(element,{slotSize:()=>40});
+ const models=[{sku:'first',x:1,y:2,height:2,page:1},{sku:'second',x:0,y:0,height:1,page:0}];
+ const rendered: typeof models=[];
+ grid.render({columns:3,rows:4,items:models},item=>{rendered.push(item);const node=document.createElement('span');node.textContent=item.sku;return node;});
+ assert.deepEqual(rendered,models,'no internal inventory-page filtering');
+ const presentation={id:'content',name:'Material',icon_id:'material',height:2,quantity:7};
+ const slot=UiItemSlot({item:presentation,slotSize:40,resolveItemIcon:()=>null});
+ assert.equal(slot.getAttribute('aria-label'),'Material');assert.equal(slot.dataset.height,'2');assert.equal(slot.querySelector('.quantity')?.textContent,'7');
+ grid.render({columns:1,rows:1,items:[]},()=>{throw Error('Empty grid must not request items');});
+ assert.equal(element.querySelector('span'),null);grid.dispose();assert.equal(element.childElementCount,0);
 });

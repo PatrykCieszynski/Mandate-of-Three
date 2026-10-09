@@ -1,11 +1,11 @@
 :root {--slot-size:40px}
-.inventory-grid {
+.ui-item-grid {
   --cell:var(--slot-size);
   position:relative;
   touch-action:none;
   overflow:visible}
 .cell {position:absolute;width:var(--slot-size);height:var(--slot-size)}
-.inventory-item,.carried-item {
+.ui-item-slot,.carried-item {
   position:absolute;
   width:calc(var(--slot-size) - 2px);
   padding:1px;
@@ -14,12 +14,12 @@
   justify-content:center;
   color:#ddc588;
   touch-action:none}
-.inventory-item {
+.ui-item-slot {
   border:1px solid #655946;
   cursor:pointer;
   z-index:2;
   background:#11120a38}
-.inventory-item.carried {
+.ui-item-slot.carried {
   opacity:.25}
 .item-icon {
   max-width:32px;

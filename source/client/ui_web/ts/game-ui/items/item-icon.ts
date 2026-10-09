@@ -1,6 +1,6 @@
-import type {ItemPresentation, ResolveItemIcon} from './item-types.js';
+import type {ItemIconPresentation, ResolveItemIcon} from '../item-types.js';
 // Shared item presentation only; content resolver supplies URLs from icon_id.
-export function paintItemIcon(element: HTMLElement,item: ItemPresentation,{resolveItemIcon,alt='',fallbackClass='icon-fallback',quantity=true}: {resolveItemIcon: ResolveItemIcon; alt?: string; fallbackClass?: string | null; quantity?: boolean}) {
+export function paintItemIcon(element: HTMLElement,item: ItemIconPresentation,{resolveItemIcon,alt='',fallbackClass='icon-fallback',quantity=true}: {resolveItemIcon: ResolveItemIcon; alt?: string; fallbackClass?: string | null; quantity?: boolean}) {
   element.replaceChildren();
   const fallback=()=>{const label=document.createElement('span');if(fallbackClass)label.className=fallbackClass;label.textContent=item.name;return label;};
   const url=resolveItemIcon(item.icon_id);

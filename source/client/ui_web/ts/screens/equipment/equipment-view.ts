@@ -1,16 +1,16 @@
-import type {DomainSnapshot, EquipmentItem, ItemCommand, CommandResult} from '../protocol/contracts.js';
-import type {ResolveItemIcon} from '../game-ui/item-types.js';
-import type {WindowManager} from '../core/window/window-manager.js';
-import {element as findElement} from '../core/dom.js';
-import {errorMessage} from '../protocol.js';
+import type {DomainSnapshot, EquipmentItem, ItemCommand, CommandResult} from '../../protocol/contracts.js';
+import type {ResolveItemIcon} from '../../game-ui/item-types.js';
+import type {WindowManager} from '../../core/window/window-manager.js';
+import {element as findElement} from '../../core/dom.js';
+import {errorMessage} from '../../protocol.js';
 interface EquipmentOptions {
   manager: WindowManager; resolveItemIcon?: ResolveItemIcon;
   unequipItem: (command: ItemCommand) => Promise<CommandResult>;
   onClose?: () => void; onRegionsChanged?: () => void;
 }
-import {UiEquipmentSlot} from '../game-ui/ui-equipment-slot.js';
-import {ItemTooltip} from '../game-ui/items/item-tooltip.js';
-import {UiWindow} from '../core/window/ui-window.js';
+import {UiEquipmentSlot} from '../../game-ui/equipment/ui-equipment-slot.js';
+import {ItemTooltip} from '../../game-ui/items/item-tooltip.js';
+import {UiWindow} from '../../core/window/ui-window.js';
 // Logical slot rectangles match the native 156×188 legacy reference skin.
 const slots: [slot: string,label: string,x: number,y: number,height: number][]=[
   ['weapon','Weapon',4,4,64],['head','Helmet',42,6,32],['neck','Necklace',118,2,32],

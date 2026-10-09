@@ -1,8 +1,8 @@
-import { element as findElement } from '../core/dom.js';
-import { errorMessage } from '../protocol.js';
-import { UiEquipmentSlot } from '../game-ui/ui-equipment-slot.js';
-import { ItemTooltip } from '../game-ui/items/item-tooltip.js';
-import { UiWindow } from '../core/window/ui-window.js';
+import { element as findElement } from '../../core/dom.js';
+import { errorMessage } from '../../protocol.js';
+import { UiEquipmentSlot } from '../../game-ui/equipment/ui-equipment-slot.js';
+import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
+import { UiWindow } from '../../core/window/ui-window.js';
 // Logical slot rectangles match the native 156×188 legacy reference skin.
 const slots = [
     ['weapon', 'Weapon', 4, 4, 64], ['head', 'Helmet', 42, 6, 32], ['neck', 'Necklace', 118, 2, 32],
