@@ -1,5 +1,7 @@
 import {UiTab} from '../core/ui-tab.js';
-import {UiSlot} from '../core/ui-slot.js';
+import {UiInventoryGrid} from '../game-ui/ui-inventory-grid.js';
+import {UiItemSlot} from '../game-ui/ui-item-slot.js';
+import {paintItemIcon} from '../game-ui/item-icon.js';
 import {UiTooltip} from '../core/ui-tooltip.js';
 import {UiCurrency} from '../core/ui-currency.js';
 import {UiWindow} from '../core/ui-window.js';
@@ -10,12 +12,12 @@ export function mountInventory(root,{manager,resolveItemIcon=()=>null,moveItem,e
     onClose,canDrag:()=>!carry,onCancel:()=>cancelCarry(),onRegionsChanged,onGeometry:()=>{
       surface.style.width=innerWidth/shell.scale+'px';surface.style.height=innerHeight/shell.scale+'px';
     },content:`<nav class="inventory-tabs" aria-label="Inventory pages"></nav>
-    <div class="inventory-grid"></div><footer class="wallet"><span class="yang-icon">●</span><span>Yang</span><strong>—</strong></footer>
+    <div class="inventory-grid"></div><footer class="wallet"></footer>
     <p class="inventory-status" role="status"></p>`});
   root.insertAdjacentHTML('beforeend',`<div id="carry-surface" hidden></div><div class="carried-item" hidden></div>`);
   const panel=root.querySelector('.window'),grid=root.querySelector('.inventory-grid'),surface=root.querySelector('#carry-surface'),
     ghost=root.querySelector('.carried-item'),status=root.querySelector('.inventory-status');
-  const tip=UiTooltip(root,{geometry:()=>manager}),tooltip=tip.element,currency=UiCurrency(root.querySelector('.wallet'));
+  const tip=UiTooltip(root,{geometry:()=>manager}),tooltip=tip.element,currency=UiCurrency(root.querySelector('.wallet'),{label:'Yang',iconId:'currencies.yang'});
   const tabs=['I','II','III','IV'].map((label,index)=>{
     const tab=UiTab({label,onSelect:()=>{if(!carry?.latched)cancelCarry();page=index;render();}});
     root.querySelector('.inventory-tabs').append(tab.element);return tab;
@@ -24,28 +26,18 @@ export function mountInventory(root,{manager,resolveItemIcon=()=>null,moveItem,e
   const point=e=>shell.point(e);
   const cell=()=>parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
   const positionWindow=()=>shell.refresh();
-  function icon(node,item) {
-    node.replaceChildren();
-    if(resolveItemIcon(item.icon_id)) {const img=document.createElement('img');img.src=resolveItemIcon(item.icon_id);img.alt='';img.className='item-icon';node.append(img);}
-    else {const label=document.createElement('span');label.className='icon-fallback';label.textContent=item.name;node.append(label);}
-    if(item.quantity>1){const qty=document.createElement('span');qty.className='quantity';qty.textContent=item.quantity;node.append(qty);}
-  }
+  const gridView=UiInventoryGrid(grid,{slotSize:cell});
+  const icon=(node,item)=>paintItemIcon(node,item,{resolveItemIcon});
   function render() {
-    grid.replaceChildren();
-    for(let y=0;y<inventory.rows;y++)for(let x=0;x<inventory.columns;x++) {
-      const slot=UiSlot({className:'cell'});slot.style.left=x*cell()+'px';slot.style.top=y*cell()+'px';grid.append(slot);
-    }
-    for(const item of inventory.items.filter(i=>i.page===page)) {
-      const node=document.createElement('div');node.className='inventory-item';node.dataset.id=item.id;node.dataset.height=item.height;
-      node.style.left=item.x*cell()+1+'px';node.style.top=item.y*cell()+1+'px';node.style.height=item.height*cell()-2+'px';
-      node.setAttribute('aria-label',item.name);icon(node,item);
+    gridView.render(inventory,page,item=>{
+      const node=UiItemSlot({item,slotSize:cell(),resolveItemIcon});
       node.addEventListener('pointerdown',event=>{
         if(event.button===2&&equipItem&&!carry&&!pending){event.preventDefault();equip(item);}
         else beginCarry(event,item,node);
       });
       node.addEventListener('pointermove',event=>{if(!carry&&!pending)showTooltip(event,item);});
-      node.addEventListener('pointerleave',()=>tooltip.hidden=true);grid.append(node);
-    }
+      node.addEventListener('pointerleave',()=>tooltip.hidden=true);return node;
+    });
     tabs.forEach((tab,index)=>tab.setSelected(index===page));positionWindow();
   }
   function showTooltip(event,item) {
@@ -107,6 +99,6 @@ export function mountInventory(root,{manager,resolveItemIcon=()=>null,moveItem,e
       manager.setScale(Number(snapshot.hud?.ui_scale||shell.scale));
       // Opening and Godot viewport snapshots also clamp; native resize events may lag.
       positionWindow();},
-    dispose(){disposed=true;shell.dispose();tabs.forEach(tab=>tab.dispose());tip.dispose();currency.dispose();}
+    dispose(){disposed=true;shell.dispose();tabs.forEach(tab=>tab.dispose());tip.dispose();currency.dispose();gridView.dispose();}
   };
 }

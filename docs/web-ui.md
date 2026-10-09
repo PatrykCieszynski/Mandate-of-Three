@@ -298,6 +298,8 @@ command. Each RPC ID owns its result/timeout and unresolved requests are cancell
 on navigation, disconnect and teardown. The Web bridge keeps its existing request
 correlation and UI_READY full-snapshot recovery.
 
-Inventory and Equipment share a small `WindowLayout` module: registration metadata,
-measured logical rectangles, viewport/uiScale, initial anchors and drag clamping.
+Inventory and Equipment compose `UiWindow` and share `WindowManager` for
+registration, active window/z-order, measured logical rectangles, viewport/uiScale,
+initial/relative anchors and clamping. [Core UI](core-ui.md) owns shared drag,
+capture, titlebar, close, lifecycle, tooltip geometry and semantic asset plumbing.
 CEF and CSS presentation stay outside the authenticated inventory endpoint.

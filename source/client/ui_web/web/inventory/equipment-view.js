@@ -1,4 +1,4 @@
-import {UiSlot} from '../core/ui-slot.js';
+import {UiEquipmentSlot} from '../game-ui/ui-equipment-slot.js';
 import {UiTooltip} from '../core/ui-tooltip.js';
 import {UiWindow} from '../core/ui-window.js';
 // Logical slot rectangles match the native 156×188 legacy reference skin.
@@ -21,34 +21,28 @@ export function mountEquipment(root,{manager,resolveItemIcon=()=>null,unequipIte
   let pending=false,items=[],disposed=false;
   const buttons=new Map();
   for(const [slot,label,x,y,height] of slots){
-    const button=UiSlot({tag:'button',className:'equipment-slot',label});button.dataset.slot=slot;
-    button.style.left=x+'px';button.style.top=y+'px';button.style.height=height+'px';button.setAttribute('aria-label',label);
-    button.title=slot==='weapon'?label:label+' · not available yet';button.disabled=true;
-    button.addEventListener('pointermove',event=>showTooltip(event,slot));
-    button.addEventListener('pointerleave',()=>tooltip.hidden=true);
-    button.addEventListener('click',async()=>{
+    const tile=UiEquipmentSlot({slot,label,x,y,height,resolveItemIcon,title:slot==='weapon'?label:label+' · not available yet'}),button=tile.element;
+    shell.listen(button,'pointermove',event=>showTooltip(event,slot));
+    shell.listen(button,'pointerleave',()=>tooltip.hidden=true);
+    shell.listen(button,'click',async()=>{
       const item=items.find(item=>item.slot===slot);if(!item||pending)return;
       pending=true;tooltip.hidden=true;render();status.textContent='Unequipping…';
       try {const result=await unequipItem({id:item.id,revision:item.revision});if(!disposed)status.textContent=result.ok?'':`Unequip rejected: ${result.error||'request'}`;}
       catch(error){if(!disposed)status.textContent=`Unequip failed: ${error.message}`;}
       finally {pending=false;if(!disposed)render();}
     });
-    buttons.set(slot,button);body.append(button);
+    buttons.set(slot,tile);body.append(button);
   }
   function showTooltip(event,slot){
     const item=items.find(item=>item.slot===slot);if(!item||pending||shell.drag)return;
     tip.show(event,item);
   }
   function render(){
-    for(const [slot,button] of buttons){
-      const item=items.find(item=>item.slot===slot);button.replaceChildren();button.disabled=slot!=='weapon'||!item||pending;
-      button.classList.toggle('equipped',!!item);
-      if(item){button.removeAttribute('title');
-        if(resolveItemIcon(item.icon_id)){const img=document.createElement('img');img.src=resolveItemIcon(item.icon_id);img.alt=item.name;img.className='item-icon';button.append(img);}
-        else button.textContent=item.name;
-      }
+    for(const [slot,tile] of buttons){
+      const item=items.find(item=>item.slot===slot);tile.setItem(item,{enabled:slot==='weapon'&&!!item&&!pending});
     }
   }
+
   return {regions:[panel],close:onClose,setState(state){
     manager.setScale(Number(state.hud?.ui_scale||shell.scale));
     tooltip.hidden=true;items=state.equipment?.items||[];render();root.querySelector('.equipment-stats').textContent='Attack '+Number(state.equipment?.stats?.attack||0);shell.refresh();

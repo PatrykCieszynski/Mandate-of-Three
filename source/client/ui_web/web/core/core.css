@@ -1,3 +1,15 @@
+* {
+  box-sizing:border-box}
+html,body {
+  margin:0;
+  overflow:hidden;
+  background:transparent;
+  color:var(--ink);
+  font:12px Georgia,serif;
+  user-select:none}
+[hidden] {
+  display:none!important}
+
 /* Shared chrome, unchanged logical geometry and CSS fallback. */
 :root {--ui-scale:1;--window-width:266px;--window-inset:32px;--ink:#ded5bd;--muted:#aaa18a;--frame:#71654e;--panel:#111212}
 [data-ui-window] {position:absolute;left:0;top:0;transform:scale(var(--ui-scale));transform-origin:0 0}
@@ -90,7 +102,7 @@
 .has-close-asset .window-close {
   color:transparent}
 
-.wallet {
+.ui-currency {
   height:25px;
   display:flex;
   align-items:center;
@@ -100,12 +112,12 @@
   border:1px solid #534d3f;
   padding:0 4px;
   font:12px Georgia}
-.yang-icon {
+.currency-icon {
   width:16px;
   height:16px;
   background:var(--skin-currency-yang,none) center no-repeat;
   color:#d5b963}
-.wallet strong {
+.ui-currency strong {
   margin-left:auto;
   font-weight:normal}
 .item-tooltip {

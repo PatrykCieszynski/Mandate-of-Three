@@ -2,8 +2,8 @@ import {UiTitlebar,titlebarMarkup} from './ui-titlebar.js';
 // Composed shell only. The screen supplies content, placement and actions.
 export class UiWindow {
   constructor(root,{window_id,title,className='',content='',manager,placement={},onClose=()=>{},canDrag=()=>true,onCancel=()=>{},onRegionsChanged=()=>{},onGeometry=()=>{},onActivate=()=>{},scrollBorder=0,hideHorizontalOverflow=false}={}) {
-    if(!manager||!window_id)throw new Error('UiWindow requires manager and stable window_id');
-    this.root=root;this.id=window_id;this.manager=manager;this.drag=null;this.frame=0;this.disposed=false;this.listeners=[];
+    if(!manager||typeof window_id!=='string'||!window_id)throw new Error('UiWindow requires manager and stable window_id');
+    this.onRegionsChanged=onRegionsChanged;this.root=root;this.id=window_id;this.manager=manager;this.drag=null;this.frame=0;this.disposed=false;this.listeners=[];
     root.innerHTML=`<section class="window-chrome ${className}">
       <i class="chrome edge top"></i><i class="chrome edge bottom"></i><i class="chrome edge left"></i><i class="chrome edge right"></i>
       <i class="chrome corner tl"></i><i class="chrome corner tr"></i><i class="chrome corner bl"></i><i class="chrome corner br"></i>
@@ -15,7 +15,7 @@ export class UiWindow {
     this.listeners.push(()=>titlebar.dispose());
     this.paint=position=>{this.position=position;this.panel.style.transform=`translate3d(${position.x}px,${position.y}px,0)`;onGeometry();onRegionsChanged();};
     this.cancel=()=>{this.stopDrag();onCancel();};
-    manager.register({window_id,element:this.panel,root,...placement,onActivate,cancel:this.cancel,paint:this.paint,prepare:()=>{
+    manager.register({...placement,window_id,element:this.panel,root,onActivate,cancel:this.cancel,paint:this.paint,prepare:()=>{
       const height=manager.viewport.height/this.scale;this.panel.style.maxHeight=height+'px';
       const small=this.panel.scrollHeight+scrollBorder>height;this.panel.style.overflowY=small?'auto':'visible';
       if(hideHorizontalOverflow)this.panel.style.overflowX=small?'hidden':'visible';
@@ -47,5 +47,5 @@ export class UiWindow {
     if(old?.node.hasPointerCapture(old.pointer))old.node.releasePointerCapture(old.pointer);
   }
   refresh(){this.manager.refresh(this.id);}
-  dispose(){if(this.disposed)return;this.disposed=true;this.cancel();this.listeners.forEach(remove=>remove());this.listeners=[];this.manager.unregister(this.id);}
+  dispose(){if(this.disposed)return;this.disposed=true;this.cancel();this.listeners.forEach(remove=>remove());this.listeners=[];this.manager.unregister(this.id);this.root.replaceChildren();this.onRegionsChanged();}
 }

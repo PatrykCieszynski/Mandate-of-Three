@@ -46,8 +46,10 @@ Schema v15 migrates old anchors atomically while preserving unique items.
 Individual extracted legacy PNGs are temporary local skin, isolated behind
 semantic names. Follow [UI Contract v1](ui-contract.md).
 
-Inventory only: Equipment, Shop, full HUD/character sheet and final art are not
-part of this UI slice. No frontend framework. Use small headless smoke checks by
+Production Inventory and the weapon Equipment window compose the small internal
+[Core UI](core-ui.md). Shared shell/chrome, semantic skins and separate UI/item icon
+resolvers reduce repeated window code. Domain state and actions remain in screens;
+Shop, a full HUD/character sheet and final art remain outside this slice. No frontend framework. Use small headless smoke checks by
 default; extended gameplay/asset/export tests are opt-in. Native UI checks belong
 at meaningful milestones. See [testing policy](testing.md).
 
