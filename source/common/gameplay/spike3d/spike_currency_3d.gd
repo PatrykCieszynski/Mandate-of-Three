@@ -6,6 +6,7 @@ const AUTO_REACH: float = 1.25
 const PICKUP_REACH: float = 2.5
 const TEST_SPEND_COST: int = 50
 signal feedback_received(result: Dictionary)
+signal state_changed(snapshot: Dictionary)
 var ground: Dictionary[int, Dictionary] = {}
 var state: Dictionary = {}
 var _next_drop_id: int = 0
@@ -132,6 +133,7 @@ func _send_snapshot() -> void:
 func receive_state(snapshot: Dictionary) -> void:
 	if not GameMode.is_client(): return
 	state = snapshot
+	state_changed.emit(snapshot)
 	for id: int in _visuals.keys():
 		if not snapshot.drops.has(id):
 			_visuals[id].queue_free()

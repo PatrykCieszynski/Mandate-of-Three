@@ -152,6 +152,30 @@ func change_equipment(owner_id: int, uid: String, expected_revision: int, action
 			return _rollback("storage")
 	return _commit()
 
+func move_bag_item(owner_id: int, uid: String, expected_revision: int, position: int) -> Dictionary:
+	if not valid_uid(uid) or expected_revision < 0 or position < 0 or position >= BAG_CAPACITY:
+		return _error("request")
+	if not db.query("BEGIN IMMEDIATE;"):
+		return _error("storage")
+	if not db.query_with_bindings(ITEM_SELECT + "WHERE i.uid=? AND i.owner_character_id=? AND p.owner_character_id=?;", [uid, owner_id, owner_id]):
+		return _rollback("storage")
+	if db.query_result.is_empty():
+		return _rollback("owner")
+	var item: ItemInstance = ItemInstance.from_row(db.query_result[0])
+	if item == null or item.location != "bag":
+		return _rollback("placement")
+	if item.revision != expected_revision:
+		return _rollback("stale")
+	if item.bag_position == position:
+		return _commit()
+	if not db.query_with_bindings("SELECT item_uid FROM item_placements WHERE owner_character_id=? AND location='bag' AND bag_position=?;", [owner_id, position]):
+		return _rollback("storage")
+	if not db.query_result.is_empty():
+		return _rollback("occupied")
+	if not db.query_with_bindings("UPDATE item_placements SET bag_position=? WHERE item_uid=? AND owner_character_id=? AND location='bag';", [position, uid, owner_id]) or not _increment_revision(uid, owner_id):
+		return _rollback("storage")
+	return _commit()
+
 func _free_bag_position(owner_id: int) -> int:
 	if not db.query_with_bindings("SELECT bag_position FROM item_placements WHERE owner_character_id=? AND location='bag';", [owner_id]):
 		return -2

@@ -82,3 +82,14 @@ CEF Web UI officially targets **Vulkan Mobile**. Compatibility/OpenGL is
 **unsupported / best-effort**; its drag findings are not a blocker for the
 supported Vulkan path. See [Web UI foundation](web-ui.md). This does not yet
 migrate gameplay screens or introduce CEF into server/headless targets.
+
+## First Web inventory integration - 2026-10-08
+
+Following acceptance of the visual placeholder, the user authorized integrating
+the equipment/backpack view into the 3D game. Keep the current item domain:
+24 individual bag slots (6×4), one weapon equipment slot and immediate placement
+transactions. Multi-cell item sizes remain a mock until separately implemented.
+The optional Windows CEF client is staged under `.godot/cef-client`, targets Vulkan
+Mobile and connects to the normal servers; root/headless/Compatibility retain
+native UI. Click-to-carry is the accepted interaction. Right click equips or
+unequips the exact instance. See [inventory UI](inventory-ui-prototype.md).

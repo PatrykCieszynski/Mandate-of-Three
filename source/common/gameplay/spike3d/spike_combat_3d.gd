@@ -18,6 +18,7 @@ const LOOT_LIFETIME_MS: int = 120000
 const DOG_XP: int = 20
 
 signal feedback_received(result: Dictionary)
+signal state_changed(snapshot: Dictionary)
 var dogs: Dictionary[int, SpikeWildDog3D] = {}
 var ground: Dictionary[String, Dictionary] = {}
 var health: Dictionary[int, int] = {}
@@ -413,6 +414,7 @@ func _send_snapshot() -> void:
 func receive_state(snapshot: Dictionary) -> void:
 	if GameMode.is_world_server(): return
 	state = snapshot
+	state_changed.emit(snapshot)
 	for peer_id: int in snapshot.levels:
 		var player: SpikeCharacter3D = _world.characters.get(peer_id)
 		if player != null: player.set_level(int(snapshot.levels[peer_id]))

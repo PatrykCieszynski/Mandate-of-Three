@@ -1,8 +1,8 @@
 # Equipment and backpack visual prototype
 
-A local HTML/CSS/JS preview of the first Mandate inventory design. This is an
-isolated presentation slice, not a migration of the live gameplay inventory.
-The production CEF shell and the native inventory screen remain unchanged.
+A local HTML/CSS/JS preview of the first Mandate inventory design. The browser preview remains an isolated mock. The same view is now connected
+to real Spike 3D inventory in the optional Vulkan/CEF client described below.
+The root client retains a native fallback.
 
 ## Preview
 
@@ -71,3 +71,69 @@ visually inspected. Existing Web UI protocol/application tests passed (five JS
 tests plus Godot headless checks). No CEF game window was opened. Native CEF,
 physical input, DPI and live server inventory integration remain unverified for
 this new view.
+
+## Gameplay integration
+
+Start master/gateway/world normally from the root, then launch the staged client:
+
+```powershell
+& ./tools/cef_client/run.ps1
+```
+
+The launcher uses Python 3.11+ and the local Godot 4.7.2 executable, verifies the
+pinned CEF v2.0.0 archive and copies the game into `.godot/cef-client/project`.
+The default entry is the normal game login, followed by the existing 3D instance.
+CEF binaries/profile/import caches remain ignored. Root server projects are not
+modified and can still run headless without CEF. `-SetupOnly` prepares/imports the
+client without opening a game window. Refresh staging after editing sources.
+
+I opens the equipment/backpack UI in a Vulkan Mobile client. Left click picks up
+an item; another click places it. Invalid local placement retains the carried
+item. Escape cancels carrying first, then closes. Right click a bag weapon to
+equip; right click the equipped weapon to unequip. Close/I releases gameplay
+input. The displayed name, level, weapon attack/comparison and Yang come from
+current authoritative state, not preview fixture values.
+
+The current real item model has **24 individual bag slots** and only one weapon
+slot. The game view therefore displays **6×4, height-one items**; it does not
+pretend that the 6×7 mock's larger item shapes are authoritative. Other equipment
+slots and multi-cell inventory require an explicit future domain change. The
+silhouette and SVG weapon art remain placeholders.
+
+Bag moves use UID + item revision + destination through authenticated RPCs.
+Ownership, bag-only placement, revision, bounds and occupied cells are validated
+on World Server. Position and revision commit immediately in a single SQLite
+transaction. Rejection republishes the committed inventory. Equip/unequip use the
+existing atomic transaction and runtime-stat refresh. Wallet income/checkpoints
+and combat runtime reads retain their existing policy.
+
+`game.html`, `game.js` and `game.css` are the bundled screen entry; the mock host
+is not used in the game. `InventoryWebController` owns mapping/command correlation
+and UI visibility. The reusable view contains no CEF calls and commits no local
+item mutation. Non-inventory updates do not reset the carried item.
+
+```powershell
+& ./tests/run-web-inventory.ps1
+# After staging is refreshed/imported; opens one final rendered client:
+& ./tests/run-web-inventory.ps1 -WithBrowser
+```
+
+The two-client test covers real move/equip/unequip RPCs, stale/occupied rejection,
+private snapshots, runtime attack and SQLite reopen. The browser mode additionally
+uses test-only DOM events through actual CEF IPC, periodic-update carry retention,
+reload/snapshot, modal ownership, hide/show, transparent rendering and process
+shutdown. Synthetic DOM events do not prove physical mouse/keyboard input or DPI.
+
+Verified on 2026-10-08: item SQLite tests (including move ownership, stale revision,
+occupied/bounds rejection, injected revision-write rollback and reopen), the
+headless two-client Web inventory scenario, and the Vulkan CEF gameplay scenario
+all pass. The rendered run verified DOM → IPC → World Server move/equip/unequip,
+reload/modal state, an inspected transparent 3D capture and zero owned process
+survivors two seconds after exit. A separate headless browser check covered carry
+retention on player/wallet updates and cancellation on programmatic close.
+
+Existing items, movement, PvE, combat, progression, XP, Yang and Web bridge tests
+pass. The pre-existing four ObjectDB exit leaks/three resource warnings remain.
+During integration the fixture's non-element click target and readiness race
+were corrected; the adapter's focus release now safely handles scene teardown.
+Physical mouse/keyboard, IME/DPI and release packaging remain manual/release gates.

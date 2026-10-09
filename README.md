@@ -23,8 +23,9 @@ This repository contains a working technical vertical slice, not a game alpha.
 - Active-character combat stats in RAM; swings do not query SQLite inventory.
   Item pickup and equipment retain immediate DB transactions.
 - An opt-in [Web UI foundation](docs/web-ui.md): protocol v1, explicit commands,
-  domain snapshots and region-based input routing. CEF and mock inventory remain
-  in the isolated test project; existing gameplay UI is unchanged. CEF officially
+  domain snapshots and region-based input routing. An optional staged gameplay client uses the new equipment/backpack screen,
+  with real server-authoritative item commands. CEF remains outside the root
+  server/headless project. CEF officially
   targets Vulkan Mobile; Compatibility is unsupported / best-effort.
 
 Controls: **WASD** to move, **I** for inventory, **hold Space** for a combo in front
@@ -57,6 +58,18 @@ Then start a client, or two clients for multiplayer testing:
 ```powershell
 & .\.godot\Godot_v4.7.2-stable_win64.exe --path . --mode=client
 ```
+
+For the new Web equipment/backpack screen (Windows, Vulkan Mobile), keep the
+servers above and launch the optional client:
+
+```powershell
+& ./tools/cef_client/run.ps1
+```
+
+This prepares an ignored copy of the game with pinned CEF. I opens inventory;
+left click picks up/places items, right click equips/unequips and Escape cancels
+carrying before closing. See [inventory UI](docs/inventory-ui-prototype.md).
+The real bag remains 24 slots; the mock tetris shapes are not a schema migration.
 
 Alternatively, use Godot **Debug -> Customize Run Instances** with separate feature
 tags `master-server`, `gateway-server`, `world-server` and `client`. Place `--mode`
