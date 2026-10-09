@@ -13,6 +13,7 @@ import {UiItemSlot} from '../web/game-ui/items/ui-item-slot.js';
 import {ItemTooltip} from '../web/game-ui/items/item-tooltip.js';
 import {UiCurrency} from '../web/core/primitives/ui-currency.js';
 import {element as findElement} from '../web/core/dom.js';
+import {mountStorageFixture} from './storage.fixture.mjs';
 import {environment,target,measure,capture,fire,equippedItem} from './fixtures.mjs';
 
 test('registration, activation, hidden windows, resize and scale stay in the manager',()=>{
@@ -174,4 +175,37 @@ test('item grid renders exactly the caller-selected models and slots need no dom
  assert.equal(slot.getAttribute('aria-label'),'Material');assert.equal(slot.dataset.height,'2');assert.equal(slot.querySelector('.quantity')?.textContent,'7');
  grid.render({columns:1,rows:1,items:[]},()=>{throw Error('Empty grid must not request items');});
  assert.equal(element.querySelector('span'),null);grid.dispose();assert.equal(element.childElementCount,0);
+});
+
+test('Storage composes state/actions, regions, tooltip and window lifecycle without domain coupling',()=>{
+ const {manager,doc,host,frames}=environment(),root=target();doc.body.append(root);
+ let closes=0,regions=0;const actions: string[]=[];
+ const storage=mountStorageFixture(root,{manager,resolveItemIcon:()=>null,onClose:()=>closes++,onItemAction:(_event,item)=>actions.push(item.id),onRegionsChanged:()=>regions++});
+ const panel=storage.regions[0];assert.ok(panel);measure(panel,266,280);
+ const header=findElement(root,'.window-header','header');capture(header);
+ const item={id:'storage-content',name:'Material',icon_id:'material',height:2,quantity:7,x:1,y:1,description:'Stored material'};
+ storage.setState({columns:4,rows:5,items:[item]});const slot=findElement(root,'.ui-item-slot','div');
+ fire(slot,'pointerdown');assert.deepEqual(actions,['storage-content']);
+ fire(slot,'pointermove',100,150);const tooltip=findElement(root,'.ui-tooltip','aside');assert.equal(tooltip.hidden,false);assert.equal(findElement(tooltip,'p','p').textContent,item.description);
+ manager.setScale(1.25);assert.equal(tooltip.hidden,true);
+ fire(header,'pointerdown');fire(doc,'pointermove',120,140);fire(doc,'pointerup');assert.equal(frames.size,0);assert.ok(regions>1);assert.equal(manager.activeWindowId,'storage');
+ manager.setViewport({width:400,height:350});const position=manager.place('storage');assert.ok(position.x>=0&&position.x+panel.offsetWidth<=400/1.25);
+ storage.setState({columns:4,rows:5,items:[{...item,id:'updated',quantity:9}]});
+ const updated=findElement(root,'.ui-item-slot','div');fire(updated,'pointerdown');assert.deepEqual(actions,['storage-content','updated']);assert.equal(updated.querySelector('.quantity')?.textContent,'9');
+ const close=findElement(root,'.window-close','button');close.click();assert.equal(closes,1);
+ fire(updated,'pointermove');root.hidden=true;manager.refreshAll();assert.equal(tooltip.hidden,true);
+ storage.dispose();storage.dispose();const savedRegions=regions;close.click();fire(updated,'pointerdown');fire(doc,'pointermove');host.dispatchEvent(new host.Event('blur'));
+ assert.equal(closes,1);assert.equal(actions.length,2);assert.equal(regions,savedRegions);assert.equal(manager.windows.has('storage'),false);assert.equal(frames.size,0);manager.dispose();
+});
+
+test('viewport corner anchors use logical size and stale handles cannot unregister replacement windows',()=>{
+ const {manager}=environment(),element=target();measure(element,80,40);manager.setViewport({width:1000,height:800},1.25);
+ const corners=[['top-left',{x:10,y:5},{x:10,y:5}],['top-right',{x:-10,y:5},{x:710,y:5}],
+  ['bottom-left',{x:10,y:-5},{x:10,y:595}],['bottom-right',{x:-10,y:-5},{x:710,y:595}]] satisfies
+  [import('../web/core/window/window-types.js').ViewportPlacement['anchor'],{x:number;y:number},{x:number;y:number}][];
+ for(const [anchor,offset,expected] of corners){
+  const handle=manager.register({id:'corner',element,placement:{kind:'viewport',anchor,offset}});assert.deepEqual(handle.place(),expected);handle.dispose();
+  const replacement=manager.register({id:'corner',element});handle.dispose();assert.equal(manager.windows.has('corner'),true);replacement.dispose();
+ }
+ manager.dispose();
 });

@@ -5,7 +5,8 @@ from the production Inventory and Equipment. It is an internal composition tool,
 with no frontend framework or public SDK contract.
 
 The production browser logic is maintained in TypeScript and emitted to the
-same static `web/` module paths. See [build and test instructions](../source/client/ui_web/README.md).
+static ES modules under `web/`. The production entry remains
+`web/inventory/game.html` and `inventory/game.js`. See [build and test instructions](../source/client/ui_web/README.md).
 
 ## Ownership
 
@@ -30,13 +31,15 @@ metadata, with no item-instance schema change.
 ## Window contract
 
 Create a `UiWindow` with an application-owned `WindowManager`, a stable
-`id`, title and callbacks. Append screen content to `contentRoot`. It owns the section/chrome/titlebar,
+`id`, title and callbacks. Append screen content to `contentRoot`. It owns
+the section/chrome/titlebar,
 close binding, shared lifecycle and region refresh hooks. A composed
 `WindowDragController` owns pointer capture and coalesced dragging. It adds global
 move/up listeners only during a drag and removes them on every termination.
 `templates/ui-window.html` is compiled to a local static module by the build;
 window construction performs no runtime fetch. The content wrapper uses
-`display: contents` to preserve existing logical geometry. It composes `UiTitlebar`/`UiButton`; it does not own screen state.
+`display: contents` to preserve existing logical geometry. It composes
+`UiTitlebar`/`UiButton`; it does not own screen state.
 `canDrag` lets Inventory suppress window dragging while carrying an item.
 `onCancel` clears screen transients on blur, pointer cancellation, hiding,
 resize, scale changes and disposal. `onActivate` is a presentation callback;
@@ -80,17 +83,21 @@ Window declarations), `core/window/window-types.ts` (geometry/registration),
 ## Minimal primitives
 
 `UiTitlebar`, `UiButton`, `UiTab`, `UiSlot`, `UiTooltip` and `UiCurrency` are small
-composed primitives. `UiTooltip` accepts arbitrary DOM through `contentRoot` and a logical anchor
+composed primitives. `UiTooltip` accepts arbitrary DOM through `contentRoot`
+and a logical anchor
 through `showAt(point)`. It flips/clamps using the manager's physical viewport
-and scale. `game-ui/items/ItemTooltip` supplies the item name/description adapter. Currency takes its label and semantic
+and scale. `game-ui/items/item-tooltip.ts` supplies the item name/description
+adapter. Currency takes its label and semantic
 icon ID; its value and domain actions stay in the screen. Buttons/tabs/currency
 subscriptions have explicit disposal. Shared base/chrome CSS is `core/core.css`.
 
 `UiItemGrid`, `UiItemSlot` and `UiEquipmentSlot` live in `game-ui/` with
-`components.css`. ItemGrid takes `{columns, rows, items}` and a factory for positioned items
+`components.css`. ItemGrid takes `{columns, rows, items}` and a factory for
+positioned items
 (`x`, `y`, `height`). It has no page, carry, transfer or domain-state contract;
 Inventory filters its own page before rendering. ItemSlot accepts only
-`id/name/icon_id/height/quantity`, without revision or inventory coordinates. EquipmentSlot takes its rectangle and enabled state
+`id/name/icon_id/height/quantity`, without revision or inventory coordinates.
+EquipmentSlot takes its rectangle and enabled state
 from the screen. Equipment's silhouette and slot coordinates remain its own
 composition. Missing item images fall back to the item label without losing
 quantity. There are no hotbar/status widgets until a real screen needs them.
@@ -129,53 +136,38 @@ Skin replacement occurs in application composition: apply the new semantic skin,
 replace UI icon groups and select item content as appropriate. Inventory and
 Equipment require no edits. CSS fallback works in a clean checkout.
 
-## Adding a simple Storage window
+## Storage acceptance fixture
 
-The application loads `core/core.css` and `game-ui/components.css`, owns the
-manager/bridge/resolvers, sets viewport/scale and reports the returned regions.
-A screen can then be almost entirely composition (domain actions are injected):
+[storage.fixture.mts](../source/client/ui_web/test/storage.fixture.mts) is an
+executable, typed example used by both headless contracts and the browser test.
+It composes `UiWindow`, `UiItemGrid`, `UiItemSlot` and `ItemTooltip`. Its screen
+function declares its window, creates the grid/tooltip and binds state/actions; it adds
+no drag, capture, clamp, scale, z-order, tooltip-position or skin implementation.
+The fixture has its own item model, without inventory pages or revisions.
 
-```js
-import {UiWindow} from '../core/window/ui-window.js';
-import {ItemTooltip} from '../game-ui/items/item-tooltip.js';
-import {UiItemGrid} from '../game-ui/items/ui-item-grid.js';
-import {UiItemSlot} from '../game-ui/items/ui-item-slot.js';
+The application owns the manager/resolvers and interactive-region reporter.
+A caller binds domain state and actions:
 
-export function mountStorage(root, {manager, resolveItemIcon, onClose,
-  onItemPointer, onRegionsChanged}) {
-  let tooltip;
-  const shell = new UiWindow(root, {
-    id: 'storage', title: 'Storage', manager,
-    placement: {kind: 'viewport', anchor: 'top-right', offset: {x: -16, y: 80}},
-    onClose, onRegionsChanged, onCancel: () => tooltip?.hide()
-  });
-  tooltip = ItemTooltip(root, {geometry: () => manager});
-  const element = document.createElement('div');
-  element.className = 'inventory-grid';
-  shell.contentRoot.append(element);
-  const slotSize = () => parseFloat(getComputedStyle(element)
-    .getPropertyValue('--slot-size'));
-  const grid = UiItemGrid(element, {slotSize});
-  return {
-    regions: [shell.panel],
-    setItems(model) {
-      grid.render(model, item => {
-        const node = UiItemSlot({item, slotSize: slotSize(), resolveItemIcon});
-        node.addEventListener('pointerdown', event => onItemPointer(event, item));
-        node.addEventListener('pointermove', event => tooltip.show(event, item));
-        node.addEventListener('pointerleave', () => tooltip.hide());
-        return node;
-      });
-      shell.refresh();
-    },
-    dispose() {shell.dispose();tooltip.dispose();grid.dispose();}
-  };
-}
+```ts
+const storage = mountStorageFixture(root, {
+  manager, resolveItemIcon,
+  onClose: closeStorage,
+  onItemAction: selectStoredItem,
+  onRegionsChanged: () => regions?.refresh()
+});
+regions = reportInteractiveRegions(bridge, storage.regions);
+storage.setState({columns: 4, rows: 5, items: storageItems});
 ```
 
-This example declares a window, composes presentation and binds injected actions.
-It adds no Storage gameplay/backend implementation and duplicates no window,
-tooltip or skin mechanics. Carry/transfer eligibility would belong to Storage.
+The default headless test exercises state replacement, injected actions,
+tooltip content/cancellation, shared drag, activation, scale/clamp, region hooks,
+hiding, close and disposal. The opt-in browser test loads the same compiled
+fixture alongside the production page and checks real DOM interactions,
+region reporting, capture, resize/scale and cleanup with both skins.
+
+Storage remains a test fixture, served only by the opt-in test server and
+excluded from game exports. This work adds no Storage entrypoint, native command,
+gameplay or backend. Future carry/transfer eligibility belongs to that screen.
 
 ## Verification
 
