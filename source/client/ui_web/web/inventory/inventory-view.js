@@ -1,4 +1,4 @@
-import {placement,clampWindow} from './placement.js';
+import {placement,clampWindow,carriedCell} from './placement.js';
 import {icons} from './skin.js';
 export function mountInventory(root,{moveItem,onClose=()=>{},onRegionsChanged=()=>{}}={}) {
   root.innerHTML=`<section id="inventory-window" class="window window-chrome" aria-label="Inventory">
@@ -79,7 +79,7 @@ export function mountInventory(root,{moveItem,onClose=()=>{},onRegionsChanged=()
     if(!carry)return;const p=point(event);
     if(Math.hypot(p.x-carry.start.x,p.y-carry.start.y)>3)carry.moved=true;
     ghost.style.left=p.x-carry.offset.x+'px';ghost.style.top=p.y-carry.offset.y+'px';
-    const rect=grid.getBoundingClientRect(),x=Math.floor((event.clientX-rect.left)/scale/cell()),y=Math.floor((event.clientY-rect.top)/scale/cell());
+    const rect=grid.getBoundingClientRect(),{x,y}=carriedCell({x:(event.clientX-rect.left)/scale,y:(event.clientY-rect.top)/scale},carry.offset,cell());
     carry.preview=placement(inventory,carry.item,x,y,page);
     let preview=grid.querySelector('.placement-preview');if(!preview){preview=document.createElement('div');grid.append(preview);}
     preview.className='placement-preview'+(carry.preview.valid?'':' invalid');preview.style.left=x*cell()+'px';preview.style.top=y*cell()+'px';preview.style.height=carry.item.height*cell()+'px';

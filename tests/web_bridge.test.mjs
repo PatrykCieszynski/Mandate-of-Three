@@ -58,3 +58,21 @@ test('presentation Escape shortcut is explicit and cannot mutate state',()=>{
  bridge.receive(protocol.encode('ui.shortcut',{key:'Escape'},'request'));
  assert.deepEqual(keys,['Escape']);
 });
+
+const {carriedCell,placement} = await import('data:text/javascript;base64,'+Buffer.from(await readFile(new URL('inventory/placement.js',base),'utf8')).toString('base64'));
+test('carried footprint snaps nearest to its origin regardless of grab height',()=>{
+ for(const height of [1,2,3]) {
+  const inventory={columns:5,rows:9,pages:4,items:[]},item={id:'sword',height};
+  for(const grabY of [5,height*40-5]) {
+   const grab={x:20,y:grabY};
+   const target=carriedCell({x:80+grab.x,y:120+grab.y},grab,40);
+   assert.deepEqual(target,{x:2,y:3});
+   assert.equal(placement(inventory,item,target.x,target.y,0).valid,true);
+  }
+ }
+ assert.deepEqual(carriedCell({x:99,y:139},{x:0,y:0},40),{x:2,y:3});
+ assert.deepEqual(carriedCell({x:101,y:141},{x:0,y:0},40),{x:3,y:4});
+ const inventory={columns:5,rows:9,pages:4,items:[{id:'other',x:2,y:4,height:1,page:0}]};
+ assert.equal(placement(inventory,{id:'sword',height:3},2,3,0).valid,false);
+ assert.equal(placement(inventory,{id:'sword',height:3},2,7,0).valid,false);
+});
