@@ -48,3 +48,13 @@ test('invalid domain sections and unknown state messages are ignored',()=>{
  bridge.receive(protocol.encode('wallet.updated',{yang:30}));
  assert.deepEqual(state.state,{wallet:{yang:30}});
 });
+
+test('presentation Escape shortcut is explicit and cannot mutate state',()=>{
+ const keys=[];
+ const bridge=new WebBridge({send:()=>{},subscribe:()=>{},onShortcut:key=>keys.push(key)});
+ bridge.receive(protocol.encode('ui.shortcut',{key:'Escape'}));
+ bridge.receive(protocol.encode('ui.shortcut',{key:'W'}));
+ bridge.receive(protocol.encode('ui.shortcut',{key:'Escape',method:'quit'}));
+ bridge.receive(protocol.encode('ui.shortcut',{key:'Escape'},'request'));
+ assert.deepEqual(keys,['Escape']);
+});

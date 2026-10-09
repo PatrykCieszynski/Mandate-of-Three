@@ -11,19 +11,30 @@ export function mountInventory(root,{moveItem,onClose=()=>{},onRegionsChanged=()
     <div class="carried-item" hidden></div><aside class="item-tooltip" hidden><h2></h2><p></p></aside>`;
   const panel=root.querySelector('.window'),grid=root.querySelector('.inventory-grid'),surface=root.querySelector('#carry-surface'),
     ghost=root.querySelector('.carried-item'),tooltip=root.querySelector('.item-tooltip'),status=root.querySelector('.inventory-status');
-  let inventory={columns:5,rows:9,pages:4,items:[]},scale=1,page=0,position=null,dragged=false,carry=null,windowDrag=null,pending=false,disposed=false;
+  let inventory={columns:5,rows:9,pages:4,items:[]},scale=1,page=0,position=null,dragged=false,carry=null,windowDrag=null,windowFrame=0,windowSize=null,pending=false,disposed=false;
   const viewport=()=>({width:innerWidth,height:innerHeight});
   const point=e=>({x:e.clientX/scale,y:e.clientY/scale});
   const cell=()=>parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
   const size=()=>({width:panel.offsetWidth,height:panel.offsetHeight});
+  panel.style.left='0px';panel.style.top='0px';
+  function paintWindow() {
+    panel.style.transform=`translate3d(${position.x}px,${position.y}px,0)`;onRegionsChanged();
+  }
+  function flushWindowMove() {
+    if(windowFrame){cancelAnimationFrame(windowFrame);windowFrame=0;paintWindow();}
+  }
   function positionWindow() {
+    // display:none has no measurable geometry; clamp on reopening instead.
+    if(root.hidden)return;
+    flushWindowMove();
     // Only the unusually small viewport fallback scrolls; core geometry stays fixed.
     panel.style.maxHeight=innerHeight/scale+"px";
     const small=panel.scrollHeight+2>innerHeight/scale;
     panel.style.overflowY=small?"auto":"visible";panel.style.overflowX=small?"hidden":"visible";
-    if(!position||!dragged)position={x:innerWidth/scale-size().width-16,y:240};
-    position=clampWindow(position,size(),viewport(),scale);
-    panel.style.left=position.x+'px';panel.style.top=position.y+'px';
+    windowSize=size();
+    if(!position||!dragged)position={x:innerWidth/scale-windowSize.width-16,y:240};
+    position=clampWindow(position,windowSize,viewport(),scale);
+    paintWindow();
     surface.style.width=innerWidth/scale+'px';surface.style.height=innerHeight/scale+'px';onRegionsChanged();
   }
   function icon(node,item) {
@@ -84,37 +95,43 @@ export function mountInventory(root,{moveItem,onClose=()=>{},onRegionsChanged=()
   function pointerMove(event) {
     if(windowDrag&&event.pointerId===windowDrag.pointer){
       if(!windowDrag.node.hasPointerCapture(windowDrag.pointer))windowDrag=null;
-      else {dragged=true;const p=point(event);position={x:p.x-windowDrag.offset.x,y:p.y-windowDrag.offset.y};positionWindow();}
+      else {dragged=true;const p=point(event);
+        position=clampWindow({x:p.x-windowDrag.offset.x,y:p.y-windowDrag.offset.y},windowSize,viewport(),scale);
+        if(!windowFrame)windowFrame=requestAnimationFrame(()=>{windowFrame=0;if(!disposed)paintWindow();});
+      }
     }
     if(carry)updateCarry(event);
   }
   function pointerUp(event) {
-    if(windowDrag&&event.pointerId===windowDrag.pointer){const old=windowDrag;windowDrag=null;releaseCapture(old);}
+    if(windowDrag&&event.pointerId===windowDrag.pointer){flushWindowMove();panel.style.willChange='auto';const old=windowDrag;windowDrag=null;releaseCapture(old);}
     if(!carry||carry.latched||event.pointerId!==carry.pointer)return;updateCarry(event);
     if(carry.moved){submit();return;}carry.latched=true;releaseCapture(carry);surface.hidden=false;onRegionsChanged();
   }
+  function cancelOrClose(){if(carry)cancelCarry();else onClose();}
   function keyDown(event) {
     if(root.hidden||event.repeat)return;
-    if(event.key==='Escape'||event.key.toLowerCase()==='i'){event.preventDefault();if(carry&&event.key==='Escape')cancelCarry();else {cancelCarry();onClose();}}
+    if(event.key==='Escape'||event.key.toLowerCase()==='i'){event.preventDefault();if(event.key==='Escape')cancelOrClose();else {cancelCarry();onClose();}}
   }
-  function cancelled(){cancelCarry();if(windowDrag){const old=windowDrag;windowDrag=null;releaseCapture(old);}}
+  function cancelled(){flushWindowMove();panel.style.willChange='auto';cancelCarry();if(windowDrag){const old=windowDrag;windowDrag=null;releaseCapture(old);}}
   root.querySelector('.window-close').addEventListener('click',()=>{cancelCarry();onClose();});
   root.querySelectorAll('[data-page]').forEach(tab=>tab.addEventListener('click',()=>{if(!carry?.latched)cancelCarry();page=Number(tab.dataset.page);render();}));
   root.querySelector('.window-header').addEventListener('pointerdown',event=>{
     if(event.button!==0||event.target.closest('button')||carry)return;event.preventDefault();const p=point(event);
-    windowDrag={node:event.currentTarget,pointer:event.pointerId,offset:{x:p.x-position.x,y:p.y-position.y}};event.currentTarget.setPointerCapture(event.pointerId);
+    panel.style.willChange='transform';windowDrag={node:event.currentTarget,pointer:event.pointerId,offset:{x:p.x-position.x,y:p.y-position.y}};event.currentTarget.setPointerCapture(event.pointerId);
   });
   const resize=()=>{cancelled();positionWindow();};
   document.addEventListener('pointerdown',pointerDown);document.addEventListener('pointermove',pointerMove);document.addEventListener('pointerup',pointerUp);
   document.addEventListener('pointercancel',cancelled);document.addEventListener('keydown',keyDown);window.addEventListener('resize',resize);window.addEventListener('blur',cancelled);
   root.addEventListener('lostpointercapture',event=>{
     if(carry&&!carry.latched&&carry.pointer===event.pointerId)cancelCarry();
-    if(windowDrag?.pointer===event.pointerId)windowDrag=null;
+    if(windowDrag?.pointer===event.pointerId){flushWindowMove();panel.style.willChange='auto';windowDrag=null;}
   });render();
-  return {regions:[panel,surface],cancelCarry,
+  return {regions:[panel,surface],cancelCarry,cancelOrClose,
     setState(snapshot){cancelCarry();inventory=structuredClone(snapshot.inventory);render();this.setInfo(snapshot);},
     setInfo(snapshot){root.querySelector('.wallet strong').textContent=Number(snapshot.wallet?.balance||0).toLocaleString('en-US');
-      const next=Number(snapshot.hud?.ui_scale||scale);if(next!==scale){cancelled();scale=next;root.style.setProperty('--ui-scale',scale);positionWindow();}},
+      const next=Number(snapshot.hud?.ui_scale||scale);if(next!==scale){cancelled();scale=next;root.style.setProperty('--ui-scale',scale);}
+      // Opening and Godot viewport snapshots also clamp; native resize events may lag.
+      positionWindow();},
     dispose(){disposed=true;cancelled();document.removeEventListener('pointerdown',pointerDown);document.removeEventListener('pointermove',pointerMove);document.removeEventListener('pointerup',pointerUp);document.removeEventListener('pointercancel',cancelled);document.removeEventListener('keydown',keyDown);window.removeEventListener('resize',resize);window.removeEventListener('blur',cancelled);}
   };
 }

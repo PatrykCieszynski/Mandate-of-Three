@@ -3,9 +3,10 @@ export class WebBridge {
   pending = new Map();
   sequence = 0;
   epoch = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-  constructor({send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => {}, timeoutMs = 3000} = {}) {
+  constructor({send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => {}, onShortcut = () => {}, timeoutMs = 3000} = {}) {
     this.send = send;
     this.onState = onState;
+    this.onShortcut = onShortcut;
     this.timeoutMs = timeoutMs;
     subscribe(message => this.receive(message));
   }
@@ -36,7 +37,9 @@ export class WebBridge {
   receive(json) {
     let message;
     try { message = decode(json); } catch { return; }
-    if (message.type === 'command.result') {
+    if (message.type === 'ui.shortcut') {
+      if (!message.id && Object.keys(message.payload).length === 1 && message.payload.key === 'Escape') this.onShortcut('Escape');
+    } else if (message.type === 'command.result') {
       const result = message.payload;
       if (!message.id || typeof result.ok !== 'boolean' ||
           Object.keys(result).some(key => !['ok','error'].includes(key)) ||

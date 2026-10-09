@@ -24,9 +24,19 @@ hover tooltips flip and clamp to the viewport.
 Opening is **not globally modal**. The window reports its physical rectangle.
 A click-carried item temporarily reports a full-screen pointer region, then
 releases it on placement/cancel. Normal button drags retain native host capture.
-Clicks outside UI return keyboard ownership to gameplay. Closing clears focus
-and removes Inventory's regions while leaving the global browser alive, allowing
-future unrelated regions to continue working.
+Inventory is a pointer-only screen: clicking buttons, tabs, items or the title
+bar does not take gameplay keyboard ownership. Movement/combat hotkeys continue
+to reach Godot. Other text/modal compositions may explicitly take web focus.
+Godot handles I; Escape is sent as a fixed `ui.shortcut` presentation event so
+web can cancel carrying first, then request close. Closing clears Inventory's
+regions without hiding the global browser.
+
+Window measurements are deferred while hidden. Opening, viewport snapshots and
+browser resize clamp the measured window back into the visible viewport. Drag
+updates are coalesced with requestAnimationFrame and use translate3d rather than
+repeated left/top layout changes; pointer capture still lasts through release.
+CEF is currently capped at 60 FPS by `godot_cef/performance/max_frame_rate`. This
+is a configured maximum, not a measured input-to-photon or native frame-rate claim.
 
 ## Authority and persistence
 

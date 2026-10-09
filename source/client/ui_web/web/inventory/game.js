@@ -3,7 +3,7 @@ import {DomainStore} from '../store.js';
 import {mountInventory} from './inventory-view.js';
 const root=document.getElementById('inventory'),store=new DomainStore();
 let regions;
-const bridge=new WebBridge({onState(message){
+const bridge=new WebBridge({onShortcut:()=>view.cancelOrClose(),onState(message){
   if(!store.apply(message))return;
   const state=store.state;root.hidden=!state.hud?.inventory_open;
   if(root.hidden)view.cancelCarry();

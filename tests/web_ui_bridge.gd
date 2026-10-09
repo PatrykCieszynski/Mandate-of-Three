@@ -10,6 +10,27 @@ func _run() -> void:
 		assert(not ClassDB.class_exists("CefTexture"), "Server export must exclude native CEF")
 	var host := WebUiHost.new()
 	assert(not host.open() and not is_instance_valid(host.browser), "Headless must not create a browser")
+	# Native Control fixture: pointer capture must not imply gameplay keyboard lock.
+	add_child(host)
+	host.browser = Control.new()
+	host.add_child(host.browser)
+	host.browser.size = Vector2(300, 300)
+	host.capture_keyboard_on_click = false
+	host.update_interactive_regions({"width":300,"height":300,"regions":[{"id":"bag","x":0,"y":0,"w":200,"h":200}]})
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.position = Vector2(20, 20)
+	click.pressed = true
+	host._input(click)
+	assert(host.keyboard_owner == "gameplay" and host.browser.focus_mode == Control.FOCUS_NONE)
+	assert(host.browser.mouse_filter == Control.MOUSE_FILTER_STOP and host.owns_pointer(Vector2(250,250)))
+	click.pressed = false
+	host._input(click)
+	assert(not host.owns_pointer(Vector2(250,250)))
+	host.set_modal(true)
+	assert(host.keyboard_owner == "modal")
+	host.set_modal(false)
+	remove_child(host)
 	host.free()
 	if OS.has_feature("client"):
 		assert(not ClassDB.class_exists("SQLite"), "Exported client validation must work without SQLite")
