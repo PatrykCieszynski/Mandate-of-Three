@@ -17,7 +17,7 @@ interface InventoryOptions {
   externalCarry?: () => boolean;
   resolveItemIcon?: ResolveItemIcon;
   moveItem: (command: MoveItemCommand) => Promise<CommandResult>;
-  equipItem?: (command: ItemCommand) => Promise<CommandResult>;
+  activateItem?: (command: ItemCommand) => Promise<CommandResult>;
   onClose?: () => void;
   onRegionsChanged?: () => void;
 }
@@ -46,7 +46,7 @@ export function mountInventory(
     externalCarry = () => false,
     resolveItemIcon = () => null,
     moveItem,
-    equipItem,
+    activateItem,
     onClose = () => {},
     onRegionsChanged = () => {},
   }: InventoryOptions,
@@ -130,9 +130,9 @@ export function mountInventory(
         const node = UiItemSlot({ item, slotSize: cell(), resolveItemIcon });
         node.classList.add('inventory-item');
         node.addEventListener('pointerdown', (event) => {
-          if (event.button === 2 && equipItem && !carry && !pending) {
+          if (event.button === 2 && activateItem && !carry && !pending) {
             event.preventDefault();
-            equip(item);
+            activate(item);
           } else if (!externalCarry()) beginCarry(event, item, node);
         });
         node.addEventListener('pointermove', (event) => {
@@ -222,20 +222,23 @@ export function mountInventory(
     preview.style.top = y * cell() + 'px';
     preview.style.height = carry.item.height * cell() + 'px';
   }
-  async function equip(item: InventoryItem) {
-    if (!equipItem) return;
+  async function activate(item: InventoryItem) {
+    if (!activateItem) return;
     pending = true;
     tooltip.hidden = true;
-    status.textContent = 'Equipping…';
+    status.textContent = 'Activating…';
     try {
-      const result = await equipItem({ id: item.id, revision: item.revision });
+      const result = await activateItem({
+        id: item.id,
+        revision: item.revision,
+      });
       if (!disposed)
         status.textContent = result.ok
           ? ''
-          : `Equip rejected: ${result.error || 'request'}`;
+          : `Activation rejected: ${result.error || 'request'}`;
     } catch (error) {
       if (!disposed)
-        status.textContent = `Equip failed: ${errorMessage(error)}`;
+        status.textContent = `Activation failed: ${errorMessage(error)}`;
     } finally {
       pending = false;
     }

@@ -114,6 +114,25 @@ func inventory(owner_id: int) -> Dictionary:
 				stats[stat] = float(stats.get(stat, 0)) + float(snapshot.stats[stat])
 	return {"ok": true, "items": items, "equipment": equipment, "stats": stats}
 
+func activate_item(owner_id: int, uid: String, expected_revision: int) -> Dictionary:
+	if not ItemInstance.valid_uid(uid) or expected_revision < 0: return _error("request")
+	if not db.query_with_bindings(ITEM_SELECT + "WHERE i.uid=? AND i.owner_character_id=? AND p.owner_character_id=?;", [uid,owner_id,owner_id]): return _error("storage")
+	if db.query_result.is_empty(): return _error("owner")
+	var item: ItemInstance = ItemInstance.from_row(db.query_result[0])
+	if item == null: return _error("invalid_item")
+	if item.revision != expected_revision: return _error("stale")
+	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
+	if definition == null: return _error("unknown_definition")
+	match definition.primary_action:
+		ItemDefinition.PrimaryAction.EQUIP:
+			# Synchronous dispatch; the existing equip transaction rechecks ownership
+			# and revision and remains the single implementation of equipment rules.
+			return change_equipment(owner_id,uid,expected_revision,"equip")
+		ItemDefinition.PrimaryAction.USE:
+			return _error("unsupported")
+		_:
+			return _error("no_action")
+
 func change_equipment(owner_id: int, uid: String, expected_revision: int, action: String) -> Dictionary:
 	if action not in ["equip", "unequip"] or not ItemInstance.valid_uid(uid) or expected_revision < 0:
 		return _error("request")

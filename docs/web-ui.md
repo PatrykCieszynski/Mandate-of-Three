@@ -346,3 +346,15 @@ retain the existing Inventory RPC/transaction. Storage is intentionally accessib
 everywhere in this MVP. The client's `storage_opened` check is a UX guard, not
 server authorization; future NPC/safe-zone/range restrictions must be enforced
 at the World RPC. Opening Storage opens Inventory; closing Inventory closes both.
+
+## Generic item activation
+
+Inventory right-click sends `item.activate` with exactly `{id, revision}`.
+The authenticated World RPC resolves ownership, current revision and the server
+ItemDefinition's `primary_action`. Iron Sword declares EQUIP and delegates to
+the existing atomic equipment transaction. NONE returns `no_action`; USE returns
+`unsupported` until a real use action is implemented. Definitions default to NONE.
+The action does not travel in UI snapshots and the Web controller only transports
+the command. Explicit `equipment.equip` and `equipment.unequip` remain available.
+Results, rate limiting and Inventory/Equipment snapshots use the existing command
+path; a successful acknowledgement alone never changes browser domain state.

@@ -26,6 +26,7 @@ export interface ItemCommand { id: string; revision: number }
 export interface MoveItemCommand extends ItemCommand { x: number; y: number; page: number }
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'item.activate': ItemCommand;
   'storage.transfer': StorageTransferCommand;
   'storage.close': Record<string, never>;
   'inventory.move_item': MoveItemCommand;

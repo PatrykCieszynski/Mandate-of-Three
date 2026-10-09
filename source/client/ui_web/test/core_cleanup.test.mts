@@ -514,3 +514,45 @@ test('HUD cannot open Storage without Inventory and preserves last valid lifecyc
     true,
   );
 });
+
+test('Inventory right-click activates only UID/revision and preserves items on rejection', async () => {
+  const { doc, host, manager } = environment();
+  const root = target();
+  doc.body.append(root);
+  const commands: unknown[] = [];
+  const view = mountInventory(root, {
+    manager,
+    moveItem: async () => ({ ok: true }),
+    activateItem: async (command) => {
+      commands.push(command);
+      return { ok: false, error: 'no_action' };
+    },
+  });
+  try {
+    view.setState({
+      inventory: { columns: 5, rows: 9, pages: 4, items: [bagItem] },
+    });
+    findElement(root, '.inventory-item', 'div').dispatchEvent(
+      new host.MouseEvent('pointerdown', { button: 2, bubbles: true }),
+    );
+    assert.equal(
+      root.querySelector('.inventory-status')?.textContent,
+      'Activating…',
+    );
+    await Promise.resolve();
+    assert.deepEqual(commands, [
+      { id: bagItem.id, revision: bagItem.revision },
+    ]);
+    assert.equal(
+      root.querySelector('.inventory-status')?.textContent,
+      'Activation rejected: no_action',
+    );
+    assert.equal(
+      root.querySelector('.inventory-item')?.getAttribute('data-id'),
+      bagItem.id,
+    );
+  } finally {
+    view.dispose();
+    manager.dispose();
+  }
+});

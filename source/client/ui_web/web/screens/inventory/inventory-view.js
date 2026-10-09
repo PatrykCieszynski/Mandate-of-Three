@@ -8,7 +8,7 @@ import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
 import { UiWindow } from '../../core/window/ui-window.js';
 import { placement, carriedCell } from './placement.js';
-export function mountInventory(root, { manager, externalCarry = () => false, resolveItemIcon = () => null, moveItem, equipItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
+export function mountInventory(root, { manager, externalCarry = () => false, resolveItemIcon = () => null, moveItem, activateItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
     const shell = new UiWindow(root, {
         id: 'inventory',
         title: 'Inventory',
@@ -73,9 +73,9 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
             const node = UiItemSlot({ item, slotSize: cell(), resolveItemIcon });
             node.classList.add('inventory-item');
             node.addEventListener('pointerdown', (event) => {
-                if (event.button === 2 && equipItem && !carry && !pending) {
+                if (event.button === 2 && activateItem && !carry && !pending) {
                     event.preventDefault();
-                    equip(item);
+                    activate(item);
                 }
                 else if (!externalCarry())
                     beginCarry(event, item, node);
@@ -159,22 +159,25 @@ export function mountInventory(root, { manager, externalCarry = () => false, res
         preview.style.top = y * cell() + 'px';
         preview.style.height = carry.item.height * cell() + 'px';
     }
-    async function equip(item) {
-        if (!equipItem)
+    async function activate(item) {
+        if (!activateItem)
             return;
         pending = true;
         tooltip.hidden = true;
-        status.textContent = 'Equipping…';
+        status.textContent = 'Activating…';
         try {
-            const result = await equipItem({ id: item.id, revision: item.revision });
+            const result = await activateItem({
+                id: item.id,
+                revision: item.revision,
+            });
             if (!disposed)
                 status.textContent = result.ok
                     ? ''
-                    : `Equip rejected: ${result.error || 'request'}`;
+                    : `Activation rejected: ${result.error || 'request'}`;
         }
         catch (error) {
             if (!disposed)
-                status.textContent = `Equip failed: ${errorMessage(error)}`;
+                status.textContent = `Activation failed: ${errorMessage(error)}`;
         }
         finally {
             pending = false;

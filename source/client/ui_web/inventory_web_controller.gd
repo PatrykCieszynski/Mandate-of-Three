@@ -40,6 +40,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	dispatcher.register_command("storage.transfer", _valid_storage, _storage_transfer)
 	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
 	dispatcher.register_command("inventory.move_item", _valid_move, _move)
+	dispatcher.register_command("item.activate", _valid_equipment, _activate)
 	dispatcher.register_command("equipment.equip", _valid_equipment, _equip)
 	dispatcher.register_command("equipment.unequip", _valid_equipment, _unequip)
 	dispatcher.register_command("equipment.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_equipment)
@@ -112,6 +113,9 @@ func _close_storage(_payload: Dictionary) -> Dictionary:
 	_layout()
 	return {"ok":true}
 
+func _activate(payload: Dictionary) -> Dictionary:
+	return await _submit(payload, "activate")
+
 func _equip(payload: Dictionary) -> Dictionary:
 	return await _submit(payload, "equip")
 
@@ -131,6 +135,8 @@ func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
 	var id: String = _begin_command()
 	if action == "move":
 		world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), id)
+	elif action == "activate":
+		world.inventory_endpoint.request_activate_item.rpc_id(1, payload.id, int(payload.revision), id)
 	else:
 		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id)
 	return await _wait_command(id)

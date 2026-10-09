@@ -52,7 +52,23 @@ func run() -> void:
 	check(store.inventory(owner_b) == bag_moved, "bag position rolls back if revision write fails")
 	check(db.query("DROP TRIGGER fail_bag_revision;"), "remove move fault")
 	check(ItemDefinitions.IRON_SWORD.base_stats[&"attack"] == 10, "shared definition unmodified")
-	check(store.change_equipment(owner_a, weak.uid, 0, "equip").ok, "equip weak instance by UID")
+	check(ItemDefinition.new().primary_action == ItemDefinition.PrimaryAction.NONE, "new definitions default to no action")
+	check(store.activate_item(owner_a, weak.uid, 1).error == "stale", "activation rejects stale revision")
+	check(store.activate_item(owner_b, weak.uid, 0).error == "owner", "activation rejects foreign ownership")
+	check(store.activate_item(owner_a, "invalid", 0).error == "request", "activation rejects invalid UID")
+	# Only this isolated test process changes the loaded definition to exercise
+	# actions without introducing test-only items or resolver hooks in production.
+	var activation_definition: ItemDefinition = ItemDefinitions.get_definition(weak.definition_id)
+	var original_action: ItemDefinition.PrimaryAction = activation_definition.primary_action
+	check(original_action == ItemDefinition.PrimaryAction.EQUIP, "Iron Sword declares equip action")
+	activation_definition.primary_action = ItemDefinition.PrimaryAction.NONE
+	check(store.activate_item(owner_a, weak.uid, 0).error == "no_action", "NONE rejects activation")
+	check(store.inventory(owner_a) == initial, "NONE preserves full inventory")
+	activation_definition.primary_action = ItemDefinition.PrimaryAction.USE
+	check(store.activate_item(owner_a, weak.uid, 0).error == "unsupported", "USE remains unsupported")
+	check(store.inventory(owner_a) == initial, "USE preserves full inventory")
+	activation_definition.primary_action = original_action
+	check(store.activate_item(owner_a, weak.uid, 0).ok, "activate equips weak instance by UID")
 	check(store.inventory(owner_a).stats.attack == 23, "base plus weak stats")
 	check(store.change_equipment(owner_a, strong.uid, 0, "equip").ok, "swap to strong instance")
 	var swapped: Dictionary = store.inventory(owner_a)
@@ -69,7 +85,7 @@ func run() -> void:
 	check(store.change_equipment(owner_a, strong.uid, 2, "equip").ok, "re-equip instance")
 	var before_failure: Dictionary = store.inventory(owner_a)
 	check(db.query("CREATE TEMP TRIGGER fail_equipment BEFORE INSERT ON item_placements WHEN NEW.location='equipment' BEGIN SELECT RAISE(ABORT,'intentional item placement failure'); END;"), "install fault injection")
-	var rejected: Dictionary = store.change_equipment(owner_a, weak.uid, 2, "equip")
+	var rejected: Dictionary = store.activate_item(owner_a, weak.uid, 2)
 	check(not rejected.ok and rejected.error == "storage", "write failure reported")
 	check(store.inventory(owner_a) == before_failure, "failed swap rolls back locations and revisions")
 	check(db.query("DROP TRIGGER fail_equipment;"), "remove fault injection")
