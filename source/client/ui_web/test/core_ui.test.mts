@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {WindowManager} from '../web/core/window/window-manager.js';
 import {UiWindow} from '../web/core/window/ui-window.js';
-import {tooltipPosition} from '../web/core/ui-tooltip.js';
-import {applySkin,skinVariable} from '../web/core/skin.js';
-import {UiIconRegistry,uiIconDomains} from '../web/core/ui-icons.js';
+import {UiTooltip,tooltipPosition} from '../web/core/primitives/ui-tooltip.js';
+import {applySkin,skinVariable} from '../web/core/assets/skin.js';
+import {UiIconRegistry,uiIconDomains} from '../web/core/assets/ui-icons.js';
 import {ItemIconResolver} from '../web/content/item-icons.js';
 import {paintItemIcon} from '../web/game-ui/item-icon.js';
 import {UiEquipmentSlot} from '../web/game-ui/ui-equipment-slot.js';
-import {UiCurrency} from '../web/core/ui-currency.js';
+import {ItemTooltip} from '../web/game-ui/items/item-tooltip.js';
+import {UiCurrency} from '../web/core/primitives/ui-currency.js';
 import {element as findElement} from '../web/core/dom.js';
 import {environment,target,measure,capture,fire,equippedItem} from './fixtures.mjs';
 
@@ -144,4 +145,18 @@ test('idle windows install no global drag move/up listeners; every termination r
  }
  fire(header,'pointerdown');fire(doc,'pointermove',140,140);shell.dispose();assert.deepEqual(count(),[0,0]);assert.equal(frames.size,0);
  for(const entry of shells)entry.dispose();manager.dispose();
+});
+
+test('core tooltip accepts arbitrary DOM content; item adapter escapes and replaces item text',()=>{
+ const {manager}=environment(),root=target();manager.setViewport({width:800,height:600},1.25);
+ const tooltip=UiTooltip(root,{geometry:()=>manager}),content=document.createElement('button');content.textContent='Quest help';
+ tooltip.contentRoot.append(content);measure(tooltip.element,200,80);tooltip.showAt({x:635,y:475});
+ assert.equal(tooltip.element.hidden,false);assert.equal(tooltip.contentRoot.firstElementChild,content);
+ assert.ok(parseFloat(tooltip.element.style.left)+200<=800/1.25);assert.ok(parseFloat(tooltip.element.style.top)+80<=600/1.25);
+ tooltip.hide();assert.equal(tooltip.element.hidden,true);tooltip.dispose();assert.equal(root.contains(content),false);
+ const item=ItemTooltip(root,{geometry:()=>manager});measure(item.element,200,80);
+ item.show({clientX:790,clientY:590},{name:'<Sword>',description:'<img src=x>'});
+ assert.equal(findElement(item.element,'h2','h2').textContent,'<Sword>');assert.equal(item.element.querySelector('img'),null);
+ item.show({clientX:100,clientY:100},{name:'Other'});assert.equal(findElement(item.element,'p','p').textContent,'');
+ item.dispose();manager.dispose();
 });

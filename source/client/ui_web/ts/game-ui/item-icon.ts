@@ -1,4 +1,4 @@
-import type {ItemPresentation, ResolveItemIcon} from '../contracts.js';
+import type {ItemPresentation, ResolveItemIcon} from './item-types.js';
 // Shared item presentation only; content resolver supplies URLs from icon_id.
 export function paintItemIcon(element: HTMLElement,item: ItemPresentation,{resolveItemIcon,alt='',fallbackClass='icon-fallback',quantity=true}: {resolveItemIcon: ResolveItemIcon; alt?: string; fallbackClass?: string | null; quantity?: boolean}) {
   element.replaceChildren();

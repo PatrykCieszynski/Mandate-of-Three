@@ -10,7 +10,8 @@ same static `web/` module paths. See [build and test instructions](../source/cli
 ## Ownership
 
 - `source/client/ui_web/ts/core/`: domain-agnostic window shell, geometry,
-  chrome primitives, semantic skin application and global UI icon registry.
+  chrome primitives (`core/primitives/`), semantic assets (`core/assets/`)
+  and window behavior (`core/window/`).
 - `game-ui/`: proven inventory grid, item and equipment slot presentation.
   These components accept data and dimensions; they make no gameplay decisions.
 - `inventory/`: Inventory/Equipment composition, page/carry/pending state,
@@ -70,11 +71,18 @@ manager/reporter. `UiWindow.dispose()` cancels capture/frames, removes its event
 listeners, unregisters and removes its owned markup; a reporter cancels queued
 reports on disposal.
 
+The type contracts are grouped in `protocol/contracts.ts` (wire/snapshots/native
+Window declarations), `core/window/window-types.ts` (geometry/registration),
+`core/assets/types.ts` plus `skin-keys.ts` (semantic identifiers), and
+`game-ui/item-types.ts` (item presentation). Runtime IPC validation remains in
+`protocol.ts`; TypeScript types never replace those checks.
+
 ## Minimal primitives
 
 `UiTitlebar`, `UiButton`, `UiTab`, `UiSlot`, `UiTooltip` and `UiCurrency` are small
-composed primitives. Tooltip positioning flips/clamps in logical pixels using
-the manager's physical viewport and scale. Currency takes its label and semantic
+composed primitives. `UiTooltip` accepts arbitrary DOM through `contentRoot` and a logical anchor
+through `showAt(point)`. It flips/clamps using the manager's physical viewport
+and scale. `game-ui/items/ItemTooltip` supplies the item name/description adapter. Currency takes its label and semantic
 icon ID; its value and domain actions stay in the screen. Buttons/tabs/currency
 subscriptions have explicit disposal. Shared base/chrome CSS is `core/core.css`.
 
@@ -88,6 +96,8 @@ quantity. There are no hotbar/status widgets until a real screen needs them.
 
 ## Skin and icons
 
+`skinKeys` and `uiIconDomains` are readonly literal catalogs; their TypeScript
+identifier unions are derived from those arrays. There is no parallel type list.
 A skin supplies only `assets` keyed by semantics: `window.frame`,
 `window.frame.corner.tl` (tr/br/bl), `window.frame.edge.top` (bottom/left/right),
 `window.title`, `button.close.normal/hover/pressed`, `slot.normal`,
@@ -126,7 +136,7 @@ A screen can then be almost entirely composition (domain actions are injected):
 
 ```js
 import {UiWindow} from '../core/window/ui-window.js';
-import {UiTooltip} from '../core/ui-tooltip.js';
+import {ItemTooltip} from '../game-ui/items/item-tooltip.js';
 import {UiInventoryGrid} from '../game-ui/ui-inventory-grid.js';
 import {UiItemSlot} from '../game-ui/ui-item-slot.js';
 
@@ -138,7 +148,7 @@ export function mountStorage(root, {manager, resolveItemIcon, onClose,
     placement: {kind: 'viewport', anchor: 'top-right', offset: {x: -16, y: 80}},
     onClose, onRegionsChanged, onCancel: () => tooltip?.hide()
   });
-  tooltip = UiTooltip(root, {geometry: () => manager});
+  tooltip = ItemTooltip(root, {geometry: () => manager});
   const element = document.createElement('div');
   element.className = 'inventory-grid';
   shell.contentRoot.append(element);

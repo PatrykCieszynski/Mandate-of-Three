@@ -121,7 +121,7 @@ html,body {
 .ui-currency strong {
   margin-left:auto;
   font-weight:normal}
-.item-tooltip {
+.ui-tooltip {
   position:absolute;
   z-index:30;
   width:200px;

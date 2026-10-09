@@ -1,4 +1,5 @@
 import { isObject } from '../protocol.js';
+import { uiIconDomains } from '../core/assets/types.js';
 // Only this adapter knows the optional, exact legacy PNG staging location.
 const chromeKeys = {
     'window-fill': 'window.frame', 'title-center': 'window.title', 'slot': 'slot.normal', 'yang': 'currency.yang', 'equipment-base': 'equipment.background',
@@ -35,7 +36,7 @@ export async function loadLegacySkin() {
         if (uiIcons) {
             if (!isObject(uiIcons))
                 throw new Error('Invalid UI icons');
-            for (const domain of ['buffs', 'debuffs', 'status', 'skills', 'actions', 'currencies', 'quests', 'glyphs']) {
+            for (const domain of uiIconDomains) {
                 if (domain in uiIcons)
                     groups[domain] = urls(uiIcons[domain]);
             }

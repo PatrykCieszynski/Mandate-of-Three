@@ -1,4 +1,4 @@
-import { UiSlot } from '../core/ui-slot.js';
+import { UiSlot } from '../core/primitives/ui-slot.js';
 import { paintItemIcon } from './item-icon.js';
 export function UiItemSlot({ item, slotSize, resolveItemIcon }) {
     const element = UiSlot({ className: 'inventory-item', label: item.name });

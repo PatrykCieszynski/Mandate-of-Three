@@ -4,7 +4,7 @@ import {decodeAndValidate, encode, readDomainSnapshot} from '../web/protocol.js'
 import {DomainStore} from '../web/store.js';
 import {WebBridge} from '../web/bridge.js';
 import {bagItem, equippedItem} from './fixtures.mjs';
-import type {DomainName, RawObject} from '../web/contracts.js';
+import type {DomainName, RawObject} from '../web/protocol/contracts.js';
 
 const inventory = {columns:5, rows:9, pages:4, items:[bagItem]};
 const snapshot = {inventory, equipment:{items:[equippedItem], stats:{attack:10.5}},

@@ -3,19 +3,16 @@ export function tooltipPosition(point, size, viewport, scale, gap = 14) {
     const left = point.x + gap + size.width > width ? point.x - size.width - gap : point.x + gap;
     return { x: Math.max(0, Math.min(left, width - size.width)), y: Math.max(0, Math.min(point.y + gap, height - size.height)) };
 }
+// Generic content and a logical anchor. The caller owns the meaning of the content.
 export function UiTooltip(root, { geometry }) {
     const element = document.createElement('aside');
-    element.className = 'item-tooltip';
+    element.className = 'ui-tooltip';
     element.hidden = true;
-    const title = document.createElement('h2'), description = document.createElement('p');
-    element.append(title, description);
     root.append(element);
-    return { element, hide() { element.hidden = true; }, show(event, { name, description: text = '' }) {
-            title.textContent = name;
-            description.textContent = text;
+    return { element, contentRoot: element, hide() { element.hidden = true; }, showAt(point) {
             element.hidden = false;
             const { viewport, scale } = geometry();
-            const position = tooltipPosition({ x: event.clientX / scale, y: event.clientY / scale }, { width: element.offsetWidth, height: element.offsetHeight }, viewport, scale);
+            const position = tooltipPosition(point, { width: element.offsetWidth, height: element.offsetHeight }, viewport, scale);
             element.style.left = position.x + 'px';
             element.style.top = position.y + 'px';
         }, dispose() { element.remove(); } };

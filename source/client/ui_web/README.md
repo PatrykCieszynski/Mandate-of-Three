@@ -44,8 +44,9 @@ also compiles the typed milestone test and serves the actual static runtime:
 Playwright's package is a type-only test dependency; this command uses the
 explicitly supplied installed module/browser and downloads no browser.
 
-`contracts.ts` describes the existing IPC payloads, domain/view models, commands,
-geometry, skin keys and icon identifiers. `protocol.ts` validates native input:
+`protocol/contracts.ts` describes IPC, domain snapshots and commands. Window
+geometry lives in `core/window/window-types.ts`, assets in `core/assets/types.ts`
+and `skin-keys.ts`, and item presentation in `game-ui/item-types.ts`. `protocol.ts` validates native input:
 `JSON.parse` is assigned to `unknown`, then passed to `decodeAndValidate`.
 Command results keep their existing exact-field checks. Domain fields consumed by the views
 are validated before the store clones/replaces them; a malformed update retains that

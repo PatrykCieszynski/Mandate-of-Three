@@ -1,8 +1,6 @@
 // Asset-only allowlist: a skin cannot supply sizes, footprints or gameplay rules.
-export const skinKeys = Object.freeze(['window.frame', 'window.title',
-    'window.frame.corner.tl', 'window.frame.corner.tr', 'window.frame.corner.bl', 'window.frame.corner.br',
-    'window.frame.edge.top', 'window.frame.edge.bottom', 'window.frame.edge.left', 'window.frame.edge.right',
-    'button.close.normal', 'button.close.hover', 'button.close.pressed', 'slot.normal', 'tab.normal', 'tab.active', 'currency.yang', 'equipment.background']);
+import { skinKeys } from './skin-keys.js';
+export { skinKeys } from './skin-keys.js';
 export const skinVariable = (key) => '--skin-' + key.replaceAll('.', '-');
 export function loadImage(url) {
     return new Promise(resolve => { const image = new Image(); image.onload = () => resolve(true); image.onerror = () => resolve(false); image.src = url; });

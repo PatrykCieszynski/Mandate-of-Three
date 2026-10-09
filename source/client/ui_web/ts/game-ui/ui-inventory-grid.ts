@@ -1,5 +1,5 @@
-import type {InventorySnapshot, InventoryItem} from '../contracts.js';
-import {UiSlot} from '../core/ui-slot.js';
+import type {InventorySnapshot, InventoryItem} from '../protocol/contracts.js';
+import {UiSlot} from '../core/primitives/ui-slot.js';
 // Screen-owned grid dimensions and item footprints, independent of the skin.
 export function UiInventoryGrid(element: HTMLElement,{slotSize}: {slotSize: () => number}) {
   return {element,render(inventory: InventorySnapshot,page: number,createItem: (item: InventoryItem) => HTMLElement){

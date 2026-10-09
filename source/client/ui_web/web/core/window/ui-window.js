@@ -1,4 +1,4 @@
-import { UiTitlebar } from '../ui-titlebar.js';
+import { UiTitlebar } from '../primitives/ui-titlebar.js';
 import { WindowDragController } from './window-drag.js';
 import { createWindowShell } from './window-shell.js';
 // Shell composition. The screen supplies content, placement and actions.

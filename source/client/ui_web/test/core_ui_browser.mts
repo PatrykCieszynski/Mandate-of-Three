@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
 import assert from 'node:assert/strict';
 import type {Browser, BrowserType} from 'playwright-core';
-import type {Envelope, DomainSnapshot, RawObject} from '../web/contracts.js';
+import type {Envelope, DomainSnapshot, RawObject} from '../web/protocol/contracts.js';
 import {bagItem,equippedItem} from './fixtures.mjs';
 declare global {
  interface Window { sent: Envelope[]; emit(type: string,payload: object,id?: string): void }
@@ -112,17 +112,17 @@ async function verify(browser: Browser,url: string,fallback: boolean){
    assert.deepEqual(await page.locator('#inventory-window').evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected HTML window');return {width:node.offsetWidth,height:node.offsetHeight};}),dimensions);
   }
   // Runtime skin replacement needs no changes to either view, including broken images.
-  await page.evaluate(async()=>{const modulePath='/core/skin.js';const {applySkin}: typeof import('../web/core/skin.js')=await import(modulePath);
+  await page.evaluate(async()=>{const modulePath='/core/assets/skin.js';const {applySkin}: typeof import('../web/core/assets/skin.js')=await import(modulePath);
    // @ts-expect-error Malformed layout key is intentionally tested at runtime.
    await applySkin(document.documentElement,{assets:{'button.close.normal':'/missing.png','inventory.columns':'/missing.png'}});});
   assert.equal(await page.locator('html').evaluate(node=>node.classList.contains('has-close-asset')),false);
   assert.deepEqual(await page.locator('#inventory-window').evaluate(node=>{if(!(node instanceof HTMLElement))throw Error('Expected HTML window');return {width:node.offsetWidth,height:node.offsetHeight};}),dimensions);
   // A third simple window composes only the shared shell and tooltip.
   const storage=await page.evaluate(async()=>{
-   const shellPath='/core/window/ui-window.js',managerPath='/core/window/window-manager.js',tooltipPath='/core/ui-tooltip.js';
+   const shellPath='/core/window/ui-window.js',managerPath='/core/window/window-manager.js',tooltipPath='/core/primitives/ui-tooltip.js';
    const {UiWindow}: typeof import('../web/core/window/ui-window.js')=await import(shellPath);
    const {WindowManager}: typeof import('../web/core/window/window-manager.js')=await import(managerPath);
-   const {UiTooltip}: typeof import('../web/core/ui-tooltip.js')=await import(tooltipPath);
+   const {UiTooltip}: typeof import('../web/core/primitives/ui-tooltip.js')=await import(tooltipPath);
    const root=document.createElement('main');document.body.append(root);const manager=new WindowManager();manager.setViewport({width:innerWidth,height:innerHeight},1);
    let closes=0;const shell=new UiWindow(root,{manager,id:'storage',title:'Storage',onClose:()=>closes++});
    const content=document.createElement('p');content.textContent='Storage content';shell.contentRoot.append(content);

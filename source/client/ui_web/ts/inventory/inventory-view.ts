@@ -1,4 +1,6 @@
-import type {DomainSnapshot, InventorySnapshot, InventoryItem, Point, ResolveItemIcon, MoveItemCommand, ItemCommand, CommandResult} from '../contracts.js';
+import type {DomainSnapshot, InventorySnapshot, InventoryItem, MoveItemCommand, ItemCommand, CommandResult} from '../protocol/contracts.js';
+import type {Point} from '../core/window/window-types.js';
+import type {ResolveItemIcon} from '../game-ui/item-types.js';
 import type {WindowManager} from '../core/window/window-manager.js';
 import type {Placement} from './placement.js';
 import {element as findElement} from '../core/dom.js';
@@ -13,12 +15,12 @@ interface Carry {
   item: InventoryItem; node: HTMLElement; pointer: number; start: Point; offset: Point;
   moved: boolean; latched: boolean; preview?: Placement;
 }
-import {UiTab} from '../core/ui-tab.js';
+import {UiTab} from '../core/primitives/ui-tab.js';
 import {UiInventoryGrid} from '../game-ui/ui-inventory-grid.js';
 import {UiItemSlot} from '../game-ui/ui-item-slot.js';
 import {paintItemIcon} from '../game-ui/item-icon.js';
-import {UiTooltip} from '../core/ui-tooltip.js';
-import {UiCurrency} from '../core/ui-currency.js';
+import {ItemTooltip} from '../game-ui/items/item-tooltip.js';
+import {UiCurrency} from '../core/primitives/ui-currency.js';
 import {UiWindow} from '../core/window/ui-window.js';
 import {placement,carriedCell} from './placement.js';
 export function mountInventory(root: HTMLElement,{manager,resolveItemIcon=()=>null,moveItem,equipItem,onClose=()=>{},onRegionsChanged=()=>{}}: InventoryOptions) {
@@ -33,7 +35,7 @@ export function mountInventory(root: HTMLElement,{manager,resolveItemIcon=()=>nu
   root.insertAdjacentHTML('beforeend',`<div id="carry-surface" hidden></div><div class="carried-item" hidden></div>`);
   const panel=findElement(root,'.window','section'),grid=findElement(root,'.inventory-grid','div'),surface=findElement(root,'#carry-surface','div'),
     ghost=findElement(root,'.carried-item','div'),status=findElement(root,'.inventory-status','p');
-  const tip=UiTooltip(root,{geometry:()=>manager}),tooltip=tip.element,currency=UiCurrency(findElement(root,'.wallet','footer'),{label:'Yang',iconId:'currencies.yang'});
+  const tip=ItemTooltip(root,{geometry:()=>manager}),tooltip=tip.element,currency=UiCurrency(findElement(root,'.wallet','footer'),{label:'Yang',iconId:'currencies.yang'});
   const tabs=['I','II','III','IV'].map((label,index)=>{
     const tab=UiTab({label,onSelect:()=>{if(!carry?.latched)cancelCarry();page=index;render();}});
     findElement(root,'.inventory-tabs','nav').append(tab.element);return tab;
