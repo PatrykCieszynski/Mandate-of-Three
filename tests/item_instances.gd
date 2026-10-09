@@ -90,7 +90,8 @@ func run() -> void:
 	check(db.query_with_bindings("DELETE FROM item_placements WHERE owner_character_id=?;", [owner_b]), "empty second inventory placements")
 	check(db.query_with_bindings("DELETE FROM item_instances WHERE owner_character_id=?;", [owner_b]), "empty second inventory items")
 	check(store.initialize_character(owner_b).ok and store.inventory(owner_b).items.is_empty(), "empty inventory does not regrant starter kit")
-	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 15, "schema v15")
+	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 16, "schema v16")
+	_check_storage(db,legacy,store)
 	db.close_db()
 	if not failed:
 		print("ITEM_INSTANCES_OK: distinct UID/rolls, exact equip, ownership, revisions, rollback, database reopen, legacy save isolation")
@@ -100,3 +101,44 @@ func _find(snapshot: Dictionary, uid: String) -> Dictionary:
 	for item: Dictionary in snapshot.items:
 		if item.uid == uid: return item
 	return {}
+
+func _check_storage(database: SQLite, legacy: WorldStoreSqlite, store: ItemStoreSqlite) -> void:
+	var first: int = legacy.create_player_character("storage_account",{"name":"StorageA","skin":1})
+	var second: int = legacy.create_player_character("storage_account",{"name":"StorageB","skin":1})
+	var foreign: int = legacy.create_player_character("foreign_storage",{"name":"Foreign","skin":1})
+	for character: int in [first,second,foreign]: check(store.initialize_character(character).ok,"Storage starter fixture")
+	var storage := AccountStorageSqlite.new(database)
+	var item: Dictionary = store.inventory(first).items[0]
+	check(storage.transfer(first,item.uid,0,"inventory","storage",0).ok,"deposit commits")
+	check(store.inventory(first).items.size()==1,"deposit removes bag placement")
+	check(storage.snapshot(second).items[0].uid==item.uid,"same account sees Storage")
+	check(storage.snapshot(foreign).items.is_empty(),"foreign account cannot see Storage")
+	var before: Dictionary = storage.snapshot(first)
+	check(storage.transfer(foreign,item.uid,1,"storage","inventory").error=="owner","foreign withdrawal rejected")
+	check(storage.transfer(second,item.uid,0,"storage","inventory").error=="stale","stale withdrawal rejected")
+	check(storage.transfer(second,item.uid,1,"storage","storage",269).error=="occupied","footprint crosses page bottom")
+	check(storage.snapshot(first)==before,"rejections preserve stored item")
+	check(database.query("CREATE TEMP TRIGGER storage_revision_failure BEFORE UPDATE ON item_instances BEGIN SELECT RAISE(ABORT,'test Storage rollback'); END;"),"inject Storage failure")
+	var bag_before: Dictionary = store.inventory(second)
+	check(storage.transfer(second,item.uid,1,"storage","inventory").error=="storage","withdrawal failure reported")
+	check(store.inventory(second)==bag_before and storage.snapshot(first)==before,"withdrawal rolls back ownership and both placements")
+	check(database.query("DROP TRIGGER storage_revision_failure;"),"remove Storage failure")
+	check(database.close_db() and database.open_db(),"Storage database reopen")
+	check(storage.snapshot(second)==before,"account Storage survives reopen")
+	check(storage.transfer(second,item.uid,1,"storage","storage",135).ok,"move stored item to page II")
+	check(storage.transfer(second,item.uid,2,"storage","inventory").ok,"other character withdraws")
+	var withdrawn: Dictionary = _find(store.inventory(second),item.uid)
+	check(withdrawn.owner_character_id==second and withdrawn.revision==3 and withdrawn.affixes==item.affixes,"withdrawal preserves content and transfers owner")
+	check(storage.snapshot(first).items.is_empty(),"withdrawal removes account placement")
+	check(store.move_bag_item(first,item.uid,3,10).error=="owner","original character no longer owns withdrawn item")
+	# Fill both pages with real item footprints; overflow must remain in the bag.
+	for index: int in AccountStorageSqlite.COLUMNS * AccountStorageSqlite.PAGES * (AccountStorageSqlite.ROWS / ItemDefinitions.IRON_SWORD.inventory_height):
+		var filler: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD,first,[])
+		check(store._insert_item(filler,2),"insert Storage filler")
+		check(storage.transfer(first,filler.uid,0,"inventory","storage").ok,"fill Storage footprint")
+	var excess: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD,first,[])
+	check(store._insert_item(excess,2),"insert overflow candidate")
+	bag_before=store.inventory(first)
+	before=storage.snapshot(first)
+	check(storage.transfer(first,excess.uid,0,"inventory","storage").error=="full","full account Storage rejects quick deposit")
+	check(store.inventory(first)==bag_before and storage.snapshot(first)==before,"full transfer preserves last valid states")

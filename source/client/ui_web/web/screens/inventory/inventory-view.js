@@ -8,7 +8,7 @@ import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
 import { UiWindow } from '../../core/window/ui-window.js';
 import { placement, carriedCell } from './placement.js';
-export function mountInventory(root, { manager, resolveItemIcon = () => null, moveItem, equipItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
+export function mountInventory(root, { manager, externalCarry = () => false, resolveItemIcon = () => null, moveItem, equipItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
     const shell = new UiWindow(root, {
         id: 'inventory',
         title: 'Inventory',
@@ -77,7 +77,7 @@ export function mountInventory(root, { manager, resolveItemIcon = () => null, mo
                     event.preventDefault();
                     equip(item);
                 }
-                else
+                else if (!externalCarry())
                     beginCarry(event, item, node);
             });
             node.addEventListener('pointermove', (event) => {

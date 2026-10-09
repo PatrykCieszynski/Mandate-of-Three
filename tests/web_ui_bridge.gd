@@ -48,6 +48,12 @@ func _run() -> void:
 	for invalid: Variant in [0,79,81,151,100.5,"125",null]:
 		assert(not InventoryWebController._valid_scale({"percent":invalid}))
 	assert(not InventoryWebController._valid_scale({"percent":100,"extra":true}))
+	var storage_command: Dictionary = {"id":item_uid,"revision":0,"from":"inventory","to":"storage","x":14,"y":8,"page":1,"quick":false}
+	assert(InventoryWebController._valid_storage(storage_command))
+	for bad: Variant in [INF,NAN,-1,15,1.5]:
+		var invalid: Dictionary = storage_command.duplicate()
+		invalid.x=bad
+		assert(not InventoryWebController._valid_storage(invalid))
 	# Independent requests accept out-of-order replies and ignore expired IDs.
 	var controller := InventoryWebController.new()
 	add_child(controller)
@@ -106,6 +112,13 @@ func _run() -> void:
 	dispatcher.set_domain("wallet", {"balance": 30})
 	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	assert(messages.back().payload.wallet.balance == 30, "Reload gets current full state")
+	var count: int = messages.size()
+	bridge.send("storage.updated",{"items":"x".repeat(WebUiBridge.MAX_BYTES+1)})
+	assert(messages.size()==count+1,"Bounded large state reaches CEF")
+	bridge.send("command.result",{"ok":true,"error":"x".repeat(WebUiBridge.MAX_BYTES)},"oversize")
+	assert(messages.size()==count+1,"Command result limit remains 16 KiB")
+	bridge.send("storage.updated",{"items":"x".repeat(WebUiBridge.MAX_STATE_BYTES)})
+	assert(messages.size()==count+1,"State boundary remains finite")
 	dispatcher.free()
 	bridge.free()
 	print("WEB_UI_PROTOCOL_OK: readiness, explicit commands, correlation, reload snapshot, shared UID and gateway config")

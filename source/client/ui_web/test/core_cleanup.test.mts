@@ -1,3 +1,4 @@
+import { MAX_STATE_BYTES, MAX_BYTES } from '../web/protocol.js';
 import { transfer } from '../web/screens/storage/transfer.js';
 import { mountStorage } from '../web/screens/storage/storage-view.js';
 import type { StorageSnapshot } from '../web/screens/storage/storage-types.js';
@@ -439,4 +440,42 @@ test('Storage transfers preserve footprints and reject stale, full and occupied 
     false,
   );
   assert.equal(Object.hasOwn(same?.destinationItems[0] ?? {}, 'valid'), false);
+});
+
+test('Storage IPC validates its capacity independently and large valid snapshots keep commands bounded', () => {
+  const store = new DomainStore();
+  const item = { ...bagItem, height: 1, x: 14, y: 8, page: 1 };
+  const state = { columns: 15, rows: 9, pages: 2, items: [item] };
+  assert.equal(
+    store.apply({ v: 1, type: 'storage.updated', payload: state }),
+    true,
+  );
+  for (const value of [NaN, Infinity, -1, 15, 1.5])
+    assert.equal(
+      store.apply({
+        v: 1,
+        type: 'storage.updated',
+        payload: { ...state, items: [{ ...item, x: value }] },
+      }),
+      false,
+    );
+  assert.deepEqual(store.state.storage, state);
+  assert.equal(
+    store.apply({ v: 1, type: 'wallet.updated', payload: { balance: 17 } }),
+    true,
+  );
+  const items = Array.from({ length: 270 }, (_, i) => ({
+    ...item,
+    id: String(i),
+    x: i % 15,
+    y: Math.floor(i / 15) % 9,
+    page: Math.floor(i / 135),
+  }));
+  assert.ok(encode('storage.updated', { ...state, items }).length > MAX_BYTES);
+  assert.throws(() =>
+    encode('command.result', { ok: true, error: 'x'.repeat(MAX_BYTES) }, 'big'),
+  );
+  assert.throws(() =>
+    encode('storage.updated', { text: 'x'.repeat(MAX_STATE_BYTES) }),
+  );
 });

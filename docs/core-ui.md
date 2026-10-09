@@ -236,44 +236,27 @@ This checks presentation and composition. Native CEF embedding, focus/input
 handoff, IPC transport, real settings/snapshots and server effects remain Godot
 integration checks. See the [preview workflow](../source/client/ui_web/README.md#browser-development-without-godot).
 
-## Storage browser screen, first presentation stage
+## Storage integration
 
-`ts/screens/storage/storage-view.ts` now composes a two-page 15×9 Storage view
-from the existing UiWindow, UiTab, UiItemGrid, UiItemSlot and ItemTooltip. It owns
-page selection and typed StorageSnapshot/StorageItem data. The application
-provides close, item actions, icon resolution and region callbacks. It duplicates
-no window drag, capture, activation, scale, clamp, tooltip positioning or asset
-logic. The original small acceptance fixture remains a separate generic
-composition test.
+The production entrypoint mounts Inventory, Equipment and two-page 15×9 Storage.
+Storage composes UiWindow, UiTab, UiItemGrid, UiItemSlot and ItemTooltip; it owns
+its page selection and typed snapshot while actions and icons are injected.
+Window geometry, scale, clamp, z-order and interactive regions stay shared.
+On narrow viewports the Storage frame fits and the grid scrolls horizontally.
 
-The development host mounts this screen alongside Inventory/Equipment using
-their application's manager and resolver. The production game module exports
-these two composition dependencies without debug flags or native behavior
-changes. Preview module URLs share the same production entrypoint instance.
-Storage opens/raises explicitly and participates in the manager's scale/resize.
-On narrow viewports the frame fits the viewport and the grid scrolls horizontally
-without changing logical cells or item footprints.
+`game-ui/item-transfers.ts` is the production carry interaction used unchanged
+by CEF and the browser preview: drag/drop, click-to-carry across pages, target
+footprint preview and Ctrl + left click. It sends an injected authoritative
+transfer action and never commits local domain state. The former dev-only carry
+and Storage modules have been removed. With Storage closed, Inventory retains
+its existing authoritative move/equip behavior. No drag manager or Core UI
+inventory state is introduced.
 
-Storage currently runs only in the browser preview. Native production still
-mounts Inventory and Equipment; no Storage wire domain, command, storage
-transfer rules or backend/persistence have been added. Item actions are fixture
-logs. A focused emitted-JS test covers page filtering, actions, empty states,
-tooltip cancellation and disposal; browser acceptance covers shared activation,
-scale, narrow viewport scrolling, close/reopen and fixture item actions.
-
-### Storage fixture transfers
-
-The browser host's shared `dev/item-transfer.ts` controller handles drag/drop,
-click-to-carry and Ctrl + left click across Inventory and Storage. It delegates
-footprint/snapping to the existing Inventory placement helper and item icon
-painting to the common presenter. `screens/storage/transfer.ts` is a pure
-preview transfer operation: validates source revision and target occupancy,
-returns replacement item arrays, preserves item data and increments revision.
-Quick transfer scans all destination pages in row-major order; full destinations
-leave both snapshots intact. No swaps, rotation or stack splitting are added.
-
-The preview commits Inventory changes through its existing validated fixture IPC
-and Storage through its typed local snapshot. Both screens render their own
-state. Cancel/close/resize/reset never commits a carried item. This is presentation
-acceptance before a server Storage command/domain exists; native runtime keeps
-its current authoritative Inventory move/equip commands and behavior.
+The fixture host supplies domain snapshots and handles the same bridge commands.
+Its pure fixture transfer operation validates revisions and footprints; the
+actual server validates account access and executes an immediate SQL transaction.
+See [Storage contract](web-ui.md#account-storage) for persistence and access.
+Default tests cover bounded Storage validation, last-valid state isolation, full
+containers, same-account withdrawal, foreign access, revision rejection, rollback
+and reopen. Extended Web Inventory tests exercise bridge/RPC/SQLite deposit and
+withdrawal; browser tests exercise the shared production gestures.

@@ -95,10 +95,6 @@ try {
   await storage.getByRole('tab', { name: 'II', exact: true }).click();
   assert.equal(await storage.locator('.ui-tooltip').isVisible(), false);
   assert.equal(await storage.locator('.ui-item-slot').count(), 2);
-  await storage.locator('[data-id=stored-page-two]').click({ button: 'right' });
-  await page.waitForFunction(() =>
-    document.querySelector('pre')?.textContent?.includes('storage.item_action'),
-  );
   await storage.locator('.window-close').click();
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Open Storage', exact: true }).click();
@@ -136,14 +132,6 @@ try {
   await storage.locator('.storage-grid-viewport').evaluate((node) => {
     node.scrollLeft = node.scrollWidth;
   });
-  await storage
-    .locator('[data-id=stored-page-two-stack]')
-    .click({ button: 'right' });
-  await page.waitForFunction(() =>
-    document
-      .querySelector('pre')
-      ?.textContent?.includes('stored-page-two-stack'),
-  );
   // Restore full viewport for transfer gestures; scaled narrow-grid scrolling checked above.
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.selectOption('#scale', '1');
@@ -246,11 +234,11 @@ try {
   // Escape cancels before applying a transfer.
   await sword.click({ position: { x: 10, y: 10 } });
   await page.keyboard.press('Escape');
-  assert.equal(await ui.locator('.preview-carried-item').isVisible(), false);
+  assert.equal(await ui.locator('.transferred-item').isVisible(), false);
   assert.equal(await sword.evaluate((node) => node.style.top), '81px');
   await sword.click({ position: { x: 10, y: 10 } });
   await storage.locator('.window-close').click();
-  assert.equal(await ui.locator('.preview-carried-item').isVisible(), false);
+  assert.equal(await ui.locator('.transferred-item').isVisible(), false);
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Hide Storage', exact: true }).click();
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });

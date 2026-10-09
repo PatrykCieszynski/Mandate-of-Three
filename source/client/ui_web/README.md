@@ -54,17 +54,26 @@ hides closed windows, but does not implement item placement, equip eligibility,
 economy or other server rules. Item state changes come from fixtures. This host
 is for browser UI work, not a simulated authoritative game backend.
 
-Storage is a browser-preview screen in `ts/screens/storage/`, composed from the
-same UiWindow, tabs, item grid/slots and tooltip as the other screens. Its typed
-screen model has two 15-column × 9-row pages (270 cells total), independently of
-Inventory's native 5×9×4 validation. It reuses the production application's
-manager and item resolver, so activation, dragging, scale and viewport changes
-apply across all three windows. On narrow viewports, the Storage frame is capped
-to the logical viewport width and its grid scrolls horizontally at unchanged
-40px cell size. Page I and II fixtures include tall items and boundary stacks.
-Item clicks are logged as `storage.item_action` preview actions only. There is
-no Storage native domain, command, transfer, persistence or server implementation.
-The native production entrypoint still mounts only Inventory and Equipment.
+Storage is now mounted by the production entrypoint alongside Inventory and
+Equipment. Its two 15×9 pages use the same window manager, tabs, grid, slots,
+tooltip and item icon resolver. The narrow viewport frame scrolls its logical
+40px grid without changing footprints. The preview host injects only fixture IPC;
+there is no separate preview screen or preview carry controller.
+
+In Godot, **B** toggles account Storage (and opens Inventory). Drag/drop,
+click-to-carry across pages and Ctrl + left click send `storage.transfer`.
+Quick transfer scans all destination pages. The production interaction module
+`ts/game-ui/item-transfers.ts` is shared by CEF and preview; snapshots, not command
+acknowledgements, change the rendered domain state. Inventory keeps its existing
+move/equip path when Storage is closed. Storage fixture transfers operate through
+the same bridge command and domain updates, independently of the generic accept
+checkbox; other fixture commands retain their default rejection behavior.
+
+Native account membership is resolved by the server from the authenticated
+character. Storage placements persist in SQLite schema v16; deposit, withdrawal,
+account placement/character ownership and revision commit in one transaction.
+State messages allow up to 128 KiB for full containers; incoming native commands
+and outgoing command results remain limited to 16 KiB.
 
 Use Godot for native CEF embedding/transparency, IPC transport, focus/input
 handoff, settings-derived scale and live snapshots/server command effects. The
@@ -135,12 +144,6 @@ generated TypeScript module. The emitted template JS is committed with the
 other runtime modules. `npm run build`, `npm run check` and the PowerShell build
 all regenerate it; CEF does not fetch templates or require Node at runtime.
 
-Storage preview now supports drag/drop and click-to-carry within/between the two
-containers and between pages. Ctrl + left click transfers the whole item/stack
-to the first fitting free cell, scanning destination pages then rows/columns.
-Occupied, out-of-bounds, full and stale-revision moves leave fixtures intact.
-Escape/right click, close, resize, scale or fixture reset cancels carrying.
-The dev interaction controller reuses production footprint/snapping and item
-icon presentation; it is mounted only by the preview host, with Storage open.
-The native Inventory interaction and IPC contract remain unchanged. These
-fixture operations are independent of the accept-command checkbox.
+Both hosts support transfer cancellation through Escape/right click, close,
+resize or authoritative state replacement. No swapping, rotation or stack
+splitting is included in this stage.

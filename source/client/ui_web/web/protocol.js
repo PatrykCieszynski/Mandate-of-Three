@@ -1,5 +1,7 @@
 export const VERSION = 1;
 export const MAX_BYTES = 16384;
+// Bounded snapshots for the real 180 + 270 cell screens. Commands stay 16 KiB.
+export const MAX_STATE_BYTES = 131072;
 const bytes = (value) => new TextEncoder().encode(value).length;
 export function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -23,10 +25,13 @@ export function decodeAndValidate(parsed) {
     return parsed;
 }
 export function decode(json) {
-    if (typeof json !== 'string' || bytes(json) > MAX_BYTES)
+    if (typeof json !== 'string' || bytes(json) > MAX_STATE_BYTES)
         throw Error('size');
     const parsed = JSON.parse(json);
-    return decodeAndValidate(parsed);
+    const message = decodeAndValidate(parsed);
+    if (bytes(json) > MAX_BYTES && !isStateMessage(message))
+        throw Error('size');
+    return message;
 }
 export function isCommandResult(result) {
     return isObject(result) && typeof result.ok === 'boolean' &&
@@ -34,10 +39,10 @@ export function isCommandResult(result) {
         (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message) {
-    return !message.id && ['ui.snapshot', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
+    return !message.id && ['ui.snapshot', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
 }
 export function isDomainName(value) {
-    return ['inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
+    return ['storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
 }
 export function isRawDomainState(value) {
     return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -76,6 +81,11 @@ function isInventory(value) {
     const { columns, rows, pages } = value;
     return value.items.every(item => item.x < columns && item.y + item.height <= rows && item.page < pages);
 }
+function isStorage(value) {
+    if (!isObject(value) || value.columns !== 15 || value.rows !== 9 || value.pages !== 2 || !Array.isArray(value.items) || value.items.length > 270)
+        return false;
+    return value.items.every(item => isItem(item) && isObject(item) && integerRange(item.x, 0, 14) && integerRange(item.y, 0, 8) && item.y + item.height <= 9 && integerRange(item.page, 0, 1));
+}
 function isEquipment(value) {
     return isObject(value) && (!('items' in value) || (Array.isArray(value.items) && value.items.every(isEquipmentItem))) &&
         (!('stats' in value) || (isObject(value.stats) && (!('attack' in value.stats) || finiteRange(value.stats.attack, 0, Number.MAX_SAFE_INTEGER))));
@@ -89,7 +99,7 @@ function isViewport(value) {
     return isObject(value) && integerRange(value.width, 0, MAX_VIEWPORT) && integerRange(value.height, 0, MAX_VIEWPORT);
 }
 function isHud(value) {
-    return isObject(value) && (!('inventory_open' in value) || typeof value.inventory_open === 'boolean') &&
+    return isObject(value) && (!('storage_open' in value) || typeof value.storage_open === 'boolean') && (!('inventory_open' in value) || typeof value.inventory_open === 'boolean') &&
         (!('equipment_open' in value) || typeof value.equipment_open === 'boolean') &&
         (!('ui_scale' in value) || (finiteRange(value.ui_scale, 0.8, 1.5) && UI_SCALES.includes(value.ui_scale))) &&
         (!('viewport' in value) || isViewport(value.viewport));
@@ -99,6 +109,7 @@ export function isValidDomainValue(domain, value) {
     if (!isObject(value))
         return false;
     switch (domain) {
+        case 'storage': return isStorage(value);
         case 'inventory': return isInventory(value);
         case 'equipment': return isEquipment(value);
         case 'wallet': return isWallet(value);

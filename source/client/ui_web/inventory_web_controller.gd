@@ -7,6 +7,7 @@ var dispatcher: UiCommandDispatcher
 var world: SpikeWorld3D
 var opened: bool = false
 var equipment_opened: bool = false
+var storage_opened: bool = false
 var _sequence: int = 0
 var _pending_commands: Dictionary[String, Dictionary] = {}
 var _request_epoch: String = Crypto.new().generate_random_bytes(8).hex_encode()
@@ -36,6 +37,8 @@ func setup(game_world: SpikeWorld3D) -> void:
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
+	dispatcher.register_command("storage.transfer", _valid_storage, _storage_transfer)
+	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
 	dispatcher.register_command("inventory.move_item", _valid_move, _move)
 	dispatcher.register_command("equipment.equip", _valid_equipment, _equip)
 	dispatcher.register_command("equipment.unequip", _valid_equipment, _unequip)
@@ -69,6 +72,11 @@ func _inventory(snapshot: Dictionary) -> void:
 			var position: int = int(item.bag_position)
 			display.merge({"x":position % InventoryGrid.COLUMNS, "y":(position % InventoryGrid.PAGE_CELLS) / InventoryGrid.COLUMNS, "page":position / InventoryGrid.PAGE_CELLS})
 			bag.append(display)
+	var stored: Array = []
+	for item: Dictionary in snapshot.get("storage",{}).get("items",[]):
+		var position: int = int(item.bag_position)
+		stored.append({"id":str(item.uid),"revision":int(item.revision),"name":"%s +%d" % [item.item_name,item.upgrade_level],"icon_id":str(item.icon_id),"height":int(item.inventory_height),"quantity":int(item.amount),"x":position % 15,"y":(position % 135) / 15,"page":position / 135})
+	if snapshot.get("storage",{}).get("ok",false): dispatcher.set_domain("storage",{"columns":15,"rows":9,"pages":2,"items":stored})
 	dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag})
 	dispatcher.set_domain("equipment", {"items":equipped, "stats":snapshot.get("stats", {})})
 
@@ -86,6 +94,22 @@ static func _valid_scale(payload: Dictionary) -> bool:
 
 static func _valid_equipment(payload: Dictionary) -> bool:
 	return payload.size() == 2 and _valid_identity(payload)
+
+static func _valid_storage(p: Dictionary) -> bool:
+	if p.size() != 8 or not p.has_all(["id","revision","from","to","x","y","page","quick"]) or not _valid_identity(p): return false
+	if p.from not in ["inventory","storage"] or p.to not in ["inventory","storage"] or not p.quick is bool: return false
+	var columns: int = 15 if p.to == "storage" else 5
+	var pages: int = 2 if p.to == "storage" else 4
+	return WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < columns and p.y >= 0 and p.y < 9 and p.page >= 0 and p.page < pages
+func _storage_transfer(payload: Dictionary) -> Dictionary:
+	if not storage_opened: return {"ok":false,"error":"closed"}
+	var id: String = _begin_command()
+	world.inventory_endpoint.request_storage.rpc_id(1,payload.id,int(payload.revision),payload.from,payload.to,int(payload.x),int(payload.y),int(payload.page),payload.quick,id)
+	return await _wait_command(id)
+func _close_storage(_payload: Dictionary) -> Dictionary:
+	storage_opened = false
+	_layout()
+	return {"ok":true}
 
 func _equip(payload: Dictionary) -> Dictionary:
 	return await _submit(payload, "equip")
@@ -149,7 +173,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event.physical_keycode == KEY_I:
 		set_open(not (opened or equipment_opened))
 		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_ESCAPE and (opened or equipment_opened):
+	elif event.physical_keycode == KEY_B:
+		storage_opened = not storage_opened
+		if storage_opened: opened = true
+		_layout()
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_ESCAPE and (opened or equipment_opened or storage_opened):
 		# Presentation shortcut only: web cancels carry first, otherwise requests close.
 		bridge.send("ui.shortcut", {"key": "Escape"})
 		get_viewport().set_input_as_handled()
@@ -160,6 +189,7 @@ func _failure(reason: String) -> void:
 	_cancel_pending("ui_unavailable")
 	host.destroy_browser()
 	equipment_opened = false
+	storage_opened = false
 	world.show_ui_failure(reason)
 	set_process_unhandled_key_input(false)
 
@@ -192,4 +222,4 @@ func _layout() -> void:
 			if argument.begins_with("--ui-scale="): configured = argument.trim_prefix("--ui-scale=").to_float() / 100.0
 		if configured in UI_SCALES: ui_scale = configured
 		_scale_initialized = true
-	dispatcher.set_domain("hud", {"inventory_open": opened, "equipment_open":equipment_opened, "ui_scale": ui_scale, "viewport": {"width": host.size.x, "height": host.size.y}})
+	dispatcher.set_domain("hud", {"storage_open":storage_opened, "inventory_open": opened, "equipment_open":equipment_opened, "ui_scale": ui_scale, "viewport": {"width": host.size.x, "height": host.size.y}})

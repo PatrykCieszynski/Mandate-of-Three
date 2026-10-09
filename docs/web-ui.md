@@ -307,3 +307,36 @@ registration, active window/z-order, measured logical rectangles, viewport/uiSca
 initial/relative anchors and clamping. [Core UI](core-ui.md) owns shared drag,
 capture, titlebar, close, lifecycle, tooltip geometry and semantic asset plumbing.
 CEF and CSS presentation stay outside the authenticated inventory endpoint.
+
+## Account Storage
+
+B toggles Storage in the gameplay client and opens Inventory. Storage is shared
+by characters of one account, with 15 columns, 9 rows and 2 pages. Access is free
+and available via shortcut in this first stage; there is no NPC proximity rule.
+HUD publishes `storage_open`; the `storage` domain/`storage.updated` carries the
+same item presentation fields as Inventory with its own fixed grid validation.
+
+`storage.transfer` has exact fields `id`, `revision`, `from`, `to`, `x`, `y`,
+`page`, `quick`. Containers are `inventory` or `storage`; equipment cannot be
+transferred directly. The client supplies an intention, never account identity.
+The server derives account membership from the authenticated character. Quick
+moves scan all destination pages for the first footprint that fits. Revisions,
+foreign accounts, collisions and full containers are checked before committing.
+`storage.close` takes an empty payload. State snapshots update views independently
+of command acknowledgement, including rejection and stale revision recovery.
+
+SQLite schema v16 adds `account_storage` placements, leaving existing bag and
+equipment tables intact. Deposit removes the bag placement and adds account
+placement atomically. While stored, the instance's character owner is provenance;
+access belongs to the account placement. Withdrawal removes account placement,
+assigns the receiving character and creates its bag placement in the same
+revision transaction. Item identity, affixes, sockets, quantity and upgrades
+remain unchanged. Active peers of the account in the same map get fresh snapshots;
+other characters load the current shared state on entry. Foreign peers never
+receive account contents.
+
+Command input/results retain the existing 16 KiB boundary. Snapshot/domain
+updates have a separate bounded 128 KiB output limit: the full 180 + 270 cell
+presentation measured about 91 KiB with representative native display fields.
+CEF still loads static local assets under the existing CSP; no preview controller
+or fixture code is injected in Godot.
