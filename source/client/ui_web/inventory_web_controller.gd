@@ -58,7 +58,7 @@ func _wallet(snapshot: Dictionary) -> void:
 	dispatcher.set_domain("wallet", {"balance": int(snapshot.get("balance", 0)), "ready": snapshot.has("balance")})
 
 static func _valid_identity(payload: Dictionary) -> bool:
-	return payload.get("id") is String and ItemStoreSqlite.valid_uid(payload.id) and WebUiBridge.is_integer(payload.get("revision")) and payload.revision >= 0
+	return payload.get("id") is String and ItemInstance.valid_uid(payload.id) and WebUiBridge.is_integer(payload.get("revision")) and payload.revision >= 0
 
 static func _valid_move(p: Dictionary) -> bool:
 	return p.size() == 5 and p.has_all(["id", "revision", "x", "y", "page"]) and _valid_identity(p) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and WebUiBridge.is_integer(p.page) and p.page >= 0 and p.page < InventoryGrid.PAGES

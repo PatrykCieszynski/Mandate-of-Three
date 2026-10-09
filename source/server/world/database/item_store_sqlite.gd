@@ -58,7 +58,7 @@ static func ensure_ground_claim_schema(database: SQLite) -> bool:
 func claim_ground_item(owner_id: int, drop_uid: String, bonus: int) -> Dictionary:
 	# Only the world server supplies this roll and drop identity. The RPC accepts
 	# a drop UID alone. Receipt + item + placement commit together, before despawn.
-	if not valid_uid(drop_uid) or bonus < 1 or bonus > 9:
+	if not ItemInstance.valid_uid(drop_uid) or bonus < 1 or bonus > 9:
 		return _error("request")
 	if not db.query("BEGIN IMMEDIATE;"):
 		return _error("storage")
@@ -114,7 +114,7 @@ func inventory(owner_id: int) -> Dictionary:
 	return {"ok": true, "items": items, "equipment": equipment, "stats": stats}
 
 func change_equipment(owner_id: int, uid: String, expected_revision: int, action: String) -> Dictionary:
-	if action not in ["equip", "unequip"] or not valid_uid(uid) or expected_revision < 0:
+	if action not in ["equip", "unequip"] or not ItemInstance.valid_uid(uid) or expected_revision < 0:
 		return _error("request")
 	if not db.query("BEGIN IMMEDIATE;"):
 		return _error("storage")
@@ -163,7 +163,7 @@ func change_equipment(owner_id: int, uid: String, expected_revision: int, action
 	return _commit()
 
 func move_bag_item(owner_id: int, uid: String, expected_revision: int, position: int) -> Dictionary:
-	if not valid_uid(uid) or expected_revision < 0 or position < 0 or position >= BAG_CAPACITY:
+	if not ItemInstance.valid_uid(uid) or expected_revision < 0 or position < 0 or position >= BAG_CAPACITY:
 		return _error("request")
 	if not db.query("BEGIN IMMEDIATE;"):
 		return _error("storage")
@@ -272,11 +272,3 @@ func _rollback(reason: String) -> Dictionary:
 
 func _error(reason: String) -> Dictionary:
 	return {"ok": false, "error": reason}
-
-static func valid_uid(uid: String) -> bool:
-	if uid.length() != 32:
-		return false
-	for character: String in uid:
-		if not "0123456789abcdef".contains(character):
-			return false
-	return true

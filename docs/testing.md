@@ -38,8 +38,9 @@ sequentially. `run-items.ps1 -WithSession` requires normal gateway/master/world
 roles and writes guest fixture accounts; use it for actual session/login changes.
 
 `run-cef-export.ps1` is an optional packaging-boundary check after addon/export
-changes: client Web assets and CEF registration, CEF-free server packs and server
-pack headless boot. It requires the local CEF installation and opens no windows.
+changes: client Web assets and CEF registration, CEF-free server packs and
+client/server pack headless boot (including real client UID validation without
+SQLite). It requires the local CEF installation and opens no windows.
 
 Asset pipeline tests and visual fallback probes remain optional for pipeline
 changes. The small default suite does not install Pillow or Playwright.

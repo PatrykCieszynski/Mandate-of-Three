@@ -51,8 +51,8 @@ var current_theme: StringName = ThemePalettes.DEFAULT
 
 # Community / support links opened by the global "More" menu. Empty = not provided
 # yet → that button is disabled rather than opening a dead link.
-const LINK_WEBSITE: String = "https://ekoniaonline.com"
-const LINK_DISCORD: String = "https://discord.gg/QE5JwpFzgK"
+const LINK_WEBSITE: String = ""
+const LINK_DISCORD: String = ""
 
 # Soft, organic foley placeholders, routed through the shared AudioManager's
 # polyphonic UI player (Sound bus, volume-bound to settings). Swap the files in
@@ -64,9 +64,9 @@ const SFX_REVEAL: String = "res://assets/audio/sfx/ui/ui_reveal.wav"
 const MUSIC_GATEWAY: String = "res://assets/audio/music/angevin.ogg"
 
 # Release-stage tag shown after the build number in the ConnectionInfo line
-# ("Connected · Ekonia 0.2.0 - Alpha"). The version itself comes live from
+# ("Connected · Mandate of Three <version> - Prototype"). The version itself comes live from
 # project.godot via GatewayAPI.game_version(), so it never drifts from the build.
-const BUILD_STAGE: String = "Alpha"
+const BUILD_STAGE: String = "Prototype"
 
 # The persistent top-right "More" menu. Its nodes live in the scene (root-level,
 # unique-named); only the dynamic wiring is in code. See _wire_more_menu.
@@ -267,7 +267,8 @@ func _block_outdated(detail: String) -> void:
 	var message: String = detail if not detail.is_empty() else tr("ERR_OUTDATED")
 	while true:
 		await popup_panel.confirm_message(message, &"UPDATE_TITLE", &"UPDATE")
-		OS.shell_open(LINK_WEBSITE)
+		if not LINK_WEBSITE.is_empty():
+			OS.shell_open(LINK_WEBSITE)
 
 
 ## Reveal the main menu (no saved session): show it, focus the first action, then
@@ -848,13 +849,13 @@ func fill_connection_info(_account_name: String, _account_id: int) -> void:
 
 
 ## The bottom-left status line, two rows: "<Connected/Offline> · <account / not logged
-## in>" then "Ekonia <version> <stage>". Built in one place so the build version is
+## in>" then "Mandate of Three <version> <stage>". Built in one place so the build version is
 ## ALWAYS shown — logged in or not. Version is live from project.godot (never drifts
 ## from the handshake gate); the account-ID (old dev-only debug) is intentionally gone.
 func _refresh_connection_info() -> void:
 	var status: String = tr("STATUS_ONLINE") if _server_online else tr("STATUS_OFFLINE")
 	var who: String = account_name if not account_name.is_empty() else tr("NOT_LOGGED_IN")
-	var game: String = str(ProjectSettings.get_setting("application/config/name", "Ekonia"))
+	var game: String = str(ProjectSettings.get_setting("application/config/name", "Mandate of Three"))
 	$ConnectionInfo.text = "%s · %s\n%s %s %s" % [
 		status, who, game, GatewayAPI.game_version(), BUILD_STAGE
 	]

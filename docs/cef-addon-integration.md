@@ -41,7 +41,9 @@ bytes, not Godot's imported `.ctex` textures. The upstream `.gdextension` manife
 declares native libraries/helpers/data for regular executable export. Pack-only
 exports are not complete distributable clients and do not prove native DLL staging.
 
-Web and Android presets exclude CEF. Linux client installation is not supplied
+`LegacyWebUnsupported` and `LegacyAndroidUnsupported` exclude CEF and are retained
+reference targets, not supported releases. `LinuxClientUnverified` retains Web UI,
+but Linux client installation is not supplied
 by this Windows installer; Linux/macOS client release setup is still unverified.
 
 Export filters apply only during export. In local `--headless --path .` runs,
@@ -62,7 +64,8 @@ For addon/export changes only:
 
 This optional, headless runner exports client/server ZIP resource packs, checks
 CEF registration/exclusion and client Web resources/raw skin images, then boots
-the Windows server pack with the bridge contract. Successful runs remove their
+the Windows client and server packs with the bridge/UID contract. Client command
+validation runs without SQLite; the server package must omit CEF. Successful runs remove their
 ZIPs and retain fixed-name logs in `.godot/verification`.
 
 Local results:
@@ -71,6 +74,8 @@ Local results:
 - Five persistence smoke scenarios and JS/Godot bridge contracts: passed.
 - Real headless World Server/two-client Inventory RPC regression: passed.
 - Windows client pack: CEF registered; HTML/CSS/JS and raw skin PNGs present.
+- Client-pack headless boot: real Inventory UID validation passed without SQLite.
+  Stub constructors/void overrides and Error returns preserve valid signatures.
 - Windows/Linux server packs: no CEF resources or extension-list entry.
 - Windows server-pack headless boot: bridge contract passed, no CEF initialization.
 - No surviving CEF helper processes observed; no game windows opened.

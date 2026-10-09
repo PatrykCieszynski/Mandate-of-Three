@@ -78,6 +78,17 @@ tags `master-server`, `gateway-server`, `world-server` and `client`. Place `--mo
 before the `--` separator. Default configurations are in `data/config/`.
 Accounts and world databases are local runtime data excluded from Git.
 
+Gateway address is explicit: `network/api/base_url` in `project.godot`, defaulting
+to `http://127.0.0.1:8088` in editor/debug/release. A release build does not select
+upstream services. No Mandate website/Discord is configured yet. The inherited
+`slayhorizon` user-data directory is intentionally preserved to retain accounts,
+characters and client preferences. The Godot icon is a temporary placeholder.
+
+Export presets: `Windows` (client), `ServerWindows` / `ServerUbuntu` (shared server
+roles), `LinuxClientUnverified`, `LegacyWebUnsupported` and
+`LegacyAndroidUnsupported`. The latter three are not verified release targets.
+See [export setup](docs/cef-addon-integration.md).
+
 ## Tests and workflow
 
 ```powershell
@@ -95,6 +106,7 @@ with `--no-ff`. See [AGENTS.md](AGENTS.md).
 ## Documentation
 
 - [Project direction and priorities](docs/project-direction.md)
+- [Historical decisions and validation](docs/history/README.md)
 - [Persistence policy](docs/persistence-policy.md)
 - [3D spike and movement transport](docs/spike3d.md)
 - [Item instances and persistence](docs/item-instances.md)

@@ -124,33 +124,18 @@ Open [inventory preview](http://127.0.0.1:18741/tools/inventory_preview/).
 & ./tests/run-web-inventory.ps1
 ```
 
-The prototype policy now keeps only durable headless contracts by default.
-The browser matrix/native fixtures described below were executed during the
-initial integration and then retired on 2026-10-09. Their results are historical;
-repeat the [UI contract matrix](ui-contract.md) manually at a layout milestone
-using the root client. See [testing policy](testing.md).
+Default smoke protects item transactions/identity, grid placement/migration,
+pickup, progression/wallet checkpoints and the Web bridge. The client and server
+share `ItemInstance.valid_uid()` for wire format only; ownership/revision and
+all placement validation remain server-authoritative. The exported client must
+not depend on `ItemStoreSqlite` for local command validation.
 
-Items/grid tests pass: all heights, covered-cell overlap, page boundary, stale
-revision, transaction rollback, v14 migration rollback/repack, cross-page move
-and DB reopen. Two real clients pass private-state/UID/revision movement and
-rejection checks. Existing movement, PvE, combat, progression, XP and Yang
-regressions pass, including full-bag pickup and currency independence.
+Use the optional two-client headless Inventory regression after RPC changes.
+`run-cef-export.ps1` checks bundled client resources and client-side UID validation
+without SQLite, plus CEF-free server packs. The [UI contract matrix](ui-contract.md)
+is a manual layout milestone check, not exact-DOM CI.
 
-Headless Edge/Chromium passes **all ten contract matrix cases**: fixed geometry,
-all three footprint renderings and drag, valid/invalid previews, accepted/rejected
-state, click-to-carry across tabs, wallet updates, pointer capture, window clamp,
-resize, tooltip flip/clamp, close region release and `ui.ready` reload recovery.
-A very small viewport at 150% uses vertical scrolling without changing slots.
-
-The final Windows Vulkan Mobile CEF run passes actual bundled DOM → CEF IPC →
-World Server moves, periodic-update carry retention, reload/full snapshot,
-region-based ownership, repeated close/open and clean shutdown with **zero owned
-process survivors** two seconds after exit. The transparent 3D capture was
-visually inspected; accelerated OSR was reported on RTX 4070. Synthetic DOM
-input in that fixture does not prove physical input-to-photon behavior.
-
-Web protocol tests pass (five JS cases plus headless Godot dispatcher/host
-checks). Root and staged headless imports pass. The existing four ObjectDB exit
-leaks/three resource warnings remain. Physical CEF mouse/keyboard, OS DPI/IME,
-long-session soak and release packaging remain manual/release gates. Other
-platforms are untested; Compatibility remains unsupported/best-effort.
+Initial browser/native results are preserved in
+[historical validation](history/inventory-validation-2026-10-09.md). Physical
+input/DPI/IME, full release packaging and long-session soak remain release gates;
+headless checks do not prove those behaviors.
