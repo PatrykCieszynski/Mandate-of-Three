@@ -79,8 +79,6 @@ const bridge = new WebBridge({
             npc.setState(state.npc ?? { active: false });
         if (message.type === 'ui.snapshot' || message.type === 'shop.updated')
             shop.setState(state.shop ?? { active: false });
-        if (message.type === 'ui.snapshot' || message.type === 'wallet.updated')
-            shop.setWallet(state.wallet);
     },
 });
 const drag = new ItemDragRuntime({

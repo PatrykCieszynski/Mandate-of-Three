@@ -257,10 +257,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
         true,
       );
     else assert.equal(await page.locator('#shop .icon-fallback').count(), 1);
-    assert.equal(
-      await page.locator('#shop .ui-currency strong').textContent(),
-      '2,500',
-    );
+    assert.equal(await page.locator('#shop .ui-currency').count(), 0);
     // Check real content against its shared frame padding, without exact geometry assertions.
     const checkBounds = async () => {
       const valid = await page.locator('#shop-window').evaluate((panel) => {
@@ -271,7 +268,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
           right = rect.right - parseFloat(style.paddingRight) * scale,
           bottom = rect.bottom - parseFloat(style.paddingBottom) * scale;
         return [
-          ...panel.querySelectorAll('.shop-offers,.ui-currency,.shop-status'),
+          ...panel.querySelectorAll('.shop-offers,.shop-tabs,.shop-status'),
         ].every((node) => {
           const box = node.getBoundingClientRect();
           if (!box.width && !box.height) return true;
@@ -285,7 +282,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       assert.equal(
         valid,
         true,
-        'Offer, quantity, wallet and feedback stay inside the frame',
+        'Offers, pages and feedback stay inside the frame',
       );
     };
     await clear();
@@ -497,34 +494,76 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await page.locator('#shop .window-close').click();
     await page.locator('#npc-menu').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#shop-window').isVisible(), false);
-    // Catalog overflow preserves all offers and scrolls inside the grid viewport.
-    await send({
+    // Catalog overflow becomes bounded pages; catalog page never enters buy commands.
+    const many: DomainSnapshot = {
       ...selected,
       shop: {
         ...shop,
-        offers: Array.from({ length: 40 }, (_, i) => ({
+        offers: Array.from({ length: 46 }, (_, i) => ({
           ...shop.offers[0]!,
           offerId: 'offer_' + i,
           name: 'Tempered Iron Sword ' + i,
-          quantity: i + 1,
           price: 1000 + i,
         })),
       },
-    });
+    };
+    await send(many);
     await frame();
-    assert.equal(await page.locator('.shop-offer').count(), 40);
-    await page.locator('.shop-offer').last().scrollIntoViewIfNeeded();
+    const pages = page.getByRole('tablist', { name: 'Shop pages' });
+    assert.equal(await pages.getByRole('tab').count(), 3);
+    await pages.getByRole('tab', { name: '2', exact: true }).click();
     assert.equal(
-      await page.locator('.shop-offers').evaluate((list) => list.scrollTop > 0),
-      true,
-      'Last offer requires scrolling inside the list',
+      await pages
+        .getByRole('tab', { name: '2', exact: true })
+        .getAttribute('aria-selected'),
+      'true',
     );
+    assert.equal(
+      await page.locator('.shop-offer').first().getAttribute('data-offer-id'),
+      'offer_20',
+    );
+    await capture('shop-page-2-' + (fallback ? 'fallback' : 'legacy'));
+    if (screenshotDirectory)
+      await page.locator('#shop-window').screenshot({
+        path: path.join(
+          screenshotDirectory,
+          `shop-pages-panel-${fallback ? 'fallback' : 'legacy'}.png`,
+        ),
+      });
+    await page.locator('.shop-offer').first().click({ button: 'right' });
+    await frame();
+    assert.deepEqual((await buys()).at(-1)?.payload, {
+      npc_instance_id: npc.npcInstanceId,
+      service_id: 'weapon_shop',
+      offer_id: 'offer_20',
+    });
     await checkBounds();
-    assert.equal(await page.locator('.shop-offer').last().isVisible(), true);
-    await capture('shop-many-offers-' + (fallback ? 'fallback' : 'legacy'));
+    // Switching while carrying cancels rather than buying/dropping the previous page's offer.
+    await page.locator('.shop-offer').first().click();
+    const countBeforeSwitch = (await buys()).length;
+    await pages.getByRole('tab', { name: '3', exact: true }).click();
+    assert.equal(await page.locator('.carried-item').isVisible(), false);
+    assert.equal((await buys()).length, countBeforeSwitch);
+    assert.equal(
+      await page.locator('.shop-offer').first().getAttribute('data-offer-id'),
+      'offer_40',
+    );
+    assert.equal(await page.locator('#shop .cell').count(), 45);
+    // Small viewport scroll stays within one page; footer navigation remains reachable.
+    await page.setViewportSize({ width: 960, height: 540 });
+    await send({ ...many, hud: { ...many.hud, ui_scale: 1.5 } });
+    await frame();
+    await checkBounds();
+    await page.locator('.shop-offer').last().scrollIntoViewIfNeeded();
+    await pages.getByRole('tab', { name: '1', exact: true }).click();
+    assert.equal(
+      await page.locator('.shop-offer').first().getAttribute('data-offer-id'),
+      'offer_0',
+    );
+    await capture('shop-pages-small-' + (fallback ? 'fallback' : 'legacy'));
     assert.deepEqual(errors, []);
     console.log(
-      `Shop real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, service menu/offer grid, bounds/scales, right-click, exact/receive drops, tooltip, scroll and back)`,
+      `Shop real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, service menu/offer grid, bounds/scales, right-click, exact/receive drops, tooltip, pages and back)`,
     );
   } finally {
     await page.close();

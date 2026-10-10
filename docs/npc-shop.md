@@ -41,12 +41,19 @@ atomic; malformed offers preserve the previous valid state. `ui.ready` restores 
 
 SHOP routes from the authoritative selected service to `screens/shop/ShopView`.
 The view composes UiWindow, UiItemGrid, UiSlot/item icon renderer, ItemTooltip
-and UiCurrency. NPC Shop uses a five-column slot grid with nine visible rows at
+and UiTab. NPC Shop uses a five-column slot grid with nine visible rows at
 normal viewport size, matching the Inventory's 40 px logical cells. Offers pack
 in server order into the first available footprint (1..3 vertical cells), with
-empty slots retained. A larger catalog extends the grid and scrolls; small
-viewports reduce its visible area while keeping the wallet/feedback clear.
-Catalog positions are presentation only and never enter purchase commands.
+empty slots retained. When an offer no longer fits, the next page starts; an
+item never crosses the page boundary. Numbered tabs below the grid appear for
+2+ pages and use the same skin as Inventory tabs. Small viewports scroll within
+the selected page while keeping navigation/feedback clear. Catalog page and
+positions are presentation only and never enter purchase commands.
+
+Shop has no Yang balance footer; wallet presentation stays in Inventory.
+Switching pages cancels carried items and hides tooltips. A same-shop snapshot
+preserves the selected page (clamped if the catalog shrinks); reopening or
+changing shop starts on page 1.
 
 The shared game item tooltip recognizes typed `shop-offer` presentation and
 renders its buy price in a separate footer beneath any authored description.
@@ -86,7 +93,8 @@ IPC. It covers legacy skin and CSS fallback, service menu, offer grid and carrie
 item icons, readable frame bounds, Shop beside Inventory at 1920x1080, 1280x720
 and 960x540 with UI scales
 0.9..1.5, right-click, exact/receive mouse drops, rejected previews, tooltip,
-40-offer scrolling and close/Escape navigation. Screenshots are optional;
+46-offer/three-page navigation, purchase from page 2, carry cancellation and
+close/Escape navigation. Screenshots are optional;
 there are no pixel comparisons or new default smoke requirements.
 
 ```powershell
