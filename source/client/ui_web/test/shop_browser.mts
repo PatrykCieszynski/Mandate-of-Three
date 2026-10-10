@@ -243,7 +243,20 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       0,
       'Price belongs to the offer tooltip',
     );
-    assert.equal(await page.locator('.shop-quantity').textContent(), '×1');
+    assert.equal(await page.locator('#shop .cell').count(), 45);
+    if (!fallback)
+      assert.equal(
+        await page
+          .locator('#shop .shop-item .item-icon')
+          .evaluate(
+            (image) =>
+              image instanceof HTMLImageElement &&
+              image.complete &&
+              image.naturalWidth > 0,
+          ),
+        true,
+      );
+    else assert.equal(await page.locator('#shop .icon-fallback').count(), 1);
     assert.equal(
       await page.locator('#shop .ui-currency strong').textContent(),
       '2,500',
@@ -258,11 +271,10 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
           right = rect.right - parseFloat(style.paddingRight) * scale,
           bottom = rect.bottom - parseFloat(style.paddingBottom) * scale;
         return [
-          ...panel.querySelectorAll(
-            '.shop-offers,.shop-hint,.ui-currency,.shop-status',
-          ),
+          ...panel.querySelectorAll('.shop-offers,.ui-currency,.shop-status'),
         ].every((node) => {
           const box = node.getBoundingClientRect();
+          if (!box.width && !box.height) return true;
           return (
             box.left >= left - 1 &&
             box.right <= right + 1 &&
@@ -320,7 +332,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     const ghost = await page.locator('.carried-item').boundingBox();
     assert.ok(
       ghost && ghost.x <= grid.x + 90 && ghost.x + ghost.width >= grid.x + 90,
-      'Offer carried from the far edge stays under the cursor',
+      'Carried offer stays under the cursor',
     );
     if (!fallback) {
       assert.equal(
@@ -428,6 +440,13 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
         await capture(
           `shop-${width}-${scale}-${fallback ? 'fallback' : 'legacy'}`,
         );
+        if (screenshotDirectory && width === 1280)
+          await page.locator('#shop-window').screenshot({
+            path: path.join(
+              screenshotDirectory,
+              `shop-panel-${fallback ? 'fallback' : 'legacy'}.png`,
+            ),
+          });
       }
     }
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -478,12 +497,12 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await page.locator('#shop .window-close').click();
     await page.locator('#npc-menu').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#shop-window').isVisible(), false);
-    // Many authored offers scroll within the same shell; no separate layout content.
+    // Catalog overflow preserves all offers and scrolls inside the grid viewport.
     await send({
       ...selected,
       shop: {
         ...shop,
-        offers: Array.from({ length: 12 }, (_, i) => ({
+        offers: Array.from({ length: 40 }, (_, i) => ({
           ...shop.offers[0]!,
           offerId: 'offer_' + i,
           name: 'Tempered Iron Sword ' + i,
@@ -493,7 +512,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       },
     });
     await frame();
-    assert.equal(await page.locator('.shop-offer').count(), 12);
+    assert.equal(await page.locator('.shop-offer').count(), 40);
     await page.locator('.shop-offer').last().scrollIntoViewIfNeeded();
     assert.equal(
       await page.locator('.shop-offers').evaluate((list) => list.scrollTop > 0),
@@ -505,7 +524,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await capture('shop-many-offers-' + (fallback ? 'fallback' : 'legacy'));
     assert.deepEqual(errors, []);
     console.log(
-      `Shop real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, service/offer lists, bounds/scales, right-click, exact/receive drops, tooltip, scroll and back)`,
+      `Shop real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, service menu/offer grid, bounds/scales, right-click, exact/receive drops, tooltip, scroll and back)`,
     );
   } finally {
     await page.close();

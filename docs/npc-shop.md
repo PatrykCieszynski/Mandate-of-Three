@@ -40,12 +40,19 @@ name/icon/height/quantity/price offer presentations. Full snapshot validation is
 atomic; malformed offers preserve the previous valid state. `ui.ready` restores Shop.
 
 SHOP routes from the authoritative selected service to `screens/shop/ShopView`.
-The view composes UiWindow, ItemTooltip, UiCurrency and the same compact row style
-as the NPC service menu. Offer rows show name and quantity; the shared game item
-tooltip recognizes typed `shop-offer` presentation and renders its buy price in a
-separate footer beneath any authored description. Ordinary owned items show no
-buy price. Dragging a row creates the normal item icon/footprint ghost anchored
-at the first cell, regardless of which part of the row was grabbed.
+The view composes UiWindow, UiItemGrid, UiSlot/item icon renderer, ItemTooltip
+and UiCurrency. NPC Shop uses a five-column slot grid with nine visible rows at
+normal viewport size, matching the Inventory's 40 px logical cells. Offers pack
+in server order into the first available footprint (1..3 vertical cells), with
+empty slots retained. A larger catalog extends the grid and scrolls; small
+viewports reduce its visible area while keeping the wallet/feedback clear.
+Catalog positions are presentation only and never enter purchase commands.
+
+The shared game item tooltip recognizes typed `shop-offer` presentation and
+renders its buy price in a separate footer beneath any authored description.
+Ordinary owned items show no buy price. Icon quantity overlays show stacks;
+name/description/price are tooltip content. Dragging preserves the actual grab
+point within the item footprint, as in Inventory.
 It opens Inventory alongside Shop and initially places Shop to its left using
 the shared window placement rules. Content respects the common frame inset.
 Inventory remains open after Shop closes in v1.
@@ -59,9 +66,8 @@ Inventory remains open after Shop closes in v1.
   close NPC interaction. Escape cancels carry before navigating back.
 
 `NpcShopOfferDragSubject` is feature-owned. The shared gesture runtime sees opaque
-subjects/presentation, with an optional source-provided footprint anchor for list
-rows. Server errors have Shop status
-feedback; failed opening exposes the NPC menu for retry instead of a blank window.
+subjects/presentation. Server errors have Shop status feedback; failed opening
+exposes the NPC menu for retry instead of a blank window.
 
 ## Verification
 
@@ -76,10 +82,11 @@ It runs sequentially with other network fixtures and uses disposable SQLite data
 
 `tests/run-shop-browser.ps1` is an optional real-browser milestone check, verified
 2026-10-10 against production Web assets in installed headless Chrome with controlled
-IPC. It covers legacy skin and CSS fallback, service/offer lists, carried item
-icons, readable frame bounds, Shop beside Inventory at 1920x1080, 1280x720 and 960x540 with UI scales
+IPC. It covers legacy skin and CSS fallback, service menu, offer grid and carried
+item icons, readable frame bounds, Shop beside Inventory at 1920x1080, 1280x720
+and 960x540 with UI scales
 0.9..1.5, right-click, exact/receive mouse drops, rejected previews, tooltip,
-12-offer scrolling and close/Escape navigation. Screenshots are optional;
+40-offer scrolling and close/Escape navigation. Screenshots are optional;
 there are no pixel comparisons or new default smoke requirements.
 
 ```powershell

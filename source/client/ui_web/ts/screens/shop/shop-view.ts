@@ -1,5 +1,10 @@
 import { UiWindow } from '../../core/window/ui-window.js';
 import type { WindowManager } from '../../core/window/window-manager.js';
+import { UiSlot } from '../../core/primitives/ui-slot.js';
+import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
+import { paintItemIcon } from '../../game-ui/items/item-icon.js';
+import { ITEM_SLOT_SIZE } from '../../game-ui/items/item-geometry.js';
+import { shopOfferLayout } from './shop-layout.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { itemWindowControls } from '../../game-ui/items/item-drag-policy.js';
@@ -48,6 +53,8 @@ export function mountShop(
         offset: { x: 16, y: 180 },
       },
     },
+    scrollBorder: 2,
+    hideHorizontalOverflow: true,
     onClose: options.onClose,
     canDrag: () => !options.drag.active,
     onCancel: () => options.drag.cancel(),
@@ -57,14 +64,17 @@ export function mountShop(
   });
   const offers = document.createElement('div');
   offers.className = 'shop-offers';
-  const hint = document.createElement('p');
-  hint.className = 'shop-hint';
-  hint.textContent = 'Right-click to buy · Drag to Inventory';
+  const grid = document.createElement('div');
+  grid.className = 'shop-grid';
+  grid.setAttribute('aria-label', 'Shop offers');
+  offers.append(grid);
+  const gridView = UiItemGrid(grid, { slotSize: () => ITEM_SLOT_SIZE });
   const wallet = document.createElement('footer'),
     status = document.createElement('p');
   status.className = 'shop-status';
   status.setAttribute('role', 'status');
-  shell.contentRoot.append(offers, hint, wallet, status);
+  status.hidden = true;
+  shell.contentRoot.append(offers, wallet, status);
   const currency = UiCurrency(wallet, {
       label: 'Yang',
       iconId: 'currencies.yang',
@@ -84,6 +94,12 @@ export function mountShop(
     storage: 'Purchase failed. Try again.',
     request: 'Invalid placement.',
   };
+  function setStatus(text: string) {
+    status.textContent = text;
+    status.hidden = !text;
+    shell.refresh();
+    options.onRegionsChanged?.();
+  }
   async function buyOffer(
     subject: NpcShopOfferDragSubject,
     position?: Placement,
@@ -98,7 +114,7 @@ export function mountShop(
       return;
     pending = true;
     tip.hide();
-    status.textContent = 'Buying…';
+    setStatus('Buying…');
     const requestGeneration = generation;
     const command: ShopBuyCommand = {
       npc_instance_id: subject.npcInstanceId,
@@ -111,13 +127,15 @@ export function mountShop(
     try {
       const result = await options.buy(command);
       if (!disposed && generation === requestGeneration)
-        status.textContent = result.ok
-          ? 'Purchased.'
-          : (errors[result.error ?? ''] ??
-            `Purchase rejected: ${result.error ?? 'request'}`);
+        setStatus(
+          result.ok
+            ? 'Purchased.'
+            : (errors[result.error ?? ''] ??
+                `Purchase rejected: ${result.error ?? 'request'}`),
+        );
     } catch {
       if (!disposed && generation === requestGeneration)
-        status.textContent = 'Purchase failed. Try again.';
+        setStatus('Purchase failed. Try again.');
     } finally {
       if (generation === requestGeneration) pending = false;
     }
@@ -125,27 +143,27 @@ export function mountShop(
   function render() {
     sources.forEach((binding) => binding.dispose());
     sources.length = 0;
-    offers.replaceChildren();
+    grid.replaceChildren();
     root.hidden = !state.active;
     if (state.active) {
-      shell.panel.querySelector('h1')!.textContent = state.name;
-      for (const offer of state.offers) {
-        const entry = document.createElement('button');
-        entry.type = 'button';
-        entry.className = 'npc-service shop-offer shop-item';
+      const catalog = state;
+      shell.panel.querySelector('h1')!.textContent = catalog.name;
+      gridView.render(shopOfferLayout(catalog.offers), (offer) => {
+        const entry = UiSlot({
+          className: 'ui-item-slot shop-offer shop-item',
+          label: offer.name,
+        });
         entry.dataset.offerId = offer.offerId;
-        entry.setAttribute('aria-label', offer.name);
-        const name = document.createElement('span');
-        name.className = 'shop-offer-name';
-        name.textContent = offer.name;
-        const quantity = document.createElement('span');
-        quantity.className = 'shop-quantity';
-        quantity.textContent = '×' + offer.quantity;
-        entry.append(name, quantity);
-        offers.append(entry);
+        entry.dataset.height = String(offer.height);
+        entry.style.height = offer.height * ITEM_SLOT_SIZE - 2 + 'px';
+        paintItemIcon(
+          entry,
+          { ...offer, icon_id: offer.iconId },
+          { resolveItemIcon: options.resolveItemIcon },
+        );
         const subject = new NpcShopOfferDragSubject(
-          state.npcInstanceId,
-          state.serviceId,
+          catalog.npcInstanceId,
+          catalog.serviceId,
           offer,
         );
         sources.push(
@@ -154,7 +172,11 @@ export function mountShop(
             payload: () => {
               if (pending) return null;
               tip.hide();
-              return shopOfferPayload(subject, 40, options.resolveItemIcon);
+              return shopOfferPayload(
+                subject,
+                ITEM_SLOT_SIZE,
+                options.resolveItemIcon,
+              );
             },
           }),
         );
@@ -169,11 +191,12 @@ export function mountShop(
             tip.show(event, {
               ...offer,
               kind: 'shop-offer',
-              currency: state.active ? state.currency : 'yang',
+              currency: catalog.currency,
             });
         });
         entry.addEventListener('pointerleave', () => tip.hide());
-      }
+        return entry;
+      });
     }
     shell.refresh();
     options.onRegionsChanged?.();
@@ -194,6 +217,7 @@ export function mountShop(
         generation++;
         pending = false;
         status.textContent = '';
+        status.hidden = true;
       }
       state = structuredClone(snapshot);
       render();
@@ -207,6 +231,7 @@ export function mountShop(
       generation++;
       sources.forEach((binding) => binding.dispose());
       controls.forEach((binding) => binding.dispose());
+      gridView.dispose();
       tip.dispose();
       currency.dispose();
       shell.dispose();

@@ -4,6 +4,7 @@ import { environment, target, capture, measure, bagItem } from './fixtures.mjs';
 import { DomainStore } from '../web/store.js';
 import { decode, encode, isStateMessage } from '../web/protocol.js';
 import { ItemTooltip } from '../web/game-ui/items/item-tooltip.js';
+import { shopOfferLayout } from '../web/screens/shop/shop-layout.js';
 import { mountShop } from '../web/screens/shop/shop-view.js';
 import { mountInventory } from '../web/screens/inventory/inventory-view.js';
 import { mountNpcInteraction } from '../web/screens/npc/npc-interaction.js';
@@ -221,10 +222,10 @@ test('Shop renders server offer order and quantity, exposes offer price in toolt
     }
     f.pointer(rows[1]!, 'pointerleave');
     assert.deepEqual(
-      [...f.shopRoot.querySelectorAll('.shop-quantity')].map(
+      [...f.shopRoot.querySelectorAll('.shop-offer .quantity')].map(
         (e) => e.textContent,
       ),
-      ['×1', '×2'],
+      ['2'],
     );
     f.pointer(f.source(), 'pointerdown', 10, 10, 2);
     await flush();
@@ -419,4 +420,35 @@ test('Item tooltip preserves descriptions and clears offer pricing for owned ite
     env.manager.dispose();
     env.host.close();
   }
+});
+
+test('Shop catalog packs mixed footprints without overlap, preserving offers when it grows', () => {
+  const offers = Array.from({ length: 40 }, (_, i) => ({
+    ...shop.offers[i % 2]!,
+    offerId: 'offer_' + i,
+    height: (i % 3) + 1,
+  }));
+  const layout = shopOfferLayout(offers),
+    occupied = new Set<string>();
+  assert.deepEqual(
+    layout.items.map((item) => item.offerId),
+    offers.map((offer) => offer.offerId),
+  );
+  for (const item of layout.items) {
+    assert.ok(
+      item.x >= 0 &&
+        item.x < layout.columns &&
+        item.y >= 0 &&
+        item.y + item.height <= layout.rows,
+    );
+    for (let dy = 0; dy < item.height; dy++) {
+      const cell = `${item.x}:${item.y + dy}`;
+      assert.equal(occupied.has(cell), false, 'Catalog offers cannot overlap');
+      occupied.add(cell);
+    }
+  }
+  assert.equal(
+    occupied.size,
+    offers.reduce((sum, offer) => sum + offer.height, 0),
+  );
 });
