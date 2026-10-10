@@ -1,0 +1,11 @@
+{
+  "name": "mandate-local-tools",
+  "private": true,
+  "scripts": {
+    "servers:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/servers.ps1 -Action start -Target all",
+    "servers:restart": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/servers.ps1 -Action restart -Target game",
+    "servers:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/servers.ps1 -Action stop -Target all",
+    "servers:status": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/servers.ps1 -Action status -Target all",
+    "world:restart": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/servers.ps1 -Action restart -Target world"
+  }
+}
