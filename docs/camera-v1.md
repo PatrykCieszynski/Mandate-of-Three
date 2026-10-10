@@ -2,13 +2,16 @@
 
 The client now has a small independent MMO/ARPG camera rig. `SpikeWorld3D` supplies
 the already interpolated local character position after its usual presentation
-update. The rig never writes character position/rotation, transforms movement
-intentions or sends RPCs. The server creates no camera. WASD retains its existing
-world-axis movement semantics; turning the view does not turn the character.
+update. The rig never writes character position/rotation or sends RPCs. Manual WASD is
+projected onto the rendered camera right/forward axes on the ground plane before
+the existing movement/assist flow sends its bounded XZ intention. NPC approach
+and combat assist retain their world-space directions. Pitch does not change
+movement speed; World still validates intentions and simulates physics. The server
+creates no camera. Turning the view alone does not turn the character.
 
 ## Controls and configuration
 
-Hold RMB over the world to orbit; release to restore the cursor to its previous
+Hold RMB over the world to orbit; upward mouse motion lowers orbit elevation and downward motion raises it. release to restore the cursor to its previous
 position. Wheel zoom is smooth. Escape, focus loss, opening a modal/settings,
 leaving the map and shutdown release orbit capture. Mouse gestures started over
 CEF stay with CEF. A world orbit keeps ownership if the cursor crosses a Web

@@ -72,8 +72,8 @@ public alpha. Keep existing user data paths during cosmetic project renames.
 ## Camera presentation slice
 
 [Camera v1](camera-v1.md) adds an independent client orbit/zoom rig with
-sphere collision, damped return and data-defined settings. It preserves existing
-movement intentions and server authority. Auto-align is off by default. Native
+sphere collision, damped return and data-defined settings. Manual WASD follows the camera on the XZ plane while preserving the existing
+bounded intention protocol and server authority. Auto-align is off by default. Native
 feel/CEF interaction still require the documented manual acceptance pass.
 
 ## Next gameplay milestones

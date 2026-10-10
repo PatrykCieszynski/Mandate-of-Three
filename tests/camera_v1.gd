@@ -24,6 +24,7 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	rig.update_camera(1.0/60.0, Vector3.ZERO, true)
 	var requested: float = rig.desired_distance
+	assert(rig.movement_direction(Vector2.UP).is_equal_approx(Vector2.UP), "Default view maps W to world forward")
 	assert(rig.resolved_distance < requested, "Wall retracts boom")
 	assert(rig.camera.global_position.z < 2.75 - rig.settings.collision_radius, "Sphere stays in front of wall")
 	assert(rig.desired_distance == requested, "Collision does not overwrite requested zoom")
@@ -47,9 +48,9 @@ func _ready() -> void:
 	assert(rig.resolved_distance > obstructed and rig.resolved_distance < requested, "Unobstructed return is damped")
 	for i: int in 180: rig.update_camera(1.0/60.0, Vector3.ZERO, true)
 	assert(absf(rig.resolved_distance-requested) < 0.01, "Return restores requested distance")
-	rig.orbit_by(Vector2(700,-10000))
+	rig.orbit_by(Vector2(700,10000))
 	assert(rig.desired_pitch == rig.settings.max_pitch)
-	rig.orbit_by(Vector2(0,20000))
+	rig.orbit_by(Vector2(0,-20000))
 	assert(rig.desired_pitch == rig.settings.min_pitch)
 	rig.zoom_by(-10000)
 	assert(rig.desired_distance == rig.settings.min_distance)
@@ -63,6 +64,10 @@ func _ready() -> void:
 	rig.desired_pitch = 40
 	rig.desired_yaw = PI * 0.5
 	for i: int in 180: rig.update_camera(1.0/60.0, Vector3.ZERO, true)
+	assert(rig.movement_direction(Vector2.UP).is_equal_approx(Vector2.LEFT), "W follows rendered camera yaw")
+	assert(rig.movement_direction(Vector2.RIGHT).is_equal_approx(Vector2.UP), "D follows camera right")
+	assert(is_equal_approx(rig.movement_direction(Vector2(0.3,-0.4)).length(), 0.5), "Pitch preserves analog input magnitude")
+	assert(rig.movement_direction(Vector2.ZERO) == Vector2.ZERO)
 	var pixel: Vector2 = rig.camera.unproject_position(pick.global_position)
 	var origin: Vector3 = rig.camera.project_ray_origin(pixel)
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + rig.camera.project_ray_normal(pixel) * 100, 8)

@@ -350,7 +350,7 @@ func _physics_process(delta: float) -> void:
 				_npc_approach.cancel()
 				direction = Vector2.ZERO
 			else:
-				direction = _npc_direction(direction)
+				direction = _npc_direction(camera_controller.movement_direction(direction))
 			submit_input.rpc_id(1, _sequence, direction)
 
 func _broadcast_snapshot() -> void:

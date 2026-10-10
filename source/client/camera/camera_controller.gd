@@ -80,9 +80,17 @@ func _input(event: InputEvent) -> void:
 func orbit_by(relative: Vector2) -> void:
 	if not relative.is_finite(): return
 	desired_yaw = wrapf(desired_yaw - deg_to_rad(relative.x * settings.orbit_sensitivity), -PI, PI)
-	desired_pitch = clampf(desired_pitch - relative.y * settings.orbit_sensitivity, settings.min_pitch, settings.max_pitch)
+	desired_pitch = clampf(desired_pitch + relative.y * settings.orbit_sensitivity, settings.min_pitch, settings.max_pitch)
 	_since_manual = 0.0
 	_moving_time = 0.0
+
+## Convert manual screen-relative input into the same bounded XZ intention.
+## Use the rendered camera basis, not its requested yaw; pitch never changes speed.
+func movement_direction(input: Vector2) -> Vector2:
+	if not input.is_finite(): return Vector2.ZERO
+	var right: Vector2 = Vector2(camera.global_basis.x.x, camera.global_basis.x.z).normalized()
+	var back: Vector2 = Vector2(camera.global_basis.z.x, camera.global_basis.z.z).normalized()
+	return (right * input.x + back * input.y).limit_length()
 
 func zoom_by(steps: float) -> void:
 	if not is_finite(steps): return
