@@ -54,6 +54,7 @@ func reload_visual() -> void:
 	if not players.is_empty():
 		player = players[0] as AnimationPlayer
 		VisualAnimationTools.prepare_in_place(player,[&"idle",&"run"])
+		VisualAnimationTools.align_locomotion_heading(player,[&"idle",&"run"],&"run")
 	var skeletons := content.find_children("*","Skeleton3D",true,false)
 	if not skeletons.is_empty(): skeleton = skeletons[0] as Skeleton3D
 	_attach_weapon()
