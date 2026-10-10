@@ -66,13 +66,13 @@ func _ready() -> void:
 			check(roots_checked == 1,"root position track found")
 		check(view.player.get_animation(&"idle").loop_mode == Animation.LOOP_LINEAR,"idle loops")
 		check(view.player.get_animation(&"run").loop_mode == Animation.LOOP_LINEAR,"run loops")
-	dog.present_snapshot({"hp":0,"state":"DEAD","position":dog.position,"yaw":dog.rotation.y})
+	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,0,MobSnapshot.State.DEAD,dog.mob_key,""])
 	check(dog.ai_state == "DEAD" and dog.collision_layer == 0,"death disables collision immediately")
 	check(view.animation_state == &"death" and view.visible,"death presentation")
-	dog.present_snapshot({"hp":0,"state":"DEAD","position":dog.position,"yaw":dog.rotation.y})
+	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,0,MobSnapshot.State.DEAD,dog.mob_key,""])
 	view._process(1.1)
 	check(not view.visible,"corpse hides after presentation without affecting server respawn")
-	dog.present_snapshot({"hp":120,"state":"IDLE","position":dog.position,"yaw":dog.rotation.y})
+	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,120,MobSnapshot.State.IDLE,dog.mob_key,""])
 	check(view.visible and dog.collision_layer == 4,"respawn restores presentation and original collision")
 	check(dog.position == position_before and dog.rotation.y == yaw_before,"clips never move gameplay body")
 	check(dog.home == Vector3(3,0,2) and dog.knockback == Vector3.ZERO,"visuals do not mutate gameplay state")
@@ -90,6 +90,29 @@ func _ready() -> void:
 		check(fell_back and unchanged, "live deletion falls back without changing gameplay")
 		check(view.content.scene_file_path == VisualResolver.DEV_DOG, "restaging returns to local visual")
 	dog.free()
+	# Exercise full-list reconciliation without booting game input/UI or a server.
+	var snapshot_world := SpikeWorld3D.new()
+	var combat := SpikeCombat3D.new()
+	combat._world = snapshot_world
+	var record: Array = [101,Vector3(4,0,2),0.5,80,MobSnapshot.State.IDLE,&"feral_dog","stone-test"]
+	combat._receive_mob_snapshots([record])
+	var replicated: SpikeWildDog3D = combat.dogs[101]
+	check(replicated.definition == MobDefinitions.FERAL_DOG and replicated.max_hp == MobDefinitions.FERAL_DOG.max_hp and replicated.title == MobDefinitions.FERAL_DOG.display_name, "new actor uses local presentation definition")
+	check(replicated.hp == 80 and replicated.source_metinstone_id == "stone-test", "dynamic fields and provenance survive reconciliation")
+	check(replicated.pack_instance_id == 0, "client has no replicated pack runtime")
+	record[MobSnapshot.Field.HP] = 60
+	var unknown := record.duplicate()
+	unknown[MobSnapshot.Field.ID] = 102
+	unknown[MobSnapshot.Field.MOB_KEY] = &"future_unknown_mob"
+	combat._receive_mob_snapshots([unknown,record])
+	check(not combat.dogs.has(102) and combat.dogs.size() == 1, "unknown key skips only that actor and continues processing the snapshot")
+	check(combat.dogs[101] == replicated and replicated.hp == 60, "later full snapshot updates existing actor")
+	combat._receive_mob_snapshots([])
+	check(combat.dogs.is_empty(), "empty full snapshot removes all actors")
+	combat._receive_mob_snapshots([record])
+	check(combat.dogs[101] != replicated and combat.dogs[101].hp == 60, "full snapshot can reconstruct after removal")
+	snapshot_world.free()
+	combat.free()
 	await get_tree().process_frame
 	if _failed:
 		get_tree().quit(1)

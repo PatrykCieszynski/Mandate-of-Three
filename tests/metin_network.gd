@@ -146,7 +146,8 @@ func _process(delta: float) -> void:
 		if saw_stone:
 			check(world.combat_endpoint.selected_target.is_empty() and not world.combat_endpoint.autoattack,"death snapshot clears selection even without autoattack")
 	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():
-		check(dog.mob_instance_id > 0 and dog.pack_instance_id > 0 and not dog.mob_key.is_empty(),"dynamic snapshot reconstructs identities/content")
+		check(dog.mob_instance_id > 0 and dog.definition == MobDefinitions.resolve(dog.mob_key),"compact snapshot reconstructs identity and local definition")
+		check(dog.max_hp == dog.definition.max_hp and dog.title == dog.definition.display_name and dog.visual_id == dog.definition.visual_id,"presentation metadata comes from local definition")
 		if not dog.source_metinstone_id.is_empty():
 			saw_waves = true
 			if not wave_ids.has(dog.mob_id): wave_ids.append(dog.mob_id)

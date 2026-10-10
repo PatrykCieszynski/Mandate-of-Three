@@ -499,15 +499,43 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 	dog.move_dog(delta,direction,now)
 	dog.hp_label.text = "%d / %d" % [dog.hp,dog.max_hp]
 
+func _mob_snapshots() -> Array:
+	var records: Array = []
+	for mob: SpikeWildDog3D in dogs.values(): records.append(MobSnapshot.capture(mob))
+	return records
+
+func _receive_mob_snapshots(records: Array) -> void:
+	var present: Dictionary[int, bool] = {}
+	for record: Array in records:
+		var id: int = record[MobSnapshot.Field.ID]
+		var definition := MobDefinitions.resolve(StringName(record[MobSnapshot.Field.MOB_KEY]))
+		if definition == null:
+			push_warning("Unknown replicated mob definition: %s" % record[MobSnapshot.Field.MOB_KEY])
+			continue
+		present[id] = true
+		if not dogs.has(id):
+			var mob := SpikeWildDog3D.new()
+			mob.name = "Mob_%d" % id
+			mob.definition = definition
+			mob.mob_key = definition.mob_key
+			mob.max_hp = definition.max_hp
+			mob.title = definition.display_name
+			mob.visual_id = definition.visual_id
+			mob.source_metinstone_id = record[MobSnapshot.Field.SOURCE_METIN]
+			mob.setup_dog(id, record[MobSnapshot.Field.POSITION])
+			_world.add_child(mob)
+			dogs[id] = mob
+		dogs[id].present_snapshot(record)
+	# An empty full snapshot removes all actors just like any other snapshot.
+	for id: int in dogs.keys():
+		if not present.has(id):
+			dogs[id].queue_free()
+			dogs.erase(id)
+
 func _send_snapshot() -> void:
 	if _store() == null: return
 	var now: int = Time.get_ticks_msec()
-	var mob_snapshots: Dictionary = {}
-	for id: int in dogs:
-		var dog: SpikeWildDog3D = dogs[id]
-		mob_snapshots[id] = {"position": dog.position, "yaw": dog.rotation.y, "hp": dog.hp, "state": dog.ai_state,
-			"max_hp":dog.max_hp,"damage":dog.attack_damage,"title":dog.title,"home":dog.home,"source_metinstone_id":dog.source_metinstone_id,
-			"mob_key":dog.mob_key,"visual_id":dog.visual_id,"move_speed":dog.move_speed,"pack_instance_id":dog.pack_instance_id}
+	var mob_snapshots: Array = _mob_snapshots()
 	var respawns: Dictionary = {}
 	var levels: Dictionary = {}
 	for id: int in _world.characters:
@@ -523,7 +551,7 @@ func _send_snapshot() -> void:
 				"reserved_for": drop.owner_name if now < int(drop.protected_until) else "",
 				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner)}
 		var player: PlayerResource = WorldServer.curr.connected_players[peer_id]
-		receive_state.rpc_id(peer_id, {"dogs": mob_snapshots, "health": health.duplicate(), "drops": drops,
+		receive_state.rpc_id(peer_id, {"mobs": mob_snapshots, "health": health.duplicate(), "drops": drops,
 			"combos": _combo.duplicate(), "respawns": respawns, "levels": levels,
 			"metin": {} if _world.metin_encounter == null else _world.metin_encounter.snapshot(now),
 			"progression": {"level": player.level, "experience": player.experience, "next": player.level_xp_to_next()}})
@@ -537,27 +565,7 @@ func receive_state(snapshot: Dictionary) -> void:
 		var player: SpikeCharacter3D = _world.characters.get(peer_id)
 		if player != null: player.set_level(int(snapshot.levels[peer_id]))
 	if _world.metin_encounter != null and not snapshot.get("metin",{}).is_empty(): _world.metin_encounter.receive_snapshot(snapshot.metin)
-	for id: int in dogs.keys():
-		if not snapshot.dogs.has(id):
-			dogs[id].queue_free()
-			dogs.erase(id)
-	for id: int in snapshot.dogs:
-		var data: Dictionary = snapshot.dogs[id]
-		if not dogs.has(id):
-			var dog := SpikeWildDog3D.new()
-			dog.name = "WildDog_%d" % id
-			dog.max_hp = int(data.max_hp)
-			dog.attack_damage = int(data.damage)
-			dog.title = str(data.title)
-			dog.source_metinstone_id = str(data.source_metinstone_id)
-			dog.mob_key = StringName(data.mob_key)
-			dog.visual_id = StringName(data.visual_id)
-			dog.move_speed = float(data.move_speed)
-			dog.pack_instance_id = int(data.pack_instance_id)
-			dog.setup_dog(id,data.home)
-			_world.add_child(dog)
-			dogs[id] = dog
-		dogs[id].present_snapshot(data)
+	_receive_mob_snapshots(snapshot.mobs)
 	for peer_id: int in snapshot.health:
 		var body: SpikeCharacter3D = _world.characters.get(peer_id)
 		if body != null: body.set_alive(int(snapshot.health[peer_id]) > 0)

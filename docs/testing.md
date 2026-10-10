@@ -49,7 +49,8 @@ and the shore boundary. It opens no window and does not assert exact
 layout or balance. See [region notes](first-region-graybox.md).
 
 Default smoke also covers mixed mob packs, shared aggro, anchor leash, unique
-replacement IDs, Metin pack expiry and a short 50-actor AI tick. See [mob packs](mob-packs-v1.md).
+replacement IDs, Metin pack expiry, a short 50-actor AI tick, compact mob wire
+round trips and serialized payload measurements for 50/100 actors. See [mob packs](mob-packs-v1.md).
 
 `run-metin.ps1` covers the small stone lifecycle contracts.
 `run-metin-network.ps1` is the optional two-client production encounter/ground

@@ -89,10 +89,10 @@ func die(now: int) -> void:
 	visible = false
 	collision_layer = 0
 
-func present_snapshot(snapshot: Dictionary) -> void:
+func present_snapshot(snapshot: Array) -> void:
 	var previous_state := ai_state
-	hp = int(snapshot.hp)
-	ai_state = str(snapshot.state)
+	hp = snapshot[MobSnapshot.Field.HP]
+	ai_state = MobSnapshot.state_name(snapshot[MobSnapshot.Field.STATE])
 	var active := ai_state not in ["DEAD", "DISABLED"]
 	# The corpse is presentation only. Collision disables immediately as before.
 	visible = ai_state != "DISABLED"
@@ -101,7 +101,7 @@ func present_snapshot(snapshot: Dictionary) -> void:
 	hp_label.visible = active
 	if ai_state == "DEAD" and previous_state != "DEAD": presentation.play_death()
 	elif active and previous_state in ["DEAD", "DISABLED"]: presentation.reset_alive()
-	apply_snapshot(snapshot.position, snapshot.yaw)
+	apply_snapshot(snapshot[MobSnapshot.Field.POSITION], snapshot[MobSnapshot.Field.YAW])
 	hp_label.text = "%d / %d" % [hp, max_hp]
 
 func interpolate(delta: float) -> void:
