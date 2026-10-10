@@ -14,6 +14,9 @@ var _server: bool = false
 var _sequence: int = 0
 var _input_accum: float = 0.0
 var _snapshot_accum: float = 0.0
+var _npc_approach := NpcApproach.new()
+var _npc_repath_ms: int = 0
+var _npc_approach_until_ms: int = 0
 var _camera: Camera3D
 var _options: Navigator
 var _ui_failure_label: Label
@@ -150,6 +153,7 @@ func _build_camera_and_ui() -> void:
 	options_layer.add_child(_options)
 	_options.visibility_changed.connect(func() -> void:
 		if _options.visible:
+			_npc_approach.cancel()
 			var inventory: Node = get_node_or_null("WebInventory")
 			if inventory != null: inventory.set_open(false)
 		ClientState.menu_open = _options.visible
@@ -162,6 +166,11 @@ func show_ui_failure(reason: String) -> void:
 	if not is_instance_valid(_ui_failure_label): return
 	_ui_failure_label.text = "Inventory UI unavailable. " + reason
 	_ui_failure_label.show()
+
+func _input(event: InputEvent) -> void:
+	if _server or _npc_approach.target_id.is_empty(): return
+	if event is InputEventKey and event.pressed and event.physical_keycode in [KEY_ESCAPE, KEY_SPACE, KEY_F]:
+		_npc_approach.cancel()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if is_instance_valid(_options) and _options.visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
@@ -185,9 +194,29 @@ func _unhandled_input(event: InputEvent) -> void:
 				nearest = distance
 				npc_id = actor.instance_id
 	if npc_id != "":
-		var ui: InventoryWebController = get_node_or_null("WebInventory")
-		if ui != null: ui.interact_npc(npc_id)
+		_npc_approach.start(npc_id)
+		_npc_repath_ms = 0
+		_npc_approach_until_ms = Time.get_ticks_msec() + 15000
+		combat_endpoint.autoattack = false
 		get_viewport().set_input_as_handled()
+
+func _npc_direction(manual: Vector2) -> Vector2:
+	if _npc_approach.target_id.is_empty(): return combat_endpoint.assist_direction(manual)
+	var actor: NeutralNpc3D = npc_endpoint.actors.get(_npc_approach.target_id)
+	var body: SpikeCharacter3D = characters[local_peer]
+	var now: int = Time.get_ticks_msec()
+	if not is_instance_valid(actor) or not actor.interactable or actor.definition == null or not body.alive or now >= _npc_approach_until_ms:
+		_npc_approach.cancel()
+		return manual
+	var map: RID = get_world_3d().navigation_map
+	if now >= _npc_repath_ms and NavigationServer3D.map_get_iteration_id(map) > 0:
+		_npc_approach.set_path(NavigationServer3D.map_get_path(map, body.target_position, actor.global_position, true))
+		_npc_repath_ms = now + 200
+	var result: Dictionary = _npc_approach.step(body.target_position, actor.global_position, actor.definition.interaction_radius, manual)
+	if not str(result.interact).is_empty():
+		var ui: InventoryWebController = get_node_or_null("WebInventory")
+		if ui != null: ui.interact_npc(result.interact)
+	return result.direction
 
 @rpc("any_peer", "call_remote", "reliable", 0)
 func join_world() -> void:
@@ -298,9 +327,11 @@ func _physics_process(delta: float) -> void:
 			_input_accum = fmod(_input_accum, INPUT_INTERVAL)
 			_sequence += 1
 			var direction := Input.get_vector("player_move_left", "player_move_right", "player_move_up", "player_move_down")
-			direction = combat_endpoint.assist_direction(direction)
 			if ClientState.menu_open or not DisplayServer.window_is_focused():
+				_npc_approach.cancel()
 				direction = Vector2.ZERO
+			else:
+				direction = _npc_direction(direction)
 			submit_input.rpc_id(1, _sequence, direction)
 
 func _broadcast_snapshot() -> void:

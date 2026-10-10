@@ -47,7 +47,7 @@ var _xp_notice_until_ms: int = 0
 
 func _ready() -> void:
 	_world = get_parent()
-	if GameMode.is_world_server(): _build_navigation()
+	_build_navigation() # Shared geometry also guides client NPC approach intentions.
 	var homes: Array[Vector3] = [HOME, Vector3(-2, 0, -1), Vector3(-6, 0, -1), Vector3(-4, 0, -3)]
 	for i: int in homes.size():
 		var dog := SpikeWildDog3D.new()
@@ -474,6 +474,7 @@ func _refresh_hud() -> void:
 	_experience_bar.value = int(progression.experience)
 
 func select_mob(id: int) -> void:
+	if id != 0: _world._npc_approach.cancel()
 	selected_mob = id if dogs.has(id) and dogs[id].ai_state not in ["DEAD", "DISABLED"] else 0
 	for dog: SpikeWildDog3D in dogs.values(): dog.mark_selected(dog.mob_id == selected_mob)
 	if selected_mob == 0: autoattack = false
