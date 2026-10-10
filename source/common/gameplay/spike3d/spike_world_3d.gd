@@ -28,10 +28,12 @@ var combat_endpoint: SpikeCombat3D
 var upgrade_endpoint: Upgrade3D
 var shop_endpoint: Shop3D
 var npc_endpoint: NpcInteraction3D
+var region: FirstRegionGraybox
 var currency_endpoint: SpikeCurrency3D
 
 func _ready() -> void:
 	_server = GameMode.is_world_server()
+	region = get_node_or_null("Region") as FirstRegionGraybox
 	_build_arena()
 	inventory_endpoint = SpikeInventory3D.new()
 	inventory_endpoint.name = "Inventory"
@@ -52,6 +54,7 @@ func _ready() -> void:
 	upgrade_endpoint.name = "Upgrade"
 	add_child(upgrade_endpoint)
 	var blacksmith := preload("res://source/common/gameplay/npcs/blacksmith_fixture.tscn").instantiate() as NeutralNpc3D
+	if region != null: blacksmith.position = FirstRegionGraybox.BLACKSMITH
 	add_child(blacksmith)
 	if not npc_endpoint.register_actor(blacksmith):
 		push_error("Invalid Blacksmith content/instance")
@@ -68,18 +71,22 @@ func _ready() -> void:
 			show_ui_failure("CEF requires Vulkan Mobile and the installed addon")
 		join_world.rpc_id.call_deferred(1)
 
+func player_spawn(index: int = 0) -> Vector3:
+	return region.player_spawn(index) if region != null else Vector3(-3 + index % 5 * 1.5, 0.1, 3)
+
 func _build_arena() -> void:
-	_box("Floor", Vector3(0, -0.25, 0), Vector3(32, 0.5, 32), Color("374957"))
-	_box("North", Vector3(0, 1, -16), Vector3(32, 2, 0.5), Color("637583"))
-	_box("South", Vector3(0, 1, 16), Vector3(32, 2, 0.5), Color("637583"))
-	_box("West", Vector3(-16, 1, 0), Vector3(0.5, 2, 32), Color("637583"))
-	_box("East", Vector3(16, 1, 0), Vector3(0.5, 2, 32), Color("637583"))
-	_box("Obstacle", Vector3(0, 1, -4), Vector3(4, 2, 2), Color("c18d55"))
-	_box("Pillar", Vector3(6, 1.5, 3), Vector3(2, 3, 2), Color("668a7b"))
-	# Tile seams give movement a visible scale without importing demo assets.
-	for axis: int in range(-14, 16, 2):
-		_decoration(Vector3(axis, 0.006, 0), Vector3(0.025, 0.01, 31), Color("4b616c"))
-		_decoration(Vector3(0, 0.007, axis), Vector3(31, 0.01, 0.025), Color("4b616c"))
+	if region == null:
+		_box("Floor", Vector3(0, -0.25, 0), Vector3(32, 0.5, 32), Color("374957"))
+		_box("North", Vector3(0, 1, -16), Vector3(32, 2, 0.5), Color("637583"))
+		_box("South", Vector3(0, 1, 16), Vector3(32, 2, 0.5), Color("637583"))
+		_box("West", Vector3(-16, 1, 0), Vector3(0.5, 2, 32), Color("637583"))
+		_box("East", Vector3(16, 1, 0), Vector3(0.5, 2, 32), Color("637583"))
+		_box("Obstacle", Vector3(0, 1, -4), Vector3(4, 2, 2), Color("c18d55"))
+		_box("Pillar", Vector3(6, 1.5, 3), Vector3(2, 3, 2), Color("668a7b"))
+		# Tile seams give movement a visible scale without importing demo assets.
+		for axis: int in range(-14, 16, 2):
+			_decoration(Vector3(axis, 0.006, 0), Vector3(0.025, 0.01, 31), Color("4b616c"))
+			_decoration(Vector3(0, 0.007, axis), Vector3(31, 0.01, 0.025), Color("4b616c"))
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-55, -30, 0)
 	light.light_energy = 1.2
@@ -127,7 +134,7 @@ func _mesh(parent: Node3D, dimensions: Vector3, color: Color) -> void:
 	parent.add_child(visual)
 
 func _build_camera_and_ui() -> void:
-	DisplayServer.window_set_title("Mandate of Three — Spike 3D | %d" % local_peer)
+	DisplayServer.window_set_title("Mandate of Three — %s | %d" % ["First Region" if region != null else "Spike 3D", local_peer])
 	camera_controller = MandateCamera3D.new()
 	camera_controller.name = "CameraRig"
 	camera_controller.can_control = func() -> bool: return input_enabled and not ClientState.menu_open and DisplayServer.window_is_focused() and characters.has(local_peer)
@@ -139,7 +146,7 @@ func _build_camera_and_ui() -> void:
 	panel.position = Vector2(20, 20)
 	canvas.add_child(panel)
 	_status = Label.new()
-	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nŁączenie ze światem…"
+	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nŁączenie ze światem…" % ("First Region" if region != null else "Spike 3D")
 	_status.add_theme_font_size_override("font_size", 18)
 	var controls := VBoxContainer.new()
 	panel.add_child(controls)
@@ -250,7 +257,7 @@ func join_world() -> void:
 	host.connected_peers.append(peer_id)
 	resource.current_instance = host.instance_resource.instance_name
 	var body: SpikeCharacter3D = _add_character(peer_id, resource.display_name)
-	body.position = Vector3(-3 + (characters.size() - 1) % 5 * 1.5, 0.1, 3)
+	body.position = player_spawn(characters.size() - 1)
 	intentions[peer_id] = {"direction": Vector2.ZERO, "sequence": -1, "time": 0}
 	_send_roster()
 	inventory_endpoint.initialize_peer(peer_id)
@@ -301,7 +308,7 @@ func receive_roster(roster: Dictionary) -> void:
 	for peer_id: int in roster:
 		if not characters.has(peer_id):
 			_add_character(peer_id, str(roster[peer_id]))
-	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nGracze: %d" % characters.size()
+	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nGracze: %d" % ["First Region" if region != null else "Spike 3D", characters.size()]
 
 func _add_character(peer_id: int, display_name: String) -> SpikeCharacter3D:
 	var body := SpikeCharacter3D.new()

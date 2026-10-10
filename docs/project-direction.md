@@ -82,11 +82,15 @@ Yang wallet/autoloot/test spend, NPC Shop and the +0 → +1 Upgrade slice are
 implemented. Upgrade supports Inventory items only, one material, pending Yang
 and 100% success. Higher upgrades/failure/destruction remain deferred. Next:
 
-1. One affix reroll: consume material and mutate the item in one transaction.
-2. Party vertical slice: invite/accept/leave, shared instance and explicit XP,
-   loot/contribution rules. Highest damage is a temporary solo reward rule.
-3. First regional event: kills increase pressure; a threshold spawns a Metin-like
-   object at one of several points; shared combat, reward and pressure reset.
+1. [First region graybox](first-region-graybox.md): hub, three combat areas, routes,
+   landmarks, camera obstacles, four Metin sites and a water test strip. Implemented;
+   scale and travel/combat feel need a manual pass.
+2. Metin Stone v1: shared combat, waves and rewards on the graybox region.
+3. Spawn/pacing pass, then a visual pass after the playable loop is assessed.
+
+One affix reroll and the party vertical slice remain planned after this focused
+world loop. Regional pressure (kills, threshold, event spawn and reset) remains the
+accepted direction for a later event cadence pass, not another framework now.
 
 World direction: one logical world, later transparent overflow layers, spawn
 regions/regional pressure, viable solo and party play, self-sufficient classes

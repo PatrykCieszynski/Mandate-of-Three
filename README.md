@@ -12,7 +12,9 @@ This repository contains a working technical vertical slice, not a game alpha.
   instance and transactional SQLite persistence.
 - Initial loot progression: weapon attack shown on the ground, comparison with the
   equipped instance, attack preview after swapping and persistent sword equipment.
-- Four Wild Dogs with navigation and server-side AI; directional melee hitting multiple
+- [First region graybox](docs/first-region-graybox.md): hub/Blacksmith, three combat areas,
+  nine dogs of increasing difficulty, main road and shortcuts, landmarks, four Metin
+  candidate sites and a visual water strip. Navigation and server-side AI; directional melee hitting multiple
   targets, a three-hit combo, hit reactions and final-hit knockback.
 - Player and mob death/respawn, ground loot, reservation and persistent pickup.
   Two-client tests cover combat, death and competition for the same loot.
@@ -34,10 +36,13 @@ target; **F** toggles autoattack, interrupted by manual movement. Nearby Yang is
 picked up automatically; **G** picks up the nearest stack. A HUD test button spends
 50 Yang.
 
-AI routes around obstacles on the arena navmesh. Unclaimed loot, HP and position
+AI routes around obstacles on the shared region navmesh. Unclaimed loot, HP and position
 are runtime state; items become persistent on pickup. AOI, local prediction and
 final models/animations remain future work. Optional local development visuals
 are described below. Upstream modules still present do not imply available 3D features.
+
+The normal login map is the graybox region; the small arena remains an integration
+test fixture. Metin Stone v1, then spawn/pacing and visual passes are next.
 
 Camera v1 uses RMB orbit and wheel zoom, with independent view rotation and scenery
 collision. Settings and verification notes: [Camera v1](docs/camera-v1.md).

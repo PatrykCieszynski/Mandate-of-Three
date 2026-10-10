@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_instance")
 instance_name = &"Spike"
-map_path = "res://source/common/gameplay/maps/spike/spike_map_3d.tscn"
+map_path = "res://source/common/gameplay/maps/graybox/first_region_3d.tscn"
 load_at_startup = true
 use_3d = true
-zone_title = "Technical spike"
+zone_title = "First Region — Graybox"

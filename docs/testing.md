@@ -43,6 +43,11 @@ changes; do not run all of them after CSS edits. They share port 18098: run
 sequentially. `run-items.ps1 -WithSession` requires normal gateway/master/world
 roles and writes guest fixture accounts; use it for actual session/login changes.
 
+`run-first-region.ps1` loads the production graybox scene headlessly and checks
+connected navigation to NPC/mob/Metin sites, safe hub spawns, profile-preserving
+respawn and the shore boundary. It opens no window and does not assert exact
+layout or balance. See [region notes](first-region-graybox.md).
+
 `run-cef-export.ps1` is an optional packaging-boundary check after addon/export
 changes: client Web assets and CEF registration, CEF-free server packs and
 client/server pack headless boot (including real client UID validation without

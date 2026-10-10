@@ -48,13 +48,21 @@ var _xp_notice_until_ms: int = 0
 func _ready() -> void:
 	_world = get_parent()
 	_build_navigation() # Shared geometry also guides client NPC approach intentions.
-	var homes: Array[Vector3] = [HOME, Vector3(-2, 0, -1), Vector3(-6, 0, -1), Vector3(-4, 0, -3)]
-	for i: int in homes.size():
+	var spawns: Array[Dictionary] = []
+	if _world.region != null:
+		spawns = _world.region.mob_spawns()
+	else:
+		for home: Vector3 in [HOME, Vector3(-2,0,-1), Vector3(-6,0,-1), Vector3(-4,0,-3)]:
+			spawns.append({"position": home, "max_hp": MOB_HP, "damage": 6, "title": "Wild Dog"})
+	for i: int in spawns.size():
 		var dog := SpikeWildDog3D.new()
-		dog.name = "WildDog_%d" % (i + 1)
-		dog.setup_dog(i + 1, homes[i])
+		dog.name = "WildDog_%d" % (i+1)
+		dog.max_hp = int(spawns[i].max_hp)
+		dog.attack_damage = int(spawns[i].damage)
+		dog.title = str(spawns[i].title)
+		dog.setup_dog(i+1, spawns[i].position)
 		_world.add_child(dog)
-		dogs[i + 1] = dog
+		dogs[i+1] = dog
 	if GameMode.is_client():
 		var canvas := CanvasLayer.new()
 		add_child(canvas)
@@ -308,7 +316,7 @@ func _physics_process(delta: float) -> void:
 		if now >= _respawn_ms[peer_id] and _world.characters.has(peer_id):
 			health[peer_id] = 100
 			var body: SpikeCharacter3D = _world.characters[peer_id]
-			body.position = Vector3(-3, 0.1, 3)
+			body.position = _world.player_spawn()
 			body.velocity = Vector3.ZERO
 			_world.intentions[peer_id]["direction"] = Vector2.ZERO
 			_respawn_ms.erase(peer_id)
@@ -372,17 +380,17 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 			dog.rotation.y = atan2(-offset.x, -offset.z)
 			if now >= dog.stunned_until_ms and now - dog.last_attack_ms >= 1200:
 				dog.last_attack_ms = now
-				hurt_player(dog.target_peer, 6, now)
+				hurt_player(dog.target_peer, dog.attack_damage, now)
 	elif dog.ai_state == "RETURN":
 		if Vector2(dog.position.x - dog.home.x, dog.position.z - dog.home.z).length() < 0.25:
-			dog.hp = MOB_HP
+			dog.hp = dog.max_hp
 			dog.contributions.clear()
 			dog.contribution_players.clear()
 			dog.ai_state = "IDLE"
 		else:
 			direction = dog.navigate(dog.home, now)
 	dog.move_dog(delta, direction, now)
-	dog.hp_label.text = "%d / %d" % [dog.hp, MOB_HP]
+	dog.hp_label.text = "%d / %d" % [dog.hp, dog.max_hp]
 
 func _send_snapshot() -> void:
 	if _store() == null: return
@@ -464,7 +472,7 @@ func _refresh_hud() -> void:
 	var hp: int = int(state.get("health", {}).get(_world.local_peer, 100))
 	var target: String = "Brak celu"
 	if dogs.has(selected_mob):
-		target = "Wild Dog: %d / %d" % [dogs[selected_mob].hp, MOB_HP]
+		target = "%s: %d / %d" % [dogs[selected_mob].title, dogs[selected_mob].hp, dogs[selected_mob].max_hp]
 	var combo: int = int(state.get("combos", {}).get(_world.local_peer, 0))
 	var status: String = "Odrodzenie za %.1f s" % float(state.get("respawns", {}).get(_world.local_peer, 0)) if hp == 0 else _notice
 	_hud.text = "HP: %d / 100 · Combo: %d / 3\nSpacja — combo · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, combo, "wł." if autoattack else "wył.", target, status]

@@ -4,6 +4,9 @@ extends SpikeCharacter3D
 ## on the server; clients interpolate position and play presentation effects.
 
 const MAX_HP: int = 120
+var max_hp: int = MAX_HP
+var attack_damage: int = 6
+var title: String = "Wild Dog"
 var mob_id: int
 var ai_enabled: bool = true
 var home: Vector3
@@ -23,6 +26,7 @@ var _repath_ms: int = 0
 var presentation: DogVisual3D
 
 func setup_dog(id: int, spawn: Vector3) -> void:
+	hp = max_hp
 	mob_id = id
 	home = spawn
 	position = spawn
@@ -38,8 +42,8 @@ func setup_dog(id: int, spawn: Vector3) -> void:
 	presentation = DogVisual3D.new()
 	presentation.visual_id = &"stray_dog"
 	add_child(presentation)
-	name_label = _label("Wild Dog", 1.3, 32)
-	hp_label = _label("120 / 120", 1.65, 24)
+	name_label = _label(title, 1.3, 32)
+	hp_label = _label("%d / %d" % [hp,max_hp], 1.65, 24)
 	if GameMode.is_world_server():
 		agent = NavigationAgent3D.new()
 		agent.path_desired_distance = 0.25
@@ -90,7 +94,7 @@ func die(now: int) -> void:
 func respawn() -> void:
 	position = home
 	velocity = Vector3.ZERO
-	hp = MAX_HP
+	hp = max_hp
 	contributions.clear()
 	contribution_players.clear()
 	ai_state = "IDLE"
@@ -114,7 +118,7 @@ func present_snapshot(snapshot: Dictionary) -> void:
 	if ai_state == "DEAD" and previous_state != "DEAD": presentation.play_death()
 	elif active and previous_state in ["DEAD", "DISABLED"]: presentation.reset_alive()
 	apply_snapshot(snapshot.position, snapshot.yaw)
-	hp_label.text = "%d / %d" % [hp, MAX_HP]
+	hp_label.text = "%d / %d" % [hp, max_hp]
 
 func interpolate(delta: float) -> void:
 	var previous_position := position
