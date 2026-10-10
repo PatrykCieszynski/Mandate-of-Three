@@ -39,6 +39,9 @@ are runtime state; items become persistent on pickup. AOI, local prediction and
 final models/animations remain future work. Optional local development visuals
 are described below. Upstream modules still present do not imply available 3D features.
 
+Camera v1 uses RMB orbit and wheel zoom, with independent view rotation and scenery
+collision. Settings and verification notes: [Camera v1](docs/camera-v1.md).
+
 ## Local setup
 
 Verified engine: **Godot 4.7.2**, installed locally in `.godot/`.

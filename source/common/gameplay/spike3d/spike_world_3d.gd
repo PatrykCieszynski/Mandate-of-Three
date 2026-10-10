@@ -19,6 +19,7 @@ var _npc_preselected_item: Dictionary = {}
 var _npc_repath_ms: int = 0
 var _npc_approach_until_ms: int = 0
 var _camera: Camera3D
+var camera_controller: MandateCamera3D
 var _options: Navigator
 var _ui_failure_label: Label
 var _status: Label
@@ -127,19 +128,18 @@ func _mesh(parent: Node3D, dimensions: Vector3, color: Color) -> void:
 
 func _build_camera_and_ui() -> void:
 	DisplayServer.window_set_title("Mandate of Three — Spike 3D | %d" % local_peer)
-	_camera = Camera3D.new()
-	_camera.position = Vector3(0, 13, 12)
-	_camera.fov = 55
-	_camera.current = true
-	add_child(_camera)
-	_camera.look_at(Vector3.ZERO)
+	camera_controller = MandateCamera3D.new()
+	camera_controller.name = "CameraRig"
+	camera_controller.can_control = func() -> bool: return input_enabled and not ClientState.menu_open and DisplayServer.window_is_focused() and characters.has(local_peer)
+	add_child(camera_controller)
+	_camera = camera_controller.camera
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
 	var panel := PanelContainer.new()
 	panel.position = Vector2(20, 20)
 	canvas.add_child(panel)
 	_status = Label.new()
-	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · I — ekwipunek · N — NPC\nŁączenie ze światem…"
+	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nŁączenie ze światem…"
 	_status.add_theme_font_size_override("font_size", 18)
 	var controls := VBoxContainer.new()
 	panel.add_child(controls)
@@ -301,7 +301,7 @@ func receive_roster(roster: Dictionary) -> void:
 	for peer_id: int in roster:
 		if not characters.has(peer_id):
 			_add_character(peer_id, str(roster[peer_id]))
-	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · I — ekwipunek · N — NPC\nGracze: %d" % characters.size()
+	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nGracze: %d" % characters.size()
 
 func _add_character(peer_id: int, display_name: String) -> SpikeCharacter3D:
 	var body := SpikeCharacter3D.new()
@@ -376,9 +376,8 @@ func receive_snapshot(snapshot: Dictionary) -> void:
 func _process(delta: float) -> void:
 	if _server:
 		return
+	if camera_controller.orbiting and not camera_controller.can_control.call(): camera_controller.cancel_orbit()
 	for body: SpikeCharacter3D in characters.values():
 		body.interpolate(delta)
 	if characters.has(local_peer) and characters[local_peer].has_snapshot:
-		var center: Vector3 = characters[local_peer].position
-		_camera.position = _camera.position.lerp(center + Vector3(0, 13, 12), 1.0 - exp(-10.0 * delta))
-		_camera.look_at(center + Vector3(0, 0.5, 0))
+		camera_controller.update_camera(delta, characters[local_peer].global_position, camera_controller.can_control.call())

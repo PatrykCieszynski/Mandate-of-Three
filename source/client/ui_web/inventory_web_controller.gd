@@ -28,6 +28,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	host.capture_keyboard_on_click = false
 	host.entry_path = "res://source/client/ui_web/web/inventory/game.html"
 	layer.add_child(host)
+	world.camera_controller.pointer_capture_changed.connect(host.set_world_pointer_capture)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bridge = WebUiBridge.new()
 	add_child(bridge)

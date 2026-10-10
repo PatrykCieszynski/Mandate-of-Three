@@ -69,6 +69,13 @@ Do not delete quarantined modules/assets without dependency analysis. Legacy sav
 compatibility is temporary; a deliberate schema reset/migration belongs before
 public alpha. Keep existing user data paths during cosmetic project renames.
 
+## Camera presentation slice
+
+[Camera v1](camera-v1.md) adds an independent client orbit/zoom rig with
+sphere collision, damped return and data-defined settings. It preserves existing
+movement intentions and server authority. Auto-align is off by default. Native
+feel/CEF interaction still require the documented manual acceptance pass.
+
 ## Next gameplay milestones
 
 Yang wallet/autoloot/test spend, NPC Shop and the +0 → +1 Upgrade slice are

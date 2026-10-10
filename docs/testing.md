@@ -94,3 +94,6 @@ live under `.godot/verification`, rather than accumulating at the .godot root.
 `run-upgrade.ps1` is an opt-in two-client production Upgrade RPC suite on port
 18098; run sequentially with the other PvE-derived suites. Smoke includes one
 material/item/wallet rollback fixture and small UI/bridge contracts.
+
+`run-camera.ps1` is the optional headless Camera v1 collision/picking fixture.
+See [Camera v1](camera-v1.md) for the native input/framing acceptance checklist.
