@@ -30,6 +30,7 @@ export function mountUpgrade(
     drag: ItemDragRuntime;
     resolveItemIcon: ResolveItemIcon;
     onClose: () => void;
+    devPreview?: boolean;
     onRegionsChanged?: () => void;
   },
 ) {
@@ -64,24 +65,21 @@ export function mountUpgrade(
       ? { onRegionsChanged: options.onRegionsChanged }
       : {}),
   });
-  shell.contentRoot.innerHTML = `<div class="upgrade-preview-label">Preview</div>
-    <div class="upgrade-body"><div class="upgrade-item-summary"><div class="upgrade-item-target" aria-label="Item to upgrade"></div>
+  shell.contentRoot.innerHTML = `<div class="upgrade-body"><div class="upgrade-item-summary"><div class="upgrade-item-target" aria-label="Item to upgrade"></div>
     <div class="upgrade-item-details"><h2 class="upgrade-name"></h2><p class="upgrade-category"></p>
     <p class="upgrade-prompt">Drag an Iron Sword from Inventory into the slot.</p></div></div>
     <div class="upgrade-comparison"><p class="upgrade-transition"></p><div class="upgrade-properties"></div>
     <div class="upgrade-affixes"></div><div class="upgrade-requirements"></div></div>
     <div class="upgrade-recipe"><div class="upgrade-material"><span class="upgrade-material-symbol" aria-hidden="true">◆</span><span class="upgrade-material-name"></span></div>
-    <p class="upgrade-cost"></p><p class="upgrade-chance">Success chance: 100%</p></div>
+    <p class="upgrade-cost"></p><p class="upgrade-chance">Success: 100%</p></div>
     <p class="upgrade-max">Maximum upgrade level reached.</p></div>
-    <div class="upgrade-preview-controls"><div class="upgrade-level-controls"><span>Preview level</span><output class="upgrade-level" aria-label="Preview level">+0</output></div></div>
     <p class="upgrade-notice">Preview only. Items and Yang are unchanged.</p>
-    <div class="upgrade-confirmation" role="group" aria-label="Confirm preview" hidden><p class="upgrade-confirm-text"></p></div>
+    <div class="upgrade-confirmation" role="group" aria-label="Confirm upgrade" hidden><p class="upgrade-confirm-text"></p></div>
     <div class="upgrade-primary-actions upgrade-actions"></div>`;
   const find = <T extends HTMLElement = HTMLElement>(selector: string) =>
     root.querySelector<T>(selector)!;
   const target = find('.upgrade-item-target'),
     name = find('.upgrade-name'),
-    levelOutput = find<HTMLOutputElement>('.upgrade-level'),
     confirmation = find('.upgrade-confirmation');
   const tip = ItemTooltip(root, { geometry: () => options.manager });
   const slot = UiSlot({
@@ -89,27 +87,38 @@ export function mountUpgrade(
     label: 'Item to upgrade',
   });
   target.append(slot);
-  const example = UiButton({
-    label: 'Preview Iron Sword',
-    className: 'upgrade-example',
-    onClick: () => choose(upgradeExample),
-  });
-  find('.upgrade-preview-controls').append(example.element);
-  const previous = UiButton({ label: '−', onClick: () => changeLevel(-1) });
-  const nextLevel = UiButton({ label: '+', onClick: () => changeLevel(1) });
-  previous.element.setAttribute('aria-label', 'Previous preview level');
-  nextLevel.element.setAttribute('aria-label', 'Next preview level');
-  const levelControls = find('.upgrade-level-controls');
-  levelControls.insertBefore(previous.element, levelOutput);
-  levelControls.append(nextLevel.element);
+  // Explicit opt-in on the separate dev page; never mount tooling in the game.
+  const devControls = options.devPreview ? createDevControls() : undefined;
+  function createDevControls() {
+    const controls = document.createElement('div');
+    controls.className = 'upgrade-preview-controls';
+    controls.innerHTML =
+      '<div class="upgrade-level-controls"><span>Preview level</span><output class="upgrade-level" aria-label="Preview level">+0</output></div>';
+    const output = controls.querySelector<HTMLOutputElement>('output')!;
+    const example = UiButton({
+      label: 'Preview Iron Sword',
+      className: 'upgrade-example',
+      onClick: () => choose(upgradeExample),
+    });
+    const previous = UiButton({ label: '−', onClick: () => changeLevel(-1) });
+    const next = UiButton({ label: '+', onClick: () => changeLevel(1) });
+    previous.element.setAttribute('aria-label', 'Previous preview level');
+    next.element.setAttribute('aria-label', 'Next preview level');
+    output.before(previous.element);
+    output.after(next.element);
+    controls.append(example.element);
+    find('.upgrade-notice').before(controls);
+    return { element: controls, output, example, previous, next };
+  }
   function changeLevel(delta: number) {
-    if (!item || confirmed) return;
+    if (!options.devPreview || !item || confirmed) return;
     level = Math.max(0, Math.min(MAX_UPGRADE_LEVEL, level + delta));
     tip.hide();
     render();
   }
   const upgrade = UiButton({
-    label: 'Preview upgrade',
+    label: 'Upgrade',
+    className: 'upgrade-cta',
     onClick: () => {
       if (!item || level === MAX_UPGRADE_LEVEL) return;
       confirmed = true;
@@ -118,15 +127,22 @@ export function mountUpgrade(
       yes.element.focus({ preventScroll: true });
     },
   });
-  const cancel = UiButton({ label: 'Cancel', onClick: () => closeIfActive() });
+  const cancel = UiButton({
+    label: 'Cancel',
+    className: 'upgrade-cancel',
+    onClick: () => closeIfActive(),
+  });
   const yes = UiButton({
     label: 'Confirm',
+    className: 'upgrade-cta',
     onClick: () => {
       if (!confirmed || !item || level >= MAX_UPGRADE_LEVEL) return;
       confirmed = false;
       level++;
       render();
-      upgrade.element.focus({ preventScroll: true });
+      (level === MAX_UPGRADE_LEVEL ? cancel : upgrade).element.focus({
+        preventScroll: true,
+      });
     },
   });
   const no = UiButton({
@@ -149,7 +165,6 @@ export function mountUpgrade(
   shell.listen(slot, 'pointerleave', () => tip.hide());
   const bindings = itemWindowControls(options.drag, root);
   bindings.push(
-    options.drag.registerControl(find('.upgrade-preview-controls'), 'cancel'),
     options.drag.registerControl(confirmation, 'cancel'),
     options.drag.registerControl(find('.upgrade-primary-actions'), 'cancel'),
     options.drag.registerTarget<OwnedItemDragSubject | null>({
@@ -164,7 +179,7 @@ export function mountUpgrade(
           !confirmed && !!subject && previewItemLevel(subject.item) !== null;
         const marker = document.createElement('div');
         marker.className = 'upgrade-drop-preview' + (valid ? '' : ' invalid');
-        marker.textContent = valid ? 'Preview item' : 'Iron Sword required';
+        marker.textContent = valid ? 'Select item' : 'Iron Sword required';
         return {
           valid,
           data: subject,
@@ -176,6 +191,8 @@ export function mountUpgrade(
       },
     }),
   );
+  if (devControls)
+    bindings.push(options.drag.registerControl(devControls.element, 'cancel'));
   function choose(value: ItemPresentation) {
     const initial = previewItemLevel(value);
     if (initial === null || root.hidden || disposed) return;
@@ -215,8 +232,8 @@ export function mountUpgrade(
     }
     name.textContent = preview?.current.name ?? 'Select an item';
     name.dataset.rarity = itemRarity(item?.tooltip?.affixes?.length ?? 0);
-    find('.upgrade-category').textContent = item?.tooltip?.category ?? 'Sword';
-    find('.upgrade-category').hidden = !item;
+    find('.upgrade-category').textContent = item?.tooltip?.category ?? '';
+    find('.upgrade-category').hidden = !item?.tooltip?.category;
     find('.upgrade-prompt').hidden = !!item;
     find('.upgrade-comparison').hidden = !item;
     find('.upgrade-transition').textContent = preview?.next
@@ -224,11 +241,13 @@ export function mountUpgrade(
       : `+${MAX_UPGRADE_LEVEL}`;
     lines(
       '.upgrade-properties',
-      (preview?.current.tooltip.properties ?? []).map((line, index) =>
-        preview?.next
-          ? `${line} → ${preview.next.tooltip.properties[index]?.replace(/^Attack: /, '') ?? line}`
-          : line,
-      ),
+      (preview?.current.tooltip.properties ?? []).map((line, index) => {
+        const nextLine = preview?.next?.tooltip.properties[index];
+        const currentLine = line.replace(/^Attack: /, 'Attack ');
+        return nextLine && nextLine !== line
+          ? `${currentLine} → ${nextLine.replace(/^Attack: /, '')}`
+          : currentLine;
+      }),
     );
     lines(
       '.upgrade-affixes',
@@ -239,15 +258,19 @@ export function mountUpgrade(
     find('.upgrade-material-name').textContent =
       `Upgrade material × ${preview?.materialCount ?? 0}`;
     find('.upgrade-cost').textContent =
-      `Upgrade cost: ${(preview?.cost ?? 0).toLocaleString('en-US')} Yang`;
+      `${(preview?.cost ?? 0).toLocaleString('en-US')} Yang`;
     find('.upgrade-max').hidden = !item || level !== MAX_UPGRADE_LEVEL;
-    previous.setDisabled(!item || confirmed || level === 0);
-    nextLevel.setDisabled(!item || confirmed || level === MAX_UPGRADE_LEVEL);
-    levelOutput.value = `+${level}`;
-    example.setDisabled(confirmed);
+    if (devControls) {
+      devControls.previous.setDisabled(!item || confirmed || level === 0);
+      devControls.next.setDisabled(
+        !item || confirmed || level === MAX_UPGRADE_LEVEL,
+      );
+      devControls.output.value = `+${level}`;
+      devControls.example.setDisabled(confirmed);
+    }
     confirmation.hidden = !confirmed;
     find('.upgrade-confirm-text').textContent =
-      `Preview ${preview?.next?.name ?? ''} for ${(preview?.cost ?? 0).toLocaleString('en-US')} Yang?`;
+      `Upgrade to ${preview?.next?.name ?? ''} for ${(preview?.cost ?? 0).toLocaleString('en-US')} Yang?`;
     upgrade.element.hidden = confirmed;
     cancel.element.hidden = confirmed;
     upgrade.setDisabled(!item || level === MAX_UPGRADE_LEVEL);
@@ -289,7 +312,8 @@ export function mountUpgrade(
       if (key && wasHidden) shell.handle.activate();
     },
     setInventory(snapshot: InventorySnapshot) {
-      if (!item || item.id === upgradeExample.id) return;
+      if (!item || (options.devPreview && item.id === upgradeExample.id))
+        return;
       const current = snapshot.items.find((entry) => entry.id === item!.id);
       if (!current || previewItemLevel(current) === null) {
         item = null;
@@ -302,9 +326,11 @@ export function mountUpgrade(
       if (disposed) return;
       disposed = true;
       bindings.forEach((binding) => binding.dispose());
-      [example, previous, nextLevel, upgrade, cancel, yes, no].forEach(
-        (button) => button.dispose(),
-      );
+      [upgrade, cancel, yes, no].forEach((button) => button.dispose());
+      if (devControls)
+        [devControls.example, devControls.previous, devControls.next].forEach(
+          (button) => button.dispose(),
+        );
       tip.dispose();
       shell.dispose();
     },

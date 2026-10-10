@@ -567,6 +567,14 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       ...snapshot,
       npc: { ...npc, selectedServiceId: 'upgrade' },
       hud: { ...snapshot.hud, inventory_open: true, ui_scale: 1 },
+      inventory: {
+        ...snapshot.inventory!,
+        items: snapshot.inventory!.items.map((item) => ({
+          ...item,
+          name: 'Żelazny miecz +0',
+          tooltip: { category: 'Sword', properties: ['Attack: 10'] },
+        })),
+      },
     };
     await send(upgradeState);
     await frame();
@@ -596,11 +604,20 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await page.waitForFunction(
       () =>
         document.querySelector('.upgrade-name')?.textContent ===
-        'Iron Sword +0',
+        'Żelazny miecz +0',
     );
-    await upgradeWindow
-      .getByRole('button', { name: 'Preview Iron Sword', exact: true })
-      .click();
+    assert.equal(
+      await upgradeWindow
+        .getByRole('button', { name: 'Preview Iron Sword', exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await upgradeWindow
+        .getByRole('button', { name: 'Next preview level', exact: true })
+        .count(),
+      0,
+    );
     await frame();
     if (screenshotDirectory)
       await upgradeWindow.locator('.upgrade-window').screenshot({
@@ -611,11 +628,11 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       });
     for (let level = 0; level < 9; level++) {
       assert.equal(
-        await upgradeWindow.locator('.upgrade-level').textContent(),
-        `+${level}`,
+        await upgradeWindow.locator('.upgrade-name').textContent(),
+        `Żelazny miecz +${level}`,
       );
       await upgradeWindow
-        .getByRole('button', { name: 'Preview upgrade', exact: true })
+        .getByRole('button', { name: 'Upgrade', exact: true })
         .click();
       assert.equal(
         await upgradeWindow.locator('.upgrade-confirmation').isVisible(),
@@ -635,11 +652,11 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
           false,
         );
         assert.equal(
-          await upgradeWindow.locator('.upgrade-level').textContent(),
-          '+0',
+          await upgradeWindow.locator('.upgrade-name').textContent(),
+          'Żelazny miecz +0',
         );
         await upgradeWindow
-          .getByRole('button', { name: 'Preview upgrade', exact: true })
+          .getByRole('button', { name: 'Upgrade', exact: true })
           .click();
       }
       await upgradeWindow
@@ -649,7 +666,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     assert.equal(await upgradeWindow.locator('.upgrade-max').isVisible(), true);
     assert.equal(
       await upgradeWindow
-        .getByRole('button', { name: 'Preview upgrade', exact: true })
+        .getByRole('button', { name: 'Upgrade', exact: true })
         .isDisabled(),
       true,
     );
@@ -670,13 +687,22 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       [],
       'Upgrade UI never sends an item/economy command',
     );
-    await upgradeWindow
-      .getByRole('button', { name: 'Previous preview level', exact: true })
-      .click();
+    const smallUpgradeState: DomainSnapshot = {
+      ...upgradeState,
+      inventory: {
+        ...upgradeState.inventory!,
+        items: upgradeState.inventory!.items.map((item) => ({
+          ...item,
+          revision: 1,
+          name: 'Żelazny miecz +8',
+          tooltip: { category: 'Sword', properties: ['Attack: 26'] },
+        })),
+      },
+    };
     for (const scale of [1, 1.5]) {
       await page.setViewportSize({ width: 960, height: 540 });
       await send({
-        ...upgradeState,
+        ...smallUpgradeState,
         hud: { ...upgradeState.hud, ui_scale: scale },
       });
       await frame();
@@ -691,7 +717,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
           bounds.y + bounds.height <= 541,
       );
       await upgradeWindow
-        .getByRole('button', { name: 'Preview upgrade', exact: true })
+        .getByRole('button', { name: 'Upgrade', exact: true })
         .click();
       await upgradeWindow
         .getByRole('button', { name: 'Back', exact: true })
@@ -706,6 +732,23 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     assert.equal(await page.locator('#npc-menu .npc-window').isVisible(), true);
     console.log(
       `Upgrade real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, Inventory inspection, +0 through +9, confirmation/Escape, bounds/scales, no mutations)`,
+    );
+    // Development controls are opt-in on their own page, outside the game entry.
+    await page.goto(new URL('../dev/upgrade.html', url).href);
+    const devWindow = page.locator('#upgrade');
+    await devWindow
+      .getByRole('button', { name: 'Preview Iron Sword', exact: true })
+      .click();
+    await devWindow
+      .getByRole('button', { name: 'Next preview level', exact: true })
+      .click();
+    assert.equal(await devWindow.locator('.upgrade-level').textContent(), '+1');
+    await devWindow
+      .getByRole('button', { name: 'Previous preview level', exact: true })
+      .click();
+    assert.equal(await devWindow.locator('.upgrade-level').textContent(), '+0');
+    console.log(
+      'Upgrade standalone dev-preview: PASS (example and level controls isolated from game)',
     );
     assert.deepEqual(errors, []);
     console.log(

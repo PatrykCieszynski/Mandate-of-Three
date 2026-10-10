@@ -26,14 +26,20 @@ existing affix lines and requirements when supplied, a required material row,
 Yang cost and success chance. Hover uses the shared ItemTooltip. At +9 the recipe
 is hidden, the action is disabled and the panel displays the maximum-level state.
 
-Preview Iron Sword selects an isolated example without owning an item. Mouse-only
-minus/plus controls inspect all ten levels without a native dropdown/keyboard
-handoff. Preview upgrade opens inline confirmation; Confirm advances only the
-local display by one step. Back/Escape first cancel confirmation. Outside it,
+The game view selects items only through the Inventory drop target. Upgrade is
+its prominent primary action, with a smaller Cancel directly below. The result
+has space above/below its level and Attack comparison; materials, Yang cost and
+success chance follow underneath. Upgrade opens inline confirmation; Confirm
+advances only the local display by one step. Back/Escape first cancel confirmation. Outside it,
 Cancel/close/Escape follow the shared NPC routing: menu for multiple services,
 end interaction for one service. Escape still cancels a carried item first.
 
-The Preview label and notice remain visible throughout. Temporary fixture values
+The preview-only notice remains visible until gameplay is connected. Development
+controls are absent from the game. Open `source/client/ui_web/web/dev/upgrade.html`
+through a local Web asset server for the standalone development page: it opts into
+`devPreview`, provides Preview Iron Sword and mouse-only minus/plus level controls,
+and mounts no Web bridge or real gameplay state. The game entry never imports
+that development module. Temporary fixture values
 are next level times 1000 Yang, one material per three next levels rounded up,
 100% chance, and Iron Sword's existing +2 Attack per level. Material icon/name and
 costs are illustrative presentation data, not accepted economy/balance. Inventory
@@ -49,5 +55,6 @@ Optional `tests/run-shop-browser.ps1` now checks both NPC Shop and Upgrade using
 production HTML/JS, controlled IPC and installed Playwright/Chrome. Upgrade checks
 real Inventory mouse-drop inspection, all nine confirmations through +9, maximum
 state, Escape/back, scale/viewport bounds and absence of item/economy commands.
+It also verifies that example/level controls exist only on the standalone dev page.
 Both legacy skin and CSS fallback are covered; optional PNGs are diagnostic only.
 This browser check does not verify embedded native CEF/GPU behavior.
