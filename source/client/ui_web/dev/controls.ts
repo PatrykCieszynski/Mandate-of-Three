@@ -69,3 +69,16 @@ window.addEventListener('message', (event) => {
       (log.textContent ?? '')
     ).slice(0, 12000);
 });
+
+// Hovering the iframe need not focus it. Mirror the native presentation-only Alt
+// message from the preview host so details work before any click in the game UI.
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Alt' && !event.repeat)
+    send({ action: 'tooltip-details', value: true });
+});
+window.addEventListener('keyup', (event) => {
+  if (event.key === 'Alt') send({ action: 'tooltip-details', value: false });
+});
+window.addEventListener('blur', () =>
+  send({ action: 'tooltip-details', value: false }),
+);

@@ -14,6 +14,8 @@ var _request_epoch: String = Crypto.new().generate_random_bytes(8).hex_encode()
 const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
 var ui_scale: float = 1.0
 var _scale_initialized: bool = false
+var _tooltip_alt: bool = false
+var _tooltip_focused: bool = true
 
 func setup(game_world: SpikeWorld3D) -> void:
 	world = game_world
@@ -34,6 +36,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	host.navigation_started.connect(func() -> void: _cancel_pending("ui_reload"))
 	Client.connection_changed.connect(func(connected: bool) -> void:
 		if not connected: _cancel_pending("disconnected"))
+	bridge.ui_ready.connect(func() -> void: bridge.send("ui.tooltip_details", {"alt": _tooltip_alt}))
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
@@ -106,13 +109,22 @@ func _npc_submit(action: String, instance_id: String = "", service_id: String = 
 	world.npc_endpoint.request_interaction.rpc_id(1, action, instance_id, service_id, id)
 	return await _wait_command(id)
 
+static func _item_tooltip_details(item: Dictionary) -> Dictionary:
+	# Existing rolls are shown faithfully. Prefix/suffix metadata is absent until
+	# the content model defines it; no generated affixes or combat changes here.
+	var affixes: Array = []
+	for affix: Dictionary in item.get("affixes", []):
+		affixes.append({"lines": ["%+d %s" % [int(affix.value), str(affix.stat).capitalize()]]})
+	return {"properties": ["Attack: %d" % int(item.get("stats", {}).get("attack", 0))], "affixes": affixes}
+
 func _inventory(snapshot: Dictionary) -> void:
 	if not snapshot.get("ok", false): return
 	var bag: Array = []
 	var equipped: Array = []
 	for item: Dictionary in snapshot.items:
 		var comparison: Dictionary = world.inventory_endpoint.weapon_comparison(item)
-		var display := {"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon_id": str(item.get("icon_id", "")), "height": int(item.inventory_height), "quantity": int(item.amount), "description": "Attack %d. After equipping: %d (%+d)." % [int(item.stats.get("attack", 0)), comparison.attack, comparison.delta]}
+		var display := {"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon_id": str(item.get("icon_id", "")), "height": int(item.inventory_height), "quantity": int(item.amount), "description": "After equipping: %d (%+d)." % [comparison.attack, comparison.delta]}
+		display["tooltip"] = _item_tooltip_details(item)
 		if item.location == "equipment":
 			display["slot"] = str(item.equipment_slot)
 			equipped.append(display)
@@ -123,7 +135,7 @@ func _inventory(snapshot: Dictionary) -> void:
 	var stored: Array = []
 	for item: Dictionary in snapshot.get("storage",{}).get("items",[]):
 		var position: int = int(item.bag_position)
-		stored.append({"id":str(item.uid),"revision":int(item.revision),"name":"%s +%d" % [item.item_name,item.upgrade_level],"icon_id":str(item.icon_id),"height":int(item.inventory_height),"quantity":int(item.amount),"x":position % 15,"y":(position % 135) / 15,"page":position / 135})
+		stored.append({"id":str(item.uid),"revision":int(item.revision),"name":"%s +%d" % [item.item_name,item.upgrade_level],"icon_id":str(item.icon_id),"height":int(item.inventory_height),"quantity":int(item.amount),"tooltip":_item_tooltip_details(item),"x":position % 15,"y":(position % 135) / 15,"page":position / 135})
 	if snapshot.get("storage",{}).get("ok",false): dispatcher.set_domain("storage",{"columns":15,"rows":9,"pages":2,"items":stored})
 	dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag})
 	dispatcher.set_domain("equipment", {"items":equipped, "stats":snapshot.get("stats", {})})
@@ -225,6 +237,23 @@ func set_open(active: bool) -> void:
 	equipment_opened = active
 	_layout()
 	host.set_modal(false) # Browser stays alive; opening only changes DOM visibility.
+
+# Pointer-only CEF keeps gameplay keyboard ownership. Send modifier changes as
+# presentation input, never server RPCs or a request for keyboard focus.
+func _process(_delta: float) -> void:
+	_set_tooltip_alt(_tooltip_focused and Input.is_key_pressed(KEY_ALT))
+
+func _set_tooltip_alt(pressed: bool) -> void:
+	if pressed == _tooltip_alt: return
+	_tooltip_alt = pressed
+	if is_instance_valid(bridge): bridge.send("ui.tooltip_details", {"alt": pressed})
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_tooltip_focused = false
+		_set_tooltip_alt(false)
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		_tooltip_focused = true
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if ClientState.menu_open or not world.input_enabled: return

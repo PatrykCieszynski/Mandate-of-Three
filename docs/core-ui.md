@@ -100,7 +100,9 @@ composed primitives. `UiTooltip` accepts arbitrary DOM through `contentRoot`
 and a logical anchor
 through `showAt(point)`. It flips/clamps using the manager's physical viewport
 and scale. `game-ui/items/item-tooltip.ts` supplies the item name/description
-adapter. Currency takes its label and semantic
+adapter. The shared [item tooltip](item-tooltips.md) renders presentation sections,
+rarity colours and held-Alt affix metadata across Inventory, Equipment, Storage and Shop.
+Currency takes its label and semantic
 icon ID; its value and domain actions stay in the screen. Buttons/tabs/currency
 subscriptions have explicit disposal. Shared base/chrome CSS is `core/core.css`.
 

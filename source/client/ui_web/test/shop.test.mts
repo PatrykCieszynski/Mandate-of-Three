@@ -403,7 +403,7 @@ test('Item tooltip preserves descriptions and clears offer pricing for owned ite
         currency: 'yang',
       },
     );
-    assert.equal(tip.element.querySelector('p')?.textContent, 'Forged steel.');
+    assert.equal(tip.element.querySelector('.item-tooltip-description')?.textContent, 'Forged steel.');
     const footer = tip.element.querySelector('footer')!;
     assert.equal(footer.textContent, 'Buy price: 1,000 Yang');
     assert.equal(footer.hidden, false);
@@ -411,7 +411,7 @@ test('Item tooltip preserves descriptions and clears offer pricing for owned ite
       { clientX: 10, clientY: 10 },
       { name: 'Owned Sword', description: 'Already yours.' },
     );
-    assert.equal(tip.element.querySelector('p')?.textContent, 'Already yours.');
+    assert.equal(tip.element.querySelector('.item-tooltip-description')?.textContent, 'Already yours.');
     assert.equal(footer.hidden, true);
     assert.equal(footer.textContent, '');
   } finally {

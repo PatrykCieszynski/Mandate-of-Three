@@ -133,14 +133,6 @@ html,body {
   background:#0a0c0bf5;
   box-shadow:0 2px 5px #0009;
   pointer-events:none}
-.item-tooltip h2 {
-  margin:0 0 5px;
-  font:13px Georgia;
-  color:#e3cb91}
-.item-tooltip p {
-  margin:0;
-  font:11px/15px Arial;
-  color:#c5c2b8}
 .ui-tab {
   flex:1;
   padding:0;
@@ -160,4 +152,10 @@ html,body {
   background-repeat:no-repeat;
   background-position:center}
 
-.item-tooltip-price {margin-top:8px;padding-top:6px;border-top:1px solid var(--frame);font:11px/15px Arial;color:#e4c578}
+.ui-tooltip[popover] {
+  position:fixed;
+  inset:auto;
+  margin:0;
+  transform:scale(var(--tooltip-scale,1));
+  transform-origin:0 0}
+.ui-tooltip[popover]::backdrop {display:none}

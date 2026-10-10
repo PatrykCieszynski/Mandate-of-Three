@@ -40,6 +40,45 @@ try {
   await ui.locator('#inventory .inventory-item').first().waitFor();
   assert.equal(await ui.locator('#inventory .inventory-item').count(), 3);
   assert.equal(await ui.locator('.wallet strong').textContent(), '12,345');
+  await ui.locator('#inventory [data-id=preview-sword]').hover();
+  await ui.locator('#inventory .item-tooltip').waitFor({ state: 'visible' });
+  assert.equal(
+    await ui.locator('#inventory .item-tooltip').getAttribute('data-rarity'),
+    'legendary',
+  );
+  assert.equal(
+    await ui
+      .locator('#inventory .item-tooltip')
+      .evaluate((element) => element.matches(':popover-open')),
+    true,
+  );
+  const focusBeforeDetails = await page.evaluate(
+    () => document.activeElement?.tagName,
+  );
+
+  assert.equal(
+    await ui.locator('#inventory .item-tooltip-affix-kind:visible').count(),
+    0,
+  );
+  await page.keyboard.down('Alt');
+  await ui
+    .locator('#inventory .item-tooltip-affix-kind')
+    .first()
+    .waitFor({ state: 'visible' });
+  assert.equal(
+    await ui.locator('#inventory .item-tooltip-affix-kind:visible').count(),
+    6,
+  );
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.tagName),
+    focusBeforeDetails,
+  );
+  await page.keyboard.up('Alt');
+  await ui
+    .locator('#inventory .item-tooltip-affix-kind')
+    .first()
+    .waitFor({ state: 'hidden' });
+
   await page
     .getByRole('button', { name: 'Wallet update', exact: true })
     .click();
@@ -65,6 +104,7 @@ try {
     .locator('#inventory .inventory-status')
     .filter({ hasText: 'preview_rejected' })
     .waitFor();
+  await page.locator('pre').filter({ hasText: 'item.activate' }).waitFor();
   assert.match(
     (await page.locator('pre').textContent()) ?? '',
     /item.activate/,

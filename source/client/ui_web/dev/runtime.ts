@@ -109,7 +109,21 @@ function fixture(): DomainSnapshot {
           x: 0,
           y: 0,
           page: 0,
-          description: 'Development fixture: three-cell footprint.',
+          description:
+            'A well-balanced blade, forged for a steady hand.',
+          tooltip: {
+            category: 'One-handed sword',
+            properties: ['Attack: 24–32'],
+            requirements: ['Requires level 12'],
+            affixes: [
+              { kind: 'prefix', lines: ['+15 Strength'] },
+              { kind: 'prefix', lines: ['+120 maximum health'] },
+              { kind: 'prefix', lines: ['+18% physical damage'] },
+              { kind: 'suffix', lines: ['+8% attack speed'] },
+              { kind: 'suffix', lines: ['+12% fire resistance'] },
+              { kind: 'suffix', lines: ['+6% movement speed'] },
+            ],
+          },
         },
         {
           id: 'preview-material',
@@ -126,6 +140,16 @@ function fixture(): DomainSnapshot {
         {
           id: 'preview-armor',
           revision: 1,
+          tooltip: {
+            category: 'Body armour',
+            properties: ['Defence: 42'],
+            affixes: [
+              { kind: 'prefix', lines: ['+80 maximum health'] },
+              { kind: 'prefix', lines: ['+12 Defence'] },
+              { kind: 'suffix', lines: ['+9% cold resistance'] },
+              { kind: 'suffix', lines: ['+5% recovery rate'] },
+            ],
+          },
           name: 'Armor',
           icon_id: 'armor',
           height: 2,
@@ -152,6 +176,14 @@ function fixture(): DomainSnapshot {
         {
           id: 'preview-equipped',
           revision: 1,
+          tooltip: {
+            category: 'One-handed sword',
+            properties: ['Attack: 18–24'],
+            affixes: [
+              { kind: 'prefix', lines: ['+8 Strength'] },
+              { kind: 'suffix', lines: ['+5% attack speed'] },
+            ],
+          },
           name: 'Equipped sword',
           icon_id: 'iron_sword',
           height: 3,
@@ -170,7 +202,7 @@ export const notify = (detail: object) =>
     location.origin,
   );
 const emit = (
-  type: StateType | 'command.result' | 'ui.shortcut',
+  type: StateType | 'command.result' | 'ui.shortcut' | 'ui.tooltip_details',
   payload: object,
   id?: string,
 ) => {
@@ -337,7 +369,8 @@ export function decodePreviewAction(value: unknown): PreviewAction | null {
     (name === 'inventory' ||
       name === 'equipment' ||
       name === 'storage' ||
-      name === 'accept') &&
+      name === 'accept' ||
+      name === 'tooltip-details') &&
     typeof value.value === 'boolean'
   )
     return { action: name, value: value.value };
@@ -407,6 +440,9 @@ window.addEventListener('message', (event) => {
         ...(request.value ? { inventory_open: true } : {}),
       };
       emit('hud.updated', state.hud);
+      break;
+    case 'tooltip-details':
+      emit('ui.tooltip_details', { alt: request.value });
       break;
     case 'accept':
       accept = request.value;

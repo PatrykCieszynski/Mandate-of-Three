@@ -186,7 +186,7 @@ test('Storage composes state/actions, regions, tooltip and window lifecycle with
  const item={id:'storage-content',name:'Material',icon_id:'material',height:2,quantity:7,x:1,y:1,description:'Stored material'};
  storage.setState({columns:4,rows:5,items:[item]});const slot=findElement(root,'.ui-item-slot','div');
  fire(slot,'pointerdown');assert.deepEqual(actions,['storage-content']);
- fire(slot,'pointermove',100,150);const tooltip=findElement(root,'.ui-tooltip','aside');assert.equal(tooltip.hidden,false);assert.equal(findElement(tooltip,'p','p').textContent,item.description);
+ fire(slot,'pointermove',100,150);const tooltip=findElement(root,'.ui-tooltip','aside');assert.equal(tooltip.hidden,false);assert.equal(findElement(tooltip,'.item-tooltip-description','p').textContent,item.description);
  manager.setScale(1.25);assert.equal(tooltip.hidden,true);
  fire(header,'pointerdown');fire(doc,'pointermove',120,140);fire(doc,'pointerup');assert.equal(frames.size,0);assert.ok(regions>1);assert.equal(manager.activeWindowId,'storage');
  manager.setViewport({width:400,height:350});const position=manager.place('storage');assert.ok(position.x>=0&&position.x+panel.offsetWidth<=400/1.25);
