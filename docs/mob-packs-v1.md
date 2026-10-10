@@ -81,18 +81,54 @@ Godot's default WebSocket buffer, so the common endpoint configures bounded 1 Mi
 inbound/outbound buffers before connecting on both client and server. The network
 fixtures use that same setup. This is capacity configuration, not snapshot/AOI
 redesign; it increases per-connection buffer capacity. The engine properties are
-listed in [Godot's WebSocketMultiplayerPeer API](https://docs.godotengine.org/en/stable/classes/class_websocketmultiplayerpeer.html). Each actor includes ID, mob key,
-visual ID, title, HP/max HP, damage/speed, position/yaw, state, anchor, pack ID and
-source stone ID. Clients create unknown actors from the authoritative snapshot,
-remove missing ones and interpolate. They do not spawn, wander, leash or respawn.
-The target resolver clears dead/removed identities and disables autoattack;
-a replacement cannot revive an old selection. AOI/transport redesign is deferred.
+listed in [Godot's WebSocketMultiplayerPeer API](https://docs.godotengine.org/en/stable/classes/class_websocketmultiplayerpeer.html).
+
+The full snapshot now carries `mobs` as an array of compact records:
+
+```text
+[instance_id, position, yaw, hp, numeric_state, mob_key, source_metinstone_id]
+```
+
+`MobSnapshot.Field` defines the indices. `MobSnapshot.State` defines stable wire
+values: IDLE=0, WANDER=1, CHASE=2, ATTACK=3, RETURN=4, DEAD=5, DISABLED=6.
+Server AI continues using its existing names internally. The shared
+`MobDefinitions.resolve(mob_key)` registry supplies client display name, maximum
+HP and visual ID. Register new content in that registry before spawning it;
+unknown keys are warned about and skipped rather than rendered with fake metadata.
+Client and server content/protocol must ship together; the old dictionary shape
+is not supported.
+
+Damage, speed, home/pack anchor, pack ID, leash, aggro and respawn state are not
+replicated. The source stone ID remains for encounter provenance/debugging.
+Clients create new actors from the current position, remove missing ones (including
+an empty full snapshot), and interpolate. They do not spawn, wander, leash or
+respawn. The target resolver clears dead/removed identities and disables autoattack;
+a replacement cannot revive an old selection. Transport, cadence, full-snapshot
+semantics and 1 MiB buffers remain unchanged. AOI, deltas and split RPCs are deferred.
+
+### Serialized payload measurement
+
+`mob_packs.gd` compares the frozen previous dictionary shape with the production
+compact encoder for the same actors using Godot `var_to_bytes`. These numbers
+measure only the complete `dogs`/`mobs` section, including its outer dictionary;
+they exclude other combat fields, RPC framing and WebSocket overhead.
+
+| Actors | Previous | Compact | Reduction |
+| --- | --- | --- | --- |
+| 50 | 20,116 bytes / 19.64 KiB | 4,104 bytes / 4.01 KiB | 79.6% |
+| 100 | 39,916 bytes / 38.98 KiB | 8,104 bytes / 7.91 KiB | 79.7% |
+
+Measured headlessly with Godot 4.7.2 on Windows. This is roughly a 4.9x reduction
+for this fixture, not a total bandwidth or frame-time benchmark. Names, source
+IDs and composition affect byte counts. The regression check requires a broad
+reduction, not these exact numbers.
 
 ## Verification and remaining manual pass
 
 Default smoke includes `mob_packs.gd`: mixed composition, ID uniqueness, pack-only
 aggro/proximity, anchor leash/reset, one member's replacement, old-target invalidation,
-Metin provenance/expiry and a short 50-actor AI tick. This is not a benchmark.
+Metin provenance/expiry, a short 50-actor AI tick, compact serialization round trips
+(including every AI state) and 50/100-actor payload sizes. This is not a benchmark.
 `run-first-region`, `run-metin`, `run-combat` and `run-metin-network` cover production
 content, stone thresholds, collision policy, real melee pack aggro and two-client
 snapshot/reward behavior. Test fixtures use the small legacy arena where appropriate.

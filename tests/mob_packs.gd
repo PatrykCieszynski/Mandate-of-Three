@@ -130,8 +130,50 @@ func _ready() -> void:
 		for mob: SpikeWildDog3D in combat.dogs.values():
 			assert(mob.position.is_finite() and mob.hp > 0 and mob.ai_state in ["IDLE","WANDER"])
 		await get_tree().physics_frame
+	measure_snapshots(combat,50)
+	combat.create_pack([entry(wild,50)],Vector3.ZERO,1,2,8,1)
+	assert(combat.dogs.size() == 100)
+	measure_snapshots(combat,100)
 	world.free()
 	WorldServer.curr = null
 	server.free()
 	print("MOB_PACKS_OK: composition, identity, aggro, anchor leash, per-member replacement, Metin expiry and 50 actors")
 	get_tree().quit()
+
+func measure_snapshots(combat: SpikeCombat3D, count: int) -> void:
+	# Frozen pre-refactor wire shape; only the new side uses production encoding.
+	var legacy: Dictionary = {}
+	for mob: SpikeWildDog3D in combat.dogs.values():
+		legacy[mob.mob_instance_id] = {"position":mob.position,"yaw":mob.rotation.y,
+			"hp":mob.hp,"state":mob.ai_state,"max_hp":mob.max_hp,"damage":mob.attack_damage,
+			"title":mob.title,"home":mob.home,"source_metinstone_id":mob.source_metinstone_id,
+			"mob_key":mob.mob_key,"visual_id":mob.visual_id,"move_speed":mob.move_speed,
+			"pack_instance_id":mob.pack_instance_id}
+	var records := combat._mob_snapshots()
+	assert(records.size() == count)
+	var decoded: Dictionary = bytes_to_var(var_to_bytes({"mobs":records}))
+	var seen: Dictionary[int,bool] = {}
+	for record: Array in decoded.mobs:
+		assert(record.size() == MobSnapshot.Field.COUNT)
+		var id: int = record[MobSnapshot.Field.ID]
+		assert(not seen.has(id))
+		seen[id] = true
+		var mob: SpikeWildDog3D = combat.dogs[id]
+		assert(MobDefinitions.resolve(record[MobSnapshot.Field.MOB_KEY]) == mob.definition)
+		assert(record[MobSnapshot.Field.POSITION] == mob.position and record[MobSnapshot.Field.YAW] == mob.rotation.y)
+		assert(record[MobSnapshot.Field.HP] == mob.hp and record[MobSnapshot.Field.SOURCE_METIN] == mob.source_metinstone_id)
+		assert(typeof(record[MobSnapshot.Field.STATE]) == TYPE_INT)
+		assert(MobSnapshot.state_name(record[MobSnapshot.Field.STATE]) == mob.ai_state)
+	var probe: SpikeWildDog3D = combat.dogs.values()[0]
+	var original_state := probe.ai_state
+	for name: String in MobSnapshot.STATE_NAMES:
+		probe.ai_state = name
+		assert(MobSnapshot.state_name(MobSnapshot.capture(probe)[MobSnapshot.Field.STATE]) == name)
+	probe.ai_state = original_state
+	for key: StringName in [&"wild_dog",&"feral_dog",&"hollow_hound",&"metin_hound_elite"]:
+		assert(MobDefinitions.resolve(key).valid())
+	assert(MobDefinitions.resolve(&"unknown") == null)
+	var before := var_to_bytes({"dogs":legacy}).size()
+	var after := var_to_bytes({"mobs":records}).size()
+	assert(after < before / 2, "Compact mob section should remove repeated metadata overhead")
+	print("MOB_SNAPSHOT_SIZE count=%d before=%d bytes (%.2f KiB) after=%d bytes (%.2f KiB) reduction=%.1f%%" % [count,before,before/1024.0,after,after/1024.0,100.0*(1.0-float(after)/before)])
