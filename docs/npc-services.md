@@ -35,9 +35,15 @@ and server at (-7, 0, 6), with a capsule placeholder visual and name label. The
 is static content; dynamic NPC spawn/transform replication is not implemented.
 NPCs use collision layer 8 for picking, outside the combat mob layer.
 
-Approach the Blacksmith and click it, or press **N** within 3 m. Existing E item
-pickup and B global account Storage remain unchanged. Interaction does not
-implement auto-navigation to a distant NPC.
+Click the Blacksmith to approach along the arena navmesh and interact on arrival,
+or press **N** within 3 m. Client steering sends ordinary bounded movement inputs;
+server physics and the existing range checks still authorize the interaction.
+Arrival uses the latest server position and a small range margin, then stops and
+sends one request. WASD, attack/autoattack, selecting a mob, Escape, options,
+loss of focus, death or an unavailable NPC cancel the approach. A new NPC click
+replaces the route. An unreachable path never falls back to walking through a
+wall; the approach expires after 15 seconds. Existing E item pickup and B global
+account Storage remain unchanged.
 
 `NpcInteraction3D` lives under the authenticated map RPC path. It resolves the
 stable instance ID against its own actor registry and validates the server's
