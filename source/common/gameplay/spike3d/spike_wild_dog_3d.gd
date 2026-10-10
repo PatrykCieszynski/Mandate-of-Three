@@ -1,6 +1,6 @@
 class_name SpikeWildDog3D
 extends SpikeCharacter3D
-## Visuals resolve independently. AI, navigation, hit stun and knockback run only
+## Visuals resolve independently. AI, hit stun and knockback run only
 ## on the server; clients interpolate position and play presentation effects.
 
 const MAX_HP: int = 120
@@ -10,7 +10,18 @@ var source_metinstone_id: String = ""
 var respawn_enabled: bool = true
 var expires_at: int = 0
 var title: String = "Wild Dog"
-var mob_id: int
+var definition: MobDefinition
+var mob_key: StringName = &"wild_dog"
+var visual_id: StringName = &"stray_dog"
+var move_speed: float = 2.8
+var mob_instance_id: int
+# Existing combat/target consumers use this alias for the runtime identity.
+var mob_id: int:
+	get: return mob_instance_id
+	set(value): mob_instance_id = value
+var pack_instance_id: int = 0
+var wander_target: Vector3
+var wander_at_ms: int = 0
 var ai_enabled: bool = true
 var home: Vector3
 var hp: int = MAX_HP
@@ -22,10 +33,8 @@ var contribution_players: Dictionary[int, PlayerResource] = {}
 var last_attack_ms: int = -1000
 var stunned_until_ms: int = 0
 var knockback: Vector3 = Vector3.ZERO
-var agent: NavigationAgent3D
 var hp_label: Label3D
 var name_label: Label3D
-var _repath_ms: int = 0
 var presentation: DogVisual3D
 
 func setup_dog(id: int, spawn: Vector3) -> void:
@@ -34,7 +43,7 @@ func setup_dog(id: int, spawn: Vector3) -> void:
 	home = spawn
 	position = spawn
 	collision_layer = 4
-	collision_mask = 1
+	collision_mask = 16 # Floor layer only; scenery remains layer 1.
 	var collision := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
 	shape.radius = 0.4
@@ -42,17 +51,12 @@ func setup_dog(id: int, spawn: Vector3) -> void:
 	collision.shape = shape
 	collision.position.y = 0.4
 	add_child(collision)
-	presentation = DogVisual3D.new()
-	presentation.visual_id = &"stray_dog"
-	add_child(presentation)
+	if not GameMode.is_world_server():
+		presentation = DogVisual3D.new()
+		presentation.visual_id = visual_id
+		add_child(presentation)
 	name_label = _label(title, 1.3, 32)
 	hp_label = _label("%d / %d" % [hp,max_hp], 1.65, 24)
-	if GameMode.is_world_server():
-		agent = NavigationAgent3D.new()
-		agent.path_desired_distance = 0.25
-		agent.target_desired_distance = 0.15
-		agent.path_max_distance = 1.2
-		add_child(agent)
 
 func _label(text: String, height: float, size: int) -> Label3D:
 	var label := Label3D.new()
@@ -65,21 +69,10 @@ func _label(text: String, height: float, size: int) -> Label3D:
 	add_child(label)
 	return label
 
-func navigate(destination: Vector3, now: int) -> Vector2:
-	if agent == null or NavigationServer3D.map_get_iteration_id(get_world_3d().navigation_map) == 0:
-		return Vector2.ZERO
-	if now >= _repath_ms:
-		agent.target_position = destination
-		_repath_ms = now + 200
-	var next: Vector3 = agent.get_next_path_position()
-	if agent.is_navigation_finished(): return Vector2.ZERO
-	var offset: Vector3 = next - global_position
-	return Vector2(offset.x, offset.z).normalized()
-
 func move_dog(delta: float, direction: Vector2, now: int) -> void:
 	if now < stunned_until_ms: direction = Vector2.ZERO
-	velocity.x = direction.x * 2.8 + knockback.x
-	velocity.z = direction.y * 2.8 + knockback.z
+	velocity.x = direction.x * move_speed + knockback.x
+	velocity.z = direction.y * move_speed + knockback.z
 	velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
 	knockback *= exp(-5.0 * delta)
 	if knockback.length_squared() < 0.01: knockback = Vector3.ZERO
@@ -93,20 +86,6 @@ func die(now: int) -> void:
 	knockback = Vector3.ZERO
 	visible = false
 	collision_layer = 0
-
-func respawn() -> void:
-	position = home
-	velocity = Vector3.ZERO
-	hp = max_hp
-	contributions.clear()
-	contribution_players.clear()
-	ai_state = "IDLE"
-	target_peer = 0
-	stunned_until_ms = 0
-	knockback = Vector3.ZERO
-	_repath_ms = 0
-	visible = true
-	collision_layer = 4
 
 func present_snapshot(snapshot: Dictionary) -> void:
 	var previous_state := ai_state

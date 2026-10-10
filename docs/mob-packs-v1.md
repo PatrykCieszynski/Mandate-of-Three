@@ -1,0 +1,100 @@
+# Mob packs and straight-line AI v1
+
+World owns all mob spawning, runtime IDs, XYZ movement, targeting, HP, death and
+replacement. This is a focused mob runtime, not a generic actor or encounter factory.
+The Metin lifecycle, reward/contribution rules and persistence policy stay intact.
+
+## Content and authoring
+
+`source/common/gameplay/mobs/` contains `MobDefinition`, `MobSpawnEntry`,
+`MobSpawnPoint3D` and the map-local `MobPackRuntime`. Four `.tres` definitions
+hold the former Wild Dog, Feral Dog, Hollow Hound and Metin Elite profiles.
+`mob_key` is content identity; `display_name` is presentation text. All four
+currently use the optional `stray_dog` visual. HP/damage/speed/visual are copied
+through one `SpikeCombat3D.spawn_mob` entry point.
+
+A map authors Marker3D nodes with the `MobSpawnPoint3D` script. Each supplies
+`members: Array[MobSpawnEntry]`, spawn/wander/leash radii and a per-member respawn
+interval. Counts are 1–100 per entry. Invalid content is rejected at load. Spawn
+and wander sample a uniform disk around the anchor, with independent timers.
+No separate MobPackDefinition, leader or formation system is introduced.
+
+The production graybox authors six pack markers in `first_region_3d.tscn`:
+
+| Area | Pack compositions | Total |
+| --- | --- | --- |
+| Outskirts | 10 Wild Dogs; 10 Wild Dogs + 4 Feral Dogs | 24 |
+| Old Road | 10 Wild Dogs + 6 Feral Dogs; 10 Wild Dogs + 8 Feral Dogs | 34 |
+| Stone Hollow | 14 Feral Dogs + 8 Hollow Hounds; 14 Feral Dogs + 10 Hollow Hounds | 46 |
+
+There are 104 open-world actors before Metin waves. These are density test data,
+not final balance. Spawn radius is 3–4 m, wander 5–6 m, leash 15–18 m and each
+killed member is replaced after 15 seconds. The hub is outside the wander +
+proximity aggro envelope. Map code contains geometry, not mob combat stats.
+
+## Runtime behavior
+
+One combat-owned allocator issues all `mob_instance_id` and `pack_instance_id`
+values for the map lifetime. The existing `mob_id` property is a runtime-ID alias
+for combat/target consumers. IDs are never DB identities and are not reused.
+A spawn point keeps its pack identity; each replacement gets a new actor ID.
+
+Melee, including a killing hit, or one member's proximity detection recruits the
+living pack on the attacker. Dead/disabled actors are excluded. Other packs do
+not inherit the target. Aggro refuses a target already outside that pack's leash.
+Members move independently: `IDLE -> WANDER`, `CHASE -> ATTACK`, `RETURN`, `DEAD`.
+Chase and return use straight XZ directions, without NavigationAgent3D, navigate
+or periodic repathing. Wander chooses a local point, moves and waits with jitter.
+Leash compares both the member and its target against the shared pack anchor.
+Return restores HP, clears contribution/target and resumes idle/wander near it.
+
+Movement still uses server gravity, floor contact and move_and_slide. Ground
+bodies expose bits 1 + 5 (`17`): bit 1 remains the player's scenery/camera/NPC
+navigation geometry; bit 5 (`16`) is floor-only movement for mobs. Walls/props
+expose bit 1 only. Player mask remains 1, mob movement mask is 16, and mob hurtboxes
+remain bit 3 (`4`). Mobs can pass through props; melee/attack line-of-sight still
+uses scenery. New terrain must expose the floor bit. There is no client Y authority.
+Shared navmesh baking remains for NPC approach; mobs do not query it.
+
+Death schedules one replacement ticket containing the definition and due time.
+Other members stay alive. Corpse cleanup and respawn timers are independent;
+cleanup removes the old actor, and the ticket creates a fresh actor at a random
+spawn point. Pack state and all timers are RAM-only. Scene teardown drops them.
+
+## Metin and replication
+
+`MetinWaveDefinition.members` uses the same entry resources. The 75/50/25 waves
+still contain 3 Wild Dogs, 4 Wild Dogs, then 3 Wild Dogs + 1 Metin Elite.
+Each wave creates its own runtime pack through the same entry point, tagged with
+`source_metinstone_id`, no replacements and the existing 180-second lifetime.
+Surviving waves remain after stone death and expire independently, including when
+a later stone is active. Empty temporary packs are removed. There is no navmesh
+synchronization requirement for stone damage or wave creation.
+
+Snapshots still use the existing transport. The 104-actor join burst exceeded
+Godot's default WebSocket buffer, so the common endpoint configures bounded 1 MiB
+inbound/outbound buffers before connecting on both client and server. The network
+fixtures use that same setup. This is capacity configuration, not snapshot/AOI
+redesign; it increases per-connection buffer capacity. The engine properties are
+listed in [Godot's WebSocketMultiplayerPeer API](https://docs.godotengine.org/en/stable/classes/class_websocketmultiplayerpeer.html). Each actor includes ID, mob key,
+visual ID, title, HP/max HP, damage/speed, position/yaw, state, anchor, pack ID and
+source stone ID. Clients create unknown actors from the authoritative snapshot,
+remove missing ones and interpolate. They do not spawn, wander, leash or respawn.
+The target resolver clears dead/removed identities and disables autoattack;
+a replacement cannot revive an old selection. AOI/transport redesign is deferred.
+
+## Verification and remaining manual pass
+
+Default smoke includes `mob_packs.gd`: mixed composition, ID uniqueness, pack-only
+aggro/proximity, anchor leash/reset, one member's replacement, old-target invalidation,
+Metin provenance/expiry and a short 50-actor AI tick. This is not a benchmark.
+`run-first-region`, `run-metin`, `run-combat` and `run-metin-network` cover production
+content, stone thresholds, collision policy, real melee pack aggro and two-client
+snapshot/reward behavior. Test fixtures use the small legacy arena where appropriate.
+
+Restart World and reconnect clients to load the new data/protocol. Play 10–15 minutes:
+attack one outskirts member, pull the pack, kill several, leave leash, return and
+observe individual replacements; continue through mixed packs and a Metin wave.
+Assess density, readable combat, travel gaps and client frame time. Headless checks
+do not prove native render performance at 104 actors. No balancing or additional AI
+framework should precede that manual pass.

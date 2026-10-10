@@ -1,0 +1,125 @@
+extends Node3D
+## Small domain/physics contracts. No balance, pixel or animation timing checks.
+func entry(mob: MobDefinition, count: int) -> MobSpawnEntry:
+	var result := MobSpawnEntry.new()
+	result.mob = mob
+	result.count = count
+	return result
+func _ready() -> void:
+	var wild: MobDefinition = preload("res://source/common/gameplay/mobs/wild_dog.tres")
+	var feral: MobDefinition = preload("res://source/common/gameplay/mobs/feral_dog.tres")
+	assert(wild.valid() and feral.valid())
+	var invalid := wild.duplicate() as MobDefinition
+	invalid.move_speed = NAN
+	assert(not invalid.valid())
+	invalid.move_speed = 1
+	invalid.mob_key = &""
+	assert(not invalid.valid())
+	var server := WorldServer.new()
+	WorldServer.curr = server
+	var player := PlayerResource.new()
+	player.player_id = 1
+	server.connected_players[1] = player
+	var world := preload("res://source/common/gameplay/maps/spike/spike_map_3d.tscn").instantiate() as SpikeWorld3D
+	add_child(world)
+	world.set_physics_process(false)
+	world.combat_endpoint.set_physics_process(false)
+	var combat := world.combat_endpoint
+	for id: int in combat.dogs.keys(): combat._remove_mob(id)
+	combat.packs.clear()
+	var pack := combat.create_pack([entry(wild,10),entry(feral,4)],Vector3.ZERO,2,3,10,1)
+	var unrelated := combat.create_pack([entry(wild,3)],Vector3(10,0,0),1,2,6,1)
+	var ids: Array[int] = pack.actor_ids.duplicate()
+	assert(ids.size() == 14 and unrelated.pack_instance_id != pack.pack_instance_id)
+	var wild_count: int = 0
+	var feral_count: int = 0
+	for id: int in ids:
+		var mob := combat.dogs[id]
+		assert(mob.mob_instance_id == id and mob.pack_instance_id == pack.pack_instance_id and mob.home == pack.anchor)
+		assert(mob.definition.valid() and mob.move_speed == mob.definition.move_speed and mob.hp == mob.definition.max_hp)
+		assert(combat._horizontal_distance(mob.position,pack.anchor) <= pack.spawn_radius)
+		assert(mob.find_children("*","NavigationAgent3D",true,false).is_empty() and mob.collision_mask == 16)
+		if mob.mob_key == wild.mob_key: wild_count += 1
+		if mob.mob_key == feral.mob_key: feral_count += 1
+	assert(wild_count == 10 and feral_count == 4)
+	var hero := SpikeCharacter3D.new()
+	hero.position = Vector3(0,0,5)
+	world.add_child(hero)
+	world.characters[1] = hero
+	combat.health[1] = 100
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	# Same entry point used by melee and proximity; every live member reacts.
+	combat.aggro_pack(combat.dogs[ids[0]].pack_instance_id,1)
+	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == "CHASE")
+	for id: int in unrelated.actor_ids: assert(combat.dogs[id].target_peer == 0 and combat.dogs[id].ai_state == "IDLE")
+	# A single proximity detection recruits the whole pack too.
+	for id: int in ids: combat.dogs[id].ai_state = "IDLE"
+	combat.dogs[ids[0]].position = pack.anchor
+	combat._tick_dog(combat.dogs[ids[0]],1.0/60,0)
+	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == "CHASE")
+	var member := combat.dogs[ids[0]]
+	member.hp = 1
+	member.contributions[1] = 12
+	member.position = Vector3(11,0,0)
+	combat._tick_dog(member,1.0/60,1)
+	assert(member.ai_state == "RETURN" and member.target_peer == 0)
+	member.position = pack.anchor
+	combat._tick_dog(member,1.0/60,2)
+	assert(member.hp == member.max_hp and member.ai_state == "IDLE" and member.target_peer == 0 and member.contributions.is_empty())
+	member.ai_state = "CHASE"
+	member.target_peer = 1
+	hero.position = Vector3(30,0,0)
+	member.position = Vector3(3,0,0)
+	combat._tick_dog(member,1.0/60,3)
+	assert(member.ai_state == "RETURN", "Target outside pack leash triggers return")
+	world.characters.clear()
+	for mob: SpikeWildDog3D in combat.dogs.values(): mob.ai_enabled = false
+	var killed_id := member.mob_instance_id
+	member.hp = 0
+	combat._die(member,100)
+	assert(pack.replacements.size() == 1)
+	combat._die(member,101)
+	assert(pack.replacements.size() == 1, "Repeated death cannot schedule another replacement")
+	combat._tick_mobs(1.0/60,1099)
+	assert(pack.actor_ids.size() == 14)
+	combat._tick_mobs(1.0/60,1100)
+	var fresh_id: int = pack.actor_ids.back()
+	var fresh := combat.dogs[fresh_id]
+	assert(not ids.has(fresh_id) and fresh.pack_instance_id == pack.pack_instance_id and fresh.hp == fresh.max_hp)
+	assert(fresh.definition == member.definition and combat._horizontal_distance(fresh.position,pack.anchor) <= pack.spawn_radius)
+	for id: int in ids.slice(1): assert(combat.dogs[id].hp > 0, "Other members survive replacement")
+	combat._tick_mobs(1.0/60,6100)
+	assert(not combat.dogs.has(killed_id) and pack.actor_ids.size() == 14)
+	combat.selected_target = {"kind":&"mob","id":killed_id}
+	combat.autoattack = true
+	combat._clear_invalid_target()
+	assert(combat.selected_target.is_empty() and not combat.autoattack)
+	# A temporary Metin pack shares definitions but expires without replacement.
+	var wave := combat.create_pack([entry(wild,2),entry(feral,1)],Vector3(6,0,-6),2,3,10,0,"metin-test",10000)
+	var wave_ids: Array[int] = wave.actor_ids.duplicate()
+	for id: int in wave_ids: assert(combat.dogs[id].source_metinstone_id == "metin-test" and not combat.dogs[id].respawn_enabled)
+	combat.dogs[wave_ids[0]].hp = 0
+	combat._die(combat.dogs[wave_ids[0]],7000)
+	assert(wave.replacements.is_empty())
+	combat._tick_mobs(1.0/60,10000)
+	for id: int in wave_ids: assert(not combat.dogs.has(id))
+	assert(not combat.packs.has(wave.pack_instance_id))
+	# 50 live actors, several packs, desynchronized wander, short server ticks.
+	combat.create_pack([entry(wild,18)],Vector3(-7,0,-7),1,2,8,1)
+	combat.create_pack([entry(feral,15)],Vector3(7,0,7),1,2,8,1)
+	assert(combat.dogs.size() == 50)
+	for mob: SpikeWildDog3D in combat.dogs.values():
+		mob.ai_enabled = true
+		mob.ai_state = "IDLE"
+		mob.wander_at_ms = 0
+	for i: int in 20:
+		combat._tick_mobs(1.0/60,11000+i*17)
+		for mob: SpikeWildDog3D in combat.dogs.values():
+			assert(mob.position.is_finite() and mob.hp > 0 and mob.ai_state in ["IDLE","WANDER"])
+		await get_tree().physics_frame
+	world.free()
+	WorldServer.curr = null
+	server.free()
+	print("MOB_PACKS_OK: composition, identity, aggro, anchor leash, per-member replacement, Metin expiry and 50 actors")
+	get_tree().quit()

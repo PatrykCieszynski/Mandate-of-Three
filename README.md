@@ -13,8 +13,9 @@ This repository contains a working technical vertical slice, not a game alpha.
 - Initial loot progression: weapon attack shown on the ground, comparison with the
   equipped instance, attack preview after swapping and persistent sword equipment.
 - [First region graybox](docs/first-region-graybox.md): hub/Blacksmith, three combat areas,
-  nine dogs of increasing difficulty, main road and shortcuts, landmarks, four Metin
-  candidate sites and a visual water strip. Navigation and server-side AI; directional melee hitting multiple
+  six mixed packs (104 mobs) of increasing difficulty, roads/shortcuts, landmarks,
+  four Metin candidate sites and a visual water strip. [Pack AI](docs/mob-packs-v1.md),
+  shared aggro and server-side straight-line movement; directional melee hitting multiple
   targets, a three-hit combo, hit reactions and final-hit knockback.
 - [Metin Encounter v1](docs/metin-encounter-v1.md): one random active site, HP
   threshold waves, shared combat/contribution, one ground reward and timed respawn.
@@ -38,13 +39,14 @@ target; **F** toggles autoattack, interrupted by manual movement. Nearby Yang is
 picked up automatically; **G** picks up the nearest stack. A HUD test button spends
 50 Yang.
 
-AI routes around obstacles on the shared region navmesh. Unclaimed loot, HP and position
+Mob AI uses direct chase/return and ignores props while retaining server floor physics.
+The shared region navmesh guides NPC approach. Unclaimed loot, HP and position
 are runtime state; items become persistent on pickup. AOI, local prediction and
 final models/animations remain future work. Optional local development visuals
 are described below. Upstream modules still present do not imply available 3D features.
 
 The normal login map is the graybox region; the small arena remains an integration
-test fixture. Metin Encounter v1 is playable; a loop playtest, then spawn/pacing and visual passes are next.
+test fixture. Metin Encounter v1 is playable; a pack density/combat feel playtest, then pacing and visual passes are next.
 
 Camera v1 uses RMB orbit and wheel zoom, with independent view rotation and scenery
 collision. Settings and verification notes: [Camera v1](docs/camera-v1.md).

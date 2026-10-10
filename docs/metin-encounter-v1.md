@@ -9,7 +9,7 @@ commands or database tables are added.
 
 `source/common/gameplay/encounters/metin/first_metin.tres` configures 800 HP,
 90-second respawn, 180-second wave lifetime and a 300 Yang reward. Its three wave
-resources define threshold, dog count, elite count and spawn radius:
+resources define threshold, shared `MobSpawnEntry` composition and spawn radius:
 
 | Remaining HP | Wave |
 | --- | --- |
@@ -31,12 +31,11 @@ encounter/ground entities, consistently with the current mob/ground loot policy.
 
 `MetinRuntime` holds the state and returns newly crossed waves/death result;
 `MetinEncounter` applies those results to the shared world. A large hit crossing
-several thresholds triggers all of them once, including a lethal hit. Damage is
-ignored until shared navigation has synchronized. Spawn positions are projected
-onto its mesh, with height/distance checks to avoid placing waves on nearby roofs
-or inside the stone. Current sites have reachable room for the authored waves.
+several thresholds triggers all of them once, including a lethal hit. Wave positions sample a disk around the stone via the shared pack spawner.
+The authored sites lie on the graybox floor; server physics resolves XYZ.
+Stone damage/wave spawning no longer depend on navigation synchronization.
 
-Wave dogs retain `source_metinstone_id`, use existing navigation/AI and never
+Wave mobs retain `source_metinstone_id`, use shared [pack AI](mob-packs-v1.md) and never
 respawn. They remain after stone death; each expires 180 seconds after creation.
 Killed wave actors are removed after the existing death-display interval. Server
 snapshots create/remove dynamic actors on clients, including for late joins.

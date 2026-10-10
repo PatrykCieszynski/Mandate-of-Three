@@ -32,6 +32,7 @@ func check(ok: bool, description: String) -> void:
 
 func _ready() -> void:
 	Engine.physics_ticks_per_second = 60
+	BaseMultiplayerEndpoint.configure_peer(peer)
 	client_number = int(CmdlineUtils.get_parsed_args().get("test-client", "0"))
 	var api: SceneMultiplayer = multiplayer as SceneMultiplayer
 	api.server_relay = false

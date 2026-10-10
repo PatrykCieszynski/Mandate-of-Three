@@ -5,6 +5,13 @@ class_name BaseMultiplayerEndpoint
 ## Minimal, reusable multiplayer bootstrap.
 ## Override `_connect_multiplayer_api_signals()` in subclasses to wire only what you need.
 
+# Full dense-region snapshots and join bursts exceed the engine's 64 KiB default.
+const WEBSOCKET_BUFFER_BYTES: int = 1024 * 1024
+
+static func configure_peer(socket: WebSocketMultiplayerPeer) -> void:
+	socket.inbound_buffer_size = WEBSOCKET_BUFFER_BYTES
+	socket.outbound_buffer_size = WEBSOCKET_BUFFER_BYTES
+
 enum Role {
 	CLIENT,
 	SERVER
@@ -41,6 +48,7 @@ func init_multiplayer(use_root_api: bool = false) -> void:
 
 	# Create the kind of peer we want.
 	peer = WebSocketMultiplayerPeer.new()
+	configure_peer(peer)
 
 	if peer.is_server_relay_supported(): # Necessary check ?
 		# We want to disable the server feature that can notifies clients of other peers' connection/disconnection,
