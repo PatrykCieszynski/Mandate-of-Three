@@ -89,8 +89,9 @@ The browser validates the entire domain before replacing last known valid state.
 
 `screens/npc/npc-service-menu.ts` composes UiWindow and UiButton and exposes a typed
 selection callback. `npc-interaction.ts` owns routing based on enabled services:
-0 → no window, 1 → select directly, 2+ → menu. Selection hides the menu and routes SHOP to its feature window; Upgrade retains
-a target placeholder. SHOP opens through its own revalidating `shop.open` command.
+0 → no window, 1 → select directly, 2+ → menu. Selection hides the menu and routes
+SHOP and UPGRADE to their feature windows. [Upgrade](npc-upgrade-ui.md) currently
+provides a CEF-only +0 through +9 preview, with no item/economy mutation. SHOP opens through its own revalidating `shop.open` command.
 A failed feature open exposes the menu/status for retry. Close/Escape on a selected
 service clears selection and returns to the menu for multi-service NPCs; another
 close ends interaction. Single-service NPCs close directly. Reload restores current
@@ -98,7 +99,8 @@ selection and the published Shop snapshot.
 
 `openService(service, context?)` accepts an optional preselected item intent and
 shares the same callback as the menu. It is presentation data, not permission to
-mutate that item. Inventory-to-NPC drop wiring and actual Upgrade UI are deferred.
+mutate that item. The Upgrade view supports Inventory drops for inspection only. Actual Upgrade
+transactions remain deferred.
 `npc.clear_service` clears selection while retaining valid interaction context.
 
 ## Verification

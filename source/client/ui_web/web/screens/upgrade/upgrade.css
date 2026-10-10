@@ -1,0 +1,233 @@
+.upgrade-window {
+  --window-width: 320px;
+  padding-top: 8px;
+  padding-bottom: 32px;
+}
+.upgrade-preview-label {
+  text-align: right;
+  color: var(--muted);
+  font: 10px/14px Arial;
+  margin: 6px 0;
+}
+.upgrade-body {
+  border: 1px solid #514b3a;
+  background: #0008;
+  padding: 12px 10px;
+}
+.upgrade-item-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 82px;
+}
+.upgrade-item-target {
+  position: relative;
+  flex: 0 0 40px;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+}
+.upgrade-slot {
+  width: 38px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.upgrade-empty-slot {
+  color: #71654e;
+  font-size: 26px;
+}
+.upgrade-item-details {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.upgrade-name {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: normal;
+  color: #ded5bd;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.upgrade-name[data-rarity='magic'] {
+  color: #829cfc;
+}
+.upgrade-name[data-rarity='rare'] {
+  color: #e5cd67;
+}
+.upgrade-name[data-rarity='legendary'] {
+  color: #dca462;
+}
+.upgrade-category,
+.upgrade-prompt {
+  margin: 6px 0;
+  color: var(--muted);
+  font: 11px/16px Arial;
+}
+.upgrade-comparison {
+  text-align: center;
+  margin-top: 12px;
+  border-top: 1px solid #514b3a;
+  padding-top: 8px;
+}
+.upgrade-transition {
+  color: #e5cd67;
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.upgrade-properties {
+  color: #a8cba9;
+}
+.upgrade-comparison p {
+  line-height: 17px;
+  margin: 4px 0;
+}
+.upgrade-affixes {
+  border-top: 1px solid #514b3a;
+  margin-top: 8px;
+  padding-top: 4px;
+  color: #91b7dc;
+}
+.upgrade-requirements {
+  color: var(--muted);
+}
+.upgrade-recipe {
+  border-top: 1px solid #514b3a;
+  margin-top: 12px;
+  padding-top: 8px;
+}
+.upgrade-material {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.upgrade-material-symbol {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #71654e;
+  background: #211d15;
+  color: #c49350;
+  font-size: 20px;
+}
+.upgrade-cost {
+  text-align: center;
+  color: #ded5bd;
+  margin: 8px 0 4px;
+}
+.upgrade-chance {
+  color: #a8cba9;
+  font: 11px/16px Arial;
+  margin: 4px 0 0;
+  text-align: center;
+}
+.upgrade-max {
+  color: #e5cd67;
+  text-align: center;
+  line-height: 18px;
+  margin: 12px 0 0;
+}
+.upgrade-preview-controls {
+  margin: 10px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font: 10px/14px Arial;
+  color: var(--muted);
+}
+.upgrade-example {
+  padding: 4px 6px;
+  font: 10px/14px Arial;
+}
+.upgrade-notice {
+  text-align: center;
+  font: 10px/14px Arial;
+  color: var(--muted);
+  margin: 8px 0;
+}
+.upgrade-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.upgrade-actions button {
+  min-width: 82px;
+}
+.upgrade-confirmation {
+  border-top: 1px solid #71654e;
+  text-align: center;
+  line-height: 17px;
+  padding-top: 6px;
+}
+.upgrade-confirmation p {
+  margin: 4px 0;
+}
+.upgrade-drop-preview {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #71d487;
+  background: #172f17d9;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font: 10px/14px Arial;
+  pointer-events: none;
+  z-index: 5;
+}
+.upgrade-drop-preview.invalid {
+  border-color: #ef685c;
+  background: #391d1de6;
+}
+
+.upgrade-window button:not(.window-close) {
+  color: var(--ink);
+  background: linear-gradient(#37352e, #1b1a16);
+  border: 1px solid #71654e;
+  padding: 5px 8px;
+  font:
+    12px Georgia,
+    serif;
+  cursor: pointer;
+}
+.upgrade-window button:not(.window-close):hover:not(:disabled) {
+  background: linear-gradient(#514738, #29251d);
+  border-color: #b59b6b;
+}
+.upgrade-window button:not(.window-close):disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.upgrade-window button:focus-visible {
+  outline: 1px solid #d4b378;
+  outline-offset: 2px;
+}
+.upgrade-level-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.upgrade-level-controls > span {
+  max-width: 40px;
+}
+.upgrade-window .upgrade-level-controls button {
+  width: 20px;
+  height: 24px;
+  padding: 0;
+}
+.upgrade-level {
+  min-width: 23px;
+  padding: 4px 0;
+  margin: 0;
+  text-align: center;
+  border: 0;
+  background: transparent;
+}
+.upgrade-window .upgrade-example {
+  font: 10px/14px Arial;
+  padding: 4px 6px;
+}
