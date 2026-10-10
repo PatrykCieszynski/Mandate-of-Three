@@ -41,7 +41,9 @@ atomic; malformed offers preserve the previous valid state. `ui.ready` restores 
 
 SHOP routes from the authoritative selected service to `screens/shop/ShopView`.
 The view composes UiWindow, UiSlot/item icon renderer, ItemTooltip and UiCurrency.
-It opens Inventory alongside Shop. Inventory remains open after Shop closes in v1.
+It opens Inventory alongside Shop and initially places Shop to its left using
+the shared window placement rules. Content respects the common frame inset.
+Inventory remains open after Shop closes in v1.
 
 - Right-click offer: buy into the server's first fitting space.
 - Drag/click-carry onto Inventory grid: exact footprint preview and exact buy.
@@ -66,7 +68,22 @@ It checks pending income, private Shop/Inventory/wallet publication, foreign pee
 rejection, exact/automatic purchase, occupied/funds/range rejection and menu return.
 It runs sequentially with other network fixtures and uses disposable SQLite data.
 
-Native root-client CEF appearance/input remains a manual milestone check. Headless
-contracts and RPC tests do not establish GPU rendering or final visual appearance.
+`tests/run-shop-browser.ps1` is an optional real-browser milestone check, verified
+2026-10-10 against production Web assets in installed headless Chrome with controlled
+IPC. It covers legacy skin and CSS fallback, loaded item icons, readable frame
+bounds, Shop beside Inventory at 1920x1080, 1280x720 and 960x540 with UI scales
+0.9..1.5, right-click, exact/receive mouse drops, rejected previews, tooltip,
+12-offer scrolling and close/Escape navigation. Screenshots are optional;
+there are no pixel comparisons or new default smoke requirements.
+
+```powershell
+& ./tests/run-shop-browser.ps1 `
+  -PlaywrightModule 'N:/Mandate of Three/source/client/ui_web/node_modules/playwright-core' `
+  -BrowserExecutable 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+```
+
+Native root-client CEF appearance/input remains a manual milestone check. The
+browser fixture does not establish native GPU rendering, transparency, input
+routing through Godot, or real purchase persistence; the latter uses smoke/RPC.
 Upgrade, finite stock, sellback, stacking into existing items and Player Shop remain
 later work; a purchased offer creates one new stack/footprint.
