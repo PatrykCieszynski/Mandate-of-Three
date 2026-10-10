@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { environment, target, capture, measure, bagItem } from './fixtures.mjs';
 import { DomainStore } from '../web/store.js';
 import { decode, encode, isStateMessage } from '../web/protocol.js';
+import { ItemTooltip } from '../web/game-ui/items/item-tooltip.js';
 import { mountShop } from '../web/screens/shop/shop-view.js';
 import { mountInventory } from '../web/screens/inventory/inventory-view.js';
 import { mountNpcInteraction } from '../web/screens/npc/npc-interaction.js';
@@ -201,7 +202,7 @@ function fixture() {
     },
   };
 }
-test('Shop renders server offer order, price, quantity and right-click sends only offer authority', async () => {
+test('Shop renders server offer order and quantity, exposes offer price in tooltip and right-click sends only offer authority', async () => {
   const f = fixture();
   try {
     assert.deepEqual(
@@ -210,10 +211,15 @@ test('Shop renders server offer order, price, quantity and right-click sends onl
       ),
       ['sword', 'sword_pack'],
     );
-    assert.deepEqual(
-      [...f.shopRoot.querySelectorAll('.shop-price')].map((e) => e.textContent),
-      ['1,000 Yang', '2,000 Yang'],
-    );
+    const rows = [...f.shopRoot.querySelectorAll<HTMLElement>('.shop-offer')];
+    for (const [index, row] of rows.entries()) {
+      f.pointer(row, 'pointermove');
+      assert.equal(
+        f.shopRoot.querySelector('.item-tooltip-price')?.textContent,
+        ['Buy price: 1,000 Yang', 'Buy price: 2,000 Yang'][index],
+      );
+    }
+    f.pointer(rows[1]!, 'pointerleave');
     assert.deepEqual(
       [...f.shopRoot.querySelectorAll('.shop-quantity')].map(
         (e) => e.textContent,
@@ -375,6 +381,41 @@ test('NPC composition routes selected SHOP to its feature and close returns to m
     assert.equal(closed, 2);
   } finally {
     view.dispose();
+    env.manager.dispose();
+    env.host.close();
+  }
+});
+
+// Offer pricing is presentation context, independent of an authored item description.
+test('Item tooltip preserves descriptions and clears offer pricing for owned items', () => {
+  const env = environment(),
+    root = target();
+  env.doc.body.append(root);
+  const tip = ItemTooltip(root, { geometry: () => env.manager });
+  try {
+    tip.show(
+      { clientX: 10, clientY: 10 },
+      {
+        name: 'Sword',
+        description: 'Forged steel.',
+        kind: 'shop-offer',
+        price: 1000,
+        currency: 'yang',
+      },
+    );
+    assert.equal(tip.element.querySelector('p')?.textContent, 'Forged steel.');
+    const footer = tip.element.querySelector('footer')!;
+    assert.equal(footer.textContent, 'Buy price: 1,000 Yang');
+    assert.equal(footer.hidden, false);
+    tip.show(
+      { clientX: 10, clientY: 10 },
+      { name: 'Owned Sword', description: 'Already yours.' },
+    );
+    assert.equal(tip.element.querySelector('p')?.textContent, 'Already yours.');
+    assert.equal(footer.hidden, true);
+    assert.equal(footer.textContent, '');
+  } finally {
+    tip.dispose();
     env.manager.dispose();
     env.host.close();
   }

@@ -1,6 +1,7 @@
-.npc-window {--window-width:250px;--window-inset:16px;padding-top:8px;}
+.npc-window {--window-width:250px;padding-top:8px;padding-bottom:32px;}
 .npc-services {display:flex;flex-direction:column;gap:6px;margin-top:10px;}
-.npc-service {min-height:30px;background:#1e1b16;color:var(--ink);border:1px solid var(--frame);font:inherit;text-align:left;padding:5px 8px;cursor:pointer;}
+.npc-service {min-height:30px;background:#1e1b16;color:var(--ink);border:1px solid var(--frame);font:inherit;text-align:left;padding:5px 8px;cursor:pointer;overflow-wrap:anywhere;}
+.npc-service:focus-visible {outline:1px solid #cbb079;outline-offset:1px;}
 .npc-service:hover:not(:disabled) {background:#393022;}
 .npc-service:disabled {opacity:.5;cursor:default;}
 .npc-status {color:#d5a88a;margin:8px 0 0;}

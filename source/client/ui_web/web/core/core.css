@@ -159,3 +159,5 @@ html,body {
   background:var(--skin-slot-normal,none),linear-gradient(#181b19,#080a09);
   background-repeat:no-repeat;
   background-position:center}
+
+.item-tooltip-price {margin-top:8px;padding-top:6px;border-top:1px solid var(--frame);font:11px/15px Arial;color:#e4c578}
