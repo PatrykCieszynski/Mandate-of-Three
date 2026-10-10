@@ -585,6 +585,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
         serviceId: 'upgrade',
         upgradeId: 'basic_upgrade',
         itemDefinitionId: 'iron_sword',
+        itemName: 'Iron Sword',
         fromLevel: 0,
         toLevel: 1,
         yangCost: 1000,
@@ -679,7 +680,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await page.goto(new URL('../dev/upgrade.html', url).href);
     const devWindow = page.locator('#upgrade');
     await devWindow
-      .getByRole('button', { name: 'Preview Iron Sword', exact: true })
+      .getByRole('button', { name: 'Preview Żelazny miecz', exact: true })
       .click();
     await devWindow
       .getByRole('button', { name: 'Next preview level', exact: true })

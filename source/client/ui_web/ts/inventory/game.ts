@@ -124,8 +124,12 @@ const drag = new ItemDragRuntime({
 });
 const worldDrop = mountNpcWorldDrop(
   drag,
-  (npc, item) =>
-    bridge.request('npc.upgrade_item', { npc_instance_id: npc, ...item }),
+  (npc, service, item) =>
+    bridge.request('npc.upgrade_item', {
+      npc_instance_id: npc,
+      service_id: service,
+      ...item,
+    }),
   () => regions?.refresh(),
 );
 const view = mountInventory(root, {

@@ -87,7 +87,7 @@ static func _valid_upgrade(p: Dictionary) -> bool:
 	return p.size() == 4 and _valid_identity(p) and _valid_npc_service({"npc_instance_id":p.get("npc_instance_id"),"service_id":p.get("service_id")})
 
 static func _valid_upgrade_drop(p: Dictionary) -> bool:
-	return p.size() == 3 and _valid_identity(p) and p.get("npc_instance_id") is String and NeutralNpc3D.valid_instance_id(p.npc_instance_id)
+	return _valid_upgrade(p)
 
 func _upgrade_submit(action: String, p: Dictionary) -> Dictionary:
 	var id: String = _begin_command()
@@ -95,7 +95,7 @@ func _upgrade_submit(action: String, p: Dictionary) -> Dictionary:
 	return await _wait_command(id)
 
 func _drop_on_npc(p: Dictionary) -> Dictionary:
-	if not world.begin_npc_approach(p.npc_instance_id,{"id":p.id,"revision":int(p.revision)}): return {"ok":false,"error":"unavailable"}
+	if not world.begin_npc_approach(p.npc_instance_id,{"id":p.id,"revision":int(p.revision),"service_id":p.service_id}): return {"ok":false,"error":"unavailable"}
 	return {"ok":true}
 
 func _shop_state(snapshot: Dictionary) -> void:
@@ -137,7 +137,7 @@ func interact_npc(instance_id: String, preselected_item: Dictionary = {}) -> Dic
 	if not result.ok or preselected_item.is_empty(): return result
 	# Same service and selection commands as the manual menu/Upgrade slot.
 	for service: Dictionary in world.npc_endpoint.state.get("services",[]):
-		if service.kind == NpcServiceDefinition.Kind.UPGRADE and service.enabled:
+		if service.id == preselected_item.get("service_id","") and service.kind == NpcServiceDefinition.Kind.UPGRADE and service.enabled:
 			result = await _npc_submit("select",instance_id,service.id)
 			if not result.ok: return result
 			return await _upgrade_submit("select",{"npc_instance_id":instance_id,"service_id":service.id,"id":preselected_item.id,"revision":preselected_item.revision})
@@ -300,10 +300,6 @@ func _process(_delta: float) -> void:
 			for actor: NeutralNpc3D in world.npc_endpoint.actors.values():
 				if targets.size() >= 64: break
 				if not actor.interactable or camera.is_position_behind(actor.global_position): continue
-				var has_upgrade: bool = false
-				for service: NpcServiceDefinition in actor.definition.services:
-					if service.kind == NpcServiceDefinition.Kind.UPGRADE and actor.service_enabled(service.service_id): has_upgrade = true
-				if not has_upgrade: continue
 				var rect := Rect2(camera.unproject_position(actor.global_position),Vector2.ZERO)
 				for x: float in [-0.4,0.4]:
 					for y: float in [0.0,1.8]:
@@ -311,12 +307,24 @@ func _process(_delta: float) -> void:
 				if not rect.position.is_finite() or not rect.size.is_finite(): continue
 				rect = rect.intersection(Rect2(Vector2.ZERO,viewport))
 				if not rect.has_area(): continue
-				targets.append({"id":actor.instance_id,"x":rect.position.x,"y":rect.position.y,"w":rect.size.x,"h":rect.size.y})
+				for target: Dictionary in _npc_upgrade_targets(actor,rect):
+					if targets.size() >= 64: break
+					targets.append(target)
 		var snapshot: Dictionary = {"width":viewport.x,"height":viewport.y,"targets":targets}
 		if snapshot != _npc_targets_state:
 			_npc_targets_state = snapshot
 			dispatcher.set_domain("npc_targets",snapshot)
 	_set_tooltip_alt(_tooltip_focused and Input.is_key_pressed(KEY_ALT))
+
+static func _npc_upgrade_targets(actor: NeutralNpc3D, rect: Rect2) -> Array[Dictionary]:
+	var targets: Array[Dictionary] = []
+	if not actor.interactable or actor.definition == null: return targets
+	for service: NpcServiceDefinition in actor.definition.ordered_services():
+		if service.kind != NpcServiceDefinition.Kind.UPGRADE or not actor.service_enabled(service.service_id): continue
+		var recipe: UpgradeDefinition = UpgradeDefinitions.get_definition(service.content_ref)
+		if recipe == null or not recipe.validation_errors().is_empty(): continue
+		targets.append({"npcInstanceId":actor.instance_id,"serviceId":str(service.service_id),"itemDefinitionId":str(recipe.item_definition_id),"fromLevel":recipe.from_level,"x":rect.position.x,"y":rect.position.y,"w":rect.size.x,"h":rect.size.y})
+	return targets
 
 func _set_tooltip_alt(pressed: bool) -> void:
 	if pressed == _tooltip_alt: return

@@ -47,7 +47,7 @@ export function mountUpgrade(root, options) {
     });
     shell.contentRoot.innerHTML = `<div class="upgrade-body"><div class="upgrade-item-summary"><div class="upgrade-item-target" aria-label="Item to upgrade"></div>
     <div class="upgrade-item-details"><h2 class="upgrade-name"></h2><p class="upgrade-category"></p>
-    <p class="upgrade-prompt">Drag an Iron Sword from Inventory into the slot.</p></div></div>
+    <p class="upgrade-prompt">Drag an item from Inventory into the slot.</p></div></div>
     <div class="upgrade-comparison"><p class="upgrade-transition"></p><div class="upgrade-properties"></div>
     <div class="upgrade-affixes"></div><div class="upgrade-requirements"></div></div>
     <div class="upgrade-recipe"><div class="upgrade-material"><span class="upgrade-material-symbol" aria-hidden="true">◆</span><span class="upgrade-material-name"></span></div>
@@ -73,7 +73,7 @@ export function mountUpgrade(root, options) {
             '<div class="upgrade-level-controls"><span>Preview level</span><output class="upgrade-level" aria-label="Preview level">+0</output></div>';
         const output = controls.querySelector('output');
         const example = UiButton({
-            label: 'Preview Iron Sword',
+            label: `Preview ${upgradeExample.name.replace(/ \+[0-9]$/, '')}`,
             className: 'upgrade-example',
             onClick: () => choose(upgradeExample),
         });
@@ -162,7 +162,11 @@ export function mountUpgrade(root, options) {
                         subject.item.upgrade_level === recipe.fromLevel);
             const marker = document.createElement('div');
             marker.className = 'upgrade-drop-preview' + (valid ? '' : ' invalid');
-            marker.textContent = valid ? 'Select item' : 'Iron Sword required';
+            marker.textContent = valid
+                ? 'Select item'
+                : recipe.active
+                    ? `${recipe.itemName} +${recipe.fromLevel} required`
+                    : 'An eligible item is required';
             return {
                 valid,
                 data: subject,
@@ -181,7 +185,10 @@ export function mountUpgrade(root, options) {
             ? previewItemLevel(value)
             : (value.upgrade_level ?? null);
         if (!options.devPreview) {
-            if (initial !== null && initial === 0 && !root.hidden && !disposed)
+            if (recipe.active &&
+                initial === recipe.fromLevel &&
+                !root.hidden &&
+                !disposed)
                 void submit('select', value);
             return;
         }
@@ -216,11 +223,12 @@ export function mountUpgrade(root, options) {
             id: value.id,
             revision: value.revision,
         };
+        clearEffect();
         pending = true;
+        confirmed = false;
         notice = '';
         let visualFinished = Promise.resolve();
         if (action === 'execute') {
-            clearEffect();
             effectPreview = presentation();
             effectLevel = level;
             root.dataset.upgradeEffect = 'forging';
@@ -337,6 +345,9 @@ export function mountUpgrade(root, options) {
         find('.upgrade-category').textContent = item?.tooltip?.category ?? '';
         find('.upgrade-category').hidden = !item?.tooltip?.category;
         find('.upgrade-prompt').hidden = !!item;
+        find('.upgrade-prompt').textContent = recipe.active
+            ? `Drag ${recipe.itemName} +${recipe.fromLevel} from Inventory into the slot.`
+            : 'Drag an item from Inventory into the slot.';
         find('.upgrade-comparison').hidden = !item;
         find('.upgrade-transition').textContent = preview?.next
             ? `+${shownLevel} → +${shownLevel + 1}`
@@ -361,7 +372,9 @@ export function mountUpgrade(root, options) {
         find('.upgrade-max').hidden = !item || !!preview?.next;
         find('.upgrade-max').textContent = options.devPreview
             ? 'Maximum upgrade level reached.'
-            : 'Only +0 → +1 is available.';
+            : recipe.active
+                ? `Only +${recipe.fromLevel} → +${recipe.toLevel} is available.`
+                : '';
         find('.upgrade-notice').textContent = options.devPreview
             ? 'Preview only. Items and Yang are unchanged.'
             : pending

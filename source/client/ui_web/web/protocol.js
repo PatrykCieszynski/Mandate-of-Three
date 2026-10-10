@@ -114,13 +114,13 @@ function isUpgrade(value) {
     if (!value.active)
         return Object.keys(value).length === 1;
     const id = (v) => typeof v === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(v);
-    if (typeof value.npcInstanceId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value.npcInstanceId) || !id(value.serviceId) || !id(value.upgradeId) || !id(value.itemDefinitionId) || !id(value.materialDefinitionId) || typeof value.materialName !== 'string' || value.materialName.length > 128 || value.fromLevel !== 0 || value.toLevel !== 1 || value.successRate !== 100 || !integerRange(value.yangCost, 1, MAX_YANG) || !integerRange(value.materialAmount, 1, 999) || !integerRange(value.materialOwned, 0) || !isObject(value.candidate))
+    if (typeof value.npcInstanceId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value.npcInstanceId) || !id(value.serviceId) || !id(value.upgradeId) || !id(value.itemDefinitionId) || typeof value.itemName !== 'string' || !value.itemName || value.itemName.length > 128 || !id(value.materialDefinitionId) || typeof value.materialName !== 'string' || value.materialName.length > 128 || value.fromLevel !== 0 || value.toLevel !== 1 || value.successRate !== 100 || !integerRange(value.yangCost, 1, MAX_YANG) || !integerRange(value.materialAmount, 1, 999) || !integerRange(value.materialOwned, 0) || !isObject(value.candidate))
         return false;
     const c = value.candidate;
     return Object.keys(c).length === 0 || (typeof c.id === 'string' && /^[a-f0-9]{32}$/.test(c.id) && integerRange(c.revision, 0) && integerRange(c.level, 0, 9) && integerRange(c.attack, 0) && integerRange(c.nextAttack, 0));
 }
 function isNpcTargets(value) {
-    return isObject(value) && finiteRange(value.width, 0, MAX_VIEWPORT) && finiteRange(value.height, 0, MAX_VIEWPORT) && Array.isArray(value.targets) && value.targets.length <= 64 && value.targets.every(t => isObject(t) && typeof t.id === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(t.id) && finiteRange(t.x, -MAX_VIEWPORT, MAX_VIEWPORT) && finiteRange(t.y, -MAX_VIEWPORT, MAX_VIEWPORT) && finiteRange(t.w, 0, MAX_VIEWPORT) && finiteRange(t.h, 0, MAX_VIEWPORT));
+    return isObject(value) && finiteRange(value.width, 0, MAX_VIEWPORT) && finiteRange(value.height, 0, MAX_VIEWPORT) && Array.isArray(value.targets) && value.targets.length <= 64 && value.targets.every(t => isObject(t) && typeof t.npcInstanceId === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(t.npcInstanceId) && typeof t.serviceId === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(t.serviceId) && typeof t.itemDefinitionId === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(t.itemDefinitionId) && integerRange(t.fromLevel, 0, 9) && finiteRange(t.x, -MAX_VIEWPORT, MAX_VIEWPORT) && finiteRange(t.y, -MAX_VIEWPORT, MAX_VIEWPORT) && finiteRange(t.w, 0, MAX_VIEWPORT) && finiteRange(t.h, 0, MAX_VIEWPORT));
 }
 function isShop(value) {
     if (!isObject(value) || typeof value.active !== 'boolean')
