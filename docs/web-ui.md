@@ -375,8 +375,11 @@ selects an exact position. Inventory right-click remains `item.activate`.
 
 ## Neutral NPC services
 
-The `npc` domain and explicit `npc.interact` / `npc.select_service` / `npc.close`
-commands compose the Core UI service menu and target placeholder. World owns
+The `npc` domain and explicit `npc.interact` / `npc.select_service` /
+`npc.clear_service` / `npc.close` commands compose the Core UI service menu.
+SHOP routes to the separate `shop` domain and `shop.open` / `shop.buy` commands;
+Upgrade retains its placeholder. Shop opens Inventory alongside it, with right-click
+first-fit and exact/receive-area offer drops. See [NPC Shop](npc-shop.md). World owns
 content, interaction context, current range and service authorization. The browser
 routes zero/one/many enabled services and restores current selection after reload.
 See [NPC services](npc-services.md) for content authoring, boundaries and tests.

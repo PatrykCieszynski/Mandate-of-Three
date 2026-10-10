@@ -40,6 +40,12 @@ func setup(game_world: SpikeWorld3D) -> void:
 	dispatcher.register_command("npc.interact", _valid_npc, func(p: Dictionary) -> Dictionary: return await interact_npc(p.npc_instance_id))
 	dispatcher.register_command("npc.select_service", _valid_npc_service, func(p: Dictionary) -> Dictionary: return await _npc_submit("select", p.npc_instance_id, p.service_id))
 	dispatcher.register_command("npc.close", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary: return await _npc_submit("close"))
+	dispatcher.register_command("npc.clear_service", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary: return await _npc_submit("clear_service"))
+	dispatcher.register_command("shop.open", _valid_npc_service, func(p: Dictionary) -> Dictionary: return await _shop_submit("open", p))
+	dispatcher.register_command("shop.buy", _valid_shop_buy, func(p: Dictionary) -> Dictionary: return await _shop_submit("buy", p))
+	world.shop_endpoint.state_changed.connect(_shop_state)
+	world.shop_endpoint.operation_finished.connect(_operation_finished)
+	dispatcher.set_domain("shop", world.shop_endpoint.state)
 	world.npc_endpoint.state_changed.connect(_npc_state)
 	world.npc_endpoint.operation_finished.connect(_operation_finished)
 	_npc_state(world.npc_endpoint.state)
@@ -64,6 +70,24 @@ func setup(game_world: SpikeWorld3D) -> void:
 	# Warm the browser/page on world entry. DOM stays hidden until inventory_open.
 	# UI_READY receives the current snapshot, including updates during startup.
 	host.open()
+
+func _shop_state(snapshot: Dictionary) -> void:
+	if snapshot.get("active", false):
+		opened = true
+		_layout()
+	dispatcher.set_domain("shop", snapshot)
+
+static func _valid_shop_buy(p: Dictionary) -> bool:
+	if p.size() not in [3, 6] or not p.has_all(["npc_instance_id", "service_id", "offer_id"]): return false
+	if not _valid_npc_service({"npc_instance_id":p.npc_instance_id, "service_id":p.service_id}) or not p.offer_id is String or not GameplayContentId.valid(StringName(p.offer_id)): return false
+	if p.size() == 3: return true
+	return p.has_all(["x", "y", "page"]) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and p.page >= 0 and p.page < InventoryGrid.PAGES
+
+func _shop_submit(action: String, p: Dictionary) -> Dictionary:
+	var id: String = _begin_command()
+	var position: int = int(p.page) * InventoryGrid.PAGE_CELLS + int(p.y) * InventoryGrid.COLUMNS + int(p.x) if p.has("x") else -1
+	world.shop_endpoint.request_shop.rpc_id(1, action, p.npc_instance_id, p.service_id, p.get("offer_id", ""), position, id)
+	return await _wait_command(id)
 
 func _npc_state(snapshot: Dictionary) -> void:
 	dispatcher.set_domain("npc", snapshot)

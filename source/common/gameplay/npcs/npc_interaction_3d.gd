@@ -2,6 +2,7 @@ class_name NpcInteraction3D
 extends Node
 ## Map-scoped authoritative context. Service domains call resolve_npc_service again
 ## at execution time; opening/selecting a service never authorizes a later spend.
+signal context_changed(peer_id: int)
 signal state_changed(snapshot: Dictionary)
 signal operation_finished(command_id: String, result: Dictionary)
 var state: Dictionary = {"active":false}
@@ -70,6 +71,14 @@ func select_for_peer(peer_id: int, instance_id: String, service_id: StringName) 
 	contexts[peer_id].selected_service_id = service_id
 	return {"ok":true}
 
+func clear_service_for_peer(peer_id: int) -> Dictionary:
+	var context: NpcInteractionContext = contexts.get(peer_id)
+	if context == null: return {"ok":false, "error":"no_interaction"}
+	var valid: Dictionary = _validate_actor(peer_id, context.npc_instance_id)
+	if not valid.ok: return {"ok":false, "error":valid.error}
+	context.selected_service_id = &""
+	return {"ok":true}
+
 func close_for_peer(peer_id: int) -> void:
 	contexts.erase(peer_id)
 
@@ -109,6 +118,7 @@ func request_interaction(action: String, instance_id: String, service_id: String
 		match action:
 			"interact": result = interact_for_peer(peer_id, instance_id)
 			"select": result = select_for_peer(peer_id, instance_id, StringName(service_id))
+			"clear_service": result = clear_service_for_peer(peer_id)
 			"close":
 				close_for_peer(peer_id)
 				result = {"ok":true}
@@ -118,6 +128,7 @@ func request_interaction(action: String, instance_id: String, service_id: String
 
 func _publish(peer_id: int) -> void:
 	var snapshot: Dictionary = snapshot_for_peer(peer_id)
+	context_changed.emit(peer_id)
 	if GameMode.is_world_server() and _world.characters.has(peer_id) and multiplayer.has_multiplayer_peer():
 		if _published.get(peer_id, {}) != snapshot:
 			_published[peer_id] = snapshot.duplicate(true)

@@ -1,8 +1,8 @@
 # Neutral NPC interaction and service foundation
 
 Implemented 2026-10-10. Neutral NPCs expose declarative services. They do not own
-Shop, Upgrade, Storage or Quest execution. This slice performs no purchase, item
-mutation or currency write and adds no database schema.
+Shop, Upgrade, Storage or Quest execution. The foundation adds no database schema;
+the separate [NPC Shop](npc-shop.md) domain now owns purchases and the Shop view.
 
 ## Static content
 
@@ -51,7 +51,7 @@ player, map parent, interactable flag, content and current distance. It stores a
 private runtime `NpcInteractionContext` per peer, with instance/definition IDs
 and the currently selected service. Nothing is persisted for this context.
 
-Future domains must call:
+Service domains call:
 
 ```gdscript
 var authorization = world.npc_endpoint.resolve_npc_service(
@@ -75,7 +75,7 @@ on the actor provides a minimal runtime availability hook. It is not quest logic
 
 ## CEF composition
 
-`npc.interact`, `npc.select_service` and `npc.close` use explicit validators and
+`npc.interact`, `npc.select_service`, `npc.clear_service` and `npc.close` use explicit validators and
 the existing per-request correlation. World → Godot controller → WebUiBridge →
 DomainStore delivers the `npc` domain. `ui.ready` reloads its current snapshot.
 No NodePath, domain Resource or content_ref is accepted from Web UI.
@@ -87,16 +87,17 @@ The browser validates the entire domain before replacing last known valid state.
 
 `screens/npc/npc-service-menu.ts` composes UiWindow and UiButton and exposes a typed
 selection callback. `npc-interaction.ts` owns routing based on enabled services:
-0 → no window, 1 → select directly, 2+ → menu. Selection hides the menu and opens
-an explicit service target placeholder. That placeholder performs no shop/upgrade
-operation; corresponding feature screens replace it in their slices. Close/Escape
-ends the interaction and releases its regions. Reload restores the selected target.
+0 → no window, 1 → select directly, 2+ → menu. Selection hides the menu and routes SHOP to its feature window; Upgrade retains
+a target placeholder. SHOP opens through its own revalidating `shop.open` command.
+A failed feature open exposes the menu/status for retry. Close/Escape on a selected
+service clears selection and returns to the menu for multi-service NPCs; another
+close ends interaction. Single-service NPCs close directly. Reload restores current
+selection and the published Shop snapshot.
 
 `openService(service, context?)` accepts an optional preselected item intent and
 shares the same callback as the menu. It is presentation data, not permission to
 mutate that item. Inventory-to-NPC drop wiring and actual Upgrade UI are deferred.
-A later service screen can return to the menu by clearing selection while retaining
-valid context; this slice closes the entire context instead.
+`npc.clear_service` clears selection while retaining valid interaction context.
 
 ## Verification
 

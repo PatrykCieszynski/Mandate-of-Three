@@ -1,6 +1,6 @@
 import { UiWindow } from '../../core/window/ui-window.js';
 import { mountNpcServiceMenu } from './npc-service-menu.js';
-import { npcOpening } from './npc-model.js';
+import { NpcServiceKind, npcOpening } from './npc-model.js';
 // NPC composition owns 0/1/many routing. Feature screens never decide that policy.
 export function mountNpcInteraction(menuRoot, serviceRoot, options) {
     let state = { active: false }, pending = false, disposed = false, error = '', autoKey = '', generation = 0;
@@ -10,7 +10,7 @@ export function mountNpcInteraction(menuRoot, serviceRoot, options) {
         onSelect: (service) => {
             void openService(service);
         },
-        onClose: options.onClose,
+        onClose: closeSelectedService,
         ...(options.onRegionsChanged
             ? { onRegionsChanged: options.onRegionsChanged }
             : {}),
@@ -26,7 +26,7 @@ export function mountNpcInteraction(menuRoot, serviceRoot, options) {
             anchor: 'top-left',
             offset: { x: 320, y: 180 },
         },
-        onClose: options.onClose,
+        onClose: closeSelectedService,
         ...(options.onRegionsChanged
             ? { onRegionsChanged: options.onRegionsChanged }
             : {}),
@@ -36,17 +36,21 @@ export function mountNpcInteraction(menuRoot, serviceRoot, options) {
     target.contentRoot.append(notice);
     function render() {
         const opening = npcOpening(state), wasMenu = menuRoot.hidden, wasService = serviceRoot.hidden;
-        const showMenu = opening.mode === 'menu' || (opening.mode === 'select' && error !== '');
+        const showMenu = opening.mode === 'menu' || error !== '';
         menuRoot.hidden = !showMenu;
-        serviceRoot.hidden = opening.mode !== 'service';
+        serviceRoot.hidden =
+            opening.mode !== 'service' ||
+                !!options.handlesService?.(opening.service.kind);
         menu.setState(state, pending, error);
         if (opening.mode === 'service' && state.active) {
             autoKey = '';
             target.panel.querySelector('h1').textContent = opening.service.label;
             notice.textContent = 'This service is not available yet.';
-            target.refresh();
-            if (wasService)
-                target.handle.activate();
+            if (!serviceRoot.hidden) {
+                target.refresh();
+                if (wasService)
+                    target.handle.activate();
+            }
             const key = state.npcInstanceId + ':' + opening.service.id;
             if (key !== lastOpened) {
                 lastOpened = key;
@@ -70,6 +74,15 @@ export function mountNpcInteraction(menuRoot, serviceRoot, options) {
             }
         }
     }
+    function closeSelectedService() {
+        if (state.active &&
+            state.selectedServiceId &&
+            state.services.filter((service) => service.enabled).length > 1 &&
+            options.clearService)
+            options.clearService();
+        else
+            options.onClose();
+    }
     async function openService(service, context) {
         if (!state.active || pending || !service.enabled)
             return { ok: false, error: 'no_interaction' };
@@ -77,6 +90,7 @@ export function mountNpcInteraction(menuRoot, serviceRoot, options) {
         if (!current)
             return { ok: false, error: 'unknown_service' };
         openingContext = context;
+        lastOpened = '';
         const requestGeneration = generation;
         pending = true;
         error = '';
@@ -97,7 +111,8 @@ export function mountNpcInteraction(menuRoot, serviceRoot, options) {
         }
         if (!disposed && generation === requestGeneration) {
             pending = false;
-            error = result.ok ? '' : `Service rejected: ${result.error || 'request'}`;
+            if (!result.ok)
+                error = `Service rejected: ${result.error || 'request'}`;
             render();
         }
         return result;
@@ -105,6 +120,14 @@ export function mountNpcInteraction(menuRoot, serviceRoot, options) {
     return {
         regions: [...menu.regions, target.panel],
         openService,
+        serviceFailed(selection, reason) {
+            if (!state.active ||
+                state.npcInstanceId !== selection.npcInstanceId ||
+                state.selectedServiceId !== selection.service.id)
+                return;
+            error = `Service rejected: ${reason}`;
+            render();
+        },
         setState(snapshot) {
             const changed = state.active !== snapshot.active ||
                 (state.active &&
@@ -124,7 +147,7 @@ export function mountNpcInteraction(menuRoot, serviceRoot, options) {
         closeIfActive() {
             if (!state.active)
                 return false;
-            options.onClose();
+            closeSelectedService();
             return true;
         },
         dispose() {

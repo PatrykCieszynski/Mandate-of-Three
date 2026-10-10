@@ -1,3 +1,5 @@
+import { mountShop } from '../screens/shop/shop-view.js';
+import { NpcServiceKind } from '../screens/npc/npc-model.js';
 import { mountNpcInteraction } from '../screens/npc/npc-interaction.js';
 import { ItemDragRuntime } from '../game-ui/drag/item-drag-runtime.js';
 import { mountStorage } from '../screens/storage/storage-view.js';
@@ -24,6 +26,7 @@ manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
 const root = findElement(document, '#inventory', 'main'),
   storageRoot = findElement(document, '#storage', 'main'),
   equipmentRoot = findElement(document, '#equipment', 'main'),
+  shopRoot = findElement(document, '#shop', 'main'),
   npcRoot = findElement(document, '#npc-menu', 'main'),
   npcServiceRoot = findElement(document, '#npc-service', 'main'),
   store = new DomainStore();
@@ -49,6 +52,7 @@ const bridge = new WebBridge({
       message.type === 'storage.updated' ||
       message.type === 'equipment.updated' ||
       message.type === 'hud.updated' ||
+      message.type === 'shop.updated' ||
       message.type === 'npc.updated'
     )
       drag.cancel();
@@ -80,6 +84,10 @@ const bridge = new WebBridge({
     });
     if (message.type === 'ui.snapshot' || message.type === 'npc.updated')
       npc.setState(state.npc ?? { active: false });
+    if (message.type === 'ui.snapshot' || message.type === 'shop.updated')
+      shop.setState(state.shop ?? { active: false });
+    if (message.type === 'ui.snapshot' || message.type === 'wallet.updated')
+      shop.setWallet(state.wallet);
   },
 });
 const drag = new ItemDragRuntime({
@@ -90,6 +98,7 @@ const view = mountInventory(root, {
   drag,
   quickDeposit: (item) => storage.tryQuickDeposit(item),
   withdrawItem: (item, position) => storage.withdrawToInventory(item, position),
+  buyShopOffer: (subject, position) => shop.buyOffer(subject, position),
   receiveEquipped: (item, position) => equipment.unequip(item, position),
   manager,
   resolveItemIcon,
@@ -118,8 +127,36 @@ const storage = mountStorage(storageRoot, {
   },
   onRegionsChanged: () => regions?.refresh(),
 });
+const shop = mountShop(shopRoot, {
+  manager,
+  drag,
+  resolveItemIcon,
+  buy: (payload) => bridge.request('shop.buy', payload),
+  onClose: () => {
+    drag.cancel();
+    npc.closeIfActive();
+  },
+  onRegionsChanged: () => regions?.refresh(),
+});
 const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
   manager,
+  handlesService: (kind) => kind === NpcServiceKind.SHOP,
+  clearService: () => {
+    void bridge.request('npc.clear_service', {}).catch(() => {});
+  },
+  onServiceOpened: (selection) => {
+    if (selection.service.kind === NpcServiceKind.SHOP)
+      void bridge
+        .request('shop.open', {
+          npc_instance_id: selection.npcInstanceId,
+          service_id: selection.service.id,
+        })
+        .then((result) => {
+          if (!result.ok)
+            npc.serviceFailed(selection, result.error ?? 'request');
+        })
+        .catch(() => npc.serviceFailed(selection, 'timeout'));
+  },
   selectService: (selection) =>
     bridge.request('npc.select_service', {
       npc_instance_id: selection.npcInstanceId,
@@ -131,6 +168,7 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
   onRegionsChanged: () => regions?.refresh(),
 });
 regions = reportInteractiveRegions(bridge, [
+  ...shop.regions,
   ...npc.regions,
   ...view.regions,
   ...equipment.regions,
@@ -138,6 +176,7 @@ regions = reportInteractiveRegions(bridge, [
   ...drag.regions,
 ]);
 window.addEventListener('pagehide', () => {
+  shop.dispose();
   npc.dispose();
   drag.dispose();
   storage.dispose();
@@ -147,5 +186,16 @@ window.addEventListener('pagehide', () => {
   bridge.clearPending('reload');
   manager.dispose();
 });
+document.addEventListener(
+  'keydown',
+  (event) => {
+    if (event.key !== 'Escape' || event.repeat) return;
+    if (drag.cancel() || npc.closeIfActive()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  },
+  true,
+);
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 bridge.ready();

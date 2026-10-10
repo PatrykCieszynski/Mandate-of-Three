@@ -16,13 +16,15 @@ Godot 4.7.2 and Node 20.19+ are required. Run `npm ci --ignore-scripts` in
 Smoke compiles TypeScript and tests the emitted static browser JS. `-NodeExecutable` can select a bundled Node.
 No running server, browser, GUI, network port or production accounts are required.
 The smoke suite does not install/download CEF. Installing CEF is optional; installed CEF loads in headless without
-creating a browser. The suite has five small SQLite scenarios, one NPC content/context fixture and one bridge contract group:
+creating a browser. The suite has six small SQLite scenarios, one NPC content/context fixture and one bridge contract group:
 
 - Item identity, ownership, revisions, atomic equip/move and rollback/reopen.
 - Inventory footprints, page bounds, overlap and atomic legacy migration.
 - Pickup identity, full bag, double pickup and partial-write rollback.
 - XP/level RAM updates and dirty checkpoints, including forced save and crash window.
 - Wallet deltas, immediate critical spend, rollback/checkpoint and relog.
+- NPC Shop offer/stack invariants, exact/first-fit purchase, capacity-before-charge,
+  pending Yang, rollback and durable item identity.
 - Neutral NPC definitions, service references, map/range/context authority and teardown.
 - Bridge framing, explicit command boundary, readiness, request correlation and
   full snapshot recovery; small Core UI lifecycle, skin and icon contracts.
@@ -36,7 +38,7 @@ These tests intentionally protect persistence and authority, not prototype visua
 
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
-`run-web-inventory`, `run-npc`. Choose the affected flow for movement/combat/XP/wallet/RPC
+`run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
 changes; do not run all of them after CSS edits. They share port 18098: run
 sequentially. `run-items.ps1 -WithSession` requires normal gateway/master/world
 roles and writes guest fixture accounts; use it for actual session/login changes.

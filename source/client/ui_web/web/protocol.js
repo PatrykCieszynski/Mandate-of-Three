@@ -40,10 +40,10 @@ export function isCommandResult(result) {
         (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message) {
-    return !message.id && ['ui.snapshot', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
+    return !message.id && ['ui.snapshot', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
 }
 export function isDomainName(value) {
-    return ['npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
+    return ['shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
 }
 export function isRawDomainState(value) {
     return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -105,6 +105,22 @@ function isHud(value) {
         (!('ui_scale' in value) || (finiteRange(value.ui_scale, 0.8, 1.5) && UI_SCALES.includes(value.ui_scale))) &&
         (!('viewport' in value) || isViewport(value.viewport));
 }
+function isShop(value) {
+    if (!isObject(value) || typeof value.active !== 'boolean')
+        return false;
+    if (!value.active)
+        return Object.keys(value).length === 1;
+    const id = (v) => typeof v === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(v);
+    if (typeof value.npcInstanceId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value.npcInstanceId) || !id(value.serviceId) || !id(value.shopId) || typeof value.name !== 'string' || !value.name || value.name.length > 128 || value.currency !== 'yang' || !Array.isArray(value.offers) || value.offers.length > 180)
+        return false;
+    const seen = new Set();
+    for (const offer of value.offers) {
+        if (!isObject(offer) || !id(offer.offerId) || typeof offer.offerId !== 'string' || seen.has(offer.offerId) || !id(offer.itemDefinitionId) || typeof offer.name !== 'string' || !offer.name || offer.name.length > 128 || typeof offer.iconId !== 'string' || offer.iconId.length > 64 || !integerRange(offer.height, 1, 3) || !integerRange(offer.quantity, 1) || !integerRange(offer.price, 1, MAX_YANG) || ('description' in offer && typeof offer.description !== 'string') || 'uid' in offer || 'revision' in offer)
+            return false;
+        seen.add(offer.offerId);
+    }
+    return true;
+}
 function isNpc(value) {
     if (!isObject(value) || typeof value.active !== 'boolean')
         return false;
@@ -130,6 +146,7 @@ export function isValidDomainValue(domain, value) {
     if (!isObject(value))
         return false;
     switch (domain) {
+        case 'shop': return isShop(value);
         case 'npc': return isNpc(value);
         case 'storage': return isStorage(value);
         case 'inventory': return isInventory(value);
