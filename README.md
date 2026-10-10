@@ -45,6 +45,19 @@ Verified engine: **Godot 4.7.2**, installed locally in `.godot/`.
 Godot and godot-sqlite native binaries are not versioned; a fresh checkout needs
 local installation. `.godot/` contains local cache, the engine and test results.
 
+For clickable local commands in WebStorm, open the root `package.json` and click
+Run beside a script, or select the shared `.run` configurations. Configure the
+project Node interpreter if the IDE asks for one. `servers:start` starts all roles;
+`servers:restart` restarts Master + World and lets the existing Gateway reconnect;
+`world:restart` restarts World alone; `servers:stop` stops all three;
+`servers:status` reports local processes/listeners. Roles run hidden with logs in
+`.godot/runtime`. Stop/restart requests a final World checkpoint via the Master
+dashboard and refuses to force-kill World if it cannot save/exit. For a protected
+local dashboard, set `MANDATE_DASHBOARD_TOKEN` in your environment. These commands
+use the default local ports/configuration and preserve runtime stores.
+
+Equivalent direct PowerShell entry: `./tools/servers.ps1 -Action restart -Target game`.
+
 Start the three roles in separate PowerShell terminals from the project directory:
 
 ```powershell
