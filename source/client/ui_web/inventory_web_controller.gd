@@ -37,6 +37,12 @@ func setup(game_world: SpikeWorld3D) -> void:
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
+	dispatcher.register_command("npc.interact", _valid_npc, func(p: Dictionary) -> Dictionary: return await interact_npc(p.npc_instance_id))
+	dispatcher.register_command("npc.select_service", _valid_npc_service, func(p: Dictionary) -> Dictionary: return await _npc_submit("select", p.npc_instance_id, p.service_id))
+	dispatcher.register_command("npc.close", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary: return await _npc_submit("close"))
+	world.npc_endpoint.state_changed.connect(_npc_state)
+	world.npc_endpoint.operation_finished.connect(_operation_finished)
+	_npc_state(world.npc_endpoint.state)
 	dispatcher.register_command("storage.transfer", _valid_storage, _storage_transfer)
 	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
 	dispatcher.register_command("inventory.move_item", _valid_move, _move)
@@ -58,6 +64,23 @@ func setup(game_world: SpikeWorld3D) -> void:
 	# Warm the browser/page on world entry. DOM stays hidden until inventory_open.
 	# UI_READY receives the current snapshot, including updates during startup.
 	host.open()
+
+func _npc_state(snapshot: Dictionary) -> void:
+	dispatcher.set_domain("npc", snapshot)
+
+static func _valid_npc(p: Dictionary) -> bool:
+	return p.size() == 1 and p.get("npc_instance_id") is String and NeutralNpc3D.valid_instance_id(p.npc_instance_id)
+
+static func _valid_npc_service(p: Dictionary) -> bool:
+	return p.size() == 2 and p.get("npc_instance_id") is String and NeutralNpc3D.valid_instance_id(p.npc_instance_id) and p.get("service_id") is String and GameplayContentId.valid(StringName(p.service_id))
+
+func interact_npc(instance_id: String) -> Dictionary:
+	return await _npc_submit("interact", instance_id)
+
+func _npc_submit(action: String, instance_id: String = "", service_id: String = "") -> Dictionary:
+	var id: String = _begin_command()
+	world.npc_endpoint.request_interaction.rpc_id(1, action, instance_id, service_id, id)
+	return await _wait_command(id)
 
 func _inventory(snapshot: Dictionary) -> void:
 	if not snapshot.get("ok", false): return
@@ -190,7 +213,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if storage_opened: opened = true
 		_layout()
 		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_ESCAPE and (opened or equipment_opened or storage_opened):
+	elif event.keycode == KEY_ESCAPE and (opened or equipment_opened or storage_opened or world.npc_endpoint.state.get("active", false)):
 		# Presentation shortcut only: web cancels carry first, otherwise requests close.
 		bridge.send("ui.shortcut", {"key": "Escape"})
 		get_viewport().set_input_as_handled()

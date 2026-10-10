@@ -20,6 +20,7 @@ var _ui_failure_label: Label
 var _status: Label
 var inventory_endpoint: SpikeInventory3D
 var combat_endpoint: SpikeCombat3D
+var npc_endpoint: NpcInteraction3D
 var currency_endpoint: SpikeCurrency3D
 
 func _ready() -> void:
@@ -34,6 +35,14 @@ func _ready() -> void:
 	currency_endpoint = SpikeCurrency3D.new()
 	currency_endpoint.name = "Currency"
 	add_child(currency_endpoint)
+	npc_endpoint = NpcInteraction3D.new()
+	npc_endpoint.name = "NpcInteraction"
+	add_child(npc_endpoint)
+	var blacksmith := preload("res://source/common/gameplay/npcs/blacksmith_fixture.tscn").instantiate() as NeutralNpc3D
+	add_child(blacksmith)
+	if not npc_endpoint.register_actor(blacksmith):
+		push_error("Invalid Blacksmith content/instance")
+		blacksmith.queue_free()
 	if not _server:
 		local_peer = multiplayer.get_unique_id()
 		_build_camera_and_ui()
@@ -118,7 +127,7 @@ func _build_camera_and_ui() -> void:
 	panel.position = Vector2(20, 20)
 	canvas.add_child(panel)
 	_status = Label.new()
-	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · I — ekwipunek\nŁączenie ze światem…"
+	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · I — ekwipunek · N — NPC\nŁączenie ze światem…"
 	_status.add_theme_font_size_override("font_size", 18)
 	var controls := VBoxContainer.new()
 	panel.add_child(controls)
@@ -159,6 +168,27 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_options.hide()
 		get_viewport().set_input_as_handled()
 
+func _unhandled_input(event: InputEvent) -> void:
+	if _server or not input_enabled or ClientState.menu_open or not characters.has(local_peer): return
+	var npc_id: String = ""
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var origin: Vector3 = _camera.project_ray_origin(event.position)
+		var ray := PhysicsRayQueryParameters3D.create(origin, origin + _camera.project_ray_normal(event.position) * 100, 8)
+		var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(ray)
+		var npc: NeutralNpc3D = hit.get("collider") as NeutralNpc3D
+		if npc != null: npc_id = npc.instance_id
+	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_N:
+		var nearest: float = INF
+		for actor: NeutralNpc3D in npc_endpoint.actors.values():
+			var distance: float = characters[local_peer].global_position.distance_to(actor.global_position)
+			if actor.interactable and distance <= actor.definition.interaction_radius and distance < nearest:
+				nearest = distance
+				npc_id = actor.instance_id
+	if npc_id != "":
+		var ui: InventoryWebController = get_node_or_null("WebInventory")
+		if ui != null: ui.interact_npc(npc_id)
+		get_viewport().set_input_as_handled()
+
 @rpc("any_peer", "call_remote", "reliable", 0)
 func join_world() -> void:
 	if not _server:
@@ -187,6 +217,7 @@ func remove_peer(peer_id: int) -> void:
 		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 		if resource != null and WorldServer.curr.database != null:
 			WorldServer.curr.database.flush_character(resource.player_id)
+	npc_endpoint.remove_peer(peer_id)
 	combat_endpoint.remove_peer(peer_id)
 	currency_endpoint.remove_peer(peer_id)
 	inventory_endpoint.remove_peer(peer_id)
@@ -222,7 +253,7 @@ func receive_roster(roster: Dictionary) -> void:
 	for peer_id: int in roster:
 		if not characters.has(peer_id):
 			_add_character(peer_id, str(roster[peer_id]))
-	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · I — ekwipunek\nGracze: %d" % characters.size()
+	_status.text = "Mandate of Three · Spike 3D\nWASD — ruch · I — ekwipunek · N — NPC\nGracze: %d" % characters.size()
 
 func _add_character(peer_id: int, display_name: String) -> SpikeCharacter3D:
 	var body := SpikeCharacter3D.new()

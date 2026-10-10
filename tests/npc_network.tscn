@@ -1,0 +1,4 @@
+[gd_scene load_steps=2 format=3]
+[ext_resource type="Script" path="res://tests/npc_network.gd" id="1"]
+[node name="NpcNetworkTest" type="Node"]
+script = ExtResource("1")

@@ -371,3 +371,12 @@ checks the full footprint and occupancy inside the equipment transaction;
 invalid/occupied exact targets are rejected without a first-free fallback.
 Right-click Equipment uses automatic receipt; left click carries and drag/drop
 selects an exact position. Inventory right-click remains `item.activate`.
+
+
+## Neutral NPC services
+
+The `npc` domain and explicit `npc.interact` / `npc.select_service` / `npc.close`
+commands compose the Core UI service menu and target placeholder. World owns
+content, interaction context, current range and service authorization. The browser
+routes zero/one/many enabled services and restores current selection after reload.
+See [NPC services](npc-services.md) for content authoring, boundaries and tests.

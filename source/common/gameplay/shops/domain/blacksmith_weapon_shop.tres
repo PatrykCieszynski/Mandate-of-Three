@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShopDefinition" load_steps=4 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/shops/domain/shop_definition.gd" id="1"]
+[ext_resource type="Script" path="res://source/common/gameplay/shops/domain/shop_offer_definition.gd" id="2"]
+[sub_resource type="Resource" id="IronSword"]
+script = ExtResource("2")
+offer_id = &"iron_sword"
+item_definition_id = &"iron_sword"
+quantity = 1
+price = 1000
+stock_policy = 0
+[resource]
+script = ExtResource("1")
+shop_id = &"blacksmith_weapon_shop"
+display_name = "Blacksmith Weapons"
+currency_id = &"yang"
+offers = Array[ExtResource("2")]([SubResource("IronSword")])

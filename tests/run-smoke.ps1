@@ -6,6 +6,7 @@ $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
 New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
 # Isolated databases. No servers, game windows, balances, exact DOM or geometry.
 $taskCases = [ordered]@{
+    npc_foundation = 'NPC_FOUNDATION_OK'
     item_instances = 'ITEM_INSTANCES_OK'
     inventory_grid = 'INVENTORY_GRID_OK'
     ground_items = 'GROUND_ITEMS_OK'
