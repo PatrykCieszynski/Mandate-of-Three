@@ -53,6 +53,13 @@ and min/max zoom near the forge, arch, rocks and shrine. Assess travel distances
 combat room, landmark visibility and camera behavior with two clients. No native
 window is automatically opened by the headless checks.
 
+Development presenters retain their active PackedScene resources while instances
+are alive. Otherwise the 250 ms model-selection polls reload weakly cached scenes.
+A local headless nine-dog probe measured roughly 4 ms average / 5.1 ms maximum
+before retention, versus 0.7 ms average / 1.1 ms maximum after it. This measures
+CPU resource resolution only, not GPU frame time or proof that visible judder is
+fixed; native movement on the region still needs comparison against the arena.
+
 ## Next slices
 
 1. Metin Stone v1: a server-authoritative attackable stone at these sites, mob waves,
