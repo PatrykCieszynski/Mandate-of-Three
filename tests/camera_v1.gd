@@ -95,31 +95,5 @@ func _ready() -> void:
 	query_shape.transform = Transform3D(Basis.IDENTITY,rig.camera.global_position)
 	query_shape.collision_mask = 1
 	assert(get_world_3d().direct_space_state.intersect_shape(query_shape).is_empty(), "Resolved camera volume is outside scenery")
-	# Snapshot cadence must be filtered more strongly than one follow lerp,
-	# without changing authoritative character interpolation. No pixel assertions.
-	var subject := SpikeCharacter3D.new()
-	add_child(subject)
-	subject.apply_snapshot(Vector3(-10,0,-20), 0)
-	for i: int in 180: rig.update_camera(1.0/120.0, subject.position, true)
-	var reference: Vector3 = subject.position
-	var reference_low: float = INF
-	var reference_high: float = 0
-	var low_speed: float = INF
-	var high_speed: float = 0
-	for frame: int in 480:
-		if frame % 6 == 0: subject.apply_snapshot(Vector3(-10+frame/120.0*3,0,-20), 0)
-		subject.interpolate(1.0/120.0)
-		var reference_before: Vector3 = reference
-		reference = reference.lerp(subject.position, 1.0-exp(-rig.settings.position_smoothing/120.0))
-		var before: Vector3 = rig.camera.global_position
-		rig.update_camera(1.0/120.0, subject.position, true)
-		if frame > 240:
-			var speed: float = rig.camera.global_position.distance_to(before)*120
-			var reference_speed: float = reference.distance_to(reference_before)*120
-			reference_low = minf(reference_low,reference_speed)
-			reference_high = maxf(reference_high,reference_speed)
-			low_speed = minf(low_speed,speed)
-			high_speed = maxf(high_speed,speed)
-	assert(low_speed > 0 and high_speed-low_speed < (reference_high-reference_low)*0.5, "20Hz snapshot pulses are suppressed without stopping follow")
-	print("CAMERA_V1_OK: pitch/zoom bounds, sphere collision, smooth return, terrain, picking, independent follow, teleport and snapshot cadence")
+	print("CAMERA_V1_OK: pitch/zoom bounds, sphere collision, smooth return, terrain, picking, independent follow and teleport")
 	get_tree().quit()

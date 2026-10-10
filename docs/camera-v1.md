@@ -44,12 +44,8 @@ after the manual-input delay. There is no camera settings UI in this slice.
 
 ## Collision and damping
 
-The rig uses two exponential follow stages, exponential orbit/zoom damping and a sphere sweep for the
-pivot-to-camera boom. Follow stages run at twice `position_smoothing`, keeping
-approximately the same follow delay while suppressing velocity pulses from the
-20 Hz snapshots of the already interpolated character. Their state stays separate
-from the collision-resolved pivot; collision corrections do not reset follow.
-Framing offset and follow lag are also swept from the player's
+The rig uses exponential damping for follow/orbit/zoom and a sphere sweep for the
+pivot-to-camera boom. Framing offset and follow lag are also swept from the player's
 eye so the pivot does not drift through nearby scenery. The framing offset drops temporarily near corners if it would obstruct the direct
 player-to-camera sightline. Requested zoom stays
 separate from resolved distance. Obstructions retract the camera immediately;
@@ -74,8 +70,7 @@ inside solid geometry need fixing in level content.
 `./tests/run-camera.ps1` is an optional bounded headless fixture: pitch/zoom bounds,
 a real wall and terrain, near-wall rear framing, outward sweeps from a clamped
 pivot, collision retraction and return, requested zoom retention,
-NPC screen-ray picking after orbit/zoom, independent follow, teleport reset and
-suppression of snapshot-cadence velocity pulses against the prior single-stage filter.
+NPC screen-ray picking after orbit/zoom, independent follow and teleport reset.
 It does not assert pixels, exact animation times or combat balance. Existing
 Web bridge tests cover temporary world pointer ownership and restoration.
 `run-spike3d` verifies the unchanged authoritative movement flow with two clients.
