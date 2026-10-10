@@ -101,7 +101,11 @@ func _ready() -> void:
 	check(replicated.hp == 80 and replicated.source_metinstone_id == "stone-test", "dynamic fields and provenance survive reconciliation")
 	check(replicated.pack_instance_id == 0, "client has no replicated pack runtime")
 	record[MobSnapshot.Field.HP] = 60
-	combat._receive_mob_snapshots([record])
+	var unknown := record.duplicate()
+	unknown[MobSnapshot.Field.ID] = 102
+	unknown[MobSnapshot.Field.MOB_KEY] = &"future_unknown_mob"
+	combat._receive_mob_snapshots([unknown,record])
+	check(not combat.dogs.has(102) and combat.dogs.size() == 1, "unknown key skips only that actor and continues processing the snapshot")
 	check(combat.dogs[101] == replicated and replicated.hp == 60, "later full snapshot updates existing actor")
 	combat._receive_mob_snapshots([])
 	check(combat.dogs.is_empty(), "empty full snapshot removes all actors")

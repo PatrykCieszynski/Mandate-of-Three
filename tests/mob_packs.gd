@@ -166,7 +166,7 @@ func measure_snapshots(combat: SpikeCombat3D, count: int) -> void:
 		assert(MobSnapshot.state_name(record[MobSnapshot.Field.STATE]) == mob.ai_state)
 	var probe: SpikeWildDog3D = combat.dogs.values()[0]
 	var original_state := probe.ai_state
-	for name: String in MobSnapshot.STATE_NAMES:
+	for name: String in MobSnapshot.STATE_NAMES.values():
 		probe.ai_state = name
 		assert(MobSnapshot.state_name(MobSnapshot.capture(probe)[MobSnapshot.Field.STATE]) == name)
 	probe.ai_state = original_state
