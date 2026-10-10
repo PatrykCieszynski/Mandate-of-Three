@@ -30,6 +30,7 @@ func apply_damage(peer_id: int, amount: int, now: int) -> bool:
 	return true
 func _spawn_wave(wave: MetinWaveDefinition, now: int, attacker: int) -> void:
 	var pack := _world.combat_endpoint.create_pack(wave.members,stone.position,wave.spawn_radius,wave.spawn_radius+2,maxf(18,wave.spawn_radius+10),0,runtime.stone_instance_id,now+int(definition.wave_lifetime_seconds*1000))
+	if pack == null: return # Invalid content is rejected without a partial wave.
 	runtime.spawned_mobs.append_array(pack.actor_ids)
 	_world.combat_endpoint.aggro_pack(pack.pack_instance_id,attacker)
 func tick(now: int) -> void:

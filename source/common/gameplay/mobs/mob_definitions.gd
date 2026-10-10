@@ -13,3 +13,6 @@ static func resolve(key: StringName) -> MobDefinition:
 		&"hollow_hound": return HOLLOW_HOUND
 		&"metin_hound_elite": return METIN_HOUND_ELITE
 	return null
+
+static func is_registered(definition: MobDefinition) -> bool:
+	return definition != null and resolve(definition.mob_key) == definition

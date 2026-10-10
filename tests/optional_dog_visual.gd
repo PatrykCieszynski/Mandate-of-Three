@@ -22,6 +22,7 @@ func _ready() -> void:
 	dog.setup_dog(9, Vector3(3,0,2))
 	add_child(dog)
 	await get_tree().process_frame
+	check(dog.name_label != null and dog.hp_label != null, "client creates name and HP presentation")
 	var view := dog.presentation
 	check(ResourceLoader.has_cached(expected_path), "live visuals retain scenes for repeated development polls")
 	check(view.content.scene_file_path == expected_path, "existing gameplay dog uses selected visual")
@@ -105,6 +106,8 @@ func _ready() -> void:
 	unknown[MobSnapshot.Field.ID] = 102
 	unknown[MobSnapshot.Field.MOB_KEY] = &"future_unknown_mob"
 	combat._receive_mob_snapshots([unknown,record])
+	combat._receive_mob_snapshots([unknown,unknown,record])
+	check(combat._warned_unknown_mob_keys.size() == 1 and combat._warned_unknown_mob_keys.has(&"future_unknown_mob"), "unknown key warnings are cached per endpoint")
 	check(not combat.dogs.has(102) and combat.dogs.size() == 1, "unknown key skips only that actor and continues processing the snapshot")
 	check(combat.dogs[101] == replicated and replicated.hp == 60, "later full snapshot updates existing actor")
 	combat._receive_mob_snapshots([])

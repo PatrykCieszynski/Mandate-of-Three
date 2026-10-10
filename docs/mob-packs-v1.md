@@ -11,7 +11,12 @@ The Metin lifecycle, reward/contribution rules and persistence policy stay intac
 hold the former Wild Dog, Feral Dog, Hollow Hound and Metin Elite profiles.
 `mob_key` is content identity; `display_name` is presentation text. All four
 currently use the optional `stray_dog` visual. HP/damage/speed/visual are copied
-through one `SpikeCombat3D.spawn_mob` entry point.
+through one `SpikeCombat3D.spawn_mob` entry point. `MobSpawnEntry.valid()` requires
+the exact canonical resource registered in `MobDefinitions`, not merely a valid
+resource with a matching key. Unregistered keys and duplicate resources using an
+existing key are rejected before any pack member is spawned, including in release
+builds. Register new definitions and reference those same resources in map/wave
+content; runtime encounter copies must preserve their shared mob definitions.
 
 A map authors Marker3D nodes with the `MobSpawnPoint3D` script. Each supplies
 `members: Array[MobSpawnEntry]`, spawn/wander/leash radii and a per-member respawn
@@ -94,13 +99,15 @@ values: IDLE=0, WANDER=1, CHASE=2, ATTACK=3, RETURN=4, DEAD=5, DISABLED=6.
 Server AI continues using its existing names internally. The shared
 `MobDefinitions.resolve(mob_key)` registry supplies client display name, maximum
 HP and visual ID. Register new content in that registry before spawning it;
-unknown keys are warned about and skipped rather than rendered with fake metadata.
+unknown keys are warned about once per key for the endpoint lifetime and skipped
+rather than rendered with fake metadata.
 Client and server content/protocol must ship together; the old dictionary shape
 is not supported.
 
 Damage, speed, home/pack anchor, pack ID, leash, aggro and respawn state are not
 replicated. The source stone ID remains for encounter provenance/debugging.
-Clients create new actors from the current position, remove missing ones (including
+World actors contain no DogVisual or name/HP Label3D nodes and do not format label
+text during physics ticks. Clients create new actors from the current position, remove missing ones (including
 an empty full snapshot), and interpolate. They do not spawn, wander, leash or
 respawn. The target resolver clears dead/removed identities and disables autoattack;
 a replacement cannot revive an old selection. Transport, cadence, full-snapshot

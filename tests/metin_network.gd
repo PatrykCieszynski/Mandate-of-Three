@@ -27,7 +27,7 @@ func phase(command: String, uid: String) -> void:
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size()==2 and ready_peers.size()==2)
 	var encounter: MetinEncounter = world.metin_encounter
-	encounter.definition = encounter.definition.duplicate(true)
+	encounter.definition = encounter.definition.duplicate()
 	encounter.definition.respawn_seconds = 5
 	encounter.runtime.definition = encounter.definition
 	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():

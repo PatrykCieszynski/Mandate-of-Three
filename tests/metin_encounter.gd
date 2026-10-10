@@ -1,7 +1,7 @@
 extends Node3D
 ## Small lifecycle and real melee integration contracts; no pacing/balance assertions.
 func _ready() -> void:
-	var definition: MetinDefinition = preload("res://source/common/gameplay/encounters/metin/first_metin.tres").duplicate(true)
+	var definition: MetinDefinition = preload("res://source/common/gameplay/encounters/metin/first_metin.tres").duplicate()
 	assert(definition.valid())
 	var runtime := MetinRuntime.new()
 	runtime.definition = definition
