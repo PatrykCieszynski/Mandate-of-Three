@@ -16,7 +16,6 @@ export function shopOfferPayload(subject, slotSize, resolveItemIcon) {
         subject,
         presentation: {
             width: slotSize - 2,
-            grabOffset: { x: slotSize / 2, y: slotSize / 2 },
             height: subject.offer.height * slotSize - 2,
             render: (ghost) => paintItemIcon(ghost, { ...subject.offer, icon_id: subject.offer.iconId }, { resolveItemIcon }),
         },
