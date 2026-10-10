@@ -83,6 +83,7 @@ func run_server() -> void:
 		var dog: SpikeWildDog3D = world.combat_endpoint.dogs[id]
 		check(dog.source_metinstone_id==initial_stone_id and not dog.respawn_enabled,"wave provenance and no respawn")
 		check(dog.definition.valid() and dog.pack_instance_id > 0,"wave uses shared data-defined pack runtime")
+		check(dog.target_peer != 0,"passive wave dogs still attack stone contributors")
 		dog.ai_enabled = false
 	drop_uid = str(world.combat_endpoint.ground.keys()[0])
 	var reward_owner: int = int(world.combat_endpoint.ground[drop_uid].owner)

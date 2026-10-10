@@ -8,3 +8,4 @@ max_hp = 120
 attack_damage = 6
 move_speed = 2.8
 visual_id = &"stray_dog"
+proximity_aggro = false

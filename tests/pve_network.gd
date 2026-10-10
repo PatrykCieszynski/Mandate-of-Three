@@ -60,6 +60,8 @@ func _ready() -> void:
 		host.load_map(map_scene_path)
 		add_child(host)
 		world = host.get_node("SpikeMap")
+		# Opt in only in the fixture to retain natural-aggro/return coverage.
+		for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values(): dog.proximity_aggro = true
 		api.peer_connected.connect(func(id: int) -> void:
 			var number: int = server.connected_players.size() + 1
 			var owner: int = server.database.store.create_player_character("pve%d" % number, {"name": "Pve%d" % number, "skin": 1})

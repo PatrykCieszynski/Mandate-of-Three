@@ -28,7 +28,7 @@ The production graybox authors six pack markers in `first_region_3d.tscn`:
 | Stone Hollow | 14 Feral Dogs + 8 Hollow Hounds; 14 Feral Dogs + 10 Hollow Hounds | 46 |
 
 There are 104 open-world actors before Metin waves. These are density test data,
-not final balance. Spawn radius is 3–4 m, wander 5–6 m, leash 15–18 m and each
+not final balance. Spawn radius is 5–6 m, wander 9–10 m, leash 15–18 m and each
 killed member is replaced after 15 seconds. The hub is outside the wander +
 proximity aggro envelope. Map code contains geometry, not mob combat stats.
 
@@ -39,14 +39,18 @@ values for the map lifetime. The existing `mob_id` property is a runtime-ID alia
 for combat/target consumers. IDs are never DB identities and are not reused.
 A spawn point keeps its pack identity; each replacement gets a new actor ID.
 
-Melee, including a killing hit, or one member's proximity detection recruits the
+Melee, including a killing hit, recruits the
 living pack on the attacker. Dead/disabled actors are excluded. Other packs do
 not inherit the target. Aggro refuses a target already outside that pack's leash.
+Dog definitions disable `proximity_aggro`: walking nearby does not start combat.
+Other future definitions can opt into natural proximity detection.
 Members move independently: `IDLE -> WANDER`, `CHASE -> ATTACK`, `RETURN`, `DEAD`.
 Chase and return use straight XZ directions, without NavigationAgent3D, navigate
 or periodic repathing. Wander chooses a local point, moves and waits with jitter.
 Leash compares both the member and its target against the shared pack anchor.
-Return restores HP, clears contribution/target and resumes idle/wander near it.
+Return picks a separate destination per member inside the pack wander disk, once
+on entering RETURN. It restores HP, clears contribution/target and resumes
+idle/wander there; members do not collapse onto the anchor.
 
 Movement still uses server gravity, floor contact and move_and_slide. Ground
 bodies expose bits 1 + 5 (`17`): bit 1 remains the player's scenery/camera/NPC
@@ -65,7 +69,8 @@ spawn point. Pack state and all timers are RAM-only. Scene teardown drops them.
 
 `MetinWaveDefinition.members` uses the same entry resources. The 75/50/25 waves
 still contain 3 Wild Dogs, 4 Wild Dogs, then 3 Wild Dogs + 1 Metin Elite.
-Each wave creates its own runtime pack through the same entry point, tagged with
+Each wave creates its own runtime pack, immediately aggroed on the stone attacker
+regardless of passive proximity policy, through the same entry point, tagged with
 `source_metinstone_id`, no replacements and the existing 180-second lifetime.
 Surviving waves remain after stone death and expire independently, including when
 a later stone is active. Empty temporary packs are removed. There is no navmesh
