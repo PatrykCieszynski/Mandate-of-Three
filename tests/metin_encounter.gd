@@ -18,5 +18,72 @@ func _ready() -> void:
 	assert(not runtime.ready_to_respawn(runtime.respawn_at-1) and runtime.ready_to_respawn(runtime.respawn_at))
 	runtime.spawn(1)
 	assert(runtime.hp == definition.max_hp and runtime.participants.is_empty() and not runtime.reward_claimed and runtime.stone_instance_id != original_id)
+	_check_target_identity()
 	print("METIN_ENCOUNTER_OK: thresholds, overkill contribution, once-only reward and fresh respawn lifecycle")
 	get_tree().quit()
+
+func _check_target_identity() -> void:
+	# Detached actors exercise identity/lifecycle without input, pixels or pacing.
+	var world := SpikeWorld3D.new()
+	var combat := SpikeCombat3D.new()
+	world.add_child(combat)
+	combat._world = world
+	var dog := SpikeWildDog3D.new()
+	dog.setup_dog(17,Vector3.ZERO)
+	world.add_child(dog)
+	combat.dogs[17] = dog
+	var mob: Dictionary = {"kind":&"mob","id":17}
+	combat.select_target(mob)
+	mob.id = 18
+	assert(combat.selected_target.id == 17 and combat._resolve_target(combat.selected_target) == dog, "Selection owns its identity")
+	dog.die(0)
+	combat.assist_direction(Vector2.ZERO)
+	assert(combat.selected_target.is_empty() and not combat.autoattack, "Death clears even without autoattack")
+	dog.respawn()
+	assert(combat.selected_target.is_empty(), "Same-ID respawn never revives the selection")
+	combat.select_target({"kind":&"mob","id":17})
+	combat.autoattack = true
+	dog.ai_state = "DISABLED"
+	combat._clear_invalid_target()
+	assert(combat.selected_target.is_empty() and not combat.autoattack)
+	dog.ai_state = "IDLE"
+	combat.select_target({"kind":&"mob","id":17})
+	combat.autoattack = true
+	combat.dogs.erase(17)
+	combat._clear_invalid_target()
+	assert(combat.selected_target.is_empty() and not combat.autoattack, "Dynamic removal clears selection")
+	combat.dogs[17] = dog
+	combat.select_target({"kind":&"mob","id":17})
+	combat.autoattack = true
+	dog.queue_free()
+	combat._clear_invalid_target()
+	assert(combat.selected_target.is_empty() and not combat.autoattack, "Queued deletion cannot remain a target")
+	combat.dogs.erase(17)
+	var encounter := MetinEncounter.new()
+	world.add_child(encounter)
+	world.metin_encounter = encounter
+	encounter.runtime.definition = encounter.definition
+	encounter.stone = MetinStone3D.new()
+	world.add_child(encounter.stone)
+	encounter.runtime.spawn(0)
+	var stone_target: Dictionary = {"kind":&"metin","id":encounter.runtime.stone_instance_id}
+	combat.select_target(stone_target)
+	assert(combat._resolve_target(combat.selected_target) == encounter.stone)
+	combat.autoattack = true
+	encounter.runtime.damage(1,encounter.definition.max_hp,0)
+	combat._clear_invalid_target()
+	assert(combat.selected_target.is_empty() and not combat.autoattack, "Metin death clears selection")
+	encounter.runtime.spawn(0)
+	assert(combat.selected_target.is_empty())
+	combat.select_target({"kind":&"metin","id":encounter.runtime.stone_instance_id})
+	combat.autoattack = true
+	encounter.runtime.spawn(1)
+	combat._clear_invalid_target()
+	assert(combat.selected_target.is_empty() and not combat.autoattack and combat._resolve_target(stone_target) == null, "New instance/site invalidates an old identity even on the same stone node")
+	combat.select_target({"kind":&"metin","id":encounter.runtime.stone_instance_id})
+	combat.autoattack = true
+	encounter.runtime.state = "COOLDOWN"
+	combat._clear_invalid_target()
+	assert(combat.selected_target.is_empty() and not combat.autoattack, "Cooldown invalidates selection without requiring a DEAD snapshot")
+	assert(combat._resolve_target({}) == null and combat._resolve_target({"kind":&"missing","id":17}) == null)
+	world.free()

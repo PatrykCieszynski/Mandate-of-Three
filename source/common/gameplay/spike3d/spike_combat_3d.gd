@@ -36,7 +36,7 @@ var _notice: String = ""
 var _visual_drops: Dictionary[String, Node3D] = {}
 var _client_sequence: int = 0
 var _client_attack_accum: float = 0
-var selected_mob: int = 0
+var selected_target: Dictionary = {}
 var autoattack: bool = false
 var state: Dictionary = {}
 var navigation_region: NavigationRegion3D
@@ -464,6 +464,7 @@ func receive_state(snapshot: Dictionary) -> void:
 	for peer_id: int in snapshot.health:
 		var body: SpikeCharacter3D = _world.characters.get(peer_id)
 		if body != null: body.set_alive(int(snapshot.health[peer_id]) > 0)
+	_clear_invalid_target()
 	if int(snapshot.health.get(_world.local_peer, 0)) <= 0: autoattack = false
 	for uid: String in _visual_drops.keys():
 		if not snapshot.drops.has(uid):
@@ -504,10 +505,11 @@ func _refresh_hud() -> void:
 	if _hud == null: return
 	var hp: int = int(state.get("health", {}).get(_world.local_peer, 100))
 	var target: String = "Brak celu"
-	if selected_mob == -1 and _world.metin_encounter != null:
+	var actor: Node3D = _resolve_target(selected_target)
+	if actor is MetinStone3D:
 		target = "%s: %d / %d" % [_world.metin_encounter.definition.display_name,_world.metin_encounter.runtime.hp,_world.metin_encounter.definition.max_hp]
-	elif dogs.has(selected_mob):
-		target = "%s: %d / %d" % [dogs[selected_mob].title, dogs[selected_mob].hp, dogs[selected_mob].max_hp]
+	elif actor is SpikeWildDog3D:
+		target = "%s: %d / %d" % [actor.title, actor.hp, actor.max_hp]
 	var combo: int = int(state.get("combos", {}).get(_world.local_peer, 0))
 	var status: String = "Odrodzenie za %.1f s" % float(state.get("respawns", {}).get(_world.local_peer, 0)) if hp == 0 else _notice
 	_hud.text = "HP: %d / 100 · Combo: %d / 3\nSpacja — combo · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, combo, "wł." if autoattack else "wył.", target, status]
@@ -516,17 +518,31 @@ func _refresh_hud() -> void:
 	_experience_bar.max_value = int(progression.next)
 	_experience_bar.value = int(progression.experience)
 
-func _selected_actor() -> Node3D:
-	if selected_mob == -1 and _world.metin_encounter != null and _world.metin_encounter.active(): return _world.metin_encounter.stone
-	var dog: SpikeWildDog3D = dogs.get(selected_mob)
-	return dog if dog != null and dog.ai_state not in ["DEAD","DISABLED"] else null
+func _resolve_target(target: Dictionary) -> Node3D:
+	if target.is_empty(): return null
+	match target.get("kind"):
+		&"mob":
+			var dog: SpikeWildDog3D = dogs.get(int(target.get("id",0)))
+			if not is_instance_valid(dog) or dog.is_queued_for_deletion() or dog.hp <= 0 or dog.ai_state in ["DEAD","DISABLED"]: return null
+			return dog
+		&"metin":
+			var encounter: MetinEncounter = _world.metin_encounter
+			if not is_instance_valid(encounter) or not encounter.active() or encounter.runtime.hp <= 0 or encounter.runtime.stone_instance_id != str(target.get("id","")): return null
+			return encounter.stone if is_instance_valid(encounter.stone) and not encounter.stone.is_queued_for_deletion() else null
+	return null
 
-func select_mob(id: int) -> void:
-	if id != 0: _world._npc_approach.cancel()
-	selected_mob = id
-	if _selected_actor() == null: selected_mob = 0
-	for dog: SpikeWildDog3D in dogs.values(): dog.mark_selected(dog.mob_id == selected_mob)
-	if selected_mob == 0: autoattack = false
+func _clear_invalid_target() -> void:
+	if _resolve_target(selected_target) == null and (not selected_target.is_empty() or autoattack):
+		select_target({})
+
+func select_target(target: Dictionary) -> void:
+	if not target.is_empty(): _world._npc_approach.cancel()
+	selected_target = target.duplicate()
+	if _resolve_target(selected_target) == null: selected_target = {}
+	for dog: SpikeWildDog3D in dogs.values():
+		if is_instance_valid(dog) and not dog.is_queued_for_deletion():
+			dog.mark_selected(selected_target.get("kind") == &"mob" and dog.mob_id == int(selected_target.get("id",0)))
+	if selected_target.is_empty(): autoattack = false
 	_refresh_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -537,10 +553,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		var ray := PhysicsRayQueryParameters3D.create(origin, origin + camera.project_ray_normal(event.position) * 100, 4)
 		var hit: Dictionary = _world.get_world_3d().direct_space_state.intersect_ray(ray)
 		var dog: SpikeWildDog3D = hit.get("collider") as SpikeWildDog3D
-		select_mob(-1 if hit.get("collider") is MetinStone3D else (0 if dog == null else dog.mob_id))
+		if hit.get("collider") is MetinStone3D and _world.metin_encounter != null:
+			select_target({"kind":&"metin","id":_world.metin_encounter.runtime.stone_instance_id})
+		elif dog != null:
+			select_target({"kind":&"mob","id":dog.mob_id})
+		else:
+			select_target({})
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_F:
-			autoattack = not autoattack and selected_mob != 0
+			_clear_invalid_target()
+			autoattack = not autoattack and not selected_target.is_empty()
 			_refresh_hud()
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_E:
@@ -556,11 +578,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func assist_direction(manual: Vector2) -> Vector2:
+	_clear_invalid_target()
 	if manual.length_squared() > 0.001:
 		autoattack = false
 		return manual
 	if not autoattack or not _world.characters.has(_world.local_peer): return manual
-	var actor: Node3D = _selected_actor()
+	var actor: Node3D = _resolve_target(selected_target)
 	if actor == null:
 		autoattack = false
 		return Vector2.ZERO
@@ -573,6 +596,7 @@ func assist_direction(manual: Vector2) -> Vector2:
 
 func _process(delta: float) -> void:
 	if not GameMode.is_client(): return
+	_clear_invalid_target()
 	if _xp_notice != "" and Time.get_ticks_msec() >= _xp_notice_until_ms:
 		_xp_notice = ""
 		_refresh_hud()
@@ -581,7 +605,7 @@ func _process(delta: float) -> void:
 	_client_attack_accum += delta
 	var active: bool = Input.is_physical_key_pressed(KEY_SPACE)
 	if autoattack and _world.characters.has(_world.local_peer):
-		var actor: Node3D = _selected_actor()
+		var actor: Node3D = _resolve_target(selected_target)
 		active = actor != null and _world.characters[_world.local_peer].position.distance_to(actor.position) <= ATTACK_REACH
 	if active and _client_attack_accum >= 0.1:
 		_client_attack_accum = 0
