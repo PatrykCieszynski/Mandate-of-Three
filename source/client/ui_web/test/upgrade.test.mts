@@ -138,6 +138,19 @@ test('Production Upgrade sends UID/revision only and waits for authoritative +1;
   view.setInventory(inventory);
   view.setState(quote);
   view.setWallet({ ready: true, balance: 1000 });
+  let finishEffect!: () => void;
+  Object.defineProperty(
+    root.querySelector('.upgrade-slot')!,
+    'animate',
+    {
+      value: () => ({
+        finished: new Promise<void>((resolve) => {
+          finishEffect = resolve;
+        }),
+        cancel: () => finishEffect(),
+      }),
+    },
+  );
   assert.equal(
     (await view.selectItem({ id: sword.id, revision: sword.revision })).ok,
     true,
@@ -152,6 +165,19 @@ test('Production Upgrade sends UID/revision only and waits for authoritative +1;
   ]);
   button('Upgrade').click();
   button('Confirm').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(
+    root.dataset.upgradeEffect,
+    'forging',
+    'Immediate response does not end the presentation',
+  );
+  assert.equal(
+    button('Upgrade').disabled,
+    true,
+    'No second execution during the effect',
+  );
+  assert.match(root.querySelector('.upgrade-notice')!.textContent!, /Forging/);
+  finishEffect();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(commands, [
     {

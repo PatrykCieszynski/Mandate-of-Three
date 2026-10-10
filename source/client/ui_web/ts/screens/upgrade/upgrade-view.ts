@@ -47,6 +47,20 @@ export function mountUpgrade(
     pending = false,
     generation = 0,
     notice = '';
+  let effectPreview: {
+    current: ItemPresentation;
+    next: ItemPresentation | null;
+    cost: number | null;
+    materialCount: number | null;
+  } | null = null;
+  let effectLevel = 0;
+  let forging: Animation | null = null;
+  function clearEffect() {
+    forging?.cancel();
+    forging = null;
+    effectPreview = null;
+    delete root.dataset.upgradeEffect;
+  }
   let item: ItemPresentation | null = null,
     level = 0,
     confirmed = false,
@@ -174,7 +188,7 @@ export function mountUpgrade(
   find('.upgrade-primary-actions').append(upgrade.element, cancel.element);
   shell.listen(slot, 'pointermove', (event) => {
     if (item && !options.drag.active && !confirmed)
-      tip.show(event, presentation()!.current);
+      tip.show(event, (effectPreview ?? presentation())!.current);
   });
   shell.listen(slot, 'pointerleave', () => tip.hide());
   const bindings = itemWindowControls(options.drag, root);
@@ -255,6 +269,30 @@ export function mountUpgrade(
     };
     pending = true;
     notice = '';
+    let visualFinished = Promise.resolve();
+    if (action === 'execute') {
+      clearEffect();
+      effectPreview = presentation();
+      effectLevel = level;
+      root.dataset.upgradeEffect = 'forging';
+      // Start presentation alongside the request; persistence never waits for it.
+      if (typeof slot.animate === 'function') {
+        forging = slot.animate(
+          [
+            { filter: 'brightness(1)' },
+            { filter: 'brightness(1.8)', offset: 0.35 },
+            { filter: 'brightness(1.15)', offset: 0.5 },
+            { filter: 'brightness(2)', offset: 0.8 },
+            { filter: 'brightness(1)' },
+          ],
+          { duration: 1400, easing: 'ease-in-out' },
+        );
+        visualFinished = forging.finished.then(
+          () => {},
+          () => {},
+        );
+      }
+    }
     render();
     let result: CommandResult;
     try {
@@ -265,7 +303,12 @@ export function mountUpgrade(
     } catch {
       result = { ok: false, error: 'timeout' };
     }
+    if (action === 'execute') await visualFinished;
     if (disposed || token !== generation) return result;
+    if (action === 'execute') {
+      clearEffect();
+      root.dataset.upgradeEffect = result.ok ? 'success' : 'failure';
+    }
     pending = false;
     notice = result.ok
       ? action === 'execute'
@@ -329,7 +372,8 @@ export function mountUpgrade(
   }
   function render() {
     if (disposed) return;
-    const preview = presentation();
+    const preview = effectPreview ?? presentation();
+    const shownLevel = effectPreview ? effectLevel : level;
     slot.style.height = `${(item?.height ?? 2) * 40 - 2}px`;
     if (preview)
       paintItemIcon(slot, preview.current, {
@@ -350,12 +394,12 @@ export function mountUpgrade(
     find('.upgrade-prompt').hidden = !!item;
     find('.upgrade-comparison').hidden = !item;
     find('.upgrade-transition').textContent = preview?.next
-      ? `+${level} → +${level + 1}`
-      : `+${level}`;
+      ? `+${shownLevel} → +${shownLevel + 1}`
+      : `+${shownLevel}`;
     lines(
       '.upgrade-properties',
-      (preview?.current.tooltip.properties ?? []).map((line, index) => {
-        const nextLine = preview?.next?.tooltip.properties[index];
+      (preview?.current.tooltip?.properties ?? []).map((line, index) => {
+        const nextLine = preview?.next?.tooltip?.properties?.[index];
         const currentLine = line.replace(/^Attack: /, 'Attack ');
         return nextLine && nextLine !== line
           ? `${currentLine} → ${nextLine.replace(/^Attack: /, '')}`
@@ -382,7 +426,9 @@ export function mountUpgrade(
     find('.upgrade-notice').textContent = options.devPreview
       ? 'Preview only. Items and Yang are unchanged.'
       : pending
-        ? 'Waiting for server…'
+        ? effectPreview
+          ? 'Forging…'
+          : 'Waiting for server…'
         : notice ||
           (recipe.active
             ? 'The item stays in Inventory. Upgrade consumes material and Yang.'
@@ -440,6 +486,7 @@ export function mountUpgrade(
           : '';
       if (key !== nextKey) {
         generation++;
+        clearEffect();
         pending = false;
         notice = '';
         item = null;
@@ -478,6 +525,7 @@ export function mountUpgrade(
             recipe.serviceId !== snapshot.serviceId));
       if (changed) {
         generation++;
+        clearEffect();
         pending = false;
         confirmed = false;
         notice = '';
@@ -494,6 +542,7 @@ export function mountUpgrade(
     dispose() {
       if (disposed) return;
       disposed = true;
+      clearEffect();
       generation++;
       bindings.forEach((binding) => binding.dispose());
       [upgrade, cancel, yes, no].forEach((button) => button.dispose());

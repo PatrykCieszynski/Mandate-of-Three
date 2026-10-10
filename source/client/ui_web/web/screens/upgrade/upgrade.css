@@ -270,3 +270,32 @@
 .npc-world-drop-target[data-valid="false"] {border-color:#b45b50}
 
 .npc-world-drop[data-carrying="true"] .npc-world-drop-target {pointer-events:auto;opacity:1}
+
+
+/* Presentation only: the authoritative transaction completes independently. */
+[data-upgrade-effect="forging"] .upgrade-item-target {
+  animation: upgrade-forging-glow 700ms ease-in-out infinite alternate;
+}
+[data-upgrade-effect="success"] .upgrade-item-target {
+  animation: upgrade-success-flash 650ms ease-out;
+}
+[data-upgrade-effect="failure"] .upgrade-item-target {
+  animation: upgrade-failure-flash 450ms ease-out;
+}
+[data-upgrade-effect="success"] .upgrade-notice { color: #e7c87a; }
+[data-upgrade-effect="failure"] .upgrade-notice { color: #e18c80; }
+@keyframes upgrade-forging-glow {
+  from { box-shadow: 0 0 4px #bf843144, inset 0 0 4px #bf843122; }
+  to { box-shadow: 0 0 18px #e8b453aa, inset 0 0 14px #e8b45366; }
+}
+@keyframes upgrade-success-flash {
+  from { box-shadow: 0 0 30px #ffe3a3, inset 0 0 20px #ffe3a3aa; }
+  to { box-shadow: 0 0 0 transparent; }
+}
+@keyframes upgrade-failure-flash {
+  from { box-shadow: 0 0 22px #dc5149, inset 0 0 16px #dc514988; }
+  to { box-shadow: 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-upgrade-effect] .upgrade-item-target { animation: none; }
+}
