@@ -262,7 +262,7 @@ export class ItemDragRuntime {
         node: source.element,
         pointerId: event.pointerId,
         start: { x: event.clientX, y: event.clientY },
-        offset: {
+        offset: payload.presentation.grabOffset ?? {
           x: (event.clientX - rect.left) / scale,
           y: (event.clientY - rect.top) / scale,
         },

@@ -76,6 +76,7 @@ const shop: Extract<ShopSnapshot, { active: true }> = {
       height: 2,
       quantity: 1,
       price: 1000,
+      description: 'Forged steel.',
     },
   ],
 };
@@ -200,6 +201,31 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await send(snapshot);
     await page
       .getByRole('button', { name: 'Weapon Shop', exact: true })
+      .waitFor();
+    const menuBounds = await page
+      .locator('#npc-menu-window')
+      .evaluate((panel) => {
+        const rect = panel.getBoundingClientRect(),
+          style = getComputedStyle(panel),
+          scale = rect.width / (panel as HTMLElement).offsetWidth;
+        return [...panel.querySelectorAll('.npc-service')].every((row) => {
+          const box = row.getBoundingClientRect();
+          return (
+            box.left >= rect.left + parseFloat(style.paddingLeft) * scale - 1 &&
+            box.right <=
+              rect.right - parseFloat(style.paddingRight) * scale + 1 &&
+            box.bottom <=
+              rect.bottom - parseFloat(style.paddingBottom) * scale + 1
+          );
+        });
+      });
+    assert.equal(menuBounds, true, 'Every service stays inside its frame');
+    await page.evaluate(() => {
+      document.body.style.background = '#253540';
+    });
+    await capture('npc-services-' + (fallback ? 'fallback' : 'legacy'));
+    await page
+      .getByRole('button', { name: 'Weapon Shop', exact: true })
       .click();
     await page.locator('#shop-window').waitFor({ state: 'visible' });
     assert.equal(
@@ -212,26 +238,16 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       false,
       'SHOP has its own window',
     );
-    assert.equal(await page.locator('.shop-price').textContent(), '1,000 Yang');
+    assert.equal(
+      await page.locator('.shop-price').count(),
+      0,
+      'Price belongs to the offer tooltip',
+    );
     assert.equal(await page.locator('.shop-quantity').textContent(), '×1');
     assert.equal(
       await page.locator('#shop .ui-currency strong').textContent(),
       '2,500',
     );
-    if (fallback)
-      assert.equal(await page.locator('#shop .icon-fallback').count(), 1);
-    else
-      assert.equal(
-        await page
-          .locator('#shop .item-icon')
-          .evaluate(
-            (image) =>
-              image instanceof HTMLImageElement &&
-              image.complete &&
-              image.naturalWidth > 0,
-          ),
-        true,
-      );
     // Check real content against its shared frame padding, without exact geometry assertions.
     const checkBounds = async () => {
       const valid = await page.locator('#shop-window').evaluate((panel) => {
@@ -276,16 +292,49 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       grid = await page.locator('.inventory-grid').boundingBox();
     assert.ok(grid);
     const source = () => page.locator('#shop .shop-item');
-    const drag = async (x: number, y: number) => {
+    const drag = async (x: number, y: number, fromRight = false) => {
       const box = await source().boundingBox();
       assert.ok(box);
-      await page.mouse.move(box.x + 10 * scale, box.y + 10 * scale);
+      await page.mouse.move(
+        fromRight ? box.x + box.width - 10 : box.x + 10 * scale,
+        box.y + 10 * scale,
+      );
       await page.mouse.down();
       await page.mouse.move(x, y, { steps: 6 });
     };
     await clear();
     await drag(grid.x + 90, grid.y + 130);
     assert.equal(await page.locator('.placement-preview.invalid').count(), 0);
+    await page.mouse.up();
+    await page.waitForFunction(() => sent.some((m) => m.type === 'shop.buy'));
+    assert.deepEqual((await buys())[0]?.payload, {
+      npc_instance_id: npc.npcInstanceId,
+      service_id: 'weapon_shop',
+      offer_id: 'iron_sword',
+      x: 2,
+      y: 3,
+      page: 0,
+    });
+    await clear();
+    await drag(grid.x + 90, grid.y + 130, true);
+    const ghost = await page.locator('.carried-item').boundingBox();
+    assert.ok(
+      ghost && ghost.x <= grid.x + 90 && ghost.x + ghost.width >= grid.x + 90,
+      'Offer carried from the far edge stays under the cursor',
+    );
+    if (!fallback) {
+      assert.equal(
+        await page
+          .locator('.carried-item .item-icon')
+          .evaluate(
+            (image) =>
+              image instanceof HTMLImageElement &&
+              image.complete &&
+              image.naturalWidth > 0,
+          ),
+        true,
+      );
+    }
     await page.mouse.up();
     await page.waitForFunction(() => sent.some((m) => m.type === 'shop.buy'));
     assert.deepEqual((await buys())[0]?.payload, {
@@ -386,6 +435,20 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await frame();
     await source().hover();
     await page.locator('#shop .item-tooltip').waitFor({ state: 'visible' });
+    assert.equal(
+      await page.locator('#shop .item-tooltip-price').textContent(),
+      'Buy price: 1,000 Yang',
+    );
+    assert.equal(
+      await page.locator('#shop .item-tooltip p').textContent(),
+      'Forged steel.',
+    );
+    const tooltipOrder = await page
+      .locator('#shop .item-tooltip')
+      .evaluate((tip) =>
+        tip.lastElementChild?.classList.contains('item-tooltip-price'),
+      );
+    assert.equal(tooltipOrder, true, 'Offer price is the tooltip footer');
     await capture('shop-tooltip-' + (fallback ? 'fallback' : 'legacy'));
     await page.mouse.move(0, 0);
     await page.locator('#shop .window-close').click();
@@ -442,7 +505,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await capture('shop-many-offers-' + (fallback ? 'fallback' : 'legacy'));
     assert.deepEqual(errors, []);
     console.log(
-      `Shop real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, bounds/scales, icons, right-click, exact/receive drops, tooltip, scroll and back)`,
+      `Shop real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, service/offer lists, bounds/scales, right-click, exact/receive drops, tooltip, scroll and back)`,
     );
   } finally {
     await page.close();

@@ -1,9 +1,8 @@
-.shop-window {--window-width:280px;padding-top:8px;padding-bottom:32px;}
-.shop-offers {display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto;margin-top:10px;}
-.shop-offer {display:grid;grid-template-columns:40px minmax(0,1fr) auto;grid-template-rows:auto auto;gap:4px 8px;padding:6px;background:#1e1b16;border:1px solid var(--frame);align-items:center;}
-.shop-item {grid-row:1/3;width:38px;position:relative;cursor:pointer;}
-.shop-offer-name {color:var(--ink);overflow-wrap:anywhere;}.shop-quantity {color:var(--muted);}
-.shop-price {grid-column:2/4;color:#e4c578;}
+.shop-window {--window-width:250px;padding-top:8px;padding-bottom:32px;}
+.shop-offers {display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto;margin-top:10px;}
+.shop-offer {display:flex;gap:8px;align-items:center;width:100%;}
+.shop-item {position:relative;touch-action:none;}
+.shop-offer-name {flex:1;min-width:0;}.shop-quantity {color:var(--muted);flex-shrink:0;}
 .shop-hint {color:var(--muted);font-size:11px;line-height:1.4;}.shop-status {min-height:16px;color:#d5a88a;}
 .inventory-receive-preview {position:absolute;bottom:32px;left:var(--window-inset);right:var(--window-inset);z-index:6;padding:6px;background:#263b24;color:#c8e9a8;border:1px solid #9cce70;pointer-events:none;}
 .inventory-receive-preview.invalid {background:#472322;color:#f0b5ab;border-color:#da8276;}

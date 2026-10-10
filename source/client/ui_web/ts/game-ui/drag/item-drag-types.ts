@@ -3,6 +3,8 @@ import type { Point } from '../../core/window/window-types.js';
 export interface ItemDragPresentation {
   width: number;
   height: number;
+  // A list/button source can choose an anchor inside its carried footprint.
+  grabOffset?: Point;
   render: (ghost: HTMLElement) => void;
 }
 export interface ItemDragPayload {

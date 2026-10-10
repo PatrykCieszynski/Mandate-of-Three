@@ -1,7 +1,5 @@
 import { UiWindow } from '../../core/window/ui-window.js';
-import { UiSlot } from '../../core/primitives/ui-slot.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
-import { paintItemIcon } from '../../game-ui/items/item-icon.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { itemWindowControls } from '../../game-ui/items/item-drag-policy.js';
 import { NpcShopOfferDragSubject, shopOfferPayload, } from './shop-drag-policy.js';
@@ -101,29 +99,22 @@ export function mountShop(root, options) {
         if (state.active) {
             shell.panel.querySelector('h1').textContent = state.name;
             for (const offer of state.offers) {
-                const entry = document.createElement('div');
-                entry.className = 'shop-offer';
+                const entry = document.createElement('button');
+                entry.type = 'button';
+                entry.className = 'npc-service shop-offer shop-item';
                 entry.dataset.offerId = offer.offerId;
-                const icon = UiSlot({
-                    className: 'ui-item-slot shop-item',
-                    label: offer.name,
-                });
-                icon.style.height = offer.height * 40 - 2 + 'px';
-                paintItemIcon(icon, { ...offer, icon_id: offer.iconId }, { resolveItemIcon: options.resolveItemIcon });
+                entry.setAttribute('aria-label', offer.name);
                 const name = document.createElement('span');
                 name.className = 'shop-offer-name';
                 name.textContent = offer.name;
-                const price = document.createElement('span');
-                price.className = 'shop-price';
-                price.textContent = offer.price.toLocaleString('en-US') + ' Yang';
                 const quantity = document.createElement('span');
                 quantity.className = 'shop-quantity';
                 quantity.textContent = '×' + offer.quantity;
-                entry.append(icon, name, quantity, price);
+                entry.append(name, quantity);
                 offers.append(entry);
                 const subject = new NpcShopOfferDragSubject(state.npcInstanceId, state.serviceId, offer);
                 sources.push(options.drag.registerSource({
-                    element: icon,
+                    element: entry,
                     payload: () => {
                         if (pending)
                             return null;
@@ -131,21 +122,21 @@ export function mountShop(root, options) {
                         return shopOfferPayload(subject, 40, options.resolveItemIcon);
                     },
                 }));
-                icon.addEventListener('pointerdown', (event) => {
+                entry.addEventListener('pointerdown', (event) => {
                     if (event.button === 2 && !options.drag.active && !pending) {
                         event.preventDefault();
                         void buyOffer(subject);
                     }
                 });
-                icon.addEventListener('pointermove', (event) => {
+                entry.addEventListener('pointermove', (event) => {
                     if (!options.drag.active && !pending)
                         tip.show(event, {
-                            name: offer.name,
-                            description: offer.description ??
-                                `${offer.price.toLocaleString('en-US')} Yang · Quantity ${offer.quantity}`,
+                            ...offer,
+                            kind: 'shop-offer',
+                            currency: state.active ? state.currency : 'yang',
                         });
                 });
-                icon.addEventListener('pointerleave', () => tip.hide());
+                entry.addEventListener('pointerleave', () => tip.hide());
             }
         }
         shell.refresh();

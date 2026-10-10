@@ -83,6 +83,8 @@ No NodePath, domain Resource or content_ref is accepted from Web UI.
 Snapshots contain active, NPC identity/name, ordered service ID/kind/label/iconId/
 enabled fields and selectedServiceId. Priority then service ID determines stable
 ordering. Icons are optional semantic metadata; this initial menu renders labels.
+Services and Shop offers share compact rows and the common frame inset/bottom
+padding, keeping every label clear of the legacy chrome.
 The browser validates the entire domain before replacing last known valid state.
 
 `screens/npc/npc-service-menu.ts` composes UiWindow and UiButton and exposes a typed
