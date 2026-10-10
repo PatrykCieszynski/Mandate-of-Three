@@ -6,6 +6,9 @@ extends SpikeCharacter3D
 const MAX_HP: int = 120
 var max_hp: int = MAX_HP
 var attack_damage: int = 6
+var source_metinstone_id: String = ""
+var respawn_enabled: bool = true
+var expires_at: int = 0
 var title: String = "Wild Dog"
 var mob_id: int
 var ai_enabled: bool = true

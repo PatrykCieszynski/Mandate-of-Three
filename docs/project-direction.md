@@ -85,7 +85,8 @@ and 100% success. Higher upgrades/failure/destruction remain deferred. Next:
 1. [First region graybox](first-region-graybox.md): hub, three combat areas, routes,
    landmarks, camera obstacles, four Metin sites and a water test strip. Implemented;
    scale and travel/combat feel need a manual pass.
-2. Metin Stone v1: shared combat, waves and rewards on the graybox region.
+2. [Metin Encounter v1](metin-encounter-v1.md): implemented shared stone combat,
+   threshold waves, ground rewards and timed respawn. Native loop playtest is next.
 3. Spawn/pacing pass, then a visual pass after the playable loop is assessed.
 
 One affix reroll and the party vertical slice remain planned after this focused

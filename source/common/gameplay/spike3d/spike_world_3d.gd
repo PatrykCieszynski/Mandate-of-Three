@@ -28,6 +28,7 @@ var combat_endpoint: SpikeCombat3D
 var upgrade_endpoint: Upgrade3D
 var shop_endpoint: Shop3D
 var npc_endpoint: NpcInteraction3D
+var metin_encounter: MetinEncounter
 var region: FirstRegionGraybox
 var currency_endpoint: SpikeCurrency3D
 
@@ -59,6 +60,10 @@ func _ready() -> void:
 	if not npc_endpoint.register_actor(blacksmith):
 		push_error("Invalid Blacksmith content/instance")
 		blacksmith.queue_free()
+	if region != null:
+		metin_encounter = MetinEncounter.new()
+		metin_encounter.name = "MetinEncounter"
+		add_child(metin_encounter)
 	if not _server:
 		local_peer = multiplayer.get_unique_id()
 		_build_camera_and_ui()

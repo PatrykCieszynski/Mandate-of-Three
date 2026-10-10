@@ -32,7 +32,8 @@ shrine, stone arch and rock corners provide landmarks and camera collision cases
 Roads/zone tints are surface marks, not separate navigation authority.
 
 Four visible pads and `MetinSpawn1..4` markers reserve candidate sites at
-(-24,-20), (16,-44), (-20,-78), (10,-92). They are not live stones or loot sources.
+(-24,-20), (16,-44), (-20,-78), (10,-92). The pads themselves are not loot sources. [Metin Encounter v1](metin-encounter-v1.md)
+selects one site for its live stone and timed respawn.
 Edit geometry, routes and spawn profiles in `first_region.gd`; no procedural
 region system or generic spawn framework is introduced. All scenery collision is
 layer 1, shared by server movement, navigation, line-of-sight and camera queries.
@@ -62,10 +63,10 @@ fixed; native movement on the region still needs comparison against the arena.
 
 ## Next slices
 
-1. Metin Stone v1: a server-authoritative attackable stone at these sites, mob waves,
-   death and rewards using the existing economy boundaries.
+1. [Metin Encounter v1](metin-encounter-v1.md) is implemented at these sites;
+   playtest stone combat, waves, ground reward and timed respawn.
 2. Spawn/pacing pass: evaluate a 10–15 minute route, pack density, return cost and
-   event cadence. Current graybox alone does not claim that full loop is complete.
+   event cadence. The encounter now supports the loop; its pacing has not yet been manually assessed.
 3. Visual pass after scale/gameplay feedback; final models, terrain and materials.
 
 Party, affix reroll and speculative region/event frameworks do not block this order.

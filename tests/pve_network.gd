@@ -3,6 +3,7 @@ extends Node
 ## coordinate assertions; gameplay commands go through SpikeCombat3D unchanged.
 
 const PORT: int = 18098
+var map_scene_path: String = "res://source/common/gameplay/maps/spike/spike_map_3d.tscn"
 var peer := WebSocketMultiplayerPeer.new()
 var world: SpikeWorld3D
 var server: WorldServer
@@ -55,7 +56,7 @@ func _ready() -> void:
 		host.name = "Instance"
 		host.instance_resource = InstanceResource.new()
 		host.instance_resource.instance_name = &"Spike"
-		host.load_map("res://source/common/gameplay/maps/spike/spike_map_3d.tscn")
+		host.load_map(map_scene_path)
 		add_child(host)
 		world = host.get_node("SpikeMap")
 		api.peer_connected.connect(func(id: int) -> void:
@@ -71,7 +72,7 @@ func _ready() -> void:
 		api.connected_to_server.connect(func() -> void:
 			var instance: InstanceClient = preload("res://source/client/network/spike_instance_3d.gd").new()
 			instance.name = "Instance"
-			world = load("res://source/common/gameplay/maps/spike/spike_map_3d.tscn").instantiate()
+			world = load(map_scene_path).instantiate()
 			world.input_enabled = false
 			instance.add_child(world)
 			add_child(instance)

@@ -168,6 +168,13 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	query.transform = Transform3D(Basis.IDENTITY, body.position + Vector3.UP * 0.5)
 	query.collision_mask = 4
 	for hit: Dictionary in _world.get_world_3d().direct_space_state.intersect_shape(query, 64):
+		if hit.collider is MetinStone3D:
+			var metin: MetinEncounter = _world.metin_encounter
+			var offset: Vector3 = metin.stone.position - body.position
+			var horizontal := Vector3(offset.x,0,offset.z)
+			if metin.active() and horizontal.length() <= ATTACK_REACH and absf(offset.y) <= 1.2 and (horizontal.length_squared() < 0.001 or horizontal.normalized().dot(forward) >= cos(deg_to_rad(HALF_ANGLE))) and _visible_between(body.position,metin.stone.position):
+				if metin.apply_damage(peer_id,int(swing.attack*(1.5 if int(swing.stage)==3 else 1.0)),now): hit_ids.append(-1)
+			continue
 		var dog: SpikeWildDog3D = hit.collider as SpikeWildDog3D
 		if dog == null or hit_ids.has(dog.mob_id) or dog.ai_state in ["DEAD", "RETURN", "DISABLED"]: continue
 		var offset: Vector3 = dog.position - body.position
@@ -202,16 +209,18 @@ func _die(dog: SpikeWildDog3D, now: int) -> void:
 		if dog.contributions[contributor] > highest or (dog.contributions[contributor] == highest and contributor < owner_id):
 			owner_id = contributor
 			highest = dog.contributions[contributor]
+	drop_reward(dog.position,owner_id,now)
+	if owner_id > 0: _award_experience(dog.contribution_players.get(owner_id))
+	dog.contribution_players.clear()
+
+func drop_reward(position: Vector3, owner_id: int, now: int, yang: int = SpikeCurrency3D.DOG_YANG) -> void:
 	var owner_name: String = ""
 	for peer_id: int in _world.characters:
 		if _owner(peer_id) == owner_id: owner_name = WorldServer.curr.connected_players[peer_id].display_name
 	var uid: String = Crypto.new().generate_random_bytes(16).hex_encode()
-	ground[uid] = {"position": dog.position, "definition_id": "iron_sword", "bonus": randi_range(1, 9),
-		"owner": owner_id, "owner_name": owner_name, "protected_until": now + PROTECTION_MS, "expires": now + LOOT_LIFETIME_MS}
-	_world.currency_endpoint.spawn_currency(dog.position, owner_id, owner_name, now)
-	if owner_id > 0:
-		_award_experience(dog.contribution_players.get(owner_id))
-	dog.contribution_players.clear()
+	ground[uid] = {"position":position,"definition_id":"iron_sword","bonus":randi_range(1,9),
+		"owner":owner_id,"owner_name":owner_name,"protected_until":now+PROTECTION_MS,"expires":now+LOOT_LIFETIME_MS}
+	_world.currency_endpoint.spawn_currency(position,owner_id,owner_name,now,yang)
 
 func _award_experience(resource: PlayerResource) -> void:
 	if resource == null: return
@@ -325,7 +334,13 @@ func _physics_process(delta: float) -> void:
 			var swing: Dictionary = _pending[peer_id]
 			_pending.erase(peer_id)
 			resolve_swing(peer_id, swing, now)
-	for dog: SpikeWildDog3D in dogs.values(): _tick_dog(dog, delta, now)
+	for id: int in dogs.keys():
+		var dog: SpikeWildDog3D = dogs[id]
+		if (dog.expires_at > 0 and now >= dog.expires_at) or (not dog.respawn_enabled and dog.ai_state == "DEAD" and now >= dog.dead_until_ms):
+			dog.queue_free()
+			dogs.erase(id)
+		else: _tick_dog(dog,delta,now)
+	if _world.metin_encounter != null: _world.metin_encounter.tick(now)
 	_snapshot_accum += delta
 	if _snapshot_accum >= 0.1:
 		_snapshot_accum = fmod(_snapshot_accum, 0.1)
@@ -354,7 +369,7 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 	if not dog.ai_enabled: return
 	if dog.ai_state == "DISABLED": return
 	if dog.ai_state == "DEAD":
-		if now >= dog.dead_until_ms: dog.respawn()
+		if dog.respawn_enabled and now >= dog.dead_until_ms: dog.respawn()
 		return
 	if dog.ai_state == "IDLE":
 		var nearest: float = AGGRO
@@ -398,7 +413,8 @@ func _send_snapshot() -> void:
 	var mob_snapshots: Dictionary = {}
 	for id: int in dogs:
 		var dog: SpikeWildDog3D = dogs[id]
-		mob_snapshots[id] = {"position": dog.position, "yaw": dog.rotation.y, "hp": dog.hp, "state": dog.ai_state}
+		mob_snapshots[id] = {"position": dog.position, "yaw": dog.rotation.y, "hp": dog.hp, "state": dog.ai_state,
+			"max_hp":dog.max_hp,"damage":dog.attack_damage,"title":dog.title,"home":dog.home,"source_metinstone_id":dog.source_metinstone_id}
 	var respawns: Dictionary = {}
 	var levels: Dictionary = {}
 	for id: int in _world.characters:
@@ -416,6 +432,7 @@ func _send_snapshot() -> void:
 		var player: PlayerResource = WorldServer.curr.connected_players[peer_id]
 		receive_state.rpc_id(peer_id, {"dogs": mob_snapshots, "health": health.duplicate(), "drops": drops,
 			"combos": _combo.duplicate(), "respawns": respawns, "levels": levels,
+			"metin": {} if _world.metin_encounter == null else _world.metin_encounter.snapshot(now),
 			"progression": {"level": player.level, "experience": player.experience, "next": player.level_xp_to_next()}})
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -426,8 +443,24 @@ func receive_state(snapshot: Dictionary) -> void:
 	for peer_id: int in snapshot.levels:
 		var player: SpikeCharacter3D = _world.characters.get(peer_id)
 		if player != null: player.set_level(int(snapshot.levels[peer_id]))
+	if _world.metin_encounter != null and not snapshot.get("metin",{}).is_empty(): _world.metin_encounter.receive_snapshot(snapshot.metin)
+	for id: int in dogs.keys():
+		if not snapshot.dogs.has(id):
+			dogs[id].queue_free()
+			dogs.erase(id)
 	for id: int in snapshot.dogs:
-		if dogs.has(id): dogs[id].present_snapshot(snapshot.dogs[id])
+		var data: Dictionary = snapshot.dogs[id]
+		if not dogs.has(id):
+			var dog := SpikeWildDog3D.new()
+			dog.name = "WildDog_%d" % id
+			dog.max_hp = int(data.max_hp)
+			dog.attack_damage = int(data.damage)
+			dog.title = str(data.title)
+			dog.source_metinstone_id = str(data.source_metinstone_id)
+			dog.setup_dog(id,data.home)
+			_world.add_child(dog)
+			dogs[id] = dog
+		dogs[id].present_snapshot(data)
 	for peer_id: int in snapshot.health:
 		var body: SpikeCharacter3D = _world.characters.get(peer_id)
 		if body != null: body.set_alive(int(snapshot.health[peer_id]) > 0)
@@ -471,7 +504,9 @@ func _refresh_hud() -> void:
 	if _hud == null: return
 	var hp: int = int(state.get("health", {}).get(_world.local_peer, 100))
 	var target: String = "Brak celu"
-	if dogs.has(selected_mob):
+	if selected_mob == -1 and _world.metin_encounter != null:
+		target = "%s: %d / %d" % [_world.metin_encounter.definition.display_name,_world.metin_encounter.runtime.hp,_world.metin_encounter.definition.max_hp]
+	elif dogs.has(selected_mob):
 		target = "%s: %d / %d" % [dogs[selected_mob].title, dogs[selected_mob].hp, dogs[selected_mob].max_hp]
 	var combo: int = int(state.get("combos", {}).get(_world.local_peer, 0))
 	var status: String = "Odrodzenie za %.1f s" % float(state.get("respawns", {}).get(_world.local_peer, 0)) if hp == 0 else _notice
@@ -481,9 +516,15 @@ func _refresh_hud() -> void:
 	_experience_bar.max_value = int(progression.next)
 	_experience_bar.value = int(progression.experience)
 
+func _selected_actor() -> Node3D:
+	if selected_mob == -1 and _world.metin_encounter != null and _world.metin_encounter.active(): return _world.metin_encounter.stone
+	var dog: SpikeWildDog3D = dogs.get(selected_mob)
+	return dog if dog != null and dog.ai_state not in ["DEAD","DISABLED"] else null
+
 func select_mob(id: int) -> void:
 	if id != 0: _world._npc_approach.cancel()
-	selected_mob = id if dogs.has(id) and dogs[id].ai_state not in ["DEAD", "DISABLED"] else 0
+	selected_mob = id
+	if _selected_actor() == null: selected_mob = 0
 	for dog: SpikeWildDog3D in dogs.values(): dog.mark_selected(dog.mob_id == selected_mob)
 	if selected_mob == 0: autoattack = false
 	_refresh_hud()
@@ -496,7 +537,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var ray := PhysicsRayQueryParameters3D.create(origin, origin + camera.project_ray_normal(event.position) * 100, 4)
 		var hit: Dictionary = _world.get_world_3d().direct_space_state.intersect_ray(ray)
 		var dog: SpikeWildDog3D = hit.get("collider") as SpikeWildDog3D
-		select_mob(0 if dog == null else dog.mob_id)
+		select_mob(-1 if hit.get("collider") is MetinStone3D else (0 if dog == null else dog.mob_id))
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_F:
 			autoattack = not autoattack and selected_mob != 0
@@ -518,13 +559,13 @@ func assist_direction(manual: Vector2) -> Vector2:
 	if manual.length_squared() > 0.001:
 		autoattack = false
 		return manual
-	if not autoattack or not dogs.has(selected_mob) or not _world.characters.has(_world.local_peer): return manual
-	var dog: SpikeWildDog3D = dogs[selected_mob]
-	if dog.ai_state in ["DEAD", "DISABLED"]:
+	if not autoattack or not _world.characters.has(_world.local_peer): return manual
+	var actor: Node3D = _selected_actor()
+	if actor == null:
 		autoattack = false
 		return Vector2.ZERO
 	var body: SpikeCharacter3D = _world.characters[_world.local_peer]
-	var offset: Vector3 = dog.position - body.position
+	var offset: Vector3 = actor.position - body.position
 	var direction := Vector2(offset.x, offset.z).normalized()
 	if Vector2(offset.x, offset.z).length() > 1.7: return direction
 	var forward := Vector2(-sin(body.rotation.y), -cos(body.rotation.y))
@@ -539,8 +580,9 @@ func _process(delta: float) -> void:
 	if not _world.input_enabled or ClientState.menu_open or not DisplayServer.window_is_focused(): return
 	_client_attack_accum += delta
 	var active: bool = Input.is_physical_key_pressed(KEY_SPACE)
-	if autoattack and dogs.has(selected_mob) and _world.characters.has(_world.local_peer):
-		active = dogs[selected_mob].ai_state not in ["DEAD", "DISABLED"] and _world.characters[_world.local_peer].position.distance_to(dogs[selected_mob].position) <= ATTACK_REACH
+	if autoattack and _world.characters.has(_world.local_peer):
+		var actor: Node3D = _selected_actor()
+		active = actor != null and _world.characters[_world.local_peer].position.distance_to(actor.position) <= ATTACK_REACH
 	if active and _client_attack_accum >= 0.1:
 		_client_attack_accum = 0
 		_client_sequence += 1
