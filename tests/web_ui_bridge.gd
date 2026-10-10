@@ -181,6 +181,10 @@ func _run() -> void:
 	var tooltip_model: Dictionary = InventoryWebController._item_tooltip_details(original_item)
 	assert(tooltip_model.properties == ["Attack: 13"] and tooltip_model.affixes == [{"lines":["+3 Attack"]}], "Existing rolls are displayed without inventing prefix/suffix kind")
 	assert(original_item.stats.attack == 13 and original_item.affixes[0].value == 3)
+	var fractional_item: Dictionary = {"affixes":[{"stat":"attack","value":1.5},{"stat":"attack","value":-0.25},{"stat":"attack","value":0}]}
+	var fractional_tooltip: Dictionary = InventoryWebController._item_tooltip_details(fractional_item)
+	assert(fractional_tooltip.affixes == [{"lines":["+1.5 Attack"]},{"lines":["-0.25 Attack"]},{"lines":["+0 Attack"]}], "Affix display preserves fractional values and explicit signs")
+	assert(fractional_item.affixes[0].value == 1.5 and fractional_item.affixes[1].value == -0.25)
 	var tooltip_controller := InventoryWebController.new()
 	tooltip_controller.bridge = bridge
 	var tooltip_count: int = messages.size()

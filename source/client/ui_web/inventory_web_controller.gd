@@ -114,7 +114,9 @@ static func _item_tooltip_details(item: Dictionary) -> Dictionary:
 	# the content model defines it; no generated affixes or combat changes here.
 	var affixes: Array = []
 	for affix: Dictionary in item.get("affixes", []):
-		affixes.append({"lines": ["%+d %s" % [int(affix.value), str(affix.stat).capitalize()]]})
+		var value_text: String = str(affix.value)
+		if affix.value >= 0: value_text = "+" + value_text
+		affixes.append({"lines": ["%s %s" % [value_text, str(affix.stat).capitalize()]]})
 	return {"properties": ["Attack: %d" % int(item.get("stats", {}).get("attack", 0))], "affixes": affixes}
 
 func _inventory(snapshot: Dictionary) -> void:
