@@ -64,16 +64,20 @@ unequip validates footprint/occupancy in the existing equipment transaction.
 
 ## Authoritative Inventory receiving reuse point
 
-Existing authoritative footprint logic is `InventoryGrid.cells`/`fits`.
-`ItemStoreSqlite._occupied`, `_fits_position` and `_free_bag_position` enforce
-bag occupancy and first fit. `AccountStorageSqlite.transfer` currently gathers
-transactional occupancy and uses the same InventoryGrid footprint checks for
-exact/automatic withdrawals. These operations remain unchanged in this frontend
-migration. A future receiving extraction should share these existing checks,
-accept an optional requested position and operate within the caller's transaction:
+`ItemStoreSqlite.resolve_inventory_position(owner, height, requested_position = -1,
+excluded = [])` shares transactional occupancy and `InventoryGrid.cells`/`fits`.
+It resolves only: it does not reserve cells or start/commit a transaction. Call it
+inside the operation's `BEGIN IMMEDIATE` on the same connection as its writes.
 
 - Requested position: require that exact valid position; never silently relocate.
-- No position: find the first fitting position, or return a stable full error.
+- No position (`-1`): find the first fitting position, or `inventory_full`.
+- Invalid footprint: `request`; occupied exact target: `occupied`; read failure: `storage`.
+
+Inventory moves exclude their own UID. Unequip and Storage withdrawal reuse this
+helper; existing adapters preserve `bag_full` and Storage `full` wire errors.
+Pickup and equipment swaps reuse it through `_free_bag_position`.
+`receive_item_in_transaction` resolves and inserts a new instance/placement within
+the caller's transaction; it never commits independently.
 
 ## Future purchase invariant
 
@@ -86,7 +90,14 @@ Inventory capacity, item creation, placement and finite stock updates.
 A Player Shop purchase must atomically validate/commit the live listing, buyer
 currency, Inventory capacity, ownership transfer, buyer placement, seller payment
 and listing removal/reduction. Existing Storage errors/wire format are preserved;
-this invariant adds no purchase implementation or new runtime routing.
+there is no Shop offer/RPC implementation yet. `WalletStoreSqlite.spend_in_transaction`
+applies pending income and spends without committing. The purchase caller begins
+one transaction, validates the authoritative offer/price, resolves capacity, spends,
+creates/transfers and places the item, then commits. Every failed result rolls back.
+Only after commit may World publish the item and update RAM wallet/pending delta.
+Never use standalone `spend()` followed by an item transaction. The default SQLite
+wallet suite composes these production helpers and verifies `inventory_full` without
+charge, exact rejection, insufficient funds, write-failure rollback and reopen.
 
 ## Verification
 

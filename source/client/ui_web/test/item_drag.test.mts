@@ -347,7 +347,7 @@ test('production policies preserve exact routes, quick receive, slot drops and r
     drag: f.runtime,
     moveItem: (command) => result('inventory.move_item', command),
     activateItem: (command) => result('item.activate', command),
-    quickDeposit: (item) => storage.receiveFromInventory(item),
+    quickDeposit: (item) => storage.tryQuickDeposit(item),
     withdrawItem: (item, position) =>
       storage.withdrawToInventory(item, position),
     receiveEquipped: (item, position) => equipment.unequip(item, position),
@@ -374,6 +374,24 @@ test('production policies preserve exact routes, quick receive, slot drops and r
     capture(element);
     return element;
   };
+
+  // A closed or busy Storage must leave Ctrl+LMB available for ordinary carry.
+  storageRoot.hidden = true;
+  f.pointer(item(invRoot, bagItem.id), 'pointerdown', 10, 10, 0, 7, true);
+  f.pointer(item(invRoot, bagItem.id), 'pointerup', 10, 10, 0, 7, true);
+  assert.equal(f.runtime.latched, true);
+  assert.equal(commands.length, 0);
+  f.runtime.cancel();
+  storageRoot.hidden = false;
+  const quick = storage.tryQuickDeposit(bagItem);
+  assert.ok(quick);
+  assert.equal(storage.tryQuickDeposit(bagItem), null);
+  f.pointer(item(invRoot, bagItem.id), 'pointerdown', 10, 10, 0, 7, true);
+  f.pointer(item(invRoot, bagItem.id), 'pointerup', 10, 10, 0, 7, true);
+  assert.equal(f.runtime.latched, true);
+  f.runtime.cancel();
+  await quick;
+  commands.length = 0;
   const weapon = equipmentRoot.querySelector<HTMLElement>('[data-slot=weapon]');
   assert.ok(weapon);
   async function drop(

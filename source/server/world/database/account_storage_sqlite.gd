@@ -55,25 +55,32 @@ func transfer(character_id: int, uid: String, revision: int, source: String, des
 	if item.revision != revision: return _finish(false,"stale")
 	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
 	if definition == null: return _finish(false,"unknown_definition")
-	query = SELECT + "WHERE s.account_name=?;" if destination == "storage" else ItemStoreSqlite.ITEM_SELECT + "WHERE p.owner_character_id=? AND i.owner_character_id=? AND p.location='bag';"
-	bindings = [name] if destination == "storage" else [character_id,character_id]
-	if not db.query_with_bindings(query,bindings): return _finish(false,"storage")
-	var occupied: Dictionary = {}
-	for row: Dictionary in db.query_result:
-		if str(row.uid) == uid: continue
-		var other: ItemDefinition = ItemDefinitions.get_definition(StringName(row.definition_id))
-		if other == null: return _finish(false,"unknown_definition")
-		var footprint: Array[int] = cells(int(row.bag_position),other.inventory_height) if destination == "storage" else InventoryGrid.cells(int(row.bag_position),other.inventory_height)
-		if footprint.is_empty(): return _finish(false,"placement")
-		for cell: int in footprint: occupied[cell] = true
-	var capacity: int = CAPACITY if destination == "storage" else InventoryGrid.CAPACITY
-	if position == -1:
-		for candidate: int in capacity:
-			if _fits(destination,candidate,definition.inventory_height,occupied):
-				position = candidate
-				break
-		if position == -1: return _finish(false,"full")
-	if not _fits(destination,position,definition.inventory_height,occupied): return _finish(false,"occupied")
+	if destination == "inventory":
+		var receiving: Dictionary = ItemStoreSqlite.new(db).resolve_inventory_position(character_id, definition.inventory_height, position)
+		if not receiving.ok:
+			var reason: String = str(receiving.error)
+			return _finish(false, "full" if reason == "inventory_full" else ("occupied" if reason == "request" else reason))
+		position = int(receiving.position)
+	else:
+		query = SELECT + "WHERE s.account_name=?;"
+		bindings = [name]
+		if not db.query_with_bindings(query,bindings): return _finish(false,"storage")
+		var occupied: Dictionary = {}
+		for row: Dictionary in db.query_result:
+			if str(row.uid) == uid: continue
+			var other: ItemDefinition = ItemDefinitions.get_definition(StringName(row.definition_id))
+			if other == null: return _finish(false,"unknown_definition")
+			var footprint: Array[int] = cells(int(row.bag_position),other.inventory_height)
+			if footprint.is_empty(): return _finish(false,"placement")
+			for cell: int in footprint: occupied[cell] = true
+		var capacity: int = CAPACITY
+		if position == -1:
+			for candidate: int in capacity:
+				if _fits(candidate,definition.inventory_height,occupied):
+					position = candidate
+					break
+			if position == -1: return _finish(false,"full")
+		if not _fits(position,definition.inventory_height,occupied): return _finish(false,"occupied")
 	if source == destination and position == item.bag_position: return _finish(true)
 	query = "DELETE FROM account_storage WHERE item_uid=?;" if source == "storage" else "DELETE FROM item_placements WHERE item_uid=?;"
 	if not db.query_with_bindings(query,[uid]): return _finish(false,"storage")
@@ -85,8 +92,8 @@ func transfer(character_id: int, uid: String, revision: int, source: String, des
 	# until withdrawal atomically assigns the receiving character.
 	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id if destination == "inventory" else item.owner_character_id,uid]): return _finish(false,"storage")
 	return _finish(true)
-func _fits(destination: String,position: int,height: int,occupied: Dictionary) -> bool:
-	var footprint: Array[int] = cells(position,height) if destination == "storage" else InventoryGrid.cells(position,height)
+func _fits(position: int,height: int,occupied: Dictionary) -> bool:
+	var footprint: Array[int] = cells(position,height)
 	return not footprint.is_empty() and not footprint.any(func(cell: int) -> bool: return occupied.has(cell))
 func _finish(ok: bool,error: String = "") -> Dictionary:
 	if ok and db.query("COMMIT;"): return {"ok":true}

@@ -154,18 +154,9 @@ func change_equipment(owner_id: int, uid: String, expected_revision: int, action
 	if (action == "equip" and item.location == "equipment") or (action == "unequip" and item.location == "bag"):
 		return _commit()
 	if action == "unequip":
-		var position: int = requested_position
-		if position == -1:
-			position = _free_bag_position(owner_id, definition.inventory_height)
-		else:
-			if InventoryGrid.cells(position, definition.inventory_height).is_empty(): return _rollback("request")
-			var occupied: Dictionary = _occupied(owner_id)
-			if occupied.has("error"): return _rollback("storage")
-			if not InventoryGrid.fits(position, definition.inventory_height, occupied): return _rollback("occupied")
-		if position == -2:
-			return _rollback("storage")
-		if position == -1:
-			return _rollback("bag_full")
+		var receiving: Dictionary = resolve_inventory_position(owner_id, definition.inventory_height, requested_position)
+		if not receiving.ok: return _rollback("bag_full" if receiving.error == "inventory_full" else str(receiving.error))
+		var position: int = receiving.position
 		if not _remove_placement(uid) or not _place(uid, owner_id, "bag", position, "") or not _increment_revision(uid, owner_id):
 			return _rollback("storage")
 	else:
@@ -208,10 +199,8 @@ func move_bag_item(owner_id: int, uid: String, expected_revision: int, position:
 		return _commit()
 	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
 	if definition == null: return _rollback("unknown_definition")
-	if InventoryGrid.cells(position, definition.inventory_height).is_empty(): return _rollback("request")
-	var occupied: Dictionary = _occupied(owner_id, [uid])
-	if occupied.has("error"): return _rollback("storage")
-	if not InventoryGrid.fits(position, definition.inventory_height, occupied): return _rollback("occupied")
+	var receiving: Dictionary = resolve_inventory_position(owner_id, definition.inventory_height, position, [uid])
+	if not receiving.ok: return _rollback(str(receiving.error))
 	if not db.query_with_bindings("UPDATE item_placements SET bag_position=? WHERE item_uid=? AND owner_character_id=? AND location='bag';", [position, uid, owner_id]) or not _increment_revision(uid, owner_id):
 		return _rollback("storage")
 	return _commit()
@@ -229,15 +218,37 @@ func _occupied(owner_id: int, excluded: Array = []) -> Dictionary:
 	return occupied
 
 func _fits_position(owner_id: int, position: int, height: int, excluded: Array = []) -> bool:
+	return bool(resolve_inventory_position(owner_id, height, position, excluded).ok)
+
+## Reuse point for receiving into Inventory. Call inside the caller's transaction;
+## this only resolves placement and never starts/commits a transaction or reserves a cell.
+## -1 means automatic first fit; an explicit position never falls back.
+func resolve_inventory_position(owner_id: int, height: int, requested_position: int = -1, excluded: Array = []) -> Dictionary:
+	if requested_position < -1 or height < 1 or height > 3: return _error("request")
+	if requested_position != -1 and InventoryGrid.cells(requested_position, height).is_empty(): return _error("request")
 	var occupied: Dictionary = _occupied(owner_id, excluded)
-	return not occupied.has("error") and InventoryGrid.fits(position, height, occupied)
+	if occupied.has("error"): return _error("storage")
+	if requested_position != -1:
+		if not InventoryGrid.fits(requested_position, height, occupied): return _error("occupied")
+		return {"ok": true, "position": requested_position}
+	for position: int in BAG_CAPACITY:
+		if InventoryGrid.fits(position, height, occupied): return {"ok": true, "position": position}
+	return _error("inventory_full")
+
+## Economic callers own BEGIN IMMEDIATE and rollback every failed result. Resolve
+## capacity before charging, then insert on this same connection before COMMIT.
+func receive_item_in_transaction(item: ItemInstance, requested_position: int = -1) -> Dictionary:
+	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
+	if definition == null: return _error("unknown_definition")
+	var receiving: Dictionary = resolve_inventory_position(item.owner_character_id, definition.inventory_height, requested_position)
+	if not receiving.ok: return receiving
+	if not _insert_item(item, int(receiving.position)): return _error("storage")
+	return {"ok": true, "position": receiving.position, "uid": item.uid}
 
 func _free_bag_position(owner_id: int, height: int = 1, excluded: Array = []) -> int:
-	var occupied: Dictionary = _occupied(owner_id, excluded)
-	if occupied.has("error"): return -2
-	for position: int in BAG_CAPACITY:
-		if InventoryGrid.fits(position, height, occupied): return position
-	return -1
+	var result: Dictionary = resolve_inventory_position(owner_id, height, -1, excluded)
+	if result.ok: return int(result.position)
+	return -1 if result.error == "inventory_full" else -2
 
 static func migrate_grid(database: SQLite) -> bool:
 	if not database.query("BEGIN IMMEDIATE;"): return false
