@@ -126,7 +126,6 @@ function fixture() {
     buyShopOffer: (subject, position) => view.buyOffer(subject, position),
   });
   view.setState(shop);
-  view.setWallet({ balance: 5000, ready: true });
   inventory.setState({
     inventory: { columns: 5, rows: 9, pages: 4, items: [bagItem] },
   });
@@ -431,24 +430,92 @@ test('Shop catalog packs mixed footprints without overlap, preserving offers whe
   const layout = shopOfferLayout(offers),
     occupied = new Set<string>();
   assert.deepEqual(
-    layout.items.map((item) => item.offerId),
+    layout.pages.flat().map((item) => item.offerId),
     offers.map((offer) => offer.offerId),
   );
-  for (const item of layout.items) {
-    assert.ok(
-      item.x >= 0 &&
-        item.x < layout.columns &&
-        item.y >= 0 &&
-        item.y + item.height <= layout.rows,
-    );
-    for (let dy = 0; dy < item.height; dy++) {
-      const cell = `${item.x}:${item.y + dy}`;
-      assert.equal(occupied.has(cell), false, 'Catalog offers cannot overlap');
-      occupied.add(cell);
+  for (const [pageIndex, items] of layout.pages.entries())
+    for (const item of items) {
+      assert.ok(
+        item.x >= 0 &&
+          item.x < layout.columns &&
+          item.y >= 0 &&
+          item.y + item.height <= layout.rows,
+      );
+      for (let dy = 0; dy < item.height; dy++) {
+        const cell = `${pageIndex}:${item.x}:${item.y + dy}`;
+        assert.equal(
+          occupied.has(cell),
+          false,
+          'Catalog offers cannot overlap',
+        );
+        occupied.add(cell);
+      }
     }
-  }
+  assert.ok(layout.pages.length > 1);
   assert.equal(
     occupied.size,
     offers.reduce((sum, offer) => sum + offer.height, 0),
   );
+});
+
+test('Shop pages keep offer authority separate from Inventory pages and reset/clamp cleanly', async () => {
+  const f = fixture();
+  const offers = Array.from({ length: 46 }, (_, i) => ({
+    ...shop.offers[0]!,
+    offerId: 'offer_' + i,
+  }));
+  const catalog = { ...shop, offers };
+  try {
+    f.view.setState(catalog);
+    function select(index: number) {
+      f.shopRoot
+        .querySelectorAll<HTMLButtonElement>('.shop-tabs button')
+        [index]!.click();
+    }
+    function ids() {
+      return [...f.shopRoot.querySelectorAll<HTMLElement>('.shop-offer')].map(
+        (item) => item.dataset.offerId,
+      );
+    }
+    select(1);
+    assert.equal(ids()[0], 'offer_20');
+    f.pointer(f.source(), 'pointerdown', 10, 10, 2);
+    await flush();
+    assert.deepEqual(f.commands.pop(), {
+      npc_instance_id: shop.npcInstanceId,
+      service_id: shop.serviceId,
+      offer_id: 'offer_20',
+    });
+    await f.drop(f.grid);
+    assert.deepEqual(f.commands.pop(), {
+      npc_instance_id: shop.npcInstanceId,
+      service_id: shop.serviceId,
+      offer_id: 'offer_20',
+      x: 2,
+      y: 3,
+      page: 0,
+    });
+    f.pointer(f.source(), 'pointerdown');
+    assert.equal(f.drag.active, true);
+    select(2);
+    assert.equal(f.drag.active, false);
+    assert.equal(ids()[0], 'offer_40');
+    f.view.setState(catalog);
+    assert.equal(
+      ids()[0],
+      'offer_40',
+      'Same catalog update preserves selected page',
+    );
+    f.view.setState({ ...shop, offers: offers.slice(0, 21) });
+    assert.equal(
+      ids()[0],
+      'offer_20',
+      'Shrinking catalog clamps to remaining page',
+    );
+    f.view.setState({ active: false });
+    f.view.setState(catalog);
+    assert.equal(ids()[0], 'offer_0', 'Reopening starts on first page');
+  } finally {
+    f.cleanup();
+  }
 });

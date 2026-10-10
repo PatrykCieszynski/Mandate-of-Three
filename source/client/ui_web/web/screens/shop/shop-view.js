@@ -4,12 +4,12 @@ import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { paintItemIcon } from '../../game-ui/items/item-icon.js';
 import { ITEM_SLOT_SIZE } from '../../game-ui/items/item-geometry.js';
 import { shopOfferLayout } from './shop-layout.js';
-import { UiCurrency } from '../../core/primitives/ui-currency.js';
+import { UiTab } from '../../core/primitives/ui-tab.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { itemWindowControls } from '../../game-ui/items/item-drag-policy.js';
 import { NpcShopOfferDragSubject, shopOfferPayload, } from './shop-drag-policy.js';
 export function mountShop(root, options) {
-    let state = { active: false }, pending = false, disposed = false, generation = 0;
+    let state = { active: false }, pending = false, disposed = false, generation = 0, page = 0;
     const shell = new UiWindow(root, {
         id: 'shop',
         title: 'Shop',
@@ -43,16 +43,19 @@ export function mountShop(root, options) {
     grid.setAttribute('aria-label', 'Shop offers');
     offers.append(grid);
     const gridView = UiItemGrid(grid, { slotSize: () => ITEM_SLOT_SIZE });
-    const wallet = document.createElement('footer'), status = document.createElement('p');
+    const tabList = document.createElement('nav');
+    tabList.className = 'shop-tabs';
+    tabList.setAttribute('role', 'tablist');
+    tabList.setAttribute('aria-label', 'Shop pages');
+    let tabs = [];
+    const status = document.createElement('p');
     status.className = 'shop-status';
     status.setAttribute('role', 'status');
     status.hidden = true;
-    shell.contentRoot.append(offers, wallet, status);
-    const currency = UiCurrency(wallet, {
-        label: 'Yang',
-        iconId: 'currencies.yang',
-    }), tip = ItemTooltip(root, { geometry: () => options.manager });
+    shell.contentRoot.append(offers, tabList, status);
+    const tip = ItemTooltip(root, { geometry: () => options.manager });
     const sources = [], controls = itemWindowControls(options.drag, root);
+    controls.push(options.drag.registerControl(tabList, 'cancel'));
     const errors = {
         funds: 'Not enough Yang.',
         inventory_full: 'Inventory is full.',
@@ -111,11 +114,40 @@ export function mountShop(root, options) {
         sources.forEach((binding) => binding.dispose());
         sources.length = 0;
         grid.replaceChildren();
+        tabs.forEach((tab) => tab.dispose());
+        tabs = [];
+        tabList.replaceChildren();
+        tabList.hidden = true;
         root.hidden = !state.active;
         if (state.active) {
             const catalog = state;
             shell.panel.querySelector('h1').textContent = catalog.name;
-            gridView.render(shopOfferLayout(catalog.offers), (offer) => {
+            const layout = shopOfferLayout(catalog.offers);
+            page = Math.min(page, layout.pages.length - 1);
+            tabList.hidden = layout.pages.length < 2;
+            tabs = layout.pages.map((_, index) => {
+                const tab = UiTab({
+                    label: String(index + 1),
+                    onSelect: () => {
+                        if (page === index)
+                            return;
+                        options.drag.cancel();
+                        tip.hide();
+                        page = index;
+                        offers.scrollTop = 0;
+                        render();
+                        tabs[index]?.element.focus({ preventScroll: true });
+                    },
+                });
+                tab.setSelected(page === index);
+                tabList.append(tab.element);
+                return tab;
+            });
+            gridView.render({
+                columns: layout.columns,
+                rows: layout.rows,
+                items: layout.pages[page],
+            }, (offer) => {
                 const entry = UiSlot({
                     className: 'ui-item-slot shop-offer shop-item',
                     label: offer.name,
@@ -165,9 +197,12 @@ export function mountShop(root, options) {
                 (state.active &&
                     snapshot.active &&
                     (state.npcInstanceId !== snapshot.npcInstanceId ||
-                        state.serviceId !== snapshot.serviceId));
+                        state.serviceId !== snapshot.serviceId ||
+                        state.shopId !== snapshot.shopId));
             if (changed) {
                 generation++;
+                page = 0;
+                offers.scrollTop = 0;
                 pending = false;
                 status.textContent = '';
                 status.hidden = true;
@@ -177,17 +212,14 @@ export function mountShop(root, options) {
             if (state.active && !wasOpen)
                 shell.handle.activate();
         },
-        setWallet(wallet) {
-            currency.setValue(wallet?.ready === false ? undefined : wallet?.balance);
-        },
         dispose() {
             disposed = true;
             generation++;
             sources.forEach((binding) => binding.dispose());
             controls.forEach((binding) => binding.dispose());
+            tabs.forEach((tab) => tab.dispose());
             gridView.dispose();
             tip.dispose();
-            currency.dispose();
             shell.dispose();
         },
     };

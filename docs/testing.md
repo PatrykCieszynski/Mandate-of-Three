@@ -56,7 +56,7 @@ It does not replace native root-client CEF verification.
 `run-shop-browser.ps1` is the analogous optional [NPC Shop view check](npc-shop.md).
 Pass the installed `-PlaywrightModule` and `-BrowserExecutable`, and optionally
 `-ScreenshotDirectory`. It verifies rendered skin/fallback, broad frame bounds
-and Shop/Inventory placement, mouse purchase gestures, tooltip, offer scrolling
+and Shop/Inventory placement, mouse purchase gestures, tooltip, catalog pages
 and close/Escape with controlled IPC; no game accounts or running servers.
 
 Asset pipeline tests and visual fallback probes remain optional for pipeline
