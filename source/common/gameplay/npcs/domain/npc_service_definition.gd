@@ -20,7 +20,8 @@ func validation_errors() -> Array[String]:
 			var shop: ShopDefinition = ShopDefinitions.get_definition(content_ref)
 			if shop == null or not shop.validation_errors().is_empty(): errors.append("unknown_shop")
 		Kind.UPGRADE:
-			if content_ref != &"basic_upgrade": errors.append("unknown_upgrade_content")
+			var recipe: UpgradeDefinition = UpgradeDefinitions.get_definition(content_ref)
+			if recipe == null or not recipe.validation_errors().is_empty(): errors.append("unknown_upgrade_content")
 		Kind.STORAGE:
 			if content_ref != &"account_storage": errors.append("unknown_storage_content")
 		Kind.QUEST:

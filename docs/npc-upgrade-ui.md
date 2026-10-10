@@ -1,60 +1,92 @@
-# NPC Upgrade CEF preview
+# Blacksmith Upgrade vertical slice
 
-Implemented 2026-10-10. This stage adds presentation for +0 through +9 only.
-The accepted first gameplay transaction remains +0 to +1, Yang plus one material,
-100% success. No upgrade RPC, recipe Resource, inventory mutation, wallet spend,
-persistence, failure, destruction or downgrade is introduced here.
+Implemented 2026-10-10. Production Upgrade supports exactly **Iron Sword +0 → +1**,
+with 100% success and one immediate atomic material/item/wallet transaction.
+There is no failure, downgrade, destruction, pity, scroll or equipped-item upgrade.
 
-## Access and behavior
+## Playable flow
 
-Select Upgrade at the Blacksmith. The existing authoritative NPC selection opens
-`screens/upgrade/upgrade-view.ts` instead of the service placeholder. The client
-presentation also opens Inventory. The shared UiWindow initially places Upgrade
-beside Inventory and supplies clamping, drag, scaling and small-viewport scrolling.
+1. Buy one **Upgrade Ore** from Blacksmith → Weapon Shop (100 Yang).
+2. Open Blacksmith → Upgrade and drag an Inventory Iron Sword +0 into the slot.
+3. Inspect the server-provided cost: **1000 Yang + 1 Upgrade Ore, 100% success**.
+4. Upgrade → Confirm. The authoritative snapshot displays the same sword UID at +1.
 
-Drag an Inventory Iron Sword into the target slot to inspect it. This uses the
-shared item drag runtime and an inspection-only drop policy: the item stays in
-Inventory, with the same UID, revision and placement. Other containers, offers,
-stacked items and unsupported icons/levels do not qualify. The current prototype
-only has an Iron Sword definition. Until structured upgrade-level metadata lands,
-the presentation reads its existing trailing +0 through +9 label; this must never
-become gameplay validation. A changed inventory revision refreshes the selection;
-a missing selected item clears it. Leaving/changing NPC service resets local state.
+The costs are prototype content values, not balance decisions. Change the recipe
+in `source/common/gameplay/upgrades/domain/basic_upgrade.tres`; the material is a
+normal ItemInstance stack defined by `items/domain/upgrade_ore.tres` (limit 200).
+Shop purchases create normal persistent material items; no login grant or schema
+migration is added. A small local SVG is a temporary material icon.
 
-The panel shows icon, rarity-colored name, category, effective Attack comparison,
-existing affix lines and requirements when supplied, a required material row,
-Yang cost and success chance. Hover uses the shared ItemTooltip. At +9 the recipe
-is hidden, the action is disabled and the panel displays the maximum-level state.
+Inventory sword → Upgrade slot only selects. The item retains its Inventory
+placement and revision until the actual upgrade commit. Selection is server-owned
+runtime presentation state, restored by `ui.ready` along with the current recipe.
 
-The game view selects items only through the Inventory drop target. Upgrade is
-its prominent primary action, with a smaller Cancel directly below. The result
-has space above/below its level and Attack comparison; materials, Yang cost and
-success chance follow underneath. Upgrade opens inline confirmation; Confirm
-advances only the local display by one step. Back/Escape first cancel confirmation. Outside it,
-Cancel/close/Escape follow the shared NPC routing: menu for multiple services,
-end interaction for one service. Escape still cancels a carried item first.
+Inventory sword → Blacksmith in the world enters the same flow with a
+`preselectedItem` UID/revision intent. Godot supplies projected NPC hit regions;
+they are active only during item carry, below UI windows, and independent of UI
+scale. Drop requests an approach. After arrival the controller performs the normal
+NPC interaction, service selection and Upgrade item selection commands. No item is
+placed in a fictional container. Manual movement/Escape and the existing approach
+cancellation rules stop the approach before it opens a service.
 
-The preview-only notice remains visible until gameplay is connected. Development
-controls are absent from the game. Open `source/client/ui_web/web/dev/upgrade.html`
-through a local Web asset server for the standalone development page: it opts into
-`devPreview`, provides Preview Iron Sword and mouse-only minus/plus level controls,
-and mounts no Web bridge or real gameplay state. The game entry never imports
-that development module. Temporary fixture values
-are next level times 1000 Yang, one material per three next levels rounded up,
-100% chance, and Iron Sword's existing +2 Attack per level. Material icon/name and
-costs are illustrative presentation data, not accepted economy/balance. Inventory
-material availability and wallet affordability are deliberately not simulated.
+## Authority and persistence
 
-## Verification
+`UpgradeDefinition` supplies stable recipe/item/material IDs, from/to levels,
+Yang/material costs and success rate. Validation currently accepts only +0 → +1
+and 100%. NPC service content references resolve through `UpgradeDefinitions`.
 
-Default `tests/run-smoke.ps1` includes a small local-state contract: source item
-immutability, cancellation/context reset and registration cleanup. It does not
-assert pixel geometry or a specific DOM tree.
+`Upgrade3D` lives under the authenticated world instance. Selection and execution
+both revalidate NPC instance, map, current range, enabled Upgrade service and the
+selected service. Execution accepts only NPC/service IDs and item UID/revision.
+Prices, materials, levels and success are never supplied by JavaScript.
 
-Optional `tests/run-shop-browser.ps1` now checks both NPC Shop and Upgrade using
-production HTML/JS, controlled IPC and installed Playwright/Chrome. Upgrade checks
-real Inventory mouse-drop inspection, all nine confirmations through +9, maximum
-state, Escape/back, scale/viewport bounds and absence of item/economy commands.
-It also verifies that example/level controls exist only on the standalone dev page.
-Both legacy skin and CSS fallback are covered; optional PNGs are diagnostic only.
-This browser check does not verify embedded native CEF/GPU behavior.
+`UpgradeStoreSqlite` uses one `BEGIN IMMEDIATE` connection to recheck both placement
+and item ownership, revision, Inventory location, definition, quantity, current
+level and valid footprint. Materials come only from this character's Inventory;
+Account Storage does not qualify. Multiple material stacks are consumed in UID
+order. A partial stack decrements amount and increments revision; an exhausted
+stack deletes both placement and item atomically.
+
+The same transaction applies pending wallet income, spends Yang, updates the
+sword's upgrade level/revision and commits. Any validation or SQL failure rolls
+back all three economic changes. Runtime wallet balance/pending delta/dirty state
+change only after commit. Old UID/revision commands and attempts to upgrade +1
+again are rejected. Affixes, sockets and the sword's UID/placement remain intact.
+No capacity is needed for a new item: the existing sword stays in its valid cells.
+
+After success or rejection the endpoint sends current Inventory/Equipment, wallet
+and Upgrade snapshots. Inventory refresh also updates the existing server runtime
+equipment/stat cache. The UI does not optimistically increment a level and disables
+confirmation without the server candidate, required material or sufficient wallet.
+An external inventory revision/placement change refreshes or clears the candidate.
+Closing/leaving the service clears selection; server context invalidation still
+applies. Reload retains the server selection, not an unconfirmed local action.
+
+## UI and development preview
+
+The existing CEF window, shared UiWindow, logical scale, item drag runtime,
+confirmation and tooltips are reused. Production selection uses explicit
+`definition_id` and `upgrade_level` metadata from the small native item presenter;
+material labels no longer inherit sword +0 or fake Attack text.
+
+`web/dev/upgrade.html` remains a separate visual +0…+9 preview, explicitly opting
+into `devPreview` and mounting no real bridge/economy. Its illustrative costs and
+local level increment are never used by production Upgrade.
+
+## Verification and limits
+
+```powershell
+& ./tests/run-smoke.ps1
+# Optional real production RPCs, isolated DB and two clients on port 18098:
+& ./tests/run-upgrade.ps1
+```
+
+The small transaction fixture covers ownership/revision/placement, missing
+material/funds, partial and exhausted stacks, fault-induced rollback after
+consumption/spending, pending Yang, replay and database reopen. Two UI contracts
+cover server-driven level changes/rejection/reload and queued world drop lifecycle.
+The network fixture exercises private state, selection without relocation,
+upgrade/refresh, another client, stale replay and changed NPC range.
+These checks are headless. Native in-game CEF hit alignment, visual feel and the
+complete drag → approach interaction still require a manual check after restarting
+the client and World; automated checks do not claim Vulkan visual verification.

@@ -1,4 +1,4 @@
-param([ValidateSet('npc','shop')][string]$Scenario = 'npc')
+param([ValidateSet('npc','shop','upgrade')][string]$Scenario = 'npc')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'

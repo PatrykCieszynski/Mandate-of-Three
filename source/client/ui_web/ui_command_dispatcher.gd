@@ -1,7 +1,7 @@
 class_name UiCommandDispatcher
 extends Node
 ## Explicit application boundary. No CEF types, mock model, reflection or persistence.
-const DOMAINS: Array[String] = ["shop", "npc", "storage", "inventory", "equipment", "wallet", "player", "hud"]
+const DOMAINS: Array[String] = ["upgrade", "npc_targets", "shop", "npc", "storage", "inventory", "equipment", "wallet", "player", "hud"]
 var bridge: WebUiBridge
 var _handlers: Dictionary = {}
 var _state: Dictionary = {}

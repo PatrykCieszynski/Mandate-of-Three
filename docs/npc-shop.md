@@ -106,5 +106,5 @@ there are no pixel comparisons or new default smoke requirements.
 Native root-client CEF appearance/input remains a manual milestone check. The
 browser fixture does not establish native GPU rendering, transparency, input
 routing through Godot, or real purchase persistence; the latter uses smoke/RPC.
-Upgrade, finite stock, sellback, stacking into existing items and Player Shop remain
+Higher upgrades, finite stock, sellback, stacking into existing items and Player Shop remain
 later work; a purchased offer creates one new stack/footprint.

@@ -17,13 +17,14 @@ the separate [NPC Shop](npc-shop.md) domain now owns purchases and the Shop view
 The Blacksmith exposes `upgrade` → `basic_upgrade` and `weapon_shop` →
 `blacksmith_weapon_shop`. The shop contains one infinite-stock Iron Sword offer
 (quantity 1, price 1000 Yang). Edit prices, offers and assignments in `.tres`.
-There is currently only one registered production item definition.
+The shop also sells Upgrade Ore (one material for 100 Yang). Both are registered
+production item definitions.
 
 Loaded definition resources are treated as immutable shared content. Validation
 rejects malformed IDs, duplicate service/offer IDs, missing item/shop references,
 invalid quantities/prices, unknown currencies/kinds and invalid interaction radii.
-The non-shop references `basic_upgrade` and `account_storage` are explicit future
-entry points, not implemented mechanics. No Quest content exists yet, so an
+`basic_upgrade` resolves a validated UpgradeDefinition and its atomic
+[+0 → +1 flow](npc-upgrade-ui.md). `account_storage` remains an explicit entry point. No Quest content exists yet, so an
 unresolved QUEST reference is rejected until that domain authors its content.
 
 ## World and authority
@@ -91,7 +92,7 @@ The browser validates the entire domain before replacing last known valid state.
 selection callback. `npc-interaction.ts` owns routing based on enabled services:
 0 → no window, 1 → select directly, 2+ → menu. Selection hides the menu and routes
 SHOP and UPGRADE to their feature windows. [Upgrade](npc-upgrade-ui.md) currently
-provides a CEF-only +0 through +9 preview, with no item/economy mutation. SHOP opens through its own revalidating `shop.open` command.
+provides the atomic +0 → +1 material/Yang flow. SHOP opens through its own revalidating `shop.open` command.
 A failed feature open exposes the menu/status for retry. Close/Escape on a selected
 service clears selection and returns to the menu for multi-service NPCs; another
 close ends interaction. Single-service NPCs close directly. Reload restores current
@@ -99,8 +100,8 @@ selection and the published Shop snapshot.
 
 `openService(service, context?)` accepts an optional preselected item intent and
 shares the same callback as the menu. It is presentation data, not permission to
-mutate that item. The Upgrade view supports Inventory drops for inspection only. Actual Upgrade
-transactions remain deferred.
+mutate that item. The Upgrade view selects Inventory items without relocating them. Dropping a
+sword onto the Blacksmith approaches and selects through the same service flow.
 `npc.clear_service` clears selection while retaining valid interaction context.
 
 ## Verification

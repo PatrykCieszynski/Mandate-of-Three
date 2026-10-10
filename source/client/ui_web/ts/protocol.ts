@@ -42,10 +42,10 @@ export function isCommandResult(result: unknown): result is CommandResult {
     (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message: Envelope): message is StateMessage {
-  return !message.id && ['ui.snapshot','shop.updated','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
+  return !message.id && ['ui.snapshot','upgrade.updated','npc_targets.updated','shop.updated','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
 }
 export function isDomainName(value: string): value is DomainName {
-  return ['shop','npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
+  return ['upgrade','npc_targets','shop','npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
 }
 export function isRawDomainState(value: unknown): value is RawDomainState {
   return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -67,6 +67,7 @@ function isItem(value: unknown): value is ItemPresentation {
   return isObject(value) && typeof value.id === 'string' && integerRange(value.revision, 0) &&
     typeof value.name === 'string' && typeof value.icon_id === 'string' && integerRange(value.height, 1, MAX_ITEM_HEIGHT) &&
     integerRange(value.quantity, 1) && (!('description' in value) || typeof value.description === 'string') &&
+    (!('definition_id' in value) || (typeof value.definition_id === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(value.definition_id))) && (!('upgrade_level' in value) || integerRange(value.upgrade_level,0,9)) &&
     (!('tooltip' in value) || isItemTooltipDetails(value.tooltip));
 }
 function isInventoryItem(value: unknown): value is InventoryItem {
@@ -106,6 +107,17 @@ function isHud(value: unknown): value is HudSnapshot {
     (!('ui_scale' in value) || (finiteRange(value.ui_scale, 0.8, 1.5) && UI_SCALES.includes(value.ui_scale))) &&
     (!('viewport' in value) || isViewport(value.viewport));
 }
+function isUpgrade(value: unknown): boolean {
+  if (!isObject(value) || typeof value.active !== 'boolean') return false;
+  if (!value.active) return Object.keys(value).length === 1;
+  const id = (v: unknown) => typeof v === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(v);
+  if(typeof value.npcInstanceId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value.npcInstanceId) || !id(value.serviceId) || !id(value.upgradeId) || !id(value.itemDefinitionId) || !id(value.materialDefinitionId) || typeof value.materialName !== 'string' || value.materialName.length > 128 || value.fromLevel !== 0 || value.toLevel !== 1 || value.successRate !== 100 || !integerRange(value.yangCost,1,MAX_YANG) || !integerRange(value.materialAmount,1,999) || !integerRange(value.materialOwned,0) || !isObject(value.candidate)) return false;
+  const c = value.candidate;
+  return Object.keys(c).length === 0 || (typeof c.id === 'string' && /^[a-f0-9]{32}$/.test(c.id) && integerRange(c.revision,0) && integerRange(c.level,0,9) && integerRange(c.attack,0) && integerRange(c.nextAttack,0));
+}
+function isNpcTargets(value: unknown): boolean {
+  return isObject(value) && finiteRange(value.width,0,MAX_VIEWPORT) && finiteRange(value.height,0,MAX_VIEWPORT) && Array.isArray(value.targets) && value.targets.length <= 64 && value.targets.every(t => isObject(t) && typeof t.id === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(t.id) && finiteRange(t.x,-MAX_VIEWPORT,MAX_VIEWPORT) && finiteRange(t.y,-MAX_VIEWPORT,MAX_VIEWPORT) && finiteRange(t.w,0,MAX_VIEWPORT) && finiteRange(t.h,0,MAX_VIEWPORT));
+}
 function isShop(value: unknown): value is ShopSnapshot {
   if (!isObject(value) || typeof value.active !== 'boolean') return false;
   if (!value.active) return Object.keys(value).length === 1;
@@ -138,6 +150,8 @@ function isNpc(value: unknown): value is NpcInteractionSnapshot {
 export function isValidDomainValue(domain: DomainName, value: unknown): value is RawObject {
   if (!isObject(value)) return false;
   switch (domain) {
+    case 'upgrade': return isUpgrade(value);
+    case 'npc_targets': return isNpcTargets(value);
     case 'shop': return isShop(value);
     case 'npc': return isNpc(value);
     case 'storage': return isStorage(value);

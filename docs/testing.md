@@ -58,8 +58,9 @@ Pass the installed `-PlaywrightModule` and `-BrowserExecutable`, and optionally
 `-ScreenshotDirectory`. It verifies rendered skin/fallback, broad frame bounds
 and Shop/Inventory placement, mouse purchase gestures, tooltip, catalog pages
 and close/Escape with controlled IPC; no game accounts or running servers. It also
-checks the [CEF Upgrade preview](npc-upgrade-ui.md): Inventory inspection drop,
-+0 through +9 confirmations, max-level state, cancellation and no economic commands.
+checks [Upgrade](npc-upgrade-ui.md): server-driven item selection/commit/rejection,
+a +0 → +1 snapshot and an explicit execute command without optimistic mutation.
+The separate developer page retains visual level controls.
 
 Asset pipeline tests and visual fallback probes remain optional for pipeline
 changes. The small default suite downloads no browser and does not install Pillow.
@@ -89,3 +90,7 @@ scratch files, within checked workspace paths. It preserves `.godot/imported`,
 editor cache, engine binaries, the installed root CEF addon/plugin archive cache, reference
 checkouts, local asset cache and normal player/account data. Temporary work should
 live under `.godot/verification`, rather than accumulating at the .godot root.
+
+`run-upgrade.ps1` is an opt-in two-client production Upgrade RPC suite on port
+18098; run sequentially with the other PvE-derived suites. Smoke includes one
+material/item/wallet rollback fixture and small UI/bridge contracts.

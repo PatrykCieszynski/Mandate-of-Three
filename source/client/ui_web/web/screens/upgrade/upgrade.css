@@ -263,3 +263,10 @@
   font-size: 11px;
   padding: 4px 10px;
 }
+
+.npc-world-drop {position:fixed;inset:0;pointer-events:none;z-index:0}
+.npc-world-drop-target {position:absolute;pointer-events:none;opacity:0;border:1px solid #a78b4b;background:rgba(150,120,50,.12)}
+.npc-world-drop-target[data-valid="true"] {border-color:#72b35f}
+.npc-world-drop-target[data-valid="false"] {border-color:#b45b50}
+
+.npc-world-drop[data-carrying="true"] .npc-world-drop-target {pointer-events:auto;opacity:1}

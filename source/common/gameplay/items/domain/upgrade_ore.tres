@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/items/domain/item_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+definition_id = &"upgrade_ore"
+item_name = "Upgrade Ore"
+icon_id = &"upgrade_ore"
+stack_limit = 200
+inventory_height = 1
