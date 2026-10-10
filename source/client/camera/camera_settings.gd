@@ -18,7 +18,9 @@ extends Resource
 @export var collision_margin: float = 0.05
 @export_flags_3d_physics var collision_mask: int = 1
 @export var pivot_height: float = 1.3
-@export var forward_offset: float = 0.6
+## Signed framing offset: negative keeps the pivot slightly behind the player.
+@export var forward_offset: float = -0.35
+@export var collision_skin: float = 0.02
 @export var teleport_distance: float = 5.0
 @export var fov: float = 55.0
 @export var auto_align_enabled: bool = false

@@ -28,6 +28,17 @@ func _ready() -> void:
 	assert(rig.resolved_distance < requested, "Wall retracts boom")
 	assert(rig.camera.global_position.z < 2.75 - rig.settings.collision_radius, "Sphere stays in front of wall")
 	assert(rig.desired_distance == requested, "Collision does not overwrite requested zoom")
+	# Walking toward a wall with the camera on the free side must not collapse
+	# the boom into the player's body. This also exercises a clamped follow pivot.
+	var near_wall := Vector3(0,0,3.61)
+	for i: int in 180: rig.update_camera(1.0/60.0, near_wall, true)
+	assert(rig.resolved_distance > rig.settings.min_distance, "Facing a nearby wall retains the free rear camera")
+	var eye: Vector3 = near_wall + Vector3.UP * rig.settings.pivot_height
+	assert(rig._safe_motion(eye, Vector3(0,0,-2)).length() > 0, "Near-wall pivot sweep has a nonzero safe fraction")
+	var clamped_pivot: Vector3 = eye + rig._safe_motion(eye, Vector3(0,0,-2))
+	assert(rig._safe_motion(clamped_pivot, Vector3(0,2,4)).length() > 1, "Outward cast from a clamped pivot does not collapse")
+	rig.update_camera(1.0/60.0, Vector3.ZERO, true)
+	for i: int in 180: rig.update_camera(1.0/60.0, Vector3.ZERO, true)
 	# Actual screen picking continues through the same Camera3D after orbit/zoom.
 	var pick := StaticBody3D.new()
 	pick.position = Vector3(0,1,0)

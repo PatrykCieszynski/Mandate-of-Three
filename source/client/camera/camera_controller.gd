@@ -33,7 +33,7 @@ func _ready() -> void:
 	_pitch = desired_pitch
 	_zoom = desired_distance
 	resolved_distance = desired_distance
-	_sphere.radius = settings.collision_radius
+	_sphere.radius = settings.collision_radius + settings.collision_margin
 	camera = Camera3D.new()
 	camera.name = "Camera3D"
 	camera.fov = settings.fov
@@ -122,13 +122,19 @@ func _safe_motion(origin: Vector3, motion: Vector3) -> Vector3:
 	query.shape = _sphere
 	query.transform = Transform3D(Basis.IDENTITY, origin)
 	query.collision_mask = settings.collision_mask
-	query.margin = settings.collision_margin
+	# Include clearance in the shape itself so overlap and sweep use one volume.
+	query.margin = 0.0
 	query.collide_with_areas = false
 	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	if not space.intersect_shape(query, 1).is_empty(): return Vector3.ZERO
 	query.motion = motion
 	var fractions: PackedFloat32Array = space.cast_motion(query)
-	return motion * fractions[0] if fractions.size() == 2 else Vector3.ZERO
+	if fractions.size() != 2: return Vector3.ZERO
+	if fractions[0] >= 1.0: return motion
+	# Keep the resolved pivot outside the next query's overlap tolerance.
+	# Ending exactly at the safe fraction can turn an outward boom into a zero cast.
+	var length: float = motion.length()
+	return motion / length * maxf(0.0, length * fractions[0] - settings.collision_skin)
 
 ## Called after character interpolation, not from the authoritative simulation.
 func update_camera(delta: float, target: Vector3, controls_enabled: bool) -> void:
@@ -150,7 +156,7 @@ func update_camera(delta: float, target: Vector3, controls_enabled: bool) -> voi
 	var eye: Vector3 = target + Vector3.UP * settings.pivot_height
 	var wanted_pivot: Vector3 = eye - Vector3(sin(_yaw), 0, cos(_yaw)) * settings.forward_offset
 	var followed: Vector3 = wanted_pivot if snap else _pivot.lerp(wanted_pivot, _weight(settings.position_smoothing, delta))
-	# Follow lag/look-ahead cannot push the pivot through nearby scenery.
+	# Follow lag/framing offset cannot push the pivot through nearby scenery.
 	_pivot = eye + _safe_motion(eye, followed - eye)
 	var safe_distance: float = _safe_motion(_pivot, boom * _zoom).length()
 	# Retract immediately for safety; ease only the return to the requested zoom.
