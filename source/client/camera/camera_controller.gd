@@ -14,6 +14,8 @@ var _yaw: float
 var _pitch: float
 var _zoom: float
 var _pivot: Vector3
+var _follow_target: Vector3
+var _follow_pivot: Vector3
 var _previous_target: Vector3
 var _initialized: bool = false
 var _moving_time: float = 0.0
@@ -155,7 +157,17 @@ func update_camera(delta: float, target: Vector3, controls_enabled: bool) -> voi
 	var boom := Vector3(sin(_yaw) * cos(deg_to_rad(_pitch)), sin(deg_to_rad(_pitch)), cos(_yaw) * cos(deg_to_rad(_pitch)))
 	var eye: Vector3 = target + Vector3.UP * settings.pivot_height
 	var wanted_pivot: Vector3 = eye - Vector3(sin(_yaw), 0, cos(_yaw)) * settings.forward_offset
-	var followed: Vector3 = wanted_pivot if snap else _pivot.lerp(wanted_pivot, _weight(settings.position_smoothing, delta))
+	# Two follow stages suppress snapshot-cadence velocity pulses. Twice the rate
+	# keeps the same approximate follow delay as the previous single stage.
+	# Collision corrections must never feed back into the follow filter.
+	if snap:
+		_follow_target = wanted_pivot
+		_follow_pivot = wanted_pivot
+	else:
+		var follow_weight: float = _weight(settings.position_smoothing * 2.0, delta)
+		_follow_target = _follow_target.lerp(wanted_pivot, follow_weight)
+		_follow_pivot = _follow_pivot.lerp(_follow_target, follow_weight)
+	var followed: Vector3 = _follow_pivot
 	# Follow lag/framing offset cannot push the pivot through nearby scenery.
 	_pivot = eye + _safe_motion(eye, followed - eye)
 	var safe_distance: float = _safe_motion(_pivot, boom * _zoom).length()
