@@ -7,8 +7,8 @@ without SQLite schema changes or expanded item progression.
 
 - WASD: movement/facing; I: inventory; E: nearest loot.
 - Hold Space: repeated swings in front of the character, including without a target.
-- Left click: optionally select a dog; clicking away clears selection.
-- F: autoattack the selected dog with simple approach/turning.
+- Left click: optionally select a dog or the current Metin instance; clicking away clears selection.
+- F: autoattack the selected actor with simple approach/turning.
   Manual movement or player/target death interrupts autoattack.
 
 Clients send only `request_attack(sequence)`, not target ID, rotation, damage or
@@ -35,7 +35,11 @@ at 7 m/s away from the player and decays through server physics; world collision
 remain active. Death before impact cancels the swing. Replay/spam cannot bypass recovery.
 
 These are prototype parameters, not claims about original Metin balance/limits.
-Selection assists autoattack; skills are not implemented yet.
+Selection assists autoattack; skills are not implemented yet. A small local
+`selected_target {kind,id}` resolves a living mob or the exact Metin instance.
+Death, removal or a different Metin instance clears selection and autoattack,
+including when autoattack was already off. A dog respawning with the same mob ID
+requires a new click. Target-frame and loot presentation remain later work.
 
 ## Wild Dogs, navigation and death
 

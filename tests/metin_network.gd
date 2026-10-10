@@ -99,9 +99,17 @@ func _process(delta: float) -> void:
 	var encounter: MetinEncounter = world.metin_encounter
 	if encounter.active():
 		saw_stone = true
-		if initial_stone_id.is_empty(): initial_stone_id = encounter.runtime.stone_instance_id
-		elif encounter.runtime.stone_instance_id != initial_stone_id: saw_respawn = true
-	else: saw_stone_death = saw_stone_death or saw_stone
+		if initial_stone_id.is_empty():
+			initial_stone_id = encounter.runtime.stone_instance_id
+			world.combat_endpoint.select_target({"kind":&"metin","id":initial_stone_id})
+			check(not world.combat_endpoint.selected_target.is_empty(),"living Metin is selectable")
+		elif encounter.runtime.stone_instance_id != initial_stone_id:
+			saw_respawn = true
+			check(world.combat_endpoint.selected_target.is_empty(),"respawn does not revive selection")
+	else:
+		saw_stone_death = saw_stone_death or saw_stone
+		if saw_stone:
+			check(world.combat_endpoint.selected_target.is_empty() and not world.combat_endpoint.autoattack,"death snapshot clears selection even without autoattack")
 	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():
 		if not dog.source_metinstone_id.is_empty():
 			saw_waves = true

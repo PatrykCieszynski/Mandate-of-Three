@@ -150,7 +150,7 @@ func _process(delta: float) -> void:
 	if attempted: return
 	if phase_name in ["ONE", "TWO", "THREE", "RESET", "DYING", "RESTART"]:
 		attempted = true
-		combat.select_mob(3) # selected dog behind the player cannot redirect manual damage
+		combat.select_target({"kind":&"mob","id":3}) # selected dog behind the player cannot redirect manual damage
 		for i: int in 40:
 			sequence += 1
 			combat.request_attack.rpc_id(1, sequence)
@@ -158,7 +158,7 @@ func _process(delta: float) -> void:
 		combat.request_attack.rpc_id(1, -1)
 	elif phase_name == "ASSIST":
 		attempted = true
-		combat.select_mob(1)
+		combat.select_target({"kind":&"mob","id":1})
 		combat.autoattack = true
 		var direction: Vector2 = combat.assist_direction(Vector2.ZERO)
 		var manual: Vector2 = combat.assist_direction(Vector2.RIGHT)
