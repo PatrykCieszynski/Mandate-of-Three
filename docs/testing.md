@@ -53,6 +53,12 @@ using the production page, controlled IPC and an installed headless browser.
 It checks behavior and broad bounds, with no pixel/exact-tree assertions or downloads.
 It does not replace native root-client CEF verification.
 
+`run-shop-browser.ps1` is the analogous optional [NPC Shop view check](npc-shop.md).
+Pass the installed `-PlaywrightModule` and `-BrowserExecutable`, and optionally
+`-ScreenshotDirectory`. It verifies rendered skin/fallback, broad frame bounds
+and Shop/Inventory placement, mouse purchase gestures, tooltip, offer scrolling
+and close/Escape with controlled IPC; no game accounts or running servers.
+
 Asset pipeline tests and visual fallback probes remain optional for pipeline
 changes. The small default suite downloads no browser and does not install Pillow.
 
