@@ -31,6 +31,8 @@ func _ready() -> void:
 	var a: int = store.create_player_character("yang_a", {"name": "A", "skin": 1})
 	var b: int = store.create_player_character("yang_b", {"name": "B", "skin": 1})
 	var c: int = store.create_player_character("yang_c", {"name": "C", "skin": 1})
+	check(persisted(db,a) == 1500 and persisted(db,b) == 1500, "new characters receive starting Yang")
+	check(WalletStoreSqlite.new(db).load_wallet(a).balance == 1500, "reloading does not repeat starting grant")
 	check(db.query("DROP TABLE wallets;"), "v13 fixture")
 	check(db.query("UPDATE meta SET value='13' WHERE key='schema_version';"), "v13 marker")
 	WorldSchema.ensure_schema(db)

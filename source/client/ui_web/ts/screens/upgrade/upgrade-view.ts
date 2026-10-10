@@ -244,7 +244,8 @@ export function mountUpgrade(
     );
   }
   async function submit(action: 'select' | 'execute', value: ItemPresentation) {
-    if (!recipe.active || pending || disposed) return;
+    if (!recipe.active || pending || disposed)
+      return { ok: false, error: 'unavailable' };
     const token = generation;
     const command = {
       npc_instance_id: recipe.npcInstanceId,
@@ -264,7 +265,7 @@ export function mountUpgrade(
     } catch {
       result = { ok: false, error: 'timeout' };
     }
-    if (disposed || token !== generation) return;
+    if (disposed || token !== generation) return result;
     pending = false;
     notice = result.ok
       ? action === 'execute'
@@ -272,6 +273,7 @@ export function mountUpgrade(
         : ''
       : `Rejected: ${result.error ?? 'request'}`;
     render();
+    return result;
   }
   function syncCandidate() {
     if (options.devPreview || !recipe.active) return;
@@ -417,6 +419,16 @@ export function mountUpgrade(
   }
   return {
     regions: [shell.panel],
+    async selectItem(command: {
+      id: string;
+      revision: number;
+    }): Promise<CommandResult> {
+      const selected = inventory?.items.find(
+        (i) => i.id === command.id && i.revision === command.revision,
+      );
+      if (!selected || root.hidden) return { ok: false, error: 'unavailable' };
+      return submit('select', selected);
+    },
     closeIfActive,
     setNpcState(snapshot: NpcInteractionSnapshot) {
       const opening = npcOpening(snapshot);

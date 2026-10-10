@@ -2,6 +2,8 @@ class_name WorldStoreSqlite
 extends RefCounted
 
 
+const STARTING_YANG: int = 1500
+
 var db: SQLite
 
 
@@ -150,7 +152,15 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 	player.titles_unlocked = PackedStringArray(["Alpha tester"])
 	player.display_title = "Alpha tester"
 	# Leave defaults to PlayerResource where possible.
+	if not db.query("BEGIN IMMEDIATE;"): return -1
 	save_player(player)
+	if not db.query_with_bindings("INSERT INTO wallets(character_id,yang) SELECT player_id,? FROM players WHERE player_id=?;", [STARTING_YANG, next_id]) \
+		or not db.query("SELECT changes() AS n;") or int(db.query_result[0].n) != 1:
+		db.query("ROLLBACK;")
+		return -1
+	if not db.query("COMMIT;"):
+		db.query("ROLLBACK;")
+		return -1
 	return next_id
 
 

@@ -114,11 +114,16 @@ test('Production Upgrade sends UID/revision only and waits for authoritative +1;
     onRegionsChanged: () => {},
   });
   const commands: unknown[] = [];
+  const selections: unknown[] = [];
   const view = mountUpgrade(root, {
     manager,
     drag,
     resolveItemIcon: () => null,
     onClose: () => {},
+    select: async (command) => {
+      selections.push(command);
+      return { ok: true };
+    },
     execute: async (command) => {
       commands.push(command);
       return { ok: false, error: 'stale' };
@@ -133,6 +138,18 @@ test('Production Upgrade sends UID/revision only and waits for authoritative +1;
   view.setInventory(inventory);
   view.setState(quote);
   view.setWallet({ ready: true, balance: 1000 });
+  assert.equal(
+    (await view.selectItem({ id: sword.id, revision: sword.revision })).ok,
+    true,
+  );
+  assert.deepEqual(selections, [
+    {
+      npc_instance_id: 'smith',
+      service_id: 'upgrade',
+      id: sword.id,
+      revision: 0,
+    },
+  ]);
   button('Upgrade').click();
   button('Confirm').click();
   await new Promise((resolve) => setTimeout(resolve, 0));

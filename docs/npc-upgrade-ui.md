@@ -90,3 +90,7 @@ upgrade/refresh, another client, stale replay and changed NPC range.
 These checks are headless. Native in-game CEF hit alignment, visual feel and the
 complete drag → approach interaction still require a manual check after restarting
 the client and World; automated checks do not claim Vulkan visual verification.
+
+New characters receive 1500 Yang once at creation. Existing wallet balances are unchanged.
+While Upgrade is open, right-clicking an Inventory item selects it through the
+server Upgrade command instead of activating/equipping it. Items remain in Inventory.

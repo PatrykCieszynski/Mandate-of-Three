@@ -29,6 +29,7 @@ func _ready() -> void:
 	persistence.item_store = ItemStoreSqlite.new(db)
 	persistence.wallet_store = WalletStoreSqlite.new(db)
 	character_id = persistence.store.create_player_character("upgrade_fixture",{"name":"Smith tester","skin":1})
+	assert(db.query_with_bindings("UPDATE wallets SET yang=0 WHERE character_id=?;", [character_id])) # Explicit economy fixture, independent of starter grant.
 	assert(persistence.load_wallet(character_id))
 	var sword: String = seed_item(ItemDefinitions.IRON_SWORD)
 	assert(persistence.add_yang(character_id,2100))

@@ -56,7 +56,6 @@ const bridge = new WebBridge({
             message.type === 'inventory.updated' ||
             message.type === 'storage.updated' ||
             message.type === 'equipment.updated' ||
-            message.type === 'hud.updated' ||
             message.type === 'upgrade.updated' ||
             message.type === 'shop.updated' ||
             message.type === 'npc.updated')
@@ -118,7 +117,11 @@ const view = mountInventory(root, {
     receiveEquipped: (item, position) => equipment.unequip(item, position),
     manager,
     resolveItemIcon,
-    activateItem: (payload) => bridge.request('item.activate', payload),
+    activateItem: (payload) => {
+        if (!upgradeRoot.hidden)
+            return upgrade.selectItem(payload);
+        return bridge.request('item.activate', payload);
+    },
     moveItem: (payload) => bridge.request('inventory.move_item', payload),
     onClose: () => bridge.request('inventory.close', {}).catch(() => { }),
     onRegionsChanged: () => regions?.refresh(),
