@@ -156,3 +156,10 @@ constants in screens/storage/storage-model.ts. `storage_open => inventory_open`
 is enforced by the native composition and fixture host; invalid HUD snapshots
 are rejected at the presentation boundary. Closing Inventory closes Storage.
 See [the UI follow-up TODO](../../../docs/TODO.md) for the transfer controller's limited scope.
+
+
+Neutral NPC services use `ts/screens/npc/` and the `npc` domain. The development
+Blacksmith opens its Core UI menu from the game (click or N in range); selection
+opens a service target placeholder, with actual Shop/Upgrade operations deferred.
+See [NPC services](../../../docs/npc-services.md). Edit TypeScript, then rebuild
+committed static modules; CEF never loads development dependencies.

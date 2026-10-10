@@ -1,3 +1,4 @@
+import type {NpcInteractionSnapshot} from './screens/npc/npc-model.js';
 import { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES, STORAGE_CAPACITY } from './screens/storage/storage-model.js';
 import type {Envelope, RawObject, CommandResult, DomainName, DomainSnapshot, RawDomainState, StateMessage, StorageSnapshot, InventorySnapshot, InventoryItem, EquipmentItem, EquipmentSnapshot, WalletSnapshot, HudSnapshot} from './protocol/contracts.js';
 import type {ItemPresentation} from './game-ui/item-types.js';
@@ -39,10 +40,10 @@ export function isCommandResult(result: unknown): result is CommandResult {
     (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message: Envelope): message is StateMessage {
-  return !message.id && ['ui.snapshot','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
+  return !message.id && ['ui.snapshot','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
 }
 export function isDomainName(value: string): value is DomainName {
-  return ['storage','inventory','equipment','wallet','player','hud'].includes(value);
+  return ['npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
 }
 export function isRawDomainState(value: unknown): value is RawDomainState {
   return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -102,10 +103,27 @@ function isHud(value: unknown): value is HudSnapshot {
     (!('ui_scale' in value) || (finiteRange(value.ui_scale, 0.8, 1.5) && UI_SCALES.includes(value.ui_scale))) &&
     (!('viewport' in value) || isViewport(value.viewport));
 }
+function isNpc(value: unknown): value is NpcInteractionSnapshot {
+  if (!isObject(value) || typeof value.active !== 'boolean') return false;
+  if (!value.active) return Object.keys(value).length === 1;
+  const contentId = (id: unknown) => typeof id === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(id);
+  if (typeof value.npcInstanceId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value.npcInstanceId) ||
+      !contentId(value.npcDefinitionId) || typeof value.name !== 'string' || !value.name || value.name.length > 128 ||
+      typeof value.selectedServiceId !== 'string' || !Array.isArray(value.services) || value.services.length > 16) return false;
+  const seen = new Set<string>();
+  for (const service of value.services) {
+    if (!isObject(service) || !contentId(service.id) || typeof service.id !== 'string' || seen.has(service.id) ||
+        !integerRange(service.kind, 0, 3) || typeof service.label !== 'string' || !service.label || service.label.length > 128 ||
+        typeof service.enabled !== 'boolean' || ('iconId' in service && (typeof service.iconId !== 'string' || service.iconId.length > 64))) return false;
+    seen.add(service.id);
+  }
+  return value.selectedServiceId === '' || value.services.some(service => isObject(service) && service.id === value.selectedServiceId && service.enabled === true);
+}
 // A single domain update must pass the same checks as a full view snapshot.
 export function isValidDomainValue(domain: DomainName, value: unknown): value is RawObject {
   if (!isObject(value)) return false;
   switch (domain) {
+    case 'npc': return isNpc(value);
     case 'storage': return isStorage(value);
     case 'inventory': return isInventory(value);
     case 'equipment': return isEquipment(value);

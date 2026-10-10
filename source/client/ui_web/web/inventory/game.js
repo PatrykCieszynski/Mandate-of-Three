@@ -1,3 +1,4 @@
+import { mountNpcInteraction } from '../screens/npc/npc-interaction.js';
 import { ItemDragRuntime } from '../game-ui/drag/item-drag-runtime.js';
 import { mountStorage } from '../screens/storage/storage-view.js';
 import { updateGameViews } from './domain-updates.js';
@@ -19,11 +20,13 @@ const itemIcons = new ItemIconResolver(legacy.itemIcons);
 export const resolveItemIcon = (id) => itemIcons.resolve(id);
 export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
-const root = findElement(document, '#inventory', 'main'), storageRoot = findElement(document, '#storage', 'main'), equipmentRoot = findElement(document, '#equipment', 'main'), store = new DomainStore();
+const root = findElement(document, '#inventory', 'main'), storageRoot = findElement(document, '#storage', 'main'), equipmentRoot = findElement(document, '#equipment', 'main'), npcRoot = findElement(document, '#npc-menu', 'main'), npcServiceRoot = findElement(document, '#npc-service', 'main'), store = new DomainStore();
 let regions;
 const bridge = new WebBridge({
     onShortcut: () => {
         if (drag.cancel())
+            return;
+        if (npc.closeIfActive())
             return;
         if (!storageRoot.hidden) {
             void bridge.request('storage.close', {}).catch(() => { });
@@ -44,7 +47,8 @@ const bridge = new WebBridge({
             message.type === 'inventory.updated' ||
             message.type === 'storage.updated' ||
             message.type === 'equipment.updated' ||
-            message.type === 'hud.updated')
+            message.type === 'hud.updated' ||
+            message.type === 'npc.updated')
             drag.cancel();
         if ((message.type === 'ui.snapshot' || message.type === 'storage.updated') &&
             state.storage)
@@ -68,6 +72,8 @@ const bridge = new WebBridge({
             viewport: () => ({ width: innerWidth, height: innerHeight }),
             onRegionsChanged: () => regions?.refresh(),
         });
+        if (message.type === 'ui.snapshot' || message.type === 'npc.updated')
+            npc.setState(state.npc ?? { active: false });
     },
 });
 const drag = new ItemDragRuntime({
@@ -106,13 +112,26 @@ const storage = mountStorage(storageRoot, {
     },
     onRegionsChanged: () => regions?.refresh(),
 });
+const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
+    manager,
+    selectService: (selection) => bridge.request('npc.select_service', {
+        npc_instance_id: selection.npcInstanceId,
+        service_id: selection.service.id,
+    }),
+    onClose: () => {
+        void bridge.request('npc.close', {}).catch(() => { });
+    },
+    onRegionsChanged: () => regions?.refresh(),
+});
 regions = reportInteractiveRegions(bridge, [
+    ...npc.regions,
     ...view.regions,
     ...equipment.regions,
     ...storage.regions,
     ...drag.regions,
 ]);
 window.addEventListener('pagehide', () => {
+    npc.dispose();
     drag.dispose();
     storage.dispose();
     view.dispose();

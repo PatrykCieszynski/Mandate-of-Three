@@ -51,6 +51,12 @@ Production Inventory and the weapon Equipment window compose the small internal
 resolvers reduce repeated window code. Domain state and actions remain in screens;
 Account Storage (15×9×2) is integrated through the same CEF bridge; B opens it,
 with server-authoritative atomic deposit/withdrawal and account access.
+The neutral NPC foundation now exposes data-defined services through an
+interactive development Blacksmith: Upgrade and Weapon Shop. Server contexts and
+service authorization are map/range scoped. Shop offers are editable resources;
+purchase and upgrade mechanics remain future domain slices. See
+[NPC services](npc-services.md). Global MVP Storage remains available through B.
+
 Shop, a full HUD/character sheet and final art remain outside this slice. No frontend framework. Use small headless smoke checks by
 default; extended gameplay/asset/export tests are opt-in. Native UI checks belong
 at meaningful milestones. See [testing policy](testing.md).

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="NpcDefinition" load_steps=5 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/npcs/domain/npc_definition.gd" id="1"]
+[ext_resource type="Script" path="res://source/common/gameplay/npcs/domain/npc_service_definition.gd" id="2"]
+[sub_resource type="Resource" id="Upgrade"]
+script = ExtResource("2")
+service_id = &"upgrade"
+kind = 1
+label = "Upgrade"
+icon_id = &"upgrade"
+content_ref = &"basic_upgrade"
+priority = 10
+[sub_resource type="Resource" id="Shop"]
+script = ExtResource("2")
+service_id = &"weapon_shop"
+kind = 0
+label = "Weapon Shop"
+icon_id = &"shop"
+content_ref = &"blacksmith_weapon_shop"
+priority = 20
+[resource]
+script = ExtResource("1")
+definition_id = &"blacksmith"
+display_name = "Blacksmith"
+visual_id = &"development_blacksmith"
+interaction_radius = 3.0
+services = Array[ExtResource("2")]([SubResource("Upgrade"), SubResource("Shop")])
