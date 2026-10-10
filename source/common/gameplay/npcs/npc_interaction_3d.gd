@@ -10,6 +10,7 @@ var actors: Dictionary[String, NeutralNpc3D] = {}
 var contexts: Dictionary[int, NpcInteractionContext] = {}
 var _world: Node3D
 var _last_request: Dictionary[int, Dictionary] = {}
+var _observed: Dictionary[int, Dictionary] = {}
 var _published: Dictionary[int, Dictionary] = {}
 var _check_elapsed: float = 0.0
 
@@ -85,6 +86,7 @@ func close_for_peer(peer_id: int) -> void:
 func remove_peer(peer_id: int) -> void:
 	close_for_peer(peer_id)
 	_last_request.erase(peer_id)
+	_observed.erase(peer_id)
 	_published.erase(peer_id)
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
@@ -128,7 +130,10 @@ func request_interaction(action: String, instance_id: String, service_id: String
 
 func _publish(peer_id: int) -> void:
 	var snapshot: Dictionary = snapshot_for_peer(peer_id)
-	context_changed.emit(peer_id)
+	# Local change notifications are independent of network availability/delivery.
+	if _observed.get(peer_id, {"active":false}) != snapshot:
+		_observed[peer_id] = snapshot.duplicate(true)
+		context_changed.emit(peer_id)
 	if GameMode.is_world_server() and _world.characters.has(peer_id) and multiplayer.has_multiplayer_peer():
 		if _published.get(peer_id, {}) != snapshot:
 			_published[peer_id] = snapshot.duplicate(true)
@@ -156,4 +161,5 @@ func _exit_tree() -> void:
 	contexts.clear()
 	actors.clear()
 	_last_request.clear()
+	_observed.clear()
 	_published.clear()
