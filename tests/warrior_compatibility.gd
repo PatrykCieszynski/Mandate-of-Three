@@ -35,6 +35,15 @@ func _ready() -> void:
 					check(material != null and material.albedo_texture != null,"resolved embedded material")
 					if mesh.name.to_lower().contains("hair"):
 						check(material.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR,"hair alpha cutout")
+			# Facing belongs to the character body, not a run -> idle clip change.
+			var root_bone := 0
+			view.player.play(&"run",0)
+			view.player.advance(0)
+			var running_right := Basis(view.skeleton.get_bone_pose_rotation(root_bone)).x
+			view.player.play(&"idle",0)
+			view.player.advance(0)
+			var idle_right := Basis(view.skeleton.get_bone_pose_rotation(root_bone)).x
+			check(Vector2(running_right.x,running_right.z).normalized().dot(Vector2(idle_right.x,idle_right.z).normalized()) > 0.99,"stopping preserves locomotion heading")
 			for clip: StringName in _clips:
 				check(view.player.has_animation(clip),"clip " + str(clip))
 				var animation := view.player.get_animation(clip)
