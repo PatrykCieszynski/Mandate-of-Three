@@ -1,3 +1,4 @@
+import { setItemTooltipDetails } from '../game-ui/items/item-tooltip.js';
 import { mountShop } from '../screens/shop/shop-view.js';
 import { NpcServiceKind } from '../screens/npc/npc-model.js';
 import { mountNpcInteraction } from '../screens/npc/npc-interaction.js';
@@ -32,6 +33,7 @@ const root = findElement(document, '#inventory', 'main'),
   store = new DomainStore();
 let regions: ReturnType<typeof reportInteractiveRegions> | undefined;
 const bridge = new WebBridge({
+  onTooltipDetails: (alt) => setItemTooltipDetails(document, alt, 'native'),
   onShortcut: () => {
     if (drag.cancel()) return;
     if (npc.closeIfActive()) return;

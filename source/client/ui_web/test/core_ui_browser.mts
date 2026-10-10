@@ -257,7 +257,7 @@ async function verify(browser: Browser,url: string,fallback: boolean){
   });await frame();
   const stored=page.locator('#storage-fixture .ui-item-slot');await stored.click();assert.deepEqual(await page.evaluate(()=>window.storageActions),['stored-material']);
   await stored.hover();assert.equal(await page.locator('#storage-fixture .item-tooltip').isVisible(),true);
-  assert.equal(await page.locator('#storage-fixture .item-tooltip p').textContent(),'Storage description');
+  assert.equal(await page.locator('#storage-fixture .item-tooltip-description').textContent(),'Storage description');
   await page.locator('#storage-fixture .cell').first().hover();assert.equal(await page.locator('#storage-fixture .item-tooltip').isVisible(),false);
   await stored.hover();assert.equal(await page.locator('#storage-fixture .item-tooltip').isVisible(),true);
   assert.ok(await page.evaluate(()=>window.storageReports>0));

@@ -1,3 +1,4 @@
+import { isItemTooltipDetails } from './game-ui/items/item-tooltip-model.js';
 import type {ShopSnapshot} from './screens/shop/shop-model.js';
 import type {NpcInteractionSnapshot} from './screens/npc/npc-model.js';
 import { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES, STORAGE_CAPACITY } from './screens/storage/storage-model.js';
@@ -65,7 +66,8 @@ function integerRange(value: unknown, min: number, max = Number.MAX_SAFE_INTEGER
 function isItem(value: unknown): value is ItemPresentation {
   return isObject(value) && typeof value.id === 'string' && integerRange(value.revision, 0) &&
     typeof value.name === 'string' && typeof value.icon_id === 'string' && integerRange(value.height, 1, MAX_ITEM_HEIGHT) &&
-    integerRange(value.quantity, 1) && (!('description' in value) || typeof value.description === 'string');
+    integerRange(value.quantity, 1) && (!('description' in value) || typeof value.description === 'string') &&
+    (!('tooltip' in value) || isItemTooltipDetails(value.tooltip));
 }
 function isInventoryItem(value: unknown): value is InventoryItem {
   return isItem(value) && isObject(value) && integerRange(value.x, 0, MAX_COLUMNS - 1) &&
@@ -111,7 +113,7 @@ function isShop(value: unknown): value is ShopSnapshot {
   if(typeof value.npcInstanceId!=='string'||!/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value.npcInstanceId)||!id(value.serviceId)||!id(value.shopId)||typeof value.name!=='string'||!value.name||value.name.length>128||value.currency!=='yang'||!Array.isArray(value.offers)||value.offers.length>180)return false;
   const seen=new Set<string>();
   for(const offer of value.offers){
-    if(!isObject(offer)||!id(offer.offerId)||typeof offer.offerId!=='string'||seen.has(offer.offerId)||!id(offer.itemDefinitionId)||typeof offer.name!=='string'||!offer.name||offer.name.length>128||typeof offer.iconId!=='string'||offer.iconId.length>64||!integerRange(offer.height,1,3)||!integerRange(offer.quantity,1)||!integerRange(offer.price,1,MAX_YANG)||('description' in offer&&typeof offer.description!=='string')||'uid' in offer||'revision' in offer)return false;
+    if(!isObject(offer)||!id(offer.offerId)||typeof offer.offerId!=='string'||seen.has(offer.offerId)||!id(offer.itemDefinitionId)||typeof offer.name!=='string'||!offer.name||offer.name.length>128||typeof offer.iconId!=='string'||offer.iconId.length>64||!integerRange(offer.height,1,3)||!integerRange(offer.quantity,1)||!integerRange(offer.price,1,MAX_YANG)||('description' in offer&&typeof offer.description!=='string')||('tooltip' in offer&&!isItemTooltipDetails(offer.tooltip))||'uid' in offer||'revision' in offer)return false;
     seen.add(offer.offerId);
   }
   return true;

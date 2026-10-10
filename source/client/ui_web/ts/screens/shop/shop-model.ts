@@ -1,3 +1,4 @@
+import type { ItemTooltipDetails } from '../../game-ui/items/item-tooltip-model.js';
 export interface ShopOfferPresentation {
   offerId: string;
   itemDefinitionId: string;
@@ -7,6 +8,7 @@ export interface ShopOfferPresentation {
   quantity: number;
   price: number;
   description?: string;
+  tooltip?: ItemTooltipDetails;
 }
 export type ShopSnapshot =
   | { active: false }

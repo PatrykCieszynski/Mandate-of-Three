@@ -4,6 +4,7 @@ interface BridgeOptions {
   subscribe?: (callback: (message: unknown) => void) => void;
   onState?: (message: StateMessage) => void;
   onShortcut?: (key: 'Escape') => void;
+  onTooltipDetails?: (alt: boolean) => void;
   timeoutMs?: number;
 }
 interface PendingRequest {
@@ -17,13 +18,15 @@ export class WebBridge {
   declare send: (message: string) => void;
   declare onState: (message: StateMessage) => void;
   declare onShortcut: (key: 'Escape') => void;
+  declare onTooltipDetails: (alt: boolean) => void;
   declare timeoutMs: number;
   sequence = 0;
   epoch = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-  constructor({send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => {}, onShortcut = () => {}, timeoutMs = 3000}: BridgeOptions = {}) {
+  constructor({send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => {}, onShortcut = () => {}, onTooltipDetails = () => {}, timeoutMs = 3000}: BridgeOptions = {}) {
     this.send = send;
     this.onState = onState;
     this.onShortcut = onShortcut;
+    this.onTooltipDetails = onTooltipDetails;
     this.timeoutMs = timeoutMs;
     subscribe(message => this.receive(message));
   }
@@ -56,7 +59,9 @@ export class WebBridge {
   receive(json: unknown) {
     let message;
     try { message = decode(json); } catch { return; }
-    if (message.type === 'ui.shortcut') {
+    if (message.type === 'ui.tooltip_details') {
+      if (!message.id && Object.keys(message.payload).length === 1 && typeof message.payload.alt === 'boolean') this.onTooltipDetails(message.payload.alt);
+    } else if (message.type === 'ui.shortcut') {
       if (!message.id && Object.keys(message.payload).length === 1 && message.payload.key === 'Escape') this.onShortcut('Escape');
     } else if (message.type === 'command.result') {
       const result = message.payload;

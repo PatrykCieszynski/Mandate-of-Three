@@ -20,31 +20,57 @@ export function tooltipPosition(
 // Generic content and a logical anchor. The caller owns the meaning of the content.
 export function UiTooltip(
   root: HTMLElement,
-  { geometry }: { geometry: () => { viewport: Viewport; scale: number } },
+  {
+    geometry,
+    aboveWindows = false,
+  }: {
+    geometry: () => { viewport: Viewport; scale: number };
+    aboveWindows?: boolean;
+  },
 ) {
   const element = document.createElement('aside');
   element.className = 'ui-tooltip';
   element.hidden = true;
   root.append(element);
+  // Manual popover uses the browser top layer, escaping window stacking contexts.
+  // No focus, dismissal or modal behaviour; older hosts retain ordinary positioning.
+  const topLayer = aboveWindows && typeof element.showPopover === 'function';
+  if (topLayer) element.setAttribute('popover', 'manual');
+  function hide() {
+    element.hidden = true;
+    if (topLayer && element.matches(':popover-open')) element.hidePopover();
+  }
+  const Observer = root.ownerDocument.defaultView?.MutationObserver;
+  const visibility =
+    topLayer && Observer
+      ? new Observer(() => {
+          if (root.hidden) hide();
+        })
+      : null;
+  visibility?.observe(root, { attributes: true, attributeFilter: ['hidden'] });
   return {
     element,
     contentRoot: element,
-    hide() {
-      element.hidden = true;
-    },
+    hide,
     showAt(point: Point) {
       element.hidden = false;
       const { viewport, scale } = geometry();
+      if (topLayer) {
+        element.style.setProperty('--tooltip-scale', String(scale));
+        if (!element.matches(':popover-open')) element.showPopover();
+      }
       const position = tooltipPosition(
         point,
         { width: element.offsetWidth, height: element.offsetHeight },
         viewport,
         scale,
       );
-      element.style.left = position.x + 'px';
-      element.style.top = position.y + 'px';
+      element.style.left = position.x * (topLayer ? scale : 1) + 'px';
+      element.style.top = position.y * (topLayer ? scale : 1) + 'px';
     },
     dispose() {
+      visibility?.disconnect();
+      hide();
       element.remove();
     },
   };

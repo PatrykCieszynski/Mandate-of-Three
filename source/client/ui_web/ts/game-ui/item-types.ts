@@ -1,7 +1,8 @@
+import type { ItemTooltipDetails } from './items/item-tooltip-model.js';
 export type ItemIconId = string;
 export interface ItemPresentation {
   id: string; revision: number; name: string; icon_id: ItemIconId;
-  height: number; quantity: number; description?: string;
+  height: number; quantity: number; description?: string; tooltip?: ItemTooltipDetails;
 }
 export type ResolveItemIcon = (id: ItemIconId) => string | null;
 

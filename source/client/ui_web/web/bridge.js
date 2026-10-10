@@ -3,10 +3,11 @@ export class WebBridge {
     pending = new Map();
     sequence = 0;
     epoch = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-    constructor({ send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => { }, onShortcut = () => { }, timeoutMs = 3000 } = {}) {
+    constructor({ send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => { }, onShortcut = () => { }, onTooltipDetails = () => { }, timeoutMs = 3000 } = {}) {
         this.send = send;
         this.onState = onState;
         this.onShortcut = onShortcut;
+        this.onTooltipDetails = onTooltipDetails;
         this.timeoutMs = timeoutMs;
         subscribe(message => this.receive(message));
     }
@@ -48,7 +49,11 @@ export class WebBridge {
         catch {
             return;
         }
-        if (message.type === 'ui.shortcut') {
+        if (message.type === 'ui.tooltip_details') {
+            if (!message.id && Object.keys(message.payload).length === 1 && typeof message.payload.alt === 'boolean')
+                this.onTooltipDetails(message.payload.alt);
+        }
+        else if (message.type === 'ui.shortcut') {
             if (!message.id && Object.keys(message.payload).length === 1 && message.payload.key === 'Escape')
                 this.onShortcut('Escape');
         }

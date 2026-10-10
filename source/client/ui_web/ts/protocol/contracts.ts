@@ -22,6 +22,7 @@ export interface Envelope { v: 1; type: string; id?: string; payload: RawObject 
 export type StateType = 'ui.snapshot' | `${DomainName}.updated`;
 // State payloads remain raw until their domain/view validators have checked them.
 export interface StateMessage extends Envelope { type: StateType }
+export interface TooltipDetailsMessage { v: 1; type: 'ui.tooltip_details'; payload: { alt: boolean } }
 export interface ShortcutMessage { v: 1; type: 'ui.shortcut'; payload: {key: 'Escape'} }
 export interface CommandResultMessage { v: 1; type: 'command.result'; id: string; payload: CommandResult }
 export interface ItemCommand { id: string; revision: number }

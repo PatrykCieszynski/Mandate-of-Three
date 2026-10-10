@@ -1,3 +1,4 @@
+import { isItemTooltipDetails } from './game-ui/items/item-tooltip-model.js';
 import { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES, STORAGE_CAPACITY } from './screens/storage/storage-model.js';
 export const VERSION = 1;
 export const MAX_BYTES = 16384;
@@ -64,7 +65,8 @@ function integerRange(value, min, max = Number.MAX_SAFE_INTEGER) {
 function isItem(value) {
     return isObject(value) && typeof value.id === 'string' && integerRange(value.revision, 0) &&
         typeof value.name === 'string' && typeof value.icon_id === 'string' && integerRange(value.height, 1, MAX_ITEM_HEIGHT) &&
-        integerRange(value.quantity, 1) && (!('description' in value) || typeof value.description === 'string');
+        integerRange(value.quantity, 1) && (!('description' in value) || typeof value.description === 'string') &&
+        (!('tooltip' in value) || isItemTooltipDetails(value.tooltip));
 }
 function isInventoryItem(value) {
     return isItem(value) && isObject(value) && integerRange(value.x, 0, MAX_COLUMNS - 1) &&
@@ -115,7 +117,7 @@ function isShop(value) {
         return false;
     const seen = new Set();
     for (const offer of value.offers) {
-        if (!isObject(offer) || !id(offer.offerId) || typeof offer.offerId !== 'string' || seen.has(offer.offerId) || !id(offer.itemDefinitionId) || typeof offer.name !== 'string' || !offer.name || offer.name.length > 128 || typeof offer.iconId !== 'string' || offer.iconId.length > 64 || !integerRange(offer.height, 1, 3) || !integerRange(offer.quantity, 1) || !integerRange(offer.price, 1, MAX_YANG) || ('description' in offer && typeof offer.description !== 'string') || 'uid' in offer || 'revision' in offer)
+        if (!isObject(offer) || !id(offer.offerId) || typeof offer.offerId !== 'string' || seen.has(offer.offerId) || !id(offer.itemDefinitionId) || typeof offer.name !== 'string' || !offer.name || offer.name.length > 128 || typeof offer.iconId !== 'string' || offer.iconId.length > 64 || !integerRange(offer.height, 1, 3) || !integerRange(offer.quantity, 1) || !integerRange(offer.price, 1, MAX_YANG) || ('description' in offer && typeof offer.description !== 'string') || ('tooltip' in offer && !isItemTooltipDetails(offer.tooltip)) || 'uid' in offer || 'revision' in offer)
             return false;
         seen.add(offer.offerId);
     }
