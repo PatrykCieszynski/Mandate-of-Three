@@ -33,7 +33,7 @@ export interface StorageTransferCommand extends ItemCommand { from: 'inventory' 
 export interface CommandPayloads {
   'upgrade.select': UpgradeCommand;
   'upgrade.execute': UpgradeCommand;
-  'npc.upgrade_item': ItemCommand & {npc_instance_id: string};
+  'npc.upgrade_item': UpgradeCommand;
   'shop.open': {npc_instance_id:string;service_id:string};
   'shop.buy': ShopBuyCommand;
   'npc.clear_service': Record<string,never>;

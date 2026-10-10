@@ -22,11 +22,13 @@ placement and revision until the actual upgrade commit. Selection is server-owne
 runtime presentation state, restored by `ui.ready` along with the current recipe.
 
 Inventory sword → Blacksmith in the world enters the same flow with a
-`preselectedItem` UID/revision intent. Godot supplies projected NPC hit regions;
+`preselectedItem` UID/revision intent plus the exact service ID. Godot resolves each
+enabled Upgrade service through its content reference and supplies projected NPC
+hit regions with NPC/service IDs and recipe item/from-level metadata;
 they are active only during item carry, below UI windows, and independent of UI
 scale. Drop requests an approach. After arrival the controller performs the normal
-NPC interaction, service selection and Upgrade item selection commands. No item is
-placed in a fictional container. Manual movement/Escape and the existing approach
+NPC interaction, selection of the exact matching service and Upgrade item selection
+commands. No item is placed in a fictional container. Manual movement/Escape and the existing approach
 cancellation rules stop the approach before it opens a service.
 
 ## Authority and persistence
@@ -54,9 +56,10 @@ change only after commit. Old UID/revision commands and attempts to upgrade +1
 again are rejected. Affixes, sockets and the sword's UID/placement remain intact.
 No capacity is needed for a new item: the existing sword stays in its valid cells.
 
-After success or rejection the endpoint sends current Inventory/Equipment, wallet
-and Upgrade snapshots. Inventory refresh also updates the existing server runtime
-equipment/stat cache. The UI does not optimistically increment a level and disables
+Selection publishes only the Upgrade snapshot. A stale selection also refreshes
+Inventory/Equipment to repair its revision. Execution sends current Inventory/Equipment,
+wallet and Upgrade snapshots after success or rejection. Inventory refresh also
+updates the existing server runtime equipment/stat cache. The UI does not optimistically increment a level and disables
 confirmation without the server candidate, required material or sufficient wallet.
 An external inventory revision/placement change refreshes or clears the candidate.
 Closing/leaving the service clears selection; server context invalidation still
@@ -67,7 +70,9 @@ applies. Reload retains the server selection, not an unconfirmed local action.
 The existing CEF window, shared UiWindow, logical scale, item drag runtime,
 confirmation and tooltips are reused. Production selection uses explicit
 `definition_id` and `upgrade_level` metadata from the small native item presenter;
-material labels no longer inherit sword +0 or fake Attack text.
+material labels no longer inherit sword +0 or fake Attack text. Production prompts
+use the recipe item's content name. New selection clears previous execution feedback;
+carry transitions clear world-target hover feedback.
 
 `web/dev/upgrade.html` remains a separate visual +0…+9 preview, explicitly opting
 into `devPreview` and mounting no real bridge/economy. Its illustrative costs and

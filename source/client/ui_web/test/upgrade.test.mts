@@ -35,7 +35,7 @@ test('Upgrade preview leaves the input item intact and resets local confirmation
     Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
       (node) => node.textContent === label,
     )!;
-  button('Preview Iron Sword').click();
+  button(`Preview ${upgradeExample.name.replace(/ \+[0-9]$/, '')}`).click();
   button('Upgrade').click();
   assert.equal(view.closeIfActive(), true);
   assert.equal(closed, 0, 'Escape first cancels confirmation');
@@ -89,6 +89,7 @@ const quote: UpgradeSnapshot = {
   serviceId: 'upgrade',
   upgradeId: 'basic_upgrade',
   itemDefinitionId: 'iron_sword',
+  itemName: 'Tempered Blade',
   fromLevel: 0,
   toLevel: 1,
   yangCost: 1000,
@@ -136,21 +137,22 @@ test('Production Upgrade sends UID/revision only and waits for authoritative +1;
   const inventory = { columns: 5, rows: 9, pages: 4, items: [sword] };
   view.setNpcState(npc);
   view.setInventory(inventory);
+  view.setState({ ...quote, candidate: {} });
+  assert.equal(
+    root.querySelector('.upgrade-prompt')?.textContent,
+    'Drag Tempered Blade +0 from Inventory into the slot.',
+  );
   view.setState(quote);
   view.setWallet({ ready: true, balance: 1000 });
   let finishEffect!: () => void;
-  Object.defineProperty(
-    root.querySelector('.upgrade-slot')!,
-    'animate',
-    {
-      value: () => ({
-        finished: new Promise<void>((resolve) => {
-          finishEffect = resolve;
-        }),
-        cancel: () => finishEffect(),
+  Object.defineProperty(root.querySelector('.upgrade-slot')!, 'animate', {
+    value: () => ({
+      finished: new Promise<void>((resolve) => {
+        finishEffect = resolve;
       }),
-    },
-  );
+      cancel: () => finishEffect(),
+    }),
+  });
   assert.equal(
     (await view.selectItem({ id: sword.id, revision: sword.revision })).ok,
     true,
@@ -193,6 +195,13 @@ test('Production Upgrade sends UID/revision only and waits for authoritative +1;
     'No optimistic level increment',
   );
   assert.match(root.querySelector('.upgrade-notice')!.textContent!, /stale/);
+  assert.equal(root.dataset.upgradeEffect, 'failure');
+  await view.selectItem({ id: sword.id, revision: sword.revision });
+  assert.equal(
+    root.dataset.upgradeEffect,
+    undefined,
+    'Next selection clears the previous result styling',
+  );
   assert.deepEqual(
     inventory.items,
     [sword],
@@ -231,6 +240,17 @@ test('Production Upgrade sends UID/revision only and waits for authoritative +1;
     true,
   );
   const before = structuredClone(store.state);
+  for (const itemName of [undefined, '', 42, 'x'.repeat(129)]) {
+    assert.equal(
+      store.apply({
+        v: 1,
+        type: 'upgrade.updated',
+        payload: { ...quote, itemName },
+      }),
+      false,
+    );
+    assert.deepEqual(store.state, before);
+  }
   assert.equal(
     store.apply({
       v: 1,
@@ -256,22 +276,34 @@ test('Inventory drop on world NPC selects through explicit command and releases 
   const commands: unknown[] = [];
   worldDrop = mountNpcWorldDrop(
     drag,
-    async (npc, item) => {
-      commands.push({ npc, item });
+    async (npc, service, item) => {
+      commands.push({ npc, service, item });
     },
     () => {},
   );
   worldDrop.setState({
     width: host.innerWidth,
     height: host.innerHeight,
-    targets: [{ id: 'smith', x: 0, y: 0, w: 40, h: 80 }],
+    targets: [
+      {
+        npcInstanceId: 'smith',
+        serviceId: 'blade_upgrade',
+        itemDefinitionId: sword.definition_id!,
+        fromLevel: 0,
+        x: 0,
+        y: 0,
+        w: 40,
+        h: 80,
+      },
+    ],
   });
+  let carried = sword;
   const source = target();
   doc.body.append(source);
   capture(source);
   const binding = drag.registerSource({
     element: source,
-    payload: () => ownedItemPayload('inventory', sword, 40, () => null),
+    payload: () => ownedItemPayload('inventory', carried, 40, () => null),
   });
   const hit = doc.querySelector<HTMLElement>('.npc-world-drop-target')!;
   Object.defineProperty(doc, 'elementFromPoint', {
@@ -284,11 +316,26 @@ test('Inventory drop on world NPC selects through explicit command and releases 
   worldDrop.setState({
     width: host.innerWidth,
     height: host.innerHeight,
-    targets: [{ id: 'smith', x: 1, y: 1, w: 40, h: 80 }],
+    targets: [
+      {
+        npcInstanceId: 'smith',
+        serviceId: 'new_upgrade',
+        itemDefinitionId: sword.definition_id!,
+        fromLevel: 0,
+        x: 1,
+        y: 1,
+        w: 40,
+        h: 80,
+      },
+    ],
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(commands, [
-    { npc: 'smith', item: { id: sword.id, revision: 0 } },
+    {
+      npc: 'smith',
+      service: 'blade_upgrade',
+      item: { id: sword.id, revision: 0 },
+    },
   ]);
   assert.equal(drag.active, false);
   assert.equal(
@@ -296,6 +343,100 @@ test('Inventory drop on world NPC selects through explicit command and releases 
     'false',
   );
   assert.equal(sword.upgrade_level, 0);
+  assert.equal(
+    hit.dataset.valid,
+    undefined,
+    'Ending carry clears hover feedback',
+  );
+  // Update the recipe on the existing NPC surface, with a nonmatching service first.
+  const alternate = {
+    npcInstanceId: 'smith',
+    serviceId: 'bronze_upgrade',
+    itemDefinitionId: 'bronze_blade',
+    fromLevel: 0,
+    x: 0,
+    y: 0,
+    w: 40,
+    h: 80,
+  };
+  worldDrop.setState({
+    width: host.innerWidth,
+    height: host.innerHeight,
+    targets: [
+      {
+        ...alternate,
+        serviceId: 'other_upgrade',
+        itemDefinitionId: 'other_blade',
+      },
+      alternate,
+    ],
+  });
+  assert.equal(
+    doc.querySelectorAll('.npc-world-drop-target').length,
+    1,
+    'Services share a hit surface',
+  );
+  carried = { ...sword, definition_id: 'bronze_blade' };
+  hit.dataset.valid = 'true';
+  worldDrop.setCarrying(true);
+  assert.equal(
+    hit.dataset.valid,
+    undefined,
+    'Starting carry clears old feedback',
+  );
+  worldDrop.setCarrying(false);
+  fire(source, 'pointerdown', 10, 10);
+  fire(doc, 'pointermove', 50, 50);
+  assert.equal(
+    hit.dataset.valid,
+    'true',
+    'Updated content accepts a different item definition',
+  );
+  fire(doc, 'pointerup', 50, 50);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(commands[1], {
+    npc: 'smith',
+    service: 'bronze_upgrade',
+    item: { id: sword.id, revision: 0 },
+  });
+  carried = { ...carried, upgrade_level: 1 };
+  fire(source, 'pointerdown', 10, 10);
+  fire(doc, 'pointermove', 50, 50);
+  assert.equal(
+    hit.dataset.valid,
+    'false',
+    'Recipe fromLevel rejects an already upgraded item',
+  );
+  fire(doc, 'pointerup', 50, 50);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(commands.length, 2);
+  const store = new DomainStore();
+  const targets = {
+    width: host.innerWidth,
+    height: host.innerHeight,
+    targets: [alternate],
+  };
+  assert.equal(
+    store.apply({ v: 1, type: 'npc_targets.updated', payload: targets }),
+    true,
+  );
+  const validState = structuredClone(store.state);
+  for (const invalid of [
+    { serviceId: '' },
+    { itemDefinitionId: undefined },
+    { fromLevel: -1 },
+    { npcInstanceId: '../smith' },
+  ]) {
+    assert.equal(
+      store.apply({
+        v: 1,
+        type: 'npc_targets.updated',
+        payload: { ...targets, targets: [{ ...alternate, ...invalid }] },
+      }),
+      false,
+    );
+    assert.deepEqual(store.state, validState);
+  }
   binding.dispose();
   worldDrop.dispose();
   drag.dispose();

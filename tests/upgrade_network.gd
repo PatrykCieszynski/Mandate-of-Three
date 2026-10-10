@@ -1,5 +1,8 @@
 extends "res://tests/pve_network.gd"
 var listening: bool = false
+var inventory_notifications: int = 0
+var wallet_notifications: int = 0
+var selection_counts: Vector2i
 const NPC_ID: String = "spike-blacksmith-01"
 @rpc("authority", "call_remote", "reliable", 0)
 func phase(command: String, uid: String) -> void:
@@ -44,6 +47,8 @@ func run_server() -> void:
 	set_phase("CANDIDATE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok and replies[hero].candidate == drop_uid and items.inventory(player.player_id)==before,"selection leaves authoritative Inventory untouched")
+	check(replies[hero].inventoryUpdates == 0 and replies[hero].walletUpdates == 0,"successful selection publishes only Upgrade")
+	check(replies[hero].itemName == ItemDefinitions.IRON_SWORD.item_name,"quote publishes the content item name")
 	set_phase("DENIED",other)
 	await wait_until(func() -> bool: return replies.has(other))
 	check(not replies[other].ok and not replies[other].active and items.inventory(player.player_id)==before,"second client cannot upgrade another player's item")
@@ -53,6 +58,9 @@ func run_server() -> void:
 	check(server.runtime_equipment.has(player.player_id),"committed Inventory refreshes runtime equipment cache")
 	before = items.inventory(player.player_id)
 	await get_tree().create_timer(0.15).timeout
+	set_phase("STALE_SELECT",hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(not replies[hero].ok and replies[hero].error == "stale" and replies[hero].inventoryUpdates == 1 and replies[hero].walletUpdates == 0,"stale selection repairs Inventory without wallet refresh")
 	set_phase("REPLAY",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error=="stale" and items.inventory(player.player_id)==before,"stale replay is atomic")
@@ -78,6 +86,8 @@ func _process(delta: float) -> void:
 	if GameMode.is_world_server() or world == null or world.combat_endpoint.state.is_empty(): return
 	if not listening:
 		listening = true
+		world.inventory_endpoint.state_changed.connect(func(_state: Dictionary) -> void: inventory_notifications += 1)
+		world.currency_endpoint.state_changed.connect(func(_state: Dictionary) -> void: wallet_notifications += 1)
 		world.npc_endpoint.operation_finished.connect(func(_id: String,result: Dictionary) -> void:
 			var reply: Dictionary = result.duplicate(true)
 			reply["active"] = world.upgrade_endpoint.state.active
@@ -85,7 +95,7 @@ func _process(delta: float) -> void:
 		world.upgrade_endpoint.operation_finished.connect(func(_id: String,result: Dictionary) -> void:
 			var reply: Dictionary = result.duplicate(true)
 			var quote: Dictionary = world.upgrade_endpoint.state
-			reply.merge({"active":quote.active,"candidate":quote.get("candidate",{}).get("id",""),"level":quote.get("candidate",{}).get("level",-1),"balance":world.currency_endpoint.state.get("balance",-1)})
+			reply.merge({"itemName":quote.get("itemName",""),"inventoryUpdates":inventory_notifications - selection_counts.x,"walletUpdates":wallet_notifications - selection_counts.y,"active":quote.active,"candidate":quote.get("candidate",{}).get("id",""),"level":quote.get("candidate",{}).get("level",-1),"balance":world.currency_endpoint.state.get("balance",-1)})
 			report.rpc_id(1,reply))
 		register_ready.rpc_id(1)
 	if phase_name in ["WAIT","DONE"] or attempted: return
@@ -93,5 +103,7 @@ func _process(delta: float) -> void:
 	match phase_name:
 		"INTERACT": world.npc_endpoint.request_interaction.rpc_id(1,"interact",NPC_ID,"","interact")
 		"SERVICE": world.npc_endpoint.request_interaction.rpc_id(1,"select",NPC_ID,"upgrade","service")
-		"CANDIDATE": world.upgrade_endpoint.request_upgrade.rpc_id(1,"select",NPC_ID,"upgrade",drop_uid,0,"candidate")
+		"CANDIDATE", "STALE_SELECT":
+			selection_counts = Vector2i(inventory_notifications,wallet_notifications)
+			world.upgrade_endpoint.request_upgrade.rpc_id(1,"select",NPC_ID,"upgrade",drop_uid,0,"candidate")
 		_: world.upgrade_endpoint.request_upgrade.rpc_id(1,"upgrade",NPC_ID,"upgrade",drop_uid,1 if phase_name=="RANGE" else 0,"upgrade")

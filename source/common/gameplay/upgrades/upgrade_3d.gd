@@ -63,7 +63,7 @@ func snapshot_for_peer(peer_id: int) -> Dictionary:
 		if item.uid == _selected.get(peer_id,"") and item.definition_id == str(recipe.item_definition_id):
 			candidate = {"id":item.uid,"revision":item.revision,"level":item.upgrade_level,"attack":int(item.stats.get("attack",0)),"nextAttack":int(item.stats.get("attack",0)) + int(ItemDefinitions.get_definition(recipe.item_definition_id).stats_per_upgrade.get(&"attack",0))}
 	var material: ItemDefinition = ItemDefinitions.get_definition(recipe.material_definition_id)
-	return {"active":true,"npcInstanceId":context.npc_instance_id,"serviceId":str(context.selected_service_id),"upgradeId":str(recipe.upgrade_id),"itemDefinitionId":str(recipe.item_definition_id),"fromLevel":recipe.from_level,"toLevel":recipe.to_level,"yangCost":recipe.yang_cost,"materialDefinitionId":str(recipe.material_definition_id),"materialName":material.item_name,"materialAmount":recipe.material_amount,"materialOwned":owned,"successRate":recipe.success_rate,"candidate":candidate}
+	return {"active":true,"npcInstanceId":context.npc_instance_id,"serviceId":str(context.selected_service_id),"upgradeId":str(recipe.upgrade_id),"itemDefinitionId":str(recipe.item_definition_id),"itemName":ItemDefinitions.get_definition(recipe.item_definition_id).item_name,"fromLevel":recipe.from_level,"toLevel":recipe.to_level,"yangCost":recipe.yang_cost,"materialDefinitionId":str(recipe.material_definition_id),"materialName":material.item_name,"materialAmount":recipe.material_amount,"materialOwned":owned,"successRate":recipe.success_rate,"candidate":candidate}
 
 func publish(peer_id: int) -> void:
 	if not GameMode.is_world_server(): return
@@ -82,9 +82,12 @@ func request_upgrade(action: String, instance_id: String, service_id: String, ui
 		"select": result = select_for_peer(peer_id,instance_id,StringName(service_id),uid,revision)
 		"upgrade": result = upgrade_for_peer(peer_id,instance_id,StringName(service_id),uid,revision,Time.get_ticks_msec())
 		_: result = {"ok":false,"error":"request"}
-	# Refresh authoritative views on rejection too, so stale candidate revisions recover.
-	_world.inventory_endpoint._send_state(peer_id)
-	_world.currency_endpoint._send_snapshot(peer_id)
+	# Selection changes only the quote; a stale revision also repairs Inventory.
+	if action == "upgrade":
+		_world.inventory_endpoint._send_state(peer_id)
+		_world.currency_endpoint._send_snapshot(peer_id)
+	elif result.get("error","") == "stale":
+		_world.inventory_endpoint._send_state(peer_id)
 	publish(peer_id)
 	receive_operation.rpc_id(peer_id,command_id,{"ok":true} if result.ok else {"ok":false,"error":result.error})
 

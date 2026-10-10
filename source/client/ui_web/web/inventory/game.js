@@ -108,7 +108,11 @@ const drag = new ItemDragRuntime({
         regions?.refresh();
     },
 });
-const worldDrop = mountNpcWorldDrop(drag, (npc, item) => bridge.request('npc.upgrade_item', { npc_instance_id: npc, ...item }), () => regions?.refresh());
+const worldDrop = mountNpcWorldDrop(drag, (npc, service, item) => bridge.request('npc.upgrade_item', {
+    npc_instance_id: npc,
+    service_id: service,
+    ...item,
+}), () => regions?.refresh());
 const view = mountInventory(root, {
     drag,
     quickDeposit: (item) => storage.tryQuickDeposit(item),

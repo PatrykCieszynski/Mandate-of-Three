@@ -2,11 +2,62 @@ extends Node
 ## Small contract test: no browser, mock inventory, layout or gameplay fixture.
 var messages: Array[Dictionary] = []
 var handled: int = 0
+class DropControllerFixture extends InventoryWebController:
+	var commands: Array[Dictionary] = []
+	func _npc_submit(action: String, instance_id: String = "", service_id: String = "") -> Dictionary:
+		commands.append({"action":action,"npc":instance_id,"service":service_id})
+		return {"ok":true}
+	func _upgrade_submit(action: String, p: Dictionary) -> Dictionary:
+		commands.append({"action":action,"payload":p.duplicate(true)})
+		return {"ok":true}
 func _ready() -> void:
 	_run.call_deferred()
 func _run() -> void:
 	var upgrade: Dictionary = {"npc_instance_id":"spike-blacksmith-01","service_id":"upgrade","id":"a".repeat(32),"revision":0}
 	assert(InventoryWebController._valid_upgrade(upgrade))
+	assert(InventoryWebController._valid_upgrade_drop(upgrade))
+	var missing_service: Dictionary = upgrade.duplicate()
+	missing_service.erase("service_id")
+	assert(not InventoryWebController._valid_upgrade_drop(missing_service), "World drop requires the exact service")
+	var drop_actor := NeutralNpc3D.new()
+	drop_actor.instance_id = "content-smith"
+	drop_actor.definition = NpcDefinitions.get_definition(&"blacksmith").duplicate(true)
+	var another_service: NpcServiceDefinition = drop_actor.definition.get_service(&"upgrade").duplicate(true)
+	another_service.service_id = &"another_upgrade"
+	drop_actor.definition.services.append(another_service)
+	var content_targets: Array[Dictionary] = InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4))
+	assert(content_targets.size() == 2)
+	assert(content_targets[0].npcInstanceId == drop_actor.instance_id and content_targets[0].serviceId != content_targets[1].serviceId)
+	assert(content_targets[0].itemDefinitionId == str(UpgradeDefinitions.BASIC.item_definition_id) and content_targets[0].fromLevel == UpgradeDefinitions.BASIC.from_level)
+	var item_fixture: ItemDefinition = ItemDefinitions.IRON_SWORD
+	var recipe_fixture: UpgradeDefinition = UpgradeDefinitions.BASIC
+	var old_item_id: StringName = item_fixture.definition_id
+	var old_recipe_item_id: StringName = recipe_fixture.item_definition_id
+	item_fixture.definition_id = &"content_blade"
+	recipe_fixture.item_definition_id = &"content_blade"
+	content_targets = InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4))
+	item_fixture.definition_id = old_item_id
+	recipe_fixture.item_definition_id = old_recipe_item_id
+	assert(content_targets[0].itemDefinitionId == "content_blade", "Targets follow content references, not a hardcoded sword ID")
+	drop_actor.disabled_services.append(another_service.service_id)
+	assert(InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4)).size() == 1)
+	drop_actor.definition.get_service(&"upgrade").content_ref = &"missing"
+	assert(InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4)).is_empty())
+	drop_actor.free()
+	var drop_controller := DropControllerFixture.new()
+	drop_controller.world = SpikeWorld3D.new()
+	drop_controller.world.npc_endpoint = NpcInteraction3D.new()
+	drop_controller.world.npc_endpoint.state = {"services":[{"id":"first_upgrade","kind":1,"enabled":true},{"id":"exact_upgrade","kind":1,"enabled":true}]}
+	var preselection: Dictionary = {"id":upgrade.id,"revision":0,"service_id":"exact_upgrade"}
+	assert((await drop_controller.interact_npc(upgrade.npc_instance_id,preselection)).ok)
+	assert(drop_controller.commands[1].service == "exact_upgrade" and drop_controller.commands[2].payload.service_id == "exact_upgrade", "Arrival selects the requested service rather than the first Upgrade")
+	drop_controller.commands.clear()
+	preselection.service_id = "missing_upgrade"
+	assert((await drop_controller.interact_npc(upgrade.npc_instance_id,preselection)).error == "unknown_service")
+	assert(drop_controller.commands.size() == 1, "Unavailable service never falls back to another upgrade")
+	drop_controller.world.npc_endpoint.free()
+	drop_controller.world.free()
+	drop_controller.free()
 	upgrade["yang_cost"] = 1
 	assert(not InventoryWebController._valid_upgrade(upgrade))
 	upgrade.erase("yang_cost")
