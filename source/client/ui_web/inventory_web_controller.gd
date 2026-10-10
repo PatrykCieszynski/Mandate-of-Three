@@ -93,6 +93,13 @@ func _shop_submit(action: String, p: Dictionary) -> Dictionary:
 	return await _wait_command(id)
 
 func _npc_state(snapshot: Dictionary) -> void:
+	# Upgrade is a CEF preview only; opening Inventory changes presentation, not items.
+	if snapshot.get("active", false):
+		for service: Dictionary in snapshot.get("services", []):
+			if service.id == snapshot.get("selectedServiceId", "") and service.kind == NpcServiceDefinition.Kind.UPGRADE and service.enabled:
+				opened = true
+				_layout()
+				break
 	dispatcher.set_domain("npc", snapshot)
 
 static func _valid_npc(p: Dictionary) -> bool:

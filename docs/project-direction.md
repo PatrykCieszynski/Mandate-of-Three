@@ -56,7 +56,8 @@ interactive development Blacksmith: Upgrade and Weapon Shop. Server contexts and
 service authorization are map/range scoped. Shop offers are editable resources;
 NPC Shop purchases now atomically receive items and spend persisted/pending Yang.
 The CEF Shop supports right-click, exact Inventory drops and automatic receiving;
-Upgrade remains the next gameplay slice. See [NPC services](npc-services.md) and
+Upgrade now has a [CEF-only +0 through +9 preview](npc-upgrade-ui.md); its atomic
+transaction remains the next gameplay slice. See [NPC services](npc-services.md) and
 [NPC Shop](npc-shop.md). Global MVP Storage remains available through B.
 
 A full HUD/character sheet and final art remain outside this slice. No frontend framework. Use small headless smoke checks by

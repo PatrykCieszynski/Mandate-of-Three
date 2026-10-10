@@ -456,7 +456,7 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       'Buy price: 1,000 Yang',
     );
     assert.equal(
-      await page.locator('#shop .item-tooltip p').textContent(),
+      await page.locator('#shop .item-tooltip-description').textContent(),
       'Forged steel.',
     );
     const tooltipOrder = await page
@@ -561,6 +561,152 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       'offer_0',
     );
     await capture('shop-pages-small-' + (fallback ? 'fallback' : 'legacy'));
+    // Upgrade milestone uses the same production CEF composition and IPC fixture.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const upgradeState: DomainSnapshot = {
+      ...snapshot,
+      npc: { ...npc, selectedServiceId: 'upgrade' },
+      hud: { ...snapshot.hud, inventory_open: true, ui_scale: 1 },
+    };
+    await send(upgradeState);
+    await frame();
+    const upgradeWindow = page.locator('#upgrade');
+    assert.equal(
+      await upgradeWindow.locator('.upgrade-window').isVisible(),
+      true,
+    );
+    assert.equal(await page.locator('#npc-service').isVisible(), false);
+    const original = await page.evaluate(() =>
+      structuredClone(window.shopFixture.inventory),
+    );
+    // Physical Inventory drop is inspection only: no move, equip or economic command.
+    const upgradeSource = await page
+      .locator('.inventory-item')
+      .first()
+      .boundingBox();
+    const destination = await upgradeWindow
+      .locator('.upgrade-item-target')
+      .boundingBox();
+    assert.ok(upgradeSource && destination);
+    const beforeCommands = await page.evaluate(() => sent.length);
+    await page.mouse.move(upgradeSource.x + 10, upgradeSource.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(destination.x + 12, destination.y + 20, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.upgrade-name')?.textContent ===
+        'Iron Sword +0',
+    );
+    await upgradeWindow
+      .getByRole('button', { name: 'Preview Iron Sword', exact: true })
+      .click();
+    await frame();
+    if (screenshotDirectory)
+      await upgradeWindow.locator('.upgrade-window').screenshot({
+        path: path.join(
+          screenshotDirectory,
+          `upgrade-panel-${fallback ? 'fallback' : 'legacy'}.png`,
+        ),
+      });
+    for (let level = 0; level < 9; level++) {
+      assert.equal(
+        await upgradeWindow.locator('.upgrade-level').textContent(),
+        `+${level}`,
+      );
+      await upgradeWindow
+        .getByRole('button', { name: 'Preview upgrade', exact: true })
+        .click();
+      assert.equal(
+        await upgradeWindow.locator('.upgrade-confirmation').isVisible(),
+        true,
+      );
+      if (level === 0) {
+        if (screenshotDirectory)
+          await upgradeWindow.locator('.upgrade-window').screenshot({
+            path: path.join(
+              screenshotDirectory,
+              `upgrade-confirm-${fallback ? 'fallback' : 'legacy'}.png`,
+            ),
+          });
+        await page.keyboard.press('Escape');
+        assert.equal(
+          await upgradeWindow.locator('.upgrade-confirmation').isVisible(),
+          false,
+        );
+        assert.equal(
+          await upgradeWindow.locator('.upgrade-level').textContent(),
+          '+0',
+        );
+        await upgradeWindow
+          .getByRole('button', { name: 'Preview upgrade', exact: true })
+          .click();
+      }
+      await upgradeWindow
+        .getByRole('button', { name: 'Confirm', exact: true })
+        .click();
+    }
+    assert.equal(await upgradeWindow.locator('.upgrade-max').isVisible(), true);
+    assert.equal(
+      await upgradeWindow
+        .getByRole('button', { name: 'Preview upgrade', exact: true })
+        .isDisabled(),
+      true,
+    );
+    assert.equal(
+      await upgradeWindow.locator('.upgrade-recipe').isVisible(),
+      false,
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.shopFixture.inventory),
+      original,
+    );
+    const previewCommands = await page.evaluate(
+      (start) => sent.slice(start).filter((message) => message.id),
+      beforeCommands,
+    );
+    assert.deepEqual(
+      previewCommands,
+      [],
+      'Upgrade UI never sends an item/economy command',
+    );
+    await upgradeWindow
+      .getByRole('button', { name: 'Previous preview level', exact: true })
+      .click();
+    for (const scale of [1, 1.5]) {
+      await page.setViewportSize({ width: 960, height: 540 });
+      await send({
+        ...upgradeState,
+        hud: { ...upgradeState.hud, ui_scale: scale },
+      });
+      await frame();
+      const bounds = await upgradeWindow
+        .locator('.upgrade-window')
+        .boundingBox();
+      assert.ok(
+        bounds &&
+          bounds.x >= -1 &&
+          bounds.y >= -1 &&
+          bounds.x + bounds.width <= 961 &&
+          bounds.y + bounds.height <= 541,
+      );
+      await upgradeWindow
+        .getByRole('button', { name: 'Preview upgrade', exact: true })
+        .click();
+      await upgradeWindow
+        .getByRole('button', { name: 'Back', exact: true })
+        .click();
+    }
+    await upgradeWindow
+      .getByRole('button', { name: 'Cancel', exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelector<HTMLElement>('#upgrade')?.hidden === true,
+    );
+    assert.equal(await page.locator('#npc-menu .npc-window').isVisible(), true);
+    console.log(
+      `Upgrade real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, Inventory inspection, +0 through +9, confirmation/Escape, bounds/scales, no mutations)`,
+    );
     assert.deepEqual(errors, []);
     console.log(
       `Shop real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, service menu/offer grid, bounds/scales, right-click, exact/receive drops, tooltip, pages and back)`,

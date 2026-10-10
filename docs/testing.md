@@ -57,7 +57,9 @@ It does not replace native root-client CEF verification.
 Pass the installed `-PlaywrightModule` and `-BrowserExecutable`, and optionally
 `-ScreenshotDirectory`. It verifies rendered skin/fallback, broad frame bounds
 and Shop/Inventory placement, mouse purchase gestures, tooltip, catalog pages
-and close/Escape with controlled IPC; no game accounts or running servers.
+and close/Escape with controlled IPC; no game accounts or running servers. It also
+checks the [CEF Upgrade preview](npc-upgrade-ui.md): Inventory inspection drop,
++0 through +9 confirmations, max-level state, cancellation and no economic commands.
 
 Asset pipeline tests and visual fallback probes remain optional for pipeline
 changes. The small default suite downloads no browser and does not install Pillow.

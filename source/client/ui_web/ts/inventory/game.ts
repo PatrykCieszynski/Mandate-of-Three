@@ -1,3 +1,4 @@
+import { mountUpgrade } from '../screens/upgrade/upgrade-view.js';
 import { setItemTooltipDetails } from '../game-ui/items/item-tooltip.js';
 import { mountShop } from '../screens/shop/shop-view.js';
 import { NpcServiceKind } from '../screens/npc/npc-model.js';
@@ -28,6 +29,7 @@ const root = findElement(document, '#inventory', 'main'),
   storageRoot = findElement(document, '#storage', 'main'),
   equipmentRoot = findElement(document, '#equipment', 'main'),
   shopRoot = findElement(document, '#shop', 'main'),
+  upgradeRoot = findElement(document, '#upgrade', 'main'),
   npcRoot = findElement(document, '#npc-menu', 'main'),
   npcServiceRoot = findElement(document, '#npc-service', 'main'),
   store = new DomainStore();
@@ -36,7 +38,7 @@ const bridge = new WebBridge({
   onTooltipDetails: (alt) => setItemTooltipDetails(document, alt, 'native'),
   onShortcut: () => {
     if (drag.cancel()) return;
-    if (npc.closeIfActive()) return;
+    if (upgrade.closeIfActive() || npc.closeIfActive()) return;
     if (!storageRoot.hidden) {
       void bridge.request('storage.close', {}).catch(() => {});
       return;
@@ -84,8 +86,16 @@ const bridge = new WebBridge({
       viewport: () => ({ width: innerWidth, height: innerHeight }),
       onRegionsChanged: () => regions?.refresh(),
     });
-    if (message.type === 'ui.snapshot' || message.type === 'npc.updated')
+    if (message.type === 'ui.snapshot' || message.type === 'npc.updated') {
       npc.setState(state.npc ?? { active: false });
+      upgrade.setNpcState(state.npc ?? { active: false });
+    }
+    if (
+      (message.type === 'ui.snapshot' ||
+        message.type === 'inventory.updated') &&
+      state.inventory
+    )
+      upgrade.setInventory(state.inventory);
     if (message.type === 'ui.snapshot' || message.type === 'shop.updated')
       shop.setState(state.shop ?? { active: false });
   },
@@ -138,9 +148,17 @@ const shop = mountShop(shopRoot, {
   },
   onRegionsChanged: () => regions?.refresh(),
 });
+const upgrade = mountUpgrade(upgradeRoot, {
+  manager,
+  drag,
+  resolveItemIcon,
+  onClose: () => npc.closeIfActive(),
+  onRegionsChanged: () => regions?.refresh(),
+});
 const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
   manager,
-  handlesService: (kind) => kind === NpcServiceKind.SHOP,
+  handlesService: (kind) =>
+    kind === NpcServiceKind.SHOP || kind === NpcServiceKind.UPGRADE,
   clearService: () => {
     void bridge.request('npc.clear_service', {}).catch(() => {});
   },
@@ -169,6 +187,7 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
 });
 regions = reportInteractiveRegions(bridge, [
   ...shop.regions,
+  ...upgrade.regions,
   ...npc.regions,
   ...view.regions,
   ...equipment.regions,
@@ -176,6 +195,7 @@ regions = reportInteractiveRegions(bridge, [
   ...drag.regions,
 ]);
 window.addEventListener('pagehide', () => {
+  upgrade.dispose();
   shop.dispose();
   npc.dispose();
   drag.dispose();
@@ -190,7 +210,7 @@ document.addEventListener(
   'keydown',
   (event) => {
     if (event.key !== 'Escape' || event.repeat) return;
-    if (drag.cancel() || npc.closeIfActive()) {
+    if (drag.cancel() || upgrade.closeIfActive() || npc.closeIfActive()) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
