@@ -43,6 +43,16 @@ changes; do not run all of them after CSS edits. They share port 18098: run
 sequentially. `run-items.ps1 -WithSession` requires normal gateway/master/world
 roles and writes guest fixture accounts; use it for actual session/login changes.
 
+`run-first-region.ps1` loads the production graybox scene headlessly and checks
+connected navigation to NPC/mob/Metin sites, safe hub spawns, profile-preserving
+respawn and the shore boundary. It opens no window and does not assert exact
+layout or balance. See [region notes](first-region-graybox.md).
+
+`run-metin.ps1` covers the small stone lifecycle contracts.
+`run-metin-network.ps1` is the optional two-client production encounter/ground
+reward/cleanup/respawn flow with disposable SQLite on port 18098; run sequentially
+with other PvE network suites. Neither opens a native window.
+
 `run-cef-export.ps1` is an optional packaging-boundary check after addon/export
 changes: client Web assets and CEF registration, CEF-free server packs and
 client/server pack headless boot (including real client UID validation without
@@ -94,3 +104,6 @@ live under `.godot/verification`, rather than accumulating at the .godot root.
 `run-upgrade.ps1` is an opt-in two-client production Upgrade RPC suite on port
 18098; run sequentially with the other PvE-derived suites. Smoke includes one
 material/item/wallet rollback fixture and small UI/bridge contracts.
+
+`run-camera.ps1` is the optional headless Camera v1 collision/picking fixture.
+See [Camera v1](camera-v1.md) for the native input/framing acceptance checklist.

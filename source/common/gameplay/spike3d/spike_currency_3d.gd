@@ -43,9 +43,9 @@ func _owner(peer_id: int) -> int:
 	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 	return 0 if player == null else player.player_id
 
-func spawn_currency(position: Vector3, owner_id: int, owner_name: String, now: int) -> int:
+func spawn_currency(position: Vector3, owner_id: int, owner_name: String, now: int, amount: int = DOG_YANG) -> int:
 	_next_drop_id += 1 # Local entity ID, never persisted and never an ItemInstance UID.
-	ground[_next_drop_id] = {"amount": DOG_YANG, "position": position,
+	ground[_next_drop_id] = {"amount": amount, "position": position,
 		"owner": owner_id, "owner_name": owner_name,
 		"protected_until": now + SpikeCombat3D.PROTECTION_MS, "expires": now + SpikeCombat3D.LOOT_LIFETIME_MS}
 	return _next_drop_id

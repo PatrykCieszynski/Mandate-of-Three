@@ -17,6 +17,9 @@ var _remaining: float = 0.0
 var _shot: StringName = &""
 var _scene_path: String = ""
 var _weapon_path: String = ""
+# Retain active scenes so development polling can reuse ResourceLoader cache.
+var _scene_resource: PackedScene
+var _weapon_resource: PackedScene
 var _refresh: float = 0.0
 var _flash: Tween
 var _swing: Tween
@@ -42,6 +45,7 @@ func reload_visual() -> void:
 	skeleton = null
 	var scene := VisualResolver.resolve(visual_id)
 	if scene == null: return
+	_scene_resource = scene
 	_scene_path = scene.resource_path
 	content = scene.instantiate() as Node3D
 	add_child(content)
@@ -50,6 +54,7 @@ func reload_visual() -> void:
 	if not players.is_empty():
 		player = players[0] as AnimationPlayer
 		VisualAnimationTools.prepare_in_place(player,[&"idle",&"run"])
+		VisualAnimationTools.align_locomotion_heading(player,[&"idle",&"run"],&"run")
 	var skeletons := content.find_children("*","Skeleton3D",true,false)
 	if not skeletons.is_empty(): skeleton = skeletons[0] as Skeleton3D
 	_attach_weapon()
@@ -74,6 +79,7 @@ func _attach_weapon() -> void:
 	socket = null
 	weapon = null
 	_weapon_path = ""
+	_weapon_resource = null
 	if not equipped or content == null: return
 	if skeleton != null and skeleton.find_bone("equip_right_hand") >= 0:
 		var attachment := BoneAttachment3D.new()
@@ -86,6 +92,7 @@ func _attach_weapon() -> void:
 		socket.position = Vector3(0.55,0.9,-0.15)
 		content.add_child(socket)
 	var scene := VisualResolver.resolve(&"iron_sword")
+	_weapon_resource = scene
 	_weapon_path = scene.resource_path
 	weapon = scene.instantiate() as Node3D
 	socket.add_child(weapon)

@@ -13,6 +13,8 @@ var _flash: Tween
 var _base_scale: Vector3 = Vector3.ONE
 var _base_rotation: Vector3 = Vector3.ZERO
 var _selected_scene: String = ""
+# Keep the PackedScene alive while its instances are in use; loader cache is weak.
+var _scene_resource: PackedScene
 var _refresh_accum: float = 0.0
 
 func _ready() -> void:
@@ -28,6 +30,7 @@ func reload_visual() -> void:
 	player = null
 	var scene := VisualResolver.resolve(visual_id)
 	if scene == null: return
+	_scene_resource = scene
 	_selected_scene = scene.resource_path
 	content = scene.instantiate() as Node3D
 	_base_scale = content.scale

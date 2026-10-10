@@ -85,6 +85,10 @@ func _run() -> void:
 	click.pressed = false
 	host._input(click)
 	assert(not host.owns_pointer(Vector2(250,250)))
+	host.set_world_pointer_capture(true)
+	assert(not host.owns_pointer(Vector2(20,20)), "World orbit retains pointer ownership over Web regions")
+	host.set_world_pointer_capture(false)
+	assert(host.owns_pointer(Vector2(20,20)), "Releasing orbit restores Web pointer regions")
 	host.set_modal(true)
 	assert(host.keyboard_owner == "modal")
 	host.set_modal(false)

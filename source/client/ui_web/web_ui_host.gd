@@ -15,6 +15,7 @@ var keyboard_owner: String = "gameplay"
 var modal: bool = false
 var _regions: Array[Rect2] = []
 var _held: int = 0
+var _world_pointer_capture: bool = false
 
 static func supported_client() -> bool:
 	return DisplayServer.get_name() != "headless" and ClassDB.class_exists("CefTexture") and RenderingServer.get_current_rendering_method() == "mobile"
@@ -59,7 +60,15 @@ func update_interactive_regions(payload: Dictionary) -> void:
 	for region: Dictionary in payload.regions:
 		_regions.append(Rect2(Vector2(region.x, region.y) * scale, Vector2(region.w, region.h) * scale))
 
+func set_world_pointer_capture(active: bool) -> void:
+	_world_pointer_capture = active
+	if active:
+		_held = 0
+		set_keyboard_owner("gameplay")
+		if is_instance_valid(browser): browser.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 func owns_pointer(point: Vector2) -> bool:
+	if _world_pointer_capture and not modal: return false
 	if not is_instance_valid(browser) or not browser.is_visible_in_tree(): return false
 	if modal or _held != 0: return true
 	var local: Vector2 = browser.get_global_transform_with_canvas().affine_inverse() * point
@@ -106,6 +115,7 @@ func _apply_focus() -> void:
 			browser.grab_focus()
 
 func _reset_input() -> void:
+	_world_pointer_capture = false
 	_regions.clear()
 	_held = 0
 	modal = false

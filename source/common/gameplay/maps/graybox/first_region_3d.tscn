@@ -1,0 +1,7 @@
+[gd_scene load_steps=3 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/spike3d/spike_world_3d.gd" id="1"]
+[ext_resource type="Script" path="res://source/common/gameplay/maps/graybox/first_region.gd" id="2"]
+[node name="SpikeMap" type="Node3D"]
+script = ExtResource("1")
+[node name="Region" type="Node3D" parent="."]
+script = ExtResource("2")

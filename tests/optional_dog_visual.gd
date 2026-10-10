@@ -17,11 +17,13 @@ func _ready() -> void:
 	elif expected == "final": expected_path = VisualResolver.FINAL_DOG
 	check(scene != null and scene.resource_path == expected_path, "resolution priority " + expected)
 	check(VisualResolver.resolve(&"unknown") == null, "unknown logical IDs do not load files")
+	scene = null # The live presenter must retain its own resource, not this fixture.
 	var dog := SpikeWildDog3D.new()
 	dog.setup_dog(9, Vector3(3,0,2))
 	add_child(dog)
 	await get_tree().process_frame
 	var view := dog.presentation
+	check(ResourceLoader.has_cached(expected_path), "live visuals retain scenes for repeated development polls")
 	check(view.content.scene_file_path == expected_path, "existing gameplay dog uses selected visual")
 	check(dog.hp == 120 and dog.collision_layer == 4, "gameplay spawn unaffected")
 	var collision := dog.get_children().filter(func(node): return node is CollisionShape3D)[0] as CollisionShape3D
