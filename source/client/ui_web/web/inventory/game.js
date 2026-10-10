@@ -76,7 +76,7 @@ const drag = new ItemDragRuntime({
 });
 const view = mountInventory(root, {
     drag,
-    quickDeposit: (item) => storageRoot.hidden ? Promise.resolve() : storage.receiveFromInventory(item),
+    quickDeposit: (item) => storage.tryQuickDeposit(item),
     withdrawItem: (item, position) => storage.withdrawToInventory(item, position),
     receiveEquipped: (item, position) => equipment.unequip(item, position),
     manager,

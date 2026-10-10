@@ -82,6 +82,15 @@ After commit, runtime balance is 20000 and pending delta is zero. Rollback does
 not consume pending income or publish item changes. Transactions must also prevent
 negative balances. Old DB state must not reject a purchase affordable after pending income.
 
+Inventory receiving uses `ItemStoreSqlite.resolve_inventory_position` in the
+caller's transaction: explicit targets are exact, absent targets use first fit.
+Future Shop must begin one transaction, validate its authoritative offer/price,
+resolve capacity, use `WalletStoreSqlite.spend_in_transaction`, create/transfer and
+place the item, then commit. `inventory_full` precedes wallet writes. Rollback must
+retain RAM balance and pending income; publish/reset them only after commit. The
+SQLite wallet smoke fixture proves capacity/no-charge and item-write rollback with
+these helpers. There is no Shop RPC or offer model in this preparation pass.
+
 GroundCurrency is a runtime entity: amount, loot rights/owner, position, expiry.
 Pickup adds to the wallet and removes the entity. It creates no persistent
 ItemInstance, durable UID or DB row for each small Yang stack. A tradable inventory

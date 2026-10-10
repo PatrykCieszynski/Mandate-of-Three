@@ -247,6 +247,10 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
     activate: () => shell.handle.activate(),
     setStatus,
     receiveFromInventory,
+    tryQuickDeposit(item: ItemPresentation): Promise<void> | null {
+      if (root.hidden || pending || disposed || !options.transfer) return null;
+      return receiveFromInventory(item);
+    },
     withdrawToInventory,
     setState(snapshot: StorageSnapshot) {
       options.drag?.cancel();

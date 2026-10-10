@@ -22,7 +22,7 @@ import { errorMessage } from '../../protocol.js';
 interface InventoryOptions {
   manager: WindowManager;
   drag?: ItemDragRuntime;
-  quickDeposit?: (item: ItemPresentation) => Promise<void>;
+  quickDeposit?: (item: ItemPresentation) => Promise<void> | null;
   withdrawItem?: (
     item: ItemPresentation,
     position?: Placement,
@@ -136,8 +136,11 @@ export function mountInventory(
                 shell.handle.activate();
                 tip.hide();
                 if (event.ctrlKey && quickDeposit) {
-                  void quickDeposit(item);
-                  return null;
+                  const transfer = quickDeposit(item);
+                  if (transfer) {
+                    void transfer;
+                    return null;
+                  }
                 }
                 return ownedItemPayload(
                   'inventory',

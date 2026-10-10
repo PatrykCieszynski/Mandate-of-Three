@@ -33,13 +33,22 @@ func checkpoint(deltas: Dictionary) -> Dictionary:
 func spend(owner_id: int, pending_income: int, cost: int) -> Dictionary:
 	if cost <= 0 or cost > MAX_YANG: return {"ok": false, "error": "request"}
 	if not db.query("BEGIN IMMEDIATE;"): return {"ok": false, "error": "storage"}
-	var income: Dictionary = _apply_income(owner_id, pending_income)
-	if not income.ok: return _rollback(str(income.error))
-	if not db.query_with_bindings("UPDATE wallets SET yang=yang-? WHERE character_id=? AND yang>=?;", [cost, owner_id, cost]):
-		return _rollback("storage")
-	if not db.query("SELECT changes() AS n;"): return _rollback("storage")
-	if int(db.query_result[0].n) != 1: return _rollback("funds")
+	var result: Dictionary = spend_in_transaction(owner_id, pending_income, cost)
+	if not result.ok: return _rollback(str(result.error))
 	if not db.query("COMMIT;"): return _rollback("storage")
+	return result
+
+## Caller owns the transaction, including capacity, offer validation and item
+## mutation. Never call spend() followed by a separate item transaction for Shop.
+## Runtime balance/pending income must only change after the caller commits.
+func spend_in_transaction(owner_id: int, pending_income: int, cost: int) -> Dictionary:
+	if cost <= 0 or cost > MAX_YANG: return {"ok": false, "error": "request"}
+	var income: Dictionary = _apply_income(owner_id, pending_income)
+	if not income.ok: return income
+	if not db.query_with_bindings("UPDATE wallets SET yang=yang-? WHERE character_id=? AND yang>=?;", [cost, owner_id, cost]):
+		return {"ok": false, "error": "storage"}
+	if not db.query("SELECT changes() AS n;"): return {"ok": false, "error": "storage"}
+	if int(db.query_result[0].n) != 1: return {"ok": false, "error": "funds"}
 	return {"ok": true, "balance": int(income.balance) - cost}
 
 func _apply_income(owner_id: int, amount: int) -> Dictionary:

@@ -194,6 +194,11 @@ export function mountStorage(root, options) {
         activate: () => shell.handle.activate(),
         setStatus,
         receiveFromInventory,
+        tryQuickDeposit(item) {
+            if (root.hidden || pending || disposed || !options.transfer)
+                return null;
+            return receiveFromInventory(item);
+        },
         withdrawToInventory,
         setState(snapshot) {
             options.drag?.cancel();

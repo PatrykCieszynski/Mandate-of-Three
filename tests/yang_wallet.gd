@@ -80,7 +80,63 @@ func _ready() -> void:
 	persistence.dirty_wallet.erase(c)
 	check(persistence.load_wallet(c) and persistence.wallet_balance(c) == 0, "crash restores checkpoint without ground receipt replay")
 	check(db.close_db() and db.open_db() and persisted(db,b) == 20025, "reopen durable balance")
+	test_purchase_contract(db, c)
 	db.close_db()
 	if not failed:
 		print("WALLET_OK: RAM income, dirty delta batch, critical spend rollback/commit, offline save, relog and crash window")
 		get_tree().quit()
+
+# Transaction contract fixture with a server-defined item and test cost. Real
+# Shop validates its offer/price inside this transaction and publishes RAM after commit.
+func purchase_fixture(db: SQLite, owner: int, pending: int, cost: int, requested: int = -1) -> Dictionary:
+	var items := ItemStoreSqlite.new(db)
+	var wallets := WalletStoreSqlite.new(db)
+	var item: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD, owner, [])
+	if not db.query("BEGIN IMMEDIATE;"): return {"ok": false, "error": "storage"}
+	var result: Dictionary = items.resolve_inventory_position(owner, ItemDefinitions.IRON_SWORD.inventory_height, requested)
+	if result.ok:
+		var position: int = result.position
+		result = wallets.spend_in_transaction(owner, pending, cost)
+		if result.ok:
+			var receiving: Dictionary = items.receive_item_in_transaction(item, position)
+			if not receiving.ok: result = receiving
+	if not result.ok:
+		db.query("ROLLBACK;")
+		return result
+	if not db.query("COMMIT;"):
+		db.query("ROLLBACK;")
+		return {"ok": false, "error": "storage"}
+	return result
+
+func test_purchase_contract(db: SQLite, owner: int) -> void:
+	var items := ItemStoreSqlite.new(db)
+	check(db.query_with_bindings("UPDATE wallets SET yang=100 WHERE character_id=?;", [owner]), "purchase wallet fixture")
+	check(items.resolve_inventory_position(owner, 2, 40).error == "request", "exact footprint cannot cross page")
+	check(items.resolve_inventory_position(owner, 1, -2).error == "request", "invalid requested sentinel")
+	check(purchase_fixture(db, owner, 30, 50, 10).ok, "purchase item and pending-income spend commit")
+	var before: Dictionary = items.inventory(owner)
+	check(before.items.size() == 1 and before.items[0].bag_position == 10 and persisted(db, owner) == 80, "exact purchase and wallet committed together")
+	check(purchase_fixture(db, owner, 30, 50, 10).error == "occupied" and persisted(db, owner) == 80 and items.inventory(owner) == before, "exact occupied never falls back or charges")
+	check(db.query("CREATE TEMP TRIGGER fail_purchase BEFORE INSERT ON item_placements BEGIN SELECT RAISE(ABORT,'purchase placement failure'); END;"), "fault after wallet deduction and item creation")
+	check(not purchase_fixture(db, owner, 30, 50).ok and persisted(db, owner) == 80 and items.inventory(owner) == before, "item write failure rolls back charge pending income and item")
+	check(db.query_with_bindings("SELECT COUNT(*) AS n FROM item_instances WHERE owner_character_id=?;", [owner]) and int(db.query_result[0].n) == 1, "failed purchase leaves no orphan item instance")
+	check(db.query("DROP TRIGGER fail_purchase;"), "remove purchase fault")
+	check(purchase_fixture(db, owner, 0, 81).error == "funds" and items.inventory(owner) == before and persisted(db, owner) == 80, "insufficient funds cannot create item")
+	check(purchase_fixture(db, owner, 0, 20).ok and persisted(db, owner) == 60, "automatic receiving commits")
+	check(items.inventory(owner).items[0].bag_position == 0, "automatic receiving first fitting cell")
+	# Exhaust fitting 1x2 footprints, including fragmented last rows.
+	for attempt: int in InventoryGrid.CAPACITY:
+		var filler: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD, owner, [])
+		check(db.query("BEGIN IMMEDIATE;"), "fill transaction")
+		var receiving: Dictionary = items.receive_item_in_transaction(filler)
+		if not receiving.ok:
+			check(receiving.error == "inventory_full", "only capacity terminates fill")
+			db.query("ROLLBACK;")
+			break
+		check(db.query("COMMIT;"), "fill capacity")
+	before = items.inventory(owner)
+	check(db.query("CREATE TEMP TRIGGER reject_full_charge BEFORE UPDATE ON wallets BEGIN SELECT RAISE(ABORT,'capacity must precede wallet writes'); END;"), "detect wallet write before full check")
+	check(purchase_fixture(db, owner, 30, 20).error == "inventory_full", "capacity rejects before any wallet write")
+	check(db.query("DROP TRIGGER reject_full_charge;"), "remove capacity ordering fault")
+	check(persisted(db, owner) == 60 and items.inventory(owner) == before, "full purchase never charges or creates item")
+	check(db.close_db() and db.open_db() and persisted(db, owner) == 60 and items.inventory(owner) == before, "purchase durable after reopen")

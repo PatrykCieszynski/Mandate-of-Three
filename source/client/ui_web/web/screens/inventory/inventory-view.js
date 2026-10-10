@@ -78,8 +78,11 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
                         shell.handle.activate();
                         tip.hide();
                         if (event.ctrlKey && quickDeposit) {
-                            void quickDeposit(item);
-                            return null;
+                            const transfer = quickDeposit(item);
+                            if (transfer) {
+                                void transfer;
+                                return null;
+                            }
                         }
                         return ownedItemPayload('inventory', item, cell(), resolveItemIcon);
                     },
