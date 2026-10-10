@@ -25,6 +25,7 @@ test('Upgrade preview leaves the input item intact and resets local confirmation
   const view = mountUpgrade(root, {
     manager,
     drag,
+    devPreview: true,
     resolveItemIcon: () => null,
     onClose: () => closed++,
   });
@@ -35,10 +36,10 @@ test('Upgrade preview leaves the input item intact and resets local confirmation
       (node) => node.textContent === label,
     )!;
   button('Preview Iron Sword').click();
-  button('Preview upgrade').click();
+  button('Upgrade').click();
   assert.equal(view.closeIfActive(), true);
   assert.equal(closed, 0, 'Escape first cancels confirmation');
-  button('Preview upgrade').click();
+  button('Upgrade').click();
   button('Confirm').click();
   assert.deepEqual(
     upgradeExample,
@@ -48,7 +49,7 @@ test('Upgrade preview leaves the input item intact and resets local confirmation
   view.setNpcState({ active: false });
   view.setNpcState(npc);
   assert.equal(
-    button('Preview upgrade').disabled,
+    button('Upgrade').disabled,
     true,
     'Reopening requires a fresh selection',
   );
