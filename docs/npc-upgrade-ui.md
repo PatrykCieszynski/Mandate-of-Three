@@ -94,3 +94,9 @@ the client and World; automated checks do not claim Vulkan visual verification.
 New characters receive 1500 Yang once at creation. Existing wallet balances are unchanged.
 While Upgrade is open, right-clicking an Inventory item selects it through the
 server Upgrade command instead of activating/equipping it. Items remain in Inventory.
+
+Upgrade execution sends the server request immediately while the slot plays a
+short forging effect. The Upgrade window holds its pre-upgrade presentation until
+both the response and effect complete, then reveals success/failure. Inventory
+and wallet updates are never delayed. Context loss/reload cancels the effect;
+the server transaction continues independently and the next snapshot restores it.
