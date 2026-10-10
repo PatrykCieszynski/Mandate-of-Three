@@ -4,7 +4,6 @@ extends Node
 var runtime := MetinRuntime.new()
 var stone: MetinStone3D
 var _world: SpikeWorld3D
-var _next_mob_id: int = 1000
 func _ready() -> void:
 	_world = get_parent()
 	assert(definition.valid())
@@ -22,7 +21,6 @@ func _spawn() -> void:
 	stone.present(definition.display_name,runtime.hp,definition.max_hp,true)
 func apply_damage(peer_id: int, amount: int, now: int) -> bool:
 	if not GameMode.is_world_server() or not _world.combat_endpoint._living(peer_id): return false
-	if NavigationServer3D.map_get_iteration_id(_world.get_world_3d().navigation_map) == 0: return false
 	var result: Dictionary = runtime.damage(_world.combat_endpoint._owner(peer_id),amount,now)
 	if result.is_empty(): return false
 	for index: int in result.waves: _spawn_wave(definition.waves[index],now)
@@ -31,28 +29,8 @@ func apply_damage(peer_id: int, amount: int, now: int) -> bool:
 	stone.present(definition.display_name,runtime.hp,definition.max_hp,active())
 	return true
 func _spawn_wave(wave: MetinWaveDefinition, now: int) -> void:
-	var count: int = wave.count + wave.elite_count
-	var map: RID = _world.get_world_3d().navigation_map
-	for i: int in count:
-		var angle: float = TAU * i / count
-		var point: Vector3 = stone.position + Vector3(cos(angle),0,sin(angle))*wave.spawn_radius
-		if NavigationServer3D.map_get_iteration_id(map) == 0: continue
-		point = NavigationServer3D.map_get_closest_point(map,point)
-		if absf(point.y-stone.position.y) > 0.5 or point.distance_to(stone.position) < 2: continue
-		_next_mob_id += 1
-		var elite: bool = i >= wave.count
-		var dog := SpikeWildDog3D.new()
-		dog.name = "WildDog_%d" % _next_mob_id
-		dog.max_hp = 300 if elite else 120
-		dog.attack_damage = 12 if elite else 6
-		dog.title = "Metin Elite" if elite else "Metin Dog"
-		dog.source_metinstone_id = runtime.stone_instance_id
-		dog.respawn_enabled = false
-		dog.expires_at = now + int(definition.wave_lifetime_seconds*1000)
-		dog.setup_dog(_next_mob_id,point)
-		_world.add_child(dog)
-		_world.combat_endpoint.dogs[_next_mob_id] = dog
-		runtime.spawned_mobs.append(_next_mob_id)
+	var pack := _world.combat_endpoint.create_pack(wave.members,stone.position,wave.spawn_radius,wave.spawn_radius+2,maxf(18,wave.spawn_radius+10),0,runtime.stone_instance_id,now+int(definition.wave_lifetime_seconds*1000))
+	runtime.spawned_mobs.append_array(pack.actor_ids)
 func tick(now: int) -> void:
 	if not GameMode.is_world_server(): return
 	for id: int in runtime.spawned_mobs.duplicate():

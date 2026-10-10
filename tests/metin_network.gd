@@ -34,6 +34,31 @@ func run_server() -> void:
 		dog.ai_state = "DISABLED"
 		dog.ai_enabled = false
 		dog.collision_layer = 0
+	# A real melee RPC hits one mixed-pack member and recruits its siblings.
+	var wild_entry := MobSpawnEntry.new()
+	wild_entry.mob = preload("res://source/common/gameplay/mobs/wild_dog.tres")
+	wild_entry.count = 2
+	var feral_entry := MobSpawnEntry.new()
+	feral_entry.mob = preload("res://source/common/gameplay/mobs/feral_dog.tres")
+	var combat := world.combat_endpoint
+	var pack := combat.create_pack([wild_entry,feral_entry],Vector3(-30,0,0),0,0,12,15)
+	var other_pack := combat.create_pack([feral_entry],Vector3(-30,0,-10),0,0,12,15)
+	for id: int in pack.actor_ids + other_pack.actor_ids: combat.dogs[id].ai_enabled = false
+	var victim := combat.dogs[pack.actor_ids[0]]
+	for id: int in pack.actor_ids.slice(1): combat.dogs[id].position += Vector3(4,0,0)
+	var attacker: int = world.characters.keys()[0]
+	world.characters[attacker].position = victim.position + Vector3(0,0,1.7)
+	world.characters[attacker].rotation.y = 0
+	set_phase("FIGHT",attacker)
+	await wait_until(func() -> bool: return victim.hp < victim.max_hp)
+	set_phase("WAIT")
+	for id: int in pack.actor_ids: check(combat.dogs[id].target_peer == attacker and combat.dogs[id].ai_state == "CHASE","melee recruits entire mixed pack")
+	check(combat.dogs[other_pack.actor_ids[0]].target_peer == 0,"unrelated pack stays idle")
+	for id: int in pack.actor_ids.duplicate() + other_pack.actor_ids.duplicate(): combat._remove_mob(id)
+	combat.packs.erase(pack.pack_instance_id)
+	combat.packs.erase(other_pack.pack_instance_id)
+	combat._pending.clear()
+	await get_tree().create_timer(0.7).timeout
 	var index: int = 0
 	for id: int in world.characters:
 		world.characters[id].position = encounter.stone.position + Vector3(-0.2+index*0.4,0,1.7)
@@ -57,6 +82,7 @@ func run_server() -> void:
 	for id: int in encounter.runtime.spawned_mobs:
 		var dog: SpikeWildDog3D = world.combat_endpoint.dogs[id]
 		check(dog.source_metinstone_id==initial_stone_id and not dog.respawn_enabled,"wave provenance and no respawn")
+		check(dog.definition.valid() and dog.pack_instance_id > 0,"wave uses shared data-defined pack runtime")
 		dog.ai_enabled = false
 	drop_uid = str(world.combat_endpoint.ground.keys()[0])
 	var reward_owner: int = int(world.combat_endpoint.ground[drop_uid].owner)
@@ -92,7 +118,15 @@ func run_server() -> void:
 func _process(delta: float) -> void:
 	elapsed += delta
 	if elapsed > 35: check(false,"timeout phase="+phase_name)
-	if GameMode.is_world_server() or world==null or world.combat_endpoint.state.is_empty(): return
+	if GameMode.is_world_server():
+		# Isolate stone reward assertions from ordinary wave kills in the same swing.
+		if world != null:
+			for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():
+				if not dog.source_metinstone_id.is_empty():
+					dog.ai_enabled = false
+					dog.collision_layer = 0
+		return
+	if world==null or world.combat_endpoint.state.is_empty(): return
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
@@ -111,6 +145,7 @@ func _process(delta: float) -> void:
 		if saw_stone:
 			check(world.combat_endpoint.selected_target.is_empty() and not world.combat_endpoint.autoattack,"death snapshot clears selection even without autoattack")
 	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():
+		check(dog.mob_instance_id > 0 and dog.pack_instance_id > 0 and not dog.mob_key.is_empty(),"dynamic snapshot reconstructs identities/content")
 		if not dog.source_metinstone_id.is_empty():
 			saw_waves = true
 			if not wave_ids.has(dog.mob_id): wave_ids.append(dog.mob_id)

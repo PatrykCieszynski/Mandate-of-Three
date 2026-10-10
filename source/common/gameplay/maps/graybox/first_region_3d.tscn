@@ -1,7 +1,104 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=19 format=3]
 [ext_resource type="Script" path="res://source/common/gameplay/spike3d/spike_world_3d.gd" id="1"]
 [ext_resource type="Script" path="res://source/common/gameplay/maps/graybox/first_region.gd" id="2"]
+[ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_spawn_point_3d.gd" id="point"]
+[ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_spawn_entry.gd" id="entry"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/wild_dog.tres" id="wild"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/feral_dog.tres" id="feral"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/hollow_hound.tres" id="hollow"]
+[sub_resource type="Resource" id="OutskirtsWest0"]
+script = ExtResource("entry")
+mob = ExtResource("wild")
+count = 10
+[sub_resource type="Resource" id="OutskirtsBend0"]
+script = ExtResource("entry")
+mob = ExtResource("wild")
+count = 10
+[sub_resource type="Resource" id="OutskirtsBend1"]
+script = ExtResource("entry")
+mob = ExtResource("feral")
+count = 4
+[sub_resource type="Resource" id="OldRoadWest0"]
+script = ExtResource("entry")
+mob = ExtResource("wild")
+count = 10
+[sub_resource type="Resource" id="OldRoadWest1"]
+script = ExtResource("entry")
+mob = ExtResource("feral")
+count = 6
+[sub_resource type="Resource" id="OldRoadCoast0"]
+script = ExtResource("entry")
+mob = ExtResource("wild")
+count = 10
+[sub_resource type="Resource" id="OldRoadCoast1"]
+script = ExtResource("entry")
+mob = ExtResource("feral")
+count = 8
+[sub_resource type="Resource" id="HollowWest0"]
+script = ExtResource("entry")
+mob = ExtResource("feral")
+count = 14
+[sub_resource type="Resource" id="HollowWest1"]
+script = ExtResource("entry")
+mob = ExtResource("hollow")
+count = 8
+[sub_resource type="Resource" id="HollowShrine0"]
+script = ExtResource("entry")
+mob = ExtResource("feral")
+count = 14
+[sub_resource type="Resource" id="HollowShrine1"]
+script = ExtResource("entry")
+mob = ExtResource("hollow")
+count = 10
 [node name="SpikeMap" type="Node3D"]
 script = ExtResource("1")
 [node name="Region" type="Node3D" parent="."]
 script = ExtResource("2")
+[node name="OutskirtsWest" type="Marker3D" parent="Region"]
+position = Vector3(-22,0,-8)
+script = ExtResource("point")
+members = Array[ExtResource("entry")]([SubResource("OutskirtsWest0")])
+spawn_radius = 3.0
+wander_radius = 5.0
+leash_radius = 15.0
+respawn_seconds = 15.0
+[node name="OutskirtsBend" type="Marker3D" parent="Region"]
+position = Vector3(-9,0,-20)
+script = ExtResource("point")
+members = Array[ExtResource("entry")]([SubResource("OutskirtsBend0"),SubResource("OutskirtsBend1")])
+spawn_radius = 3.0
+wander_radius = 5.0
+leash_radius = 15.0
+respawn_seconds = 15.0
+[node name="OldRoadWest" type="Marker3D" parent="Region"]
+position = Vector3(-4,0,-43)
+script = ExtResource("point")
+members = Array[ExtResource("entry")]([SubResource("OldRoadWest0"),SubResource("OldRoadWest1")])
+spawn_radius = 4.0
+wander_radius = 6.0
+leash_radius = 18.0
+respawn_seconds = 15.0
+[node name="OldRoadCoast" type="Marker3D" parent="Region"]
+position = Vector3(14,0,-52)
+script = ExtResource("point")
+members = Array[ExtResource("entry")]([SubResource("OldRoadCoast0"),SubResource("OldRoadCoast1")])
+spawn_radius = 4.0
+wander_radius = 6.0
+leash_radius = 18.0
+respawn_seconds = 15.0
+[node name="HollowWest" type="Marker3D" parent="Region"]
+position = Vector3(-20,0,-73)
+script = ExtResource("point")
+members = Array[ExtResource("entry")]([SubResource("HollowWest0"),SubResource("HollowWest1")])
+spawn_radius = 4.0
+wander_radius = 6.0
+leash_radius = 18.0
+respawn_seconds = 15.0
+[node name="HollowShrine" type="Marker3D" parent="Region"]
+position = Vector3(-3,0,-90)
+script = ExtResource("point")
+members = Array[ExtResource("entry")]([SubResource("HollowShrine0"),SubResource("HollowShrine1")])
+spawn_radius = 4.0
+wander_radius = 6.0
+leash_radius = 18.0
+respawn_seconds = 15.0

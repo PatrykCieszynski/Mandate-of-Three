@@ -61,6 +61,7 @@ func run_server() -> void:
 	set_phase("FIGHT", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
 	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
+	for ticket: Dictionary in combat.packs[combat.dogs[1].pack_instance_id].replacements: ticket.at = Time.get_ticks_msec() + 60000
 	set_phase("WAIT")
 	check(combat.ground.size() == 1 and store.inventory(owner_id).items.size() == 2, "mob creates ground loot, no automatic grant")
 	drop_uid = combat.ground.keys()[0]
@@ -88,13 +89,18 @@ func run_server() -> void:
 	check(server.runtime_attack(owner_id) == 29, "committed swap updates runtime stats")
 	check(store.inventory(server.connected_players[other].player_id).items.size() == 2, "other player receives no inventory")
 	await get_tree().create_timer(1.2).timeout
-	combat.dogs[1].respawn()
-	combat.dogs[1].position = Vector3(0, 0, 1.4)
+	var old_dog: SpikeWildDog3D = combat.dogs[1]
+	var pack: MobPackRuntime = combat.packs[old_dog.pack_instance_id]
+	pack.replacements.clear()
+	combat._remove_mob(1)
+	var replacement := combat.spawn_mob(old_dog.definition,Vector3(0,0,1.4),pack)
+	replacement.ai_enabled = false
+	replacement.position = Vector3(0, 0, 1.4)
 	await get_tree().create_timer(0.1).timeout
 	store.inventory_reads = 0
 	set_phase("IMPROVED", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
-	check(combat._combo[hero] == 1 and combat.dogs[1].hp == 91, "same first-stage attack now deals 29 instead of 23")
+	await wait_until(func() -> bool: return replacement.hp < 120)
+	check(combat._combo[hero] == 1 and replacement.hp == 91, "same first-stage attack now deals 29 instead of 23")
 	check(store.inventory_reads == 0, "improved attack also uses RAM only")
 	set_phase("WAIT")
 	check(db.close_db() and db.open_db(), "reopen SQLite")
@@ -128,8 +134,8 @@ func _process(delta: float) -> void:
 		register_ready.rpc_id(1)
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var inventory: SpikeInventory3D = world.inventory_endpoint
-	saw_damage = saw_damage or combat.dogs[1].hp < 120
-	saw_death = saw_death or combat.dogs[1].ai_state == "DEAD"
+	saw_damage = saw_damage or (combat.dogs.has(1) and combat.dogs[1].hp < 120)
+	saw_death = saw_death or (combat.dogs.has(1) and combat.dogs[1].ai_state == "DEAD")
 	saw_loot = saw_loot or not combat.state.drops.is_empty()
 	accumulator += delta
 	if phase_name == "FIGHT" and accumulator >= 0.05:

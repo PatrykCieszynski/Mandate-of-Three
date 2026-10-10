@@ -1,6 +1,6 @@
 extends "res://tests/pve_network.gd"
 ## Two production WebSocket clients plus isolated SQLite; validates combat
-## geometry, timing, physical knockback, navigation, death and respawn.
+## geometry, timing, physical knockback, straight-line chase, death and respawn.
 
 var saw_multi: bool = false
 var saw_combo: bool = false
@@ -66,7 +66,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return replies.size() == 2)
 	for result: Dictionary in replies.values(): check(result.ok, "optional target assist cancels on manual movement")
 	set_phase("WAIT")
-	# Path must route around the central obstacle, not stop at its front face.
+	# Mob chase ignores scenery but remains on the authoritative floor.
 	for dog: SpikeWildDog3D in combat.dogs.values(): dog.position = Vector3(-14, 0, -12)
 	var dog: SpikeWildDog3D = combat.dogs[1]
 	dog.position = SpikeCombat3D.HOME
@@ -77,17 +77,17 @@ func run_server() -> void:
 	dog.ai_state = "CHASE"
 	dog.target_peer = hero
 	world.characters[hero].position = Vector3(0, 0, -7)
-	var went_around: bool = false
+	var crossed_scenery: bool = false
 	while dog.position.distance_to(world.characters[hero].position) > 1.8:
-		if dog.position.z < -3 and dog.position.z > -5 and absf(dog.position.x) > 2.35: went_around = true
-		check(dog.position.is_finite() and absf(dog.position.x) < 15.6 and absf(dog.position.z) < 15.6, "navigation stays inside arena")
+		if dog.position.z < -3 and dog.position.z > -5 and absf(dog.position.x) < 2.35: crossed_scenery = true
+		check(dog.position.is_finite() and absf(dog.position.x) < 15.6 and absf(dog.position.z) < 15.6, "straight-line chase stays on floor")
 		await get_tree().physics_frame
-	check(went_around, "route around obstacle")
+	check(crossed_scenery, "direct chase passes through scenery")
 	dog.hp = 50
 	world.characters[hero].position = Vector3(-12, 0, 12)
 	await wait_until(func() -> bool: return dog.ai_state == "RETURN")
 	await wait_until(func() -> bool: return dog.ai_state == "IDLE")
-	check(dog.hp == 120 and dog.position.distance_to(dog.home) < 0.3, "navigation return and heal")
+	check(dog.hp == 120 and dog.position.distance_to(dog.home) < 0.5, "straight-line return heals at anchor")
 	world.characters[hero].position = dog.home + Vector3(0, 0, 1)
 	combat.health[hero] = 6
 	dog.ai_enabled = false
@@ -120,7 +120,7 @@ func run_server() -> void:
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
 	if not failed:
-		print("COMBAT_SERVER_OK: directional multi-hit, combo/replay, finisher knockback, nav obstacle/return, player death/respawn")
+		print("COMBAT_SERVER_OK: directional multi-hit, combo/replay, finisher knockback, straight-line obstacle/return, player death/respawn")
 		peer.close()
 		db.close_db()
 		get_tree().quit()

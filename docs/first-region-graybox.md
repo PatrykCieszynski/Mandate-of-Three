@@ -15,15 +15,16 @@ The hub is at the southern end (+Z). Default camera forward faces north (-Z).
 | Area | Centre X / Z | Current content |
 | --- | --- | --- |
 | Hub | 0 / 20 | Player entry/respawn, Blacksmith with existing Shop and Upgrade |
-| Outskirts | -16 / -10 | Three Wild Dogs, baseline profile |
-| Old Road | 8 / -46 | Three Feral Dogs, stronger profile |
-| Stone Hollow | -12 / -82 | Three Hollow Hounds, strongest prototype profile |
+| Outskirts | -16 / -10 | Two packs: 10 / 14 members, Wild + Feral Dogs |
+| Old Road | 8 / -46 | Two mixed packs: 16 / 18 members |
+| Stone Hollow | -12 / -82 | Two mixed packs: 22 / 24 Feral Dogs + Hollow Hounds |
 
 All three use the existing dog visual/AI/combat/loot/XP pipeline. Health and damage
 increase by area; values are provisional and not a balance target. XP and drops
-retain current behavior. Mob death/respawn and return-to-home retain their profile.
-There are nine mobs total, not a density or pacing pass. The hub starts outside
-all spawn aggro ranges; normal existing leash rules still apply.
+retain current behavior. Each per-member replacement retains its definition and receives a new runtime ID.
+There are 104 mobs in six packs; [mob packs v1](mob-packs-v1.md) records composition,
+shared aggro and anchor leash. These are provisional density data. The hub starts
+outside pack wander/aggro envelopes.
 
 A five-metre-wide main road connects the areas and loops back along the west.
 A narrower direct north path and coast cut offer shortcuts. Five-metre ticks on
@@ -34,16 +35,18 @@ Roads/zone tints are surface marks, not separate navigation authority.
 Four visible pads and `MetinSpawn1..4` markers reserve candidate sites at
 (-24,-20), (16,-44), (-20,-78), (10,-92). The pads themselves are not loot sources. [Metin Encounter v1](metin-encounter-v1.md)
 selects one site for its live stone and timed respawn.
-Edit geometry, routes and spawn profiles in `first_region.gd`; no procedural
-region system or generic spawn framework is introduced. All scenery collision is
-layer 1, shared by server movement, navigation, line-of-sight and camera queries.
+Edit geometry/routes in `first_region.gd`, pack markers/composition in
+`first_region_3d.tscn`, and combat stats in the separate MobDefinition resources; no procedural
+region system or generic spawn framework is introduced. Scenery is layer 1 for player movement, NPC navigation, line-of-sight and camera.
+Ground additionally exposes layer 5 for mob movement, which ignores scenery.
 Server instances skip the graybox meshes/labels and keep collision/markers.
 
 ## Verification and playtest
 
 `./tests/run-first-region.ps1` loads the actual production scene headlessly and
-checks shared navigation from the safe hub to Blacksmith, every mob home and every
-Metin site, plus profile-preserving mob respawn and a blocking shore boundary.
+checks shared navigation from the safe hub to Blacksmith, every pack anchor and every
+Metin site, plus authored composition and a blocking shore boundary.
+Default smoke covers per-member replacement and profile retention.
 The test waits for navigation synchronization rather than assuming two frames.
 Existing combat network fixtures keep their small arena and ownership/loot checks.
 Do not turn coordinates, exact geometry, pacing or damage values into assertions.

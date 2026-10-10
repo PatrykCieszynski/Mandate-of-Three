@@ -44,9 +44,12 @@ sequentially. `run-items.ps1 -WithSession` requires normal gateway/master/world
 roles and writes guest fixture accounts; use it for actual session/login changes.
 
 `run-first-region.ps1` loads the production graybox scene headlessly and checks
-connected navigation to NPC/mob/Metin sites, safe hub spawns, profile-preserving
-respawn and the shore boundary. It opens no window and does not assert exact
+connected navigation to NPC/pack/Metin sites, safe hub spawns, authored composition
+and the shore boundary. It opens no window and does not assert exact
 layout or balance. See [region notes](first-region-graybox.md).
+
+Default smoke also covers mixed mob packs, shared aggro, anchor leash, unique
+replacement IDs, Metin pack expiry and a short 50-actor AI tick. See [mob packs](mob-packs-v1.md).
 
 `run-metin.ps1` covers the small stone lifecycle contracts.
 `run-metin-network.ps1` is the optional two-client production encounter/ground

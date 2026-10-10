@@ -1,19 +1,37 @@
-[gd_resource type="Resource" script_class="MetinDefinition" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="MetinDefinition" load_steps=13 format=3]
 [ext_resource type="Script" path="res://source/common/gameplay/encounters/metin/metin_definition.gd" id="1"]
 [ext_resource type="Script" path="res://source/common/gameplay/encounters/metin/metin_wave_definition.gd" id="2"]
+[ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_spawn_entry.gd" id="entry"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/wild_dog.tres" id="dog"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/metin_hound_elite.tres" id="elite"]
+[sub_resource type="Resource" id="dogs75"]
+script = ExtResource("entry")
+mob = ExtResource("dog")
+count = 3
+[sub_resource type="Resource" id="dogs50"]
+script = ExtResource("entry")
+mob = ExtResource("dog")
+count = 4
+[sub_resource type="Resource" id="dogs25"]
+script = ExtResource("entry")
+mob = ExtResource("dog")
+count = 3
+[sub_resource type="Resource" id="elite25"]
+script = ExtResource("entry")
+mob = ExtResource("elite")
+count = 1
 [sub_resource type="Resource" id="wave75"]
 script = ExtResource("2")
 hp_percent = 75
-count = 3
+members = Array[ExtResource("entry")]([SubResource("dogs75")])
 [sub_resource type="Resource" id="wave50"]
 script = ExtResource("2")
 hp_percent = 50
-count = 4
+members = Array[ExtResource("entry")]([SubResource("dogs50")])
 [sub_resource type="Resource" id="wave25"]
 script = ExtResource("2")
 hp_percent = 25
-count = 3
-elite_count = 1
+members = Array[ExtResource("entry")]([SubResource("dogs25"),SubResource("elite25")])
 [resource]
 script = ExtResource("1")
 waves = Array[ExtResource("2")]([SubResource("wave75"),SubResource("wave50"),SubResource("wave25")])

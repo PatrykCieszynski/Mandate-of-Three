@@ -10,14 +10,6 @@ const ZONE_NAMES: Array[String] = ["Outskirts", "Old Road", "Stone Hollow"]
 func player_spawn(index: int = 0) -> Vector3:
 	return HUB + Vector3(-3 + index % 5 * 1.5, 0, 0)
 
-func mob_spawns() -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	for tier: int in 3:
-		for offset: Vector3 in [Vector3(-3,0,0), Vector3(3,0,0), Vector3(0,0,-4)]:
-			result.append({"position": ZONE_CENTERS[tier] + offset, "max_hp": [120,160,220][tier],
-				"damage": [6,8,10][tier], "title": ["Wild Dog", "Feral Dog", "Hollow Hound"][tier]})
-	return result
-
 func _ready() -> void:
 	# Land ends at x=26; the water remains a visual/material test, not swimming.
 	_box("Land", Vector3(-11,-0.25,-36), Vector3(74,0.5,144), Color("626b59"))
@@ -72,7 +64,7 @@ func _box(id: String, center: Vector3, size: Vector3, color: Color) -> void:
 	var body := StaticBody3D.new()
 	body.name = id
 	body.position = center
-	body.collision_layer = 1
+	body.collision_layer = 17 if id == "Land" else 1
 	body.collision_mask = 0
 	var collider := CollisionShape3D.new()
 	var shape := BoxShape3D.new()

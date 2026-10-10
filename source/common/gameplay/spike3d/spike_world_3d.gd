@@ -111,7 +111,7 @@ func _box(node_name: String, center: Vector3, dimensions: Vector3, color: Color)
 	var body := StaticBody3D.new()
 	body.name = node_name
 	body.position = center
-	body.collision_layer = 1
+	body.collision_layer = 17 if node_name == "Floor" else 1
 	body.collision_mask = 0
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()

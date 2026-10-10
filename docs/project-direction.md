@@ -19,7 +19,7 @@ stat, crafting or persistence frameworks.
 
 - Server-side 3D movement/physics and remote interpolation.
 - Directional melee against multiple targets, three-hit combo, final knockback,
-  dogs with navigation/AI, hit reactions, death and respawn. Targets only assist
+  data-defined mixed mob packs with cheap straight-line AI, hit reactions, death and respawn. Targets only assist
   autoattack/future skills. Balance is deferred.
 - Ground item loot, reservation, pickup, transactional inventory/equipment and
   runtime combat stats. Combat does not query SQLite per swing.
@@ -87,7 +87,9 @@ and 100% success. Higher upgrades/failure/destruction remain deferred. Next:
    scale and travel/combat feel need a manual pass.
 2. [Metin Encounter v1](metin-encounter-v1.md): implemented shared stone combat,
    threshold waves, ground rewards and timed respawn. Native loop playtest is next.
-3. Spawn/pacing pass, then a visual pass after the playable loop is assessed.
+3. [Mob packs v1](mob-packs-v1.md): implemented six denser mixed packs, shared aggro,
+   anchor leash and per-member replacement. Next is a manual density/combat feel
+   pass, then pacing and visuals. No additional AI framework before playtesting.
 
 One affix reroll and the party vertical slice remain planned after this focused
 world loop. Regional pressure (kills, threshold, event spawn and reset) remains the
