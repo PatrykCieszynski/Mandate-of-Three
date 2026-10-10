@@ -23,6 +23,7 @@ var _ui_failure_label: Label
 var _status: Label
 var inventory_endpoint: SpikeInventory3D
 var combat_endpoint: SpikeCombat3D
+var shop_endpoint: Shop3D
 var npc_endpoint: NpcInteraction3D
 var currency_endpoint: SpikeCurrency3D
 
@@ -41,6 +42,9 @@ func _ready() -> void:
 	npc_endpoint = NpcInteraction3D.new()
 	npc_endpoint.name = "NpcInteraction"
 	add_child(npc_endpoint)
+	shop_endpoint = Shop3D.new()
+	shop_endpoint.name = "Shop"
+	add_child(shop_endpoint)
 	var blacksmith := preload("res://source/common/gameplay/npcs/blacksmith_fixture.tscn").instantiate() as NeutralNpc3D
 	add_child(blacksmith)
 	if not npc_endpoint.register_actor(blacksmith):
@@ -246,6 +250,7 @@ func remove_peer(peer_id: int) -> void:
 		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 		if resource != null and WorldServer.curr.database != null:
 			WorldServer.curr.database.flush_character(resource.player_id)
+	shop_endpoint.remove_peer(peer_id)
 	npc_endpoint.remove_peer(peer_id)
 	combat_endpoint.remove_peer(peer_id)
 	currency_endpoint.remove_peer(peer_id)

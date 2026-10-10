@@ -6,6 +6,7 @@ $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
 New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
 # Isolated databases. No servers, game windows, balances, exact DOM or geometry.
 $taskCases = [ordered]@{
+    shop_purchase = 'SHOP_PURCHASE_OK'
     npc_foundation = 'NPC_FOUNDATION_OK'
     item_instances = 'ITEM_INSTANCES_OK'
     inventory_grid = 'INVENTORY_GRID_OK'
@@ -21,7 +22,7 @@ foreach ($taskCase in $taskCases.GetEnumerator()) {
     Write-Output "$($taskCase.Key): PASS"
 }
 # Successful runs keep fixed-name logs, not a new database per invocation.
-foreach ($taskPattern in @('items-unit-*.db*','grid-*.db*','ground-items-*.db*','checkpoint-*.db*','yang-wallet-*.db*')) {
+foreach ($taskPattern in @('shop-purchase-*.db*','items-unit-*.db*','grid-*.db*','ground-items-*.db*','checkpoint-*.db*','yang-wallet-*.db*')) {
     foreach ($taskFile in Get-ChildItem -LiteralPath $taskLogs -File -Filter $taskPattern) {
         if (-not $taskFile.FullName.StartsWith([IO.Path]::GetFullPath($taskLogs) + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe test DB cleanup path' }
         Remove-Item -LiteralPath $taskFile.FullName -Force

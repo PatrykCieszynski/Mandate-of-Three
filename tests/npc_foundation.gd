@@ -1,5 +1,6 @@
 extends Node
 class MapFixture extends Node3D:
+	var npc_endpoint: NpcInteraction3D
 	var characters: Dictionary[int, Node3D] = {}
 
 func _ready() -> void:
@@ -81,12 +82,28 @@ func _run() -> void:
 	assert(snapshot.services[0].id == "upgrade" and snapshot.services[1].id == "weapon_shop")
 	assert(endpoint.select_for_peer(7, actor.instance_id, &"weapon_shop").ok)
 	assert(endpoint.snapshot_for_peer(7).selectedServiceId == "weapon_shop")
+	var shop_endpoint := Shop3D.new()
+	map.set("npc_endpoint", endpoint)
+	map.add_child(shop_endpoint)
+	assert(shop_endpoint.open_for_peer(7,actor.instance_id,&"weapon_shop").ok)
+	assert(shop_endpoint.snapshot_for_peer(7).offers[0].price==1000)
+	assert(shop_endpoint.snapshot_for_peer(7).offers[0].quantity==1)
+	assert(shop_endpoint.buy_for_peer(7,second.instance_id,&"weapon_shop",shop.offers[0].offer_id,-1,1000).error=="no_interaction")
+	assert(shop_endpoint.buy_for_peer(7,actor.instance_id,&"upgrade",shop.offers[0].offer_id,-1,1100).error=="wrong_service_kind")
+	assert(shop_endpoint.buy_for_peer(7,actor.instance_id,&"weapon_shop",shop.offers[0].offer_id,-1,1101).error=="too_fast")
+	assert(endpoint.clear_service_for_peer(7).ok and endpoint.contexts.has(7))
+	assert(not shop_endpoint.snapshot_for_peer(7).active)
+	assert(endpoint.select_for_peer(7,actor.instance_id,&"weapon_shop").ok)
+	assert(shop_endpoint.open_for_peer(7,actor.instance_id,&"weapon_shop").ok)
 	actor.disabled_services.append(&"weapon_shop")
 	assert(endpoint.resolve_npc_service(7, actor.instance_id, &"weapon_shop", NpcServiceDefinition.Kind.SHOP).error == "service_disabled")
+	assert(shop_endpoint.buy_for_peer(7,actor.instance_id,&"weapon_shop",shop.offers[0].offer_id,-1,2000).error=="service_disabled")
+	assert(not shop_endpoint.snapshot_for_peer(7).active)
 	assert(endpoint.snapshot_for_peer(7).selectedServiceId == "")
 	actor.disabled_services.clear()
 	player.position += Vector3(20,0,0)
 	assert(endpoint.resolve_npc_service(7, actor.instance_id, &"weapon_shop", NpcServiceDefinition.Kind.SHOP).error == "out_of_range")
+	assert(shop_endpoint.buy_for_peer(7,actor.instance_id,&"weapon_shop",shop.offers[0].offer_id,-1,3000).error=="out_of_range")
 	assert(not endpoint.snapshot_for_peer(7).active and endpoint.contexts.is_empty())
 	player.global_position = actor.global_position
 	assert(endpoint.interact_for_peer(7, actor.instance_id).ok)

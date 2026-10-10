@@ -1,3 +1,10 @@
+import {
+  NpcShopOfferDragSubject,
+  shopGridPreview,
+} from '../shop/shop-drag-policy.js';
+import { firstFittingPlacement } from './placement.js';
+import type { GridDrop } from '../../game-ui/items/item-drag-policy.js';
+import type { ShopGridDrop } from '../shop/shop-drag-policy.js';
 import type {
   DomainSnapshot,
   InventorySnapshot,
@@ -27,6 +34,10 @@ interface InventoryOptions {
     item: ItemPresentation,
     position?: Placement,
   ) => Promise<void>;
+  buyShopOffer?: (
+    subject: NpcShopOfferDragSubject,
+    position?: Placement,
+  ) => Promise<void>;
   receiveEquipped?: (
     item: ItemPresentation,
     position: Placement,
@@ -51,6 +62,7 @@ export function mountInventory(
     quickDeposit,
     withdrawItem,
     receiveEquipped,
+    buyShopOffer,
     resolveItemIcon = () => null,
     moveItem,
     activateItem,
@@ -225,9 +237,22 @@ export function mountInventory(
       ),
     );
     bindings.push(
-      drag.registerTarget({
+      drag.registerTarget<GridDrop | ShopGridDrop | null>({
         element: grid,
         preview: (payload, pointer) => {
+          if (payload.subject instanceof NpcShopOfferDragSubject) {
+            const preview = shopGridPreview(
+              grid,
+              inventory,
+              page,
+              cell(),
+              payload,
+              pointer,
+            );
+            const valid = preview.valid && !pending && !!buyShopOffer;
+            if (!valid) preview.visual?.element.classList.add('invalid');
+            return { ...preview, valid };
+          }
           const preview = itemGridPreview(
             grid,
             inventory,
@@ -253,11 +278,42 @@ export function mountInventory(
         drop: async (_payload, preview) => {
           const data = preview.data;
           if (!data) return;
+          if (data.subject instanceof NpcShopOfferDragSubject) {
+            await buyShopOffer?.(data.subject, data.position);
+            return;
+          }
           if (data.subject.container === 'inventory')
             await move(data.subject.item, data.position);
           else if (data.subject.container === 'storage')
             await receiveFromStorage(data.subject.item, data.position);
           else await receiveEquipped?.(data.subject.item, data.position);
+        },
+      }),
+    );
+    bindings.push(
+      drag.registerTarget({
+        element: shell.contentRoot,
+        preview: (payload) => {
+          if (!(payload.subject instanceof NpcShopOfferDragSubject))
+            return { valid: false, data: null };
+          const position = firstFittingPlacement(inventory, {
+            id: '',
+            height: payload.subject.offer.height,
+          });
+          const marker = document.createElement('div');
+          marker.className =
+            'inventory-receive-preview' + (position ? '' : ' invalid');
+          marker.textContent = position
+            ? 'Buy into Inventory'
+            : 'Inventory full';
+          return {
+            valid: !!position && !pending && !!buyShopOffer,
+            data: payload.subject,
+            visual: { element: marker, parent: shell.contentRoot },
+          };
+        },
+        drop: async (_payload, preview) => {
+          if (preview.data) await buyShopOffer?.(preview.data);
         },
       }),
     );

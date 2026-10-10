@@ -71,10 +71,19 @@ func spend_yang(owner_id: int, cost: int) -> Dictionary:
 	var wallet: Dictionary = runtime_wallets[owner_id]
 	if int(wallet.wallet_balance) < cost: return {"ok": false, "error": "funds"}
 	var result: Dictionary = wallet_store.spend(owner_id, int(wallet.pending_currency_delta), cost)
-	if result.ok:
-		wallet.wallet_balance = int(result.balance)
-		wallet.pending_currency_delta = 0
-		dirty_wallet.erase(owner_id)
+	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
+	return result
+
+func accept_committed_wallet_balance(owner_id: int, balance: int) -> void:
+	assert(runtime_wallets.has(owner_id) and balance >= 0 and balance <= WalletStoreSqlite.MAX_YANG)
+	runtime_wallets[owner_id].wallet_balance = balance
+	runtime_wallets[owner_id].pending_currency_delta = 0
+	dirty_wallet.erase(owner_id)
+
+func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> Dictionary:
+	if db == null or not runtime_wallets.has(owner_id): return {"ok":false, "error":"storage"}
+	var result: Dictionary = ShopStoreSqlite.new(db).purchase(owner_id, int(runtime_wallets[owner_id].pending_currency_delta), shop, offer_id, requested_position)
+	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
 	return result
 
 func release_wallet(owner_id: int) -> void:

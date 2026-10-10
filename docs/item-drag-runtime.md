@@ -39,6 +39,12 @@ policies, without feature routing inside the runtime or composition root.
 `firstFittingPlacement` shares advisory footprint checks with the preview host;
 it is not server authorization.
 
+NPC Shop offers use `NpcShopOfferDragSubject` and their presentation footprint;
+there is no owned item UID/revision until purchase commits. Inventory's deeper grid
+is the exact target. The content surface outside the grid receives automatically
+at first fit. Both paths send only NPC/service/offer IDs and optional coordinates;
+invalid exact drops never become automatic buys. ItemDragRuntime is unchanged.
+
 ## Lifecycle and authority
 
 All source, target and control registrations have disposable handles. Screens
@@ -79,24 +85,26 @@ Pickup and equipment swaps reuse it through `_free_bag_position`.
 `receive_item_in_transaction` resolves and inserts a new instance/placement within
 the caller's transaction; it never commits independently.
 
-## Future purchase invariant
+## Purchase invariant
 
-Before Shop work, Inventory capacity must be validated inside the same
+NPC Shop now validates Inventory capacity inside the same
 authoritative transaction that charges the buyer. Failure to place must return
 `inventory_full` and must not charge the player.
 
 An NPC purchase must atomically validate/commit offer, quantity, currency,
-Inventory capacity, item creation, placement and finite stock updates.
+Inventory capacity, item creation and placement. Current NPC Shop stock is infinite;
+finite stock would also belong in that transaction.
 A Player Shop purchase must atomically validate/commit the live listing, buyer
 currency, Inventory capacity, ownership transfer, buyer placement, seller payment
 and listing removal/reduction. Existing Storage errors/wire format are preserved;
-there is no Shop offer/RPC implementation yet. `WalletStoreSqlite.spend_in_transaction`
+NPC Shop offers/RPC and the CEF view are implemented; see [NPC Shop](npc-shop.md).
+`WalletStoreSqlite.spend_in_transaction`
 applies pending income and spends without committing. The purchase caller begins
 one transaction, validates the authoritative offer/price, resolves capacity, spends,
 creates/transfers and places the item, then commits. Every failed result rolls back.
 Only after commit may World publish the item and update RAM wallet/pending delta.
 Never use standalone `spend()` followed by an item transaction. The default SQLite
-wallet suite composes these production helpers and verifies `inventory_full` without
+wallet and Shop suites compose these production helpers and verify `inventory_full` without
 charge, exact rejection, insufficient funds, write-failure rollback and reopen.
 
 ## Verification

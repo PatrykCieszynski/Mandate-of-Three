@@ -117,10 +117,11 @@ func _physics_process(delta: float) -> void:
 				break
 	_send_snapshot()
 
-func _send_snapshot() -> void:
+func _send_snapshot(only_peer: int = -1) -> void:
 	if _database() == null: return
 	var now: int = Time.get_ticks_msec()
 	for peer_id: int in _world.characters:
+		if only_peer != -1 and peer_id != only_peer: continue
 		var drops: Dictionary = {}
 		for id: int in ground:
 			var drop: Dictionary = ground[id]

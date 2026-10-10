@@ -84,12 +84,15 @@ negative balances. Old DB state must not reject a purchase affordable after pend
 
 Inventory receiving uses `ItemStoreSqlite.resolve_inventory_position` in the
 caller's transaction: explicit targets are exact, absent targets use first fit.
-Future Shop must begin one transaction, validate its authoritative offer/price,
-resolve capacity, use `WalletStoreSqlite.spend_in_transaction`, create/transfer and
-place the item, then commit. `inventory_full` precedes wallet writes. Rollback must
+NPC Shop begins one transaction, validates its authoritative offer/price,
+resolves capacity, uses `WalletStoreSqlite.spend_in_transaction`, creates and
+places the item, then commits. `inventory_full` precedes wallet writes. Rollback must
 retain RAM balance and pending income; publish/reset them only after commit. The
-SQLite wallet smoke fixture proves capacity/no-charge and item-write rollback with
-these helpers. There is no Shop RPC or offer model in this preparation pass.
+SQLite wallet and Shop smoke fixtures prove capacity/no-charge and item-write
+rollback with these helpers. `ShopStoreSqlite.purchase` implements this flow;
+`WorldDatabase.accept_committed_wallet_balance` synchronizes RAM only after commit.
+The authenticated Shop RPC revalidates the selected NPC service on every purchase.
+See [NPC Shop](npc-shop.md).
 
 GroundCurrency is a runtime entity: amount, loot rights/owner, position, expiry.
 Pickup adds to the wallet and removes the entity. It creates no persistent

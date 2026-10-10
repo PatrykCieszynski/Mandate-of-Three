@@ -83,7 +83,7 @@ func claim_ground_item(owner_id: int, drop_uid: String, bonus: int) -> Dictionar
 
 func _insert_item(item: ItemInstance, bag_position: int) -> bool:
 	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
-	if definition == null or not _fits_position(item.owner_character_id, bag_position, definition.inventory_height): return false
+	if definition == null or item.amount < 1 or item.amount > definition.stack_limit or not _fits_position(item.owner_character_id, bag_position, definition.inventory_height): return false
 	return db.query_with_bindings("INSERT INTO item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision) VALUES(?,?,?,?,?,?,?,?);",
 		[item.uid, item.owner_character_id, str(item.definition_id), item.amount, item.upgrade_level, JSON.stringify(item.affixes), JSON.stringify(item.sockets), item.revision]) \
 		and _place(item.uid, item.owner_character_id, "bag", bag_position, "")

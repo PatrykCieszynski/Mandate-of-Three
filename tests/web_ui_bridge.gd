@@ -81,6 +81,16 @@ func _run() -> void:
 	controller.storage_opened=true
 	controller.set_open(false)
 	assert(not controller.opened and not controller.storage_opened,"Inventory shortcut closes both")
+	controller.bridge = WebUiBridge.new()
+	controller.add_child(controller.bridge)
+	controller.dispatcher = UiCommandDispatcher.new()
+	controller.add_child(controller.dispatcher)
+	controller.dispatcher.attach(controller.bridge)
+	controller.opened = false
+	controller._shop_state({"active":true})
+	assert(controller.opened, "Shop opening ensures Inventory is visible")
+	controller._shop_state({"active":false})
+	assert(controller.opened, "Shop closing leaves Inventory available in v1")
 	var first := controller._begin_command()
 	var second := controller._begin_command()
 	controller._operation_finished(second, {"ok":true, "request":"second"})
@@ -99,6 +109,23 @@ func _run() -> void:
 	assert(not InventoryWebController._valid_npc({"npc_instance_id":"../NPC"}))
 	assert(InventoryWebController._valid_npc_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop"}))
 	assert(not InventoryWebController._valid_npc_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop", "kind":1}))
+	var buy: Dictionary = {"npc_instance_id":"spike-blacksmith-01","service_id":"weapon_shop","offer_id":"iron_sword"}
+	assert(InventoryWebController._valid_shop_buy(buy))
+	var exact_buy: Dictionary = buy.duplicate()
+	exact_buy.merge({"x":2,"y":3,"page":1})
+	assert(InventoryWebController._valid_shop_buy(exact_buy))
+	for field: String in ["x","y","page"]:
+		var partial: Dictionary = exact_buy.duplicate()
+		partial.erase(field)
+		assert(not InventoryWebController._valid_shop_buy(partial))
+		for bad: Variant in [-1,1.5,NAN,INF,"1",1000]:
+			var invalid: Dictionary = exact_buy.duplicate()
+			invalid[field]=bad
+			assert(not InventoryWebController._valid_shop_buy(invalid))
+	for field: String in ["price","quantity","item_definition_id"]:
+		var invalid: Dictionary = buy.duplicate()
+		invalid[field]=1
+		assert(not InventoryWebController._valid_shop_buy(invalid))
 	var configured_url: Variant = ProjectSettings.get_setting("network/api/base_url")
 	ProjectSettings.set_setting("network/api/base_url", "")
 	assert(GatewayAPI.base_url() == "http://127.0.0.1:8088")
@@ -138,8 +165,11 @@ func _run() -> void:
 	assert(handled == 1 and messages.back().type == "command.result" and messages.back().id == "one" and messages.back().payload == {"ok":true})
 	bridge.reset_transport()
 	dispatcher.set_domain("wallet", {"balance": 30})
+	var shop_snapshot: Dictionary = {"active":true,"npcInstanceId":"spike-blacksmith-01","serviceId":"weapon_shop","shopId":"blacksmith_weapon_shop","name":"Weapons","currency":"yang","offers":[]}
+	dispatcher.set_domain("shop", shop_snapshot)
 	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	assert(messages.back().payload.wallet.balance == 30, "Reload gets current full state")
+	assert(messages.back().payload.shop == shop_snapshot, "Reload restores published Shop without new purchase")
 	var count: int = messages.size()
 	bridge.send("storage.updated",{"items":"x".repeat(WebUiBridge.MAX_BYTES+1)})
 	assert(messages.size()==count+1,"Bounded large state reaches CEF")

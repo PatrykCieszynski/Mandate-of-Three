@@ -1,3 +1,4 @@
+import type {ShopSnapshot,ShopBuyCommand} from '../screens/shop/shop-model.js';
 import type {NpcInteractionSnapshot} from '../screens/npc/npc-model.js';
 import type { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES } from '../screens/storage/storage-model.js';
 // Existing native wire contracts; protocol.ts validates unknown input.
@@ -11,10 +12,10 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
-  npc?: NpcInteractionSnapshot; storage?: StorageSnapshot; inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
+  shop?: ShopSnapshot; npc?: NpcInteractionSnapshot; storage?: StorageSnapshot; inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
   player?: RawObject; hud?: HudSnapshot;
 }
 export interface Envelope { v: 1; type: string; id?: string; payload: RawObject }
@@ -28,6 +29,9 @@ export interface MoveItemCommand extends ItemCommand { x: number; y: number; pag
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'shop.open': {npc_instance_id:string;service_id:string};
+  'shop.buy': ShopBuyCommand;
+  'npc.clear_service': Record<string,never>;
   'npc.interact': {npc_instance_id:string};
   'npc.select_service': {npc_instance_id:string;service_id:string};
   'npc.close': Record<string,never>;

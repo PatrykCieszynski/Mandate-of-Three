@@ -105,7 +105,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($suite in @('items','spike3d','pve','combat','progression','xp','yang','web-inventory','npc')) {
+          foreach ($suite in @('items','spike3d','pve','combat','progression','xp','yang','web-inventory','npc','shop')) {
             & "./tests/run-$suite.ps1"
           }
       - name: Keep verification logs

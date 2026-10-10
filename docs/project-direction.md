@@ -1,6 +1,6 @@
 # Accepted project direction
 
-Current policy as of 2026-10-09. This file describes accepted scope and next work;
+Current policy as of 2026-10-10. This file describes accepted scope and next work;
 [decision history](history/project-direction-2026-10-09.md) records prior stages.
 
 ## Keep the technical foundation small
@@ -54,10 +54,12 @@ with server-authoritative atomic deposit/withdrawal and account access.
 The neutral NPC foundation now exposes data-defined services through an
 interactive development Blacksmith: Upgrade and Weapon Shop. Server contexts and
 service authorization are map/range scoped. Shop offers are editable resources;
-purchase and upgrade mechanics remain future domain slices. See
-[NPC services](npc-services.md). Global MVP Storage remains available through B.
+NPC Shop purchases now atomically receive items and spend persisted/pending Yang.
+The CEF Shop supports right-click, exact Inventory drops and automatic receiving;
+Upgrade remains the next gameplay slice. See [NPC services](npc-services.md) and
+[NPC Shop](npc-shop.md). Global MVP Storage remains available through B.
 
-Shop, a full HUD/character sheet and final art remain outside this slice. No frontend framework. Use small headless smoke checks by
+A full HUD/character sheet and final art remain outside this slice. No frontend framework. Use small headless smoke checks by
 default; extended gameplay/asset/export tests are opt-in. Native UI checks belong
 at meaningful milestones. See [testing policy](testing.md).
 
@@ -68,7 +70,8 @@ public alpha. Keep existing user data paths during cosmetic project renames.
 
 ## Next gameplay milestones
 
-Yang wallet/autoloot/test spend is implemented. The accepted order after it:
+Yang wallet/autoloot/test spend and the NPC Shop are implemented. The accepted
+order after this Shop slice:
 
 1. Upgrade +0 → +1: Yang + one material, 100% success, one atomic item/wallet
    transaction and refreshed runtime stats. No failure, downgrade, destruction,

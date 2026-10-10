@@ -1,8 +1,9 @@
 # UI follow-up
 
-- ItemDragRuntime v1 replaces the transitional Inventory/Storage controller.
-  Future Shop/Trade item subjects and drop rules belong in feature policies;
-  do not add feature routing or gameplay commands to the gesture runtime.
-- Before Shop work, share authoritative Inventory receiving checks within the
-  economic transaction. Capacity failure must not charge the buyer. See the
-  [receive/purchase invariants](item-drag-runtime.md#future-purchase-invariant).
+- ItemDragRuntime v1 remains opaque to features. NPC Shop has its own offer
+  subject and Inventory exact/receive policies; future Trade subjects follow
+  the same boundary.
+- NPC Shop is implemented. Native CEF visual/input review remains a manual
+  milestone check. See [NPC Shop](npc-shop.md).
+- Next gameplay slice: Upgrade +0 -> +1, Yang + one material, guaranteed success
+  and one atomic item/wallet transaction. See [project direction](project-direction.md).
