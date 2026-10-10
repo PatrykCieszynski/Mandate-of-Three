@@ -5,6 +5,13 @@ var handled: int = 0
 func _ready() -> void:
 	_run.call_deferred()
 func _run() -> void:
+	var upgrade: Dictionary = {"npc_instance_id":"spike-blacksmith-01","service_id":"upgrade","id":"a".repeat(32),"revision":0}
+	assert(InventoryWebController._valid_upgrade(upgrade))
+	upgrade["yang_cost"] = 1
+	assert(not InventoryWebController._valid_upgrade(upgrade))
+	upgrade.erase("yang_cost")
+	upgrade.revision = NAN
+	assert(not InventoryWebController._valid_upgrade(upgrade))
 	assert(not WebUiHost.supported_client(), "Headless must never compose a browser")
 	if OS.has_feature("dedicated_server"):
 		assert(not ClassDB.class_exists("CefTexture"), "Server export must exclude native CEF")

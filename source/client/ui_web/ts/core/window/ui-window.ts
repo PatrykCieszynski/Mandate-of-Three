@@ -93,9 +93,12 @@ export class UiWindow {
     this.removals.push(() => titlebar.dispose());
   }
   private bindLayout() {
+    let wasHidden = this.root.hidden;
     this.removals.push(
       this.handle.onLayoutChanged(({ cancelTransient }) => {
-        if (cancelTransient) this.cancel();
+        // Repainting an already hidden window must not cancel another window's carry.
+        if (cancelTransient && (!this.root.hidden || !wasHidden)) this.cancel();
+        wasHidden = this.root.hidden;
         if (this.root.hidden || this.disposed || this.options.manager.disposed)
           return;
         this.updateOverflow();

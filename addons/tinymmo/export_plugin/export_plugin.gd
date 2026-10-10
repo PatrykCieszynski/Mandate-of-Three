@@ -43,6 +43,9 @@ func _export_begin(features: PackedStringArray, _is_debug: bool, _path: String, 
 			if file_name.ends_with(".png"):
 				var path := skin_root + file_name
 				add_file(path, FileAccess.get_file_as_bytes(path), false)
+		# CEF also needs the raw local SVG, not its imported Godot texture.
+		var material_icon := "res://source/client/ui_web/web/content/upgrade_ore.svg"
+		add_file(material_icon, FileAccess.get_file_as_bytes(material_icon), false)
 	if not _client_export:
 		print("Server export: real source/server scripts ship; client autoloads self-free via OS.has_feature(\"client\").")
 

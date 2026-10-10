@@ -8,6 +8,7 @@ import { OwnedItemDragSubject, itemWindowControls, } from '../../game-ui/items/i
 import { npcOpening, NpcServiceKind } from '../npc/npc-model.js';
 import { MAX_UPGRADE_LEVEL, previewItemLevel, upgradeExample, upgradePreview, } from './upgrade-preview.js';
 export function mountUpgrade(root, options) {
+    let recipe = { active: false }, inventory = null, wallet = {}, pending = false, generation = 0, notice = '';
     let item = null, level = 0, confirmed = false, key = '', disposed = false;
     const shell = new UiWindow(root, {
         id: 'upgrade',
@@ -88,7 +89,7 @@ export function mountUpgrade(root, options) {
         label: 'Upgrade',
         className: 'upgrade-cta',
         onClick: () => {
-            if (!item || level === MAX_UPGRADE_LEVEL)
+            if (!canUpgrade())
                 return;
             confirmed = true;
             tip.hide();
@@ -105,14 +106,15 @@ export function mountUpgrade(root, options) {
         label: 'Confirm',
         className: 'upgrade-cta',
         onClick: () => {
-            if (!confirmed || !item || level >= MAX_UPGRADE_LEVEL)
+            if (!confirmed || !item || !canUpgrade())
                 return;
             confirmed = false;
-            level++;
-            render();
-            (level === MAX_UPGRADE_LEVEL ? cancel : upgrade).element.focus({
-                preventScroll: true,
-            });
+            if (options.devPreview) {
+                level++;
+                render();
+                return;
+            }
+            void submit('execute', item);
         },
     });
     const no = UiButton({
@@ -130,7 +132,7 @@ export function mountUpgrade(root, options) {
     find('.upgrade-primary-actions').append(upgrade.element, cancel.element);
     shell.listen(slot, 'pointermove', (event) => {
         if (item && !options.drag.active && !confirmed)
-            tip.show(event, upgradePreview(item, level).current);
+            tip.show(event, presentation().current);
     });
     shell.listen(slot, 'pointerleave', () => tip.hide());
     const bindings = itemWindowControls(options.drag, root);
@@ -141,7 +143,14 @@ export function mountUpgrade(root, options) {
                 payload.subject.container === 'inventory'
                 ? payload.subject
                 : null;
-            const valid = !confirmed && !!subject && previewItemLevel(subject.item) !== null;
+            const valid = !confirmed &&
+                !pending &&
+                !!subject &&
+                (options.devPreview
+                    ? previewItemLevel(subject.item) !== null
+                    : !!recipe.active &&
+                        subject.item.definition_id === recipe.itemDefinitionId &&
+                        subject.item.upgrade_level === recipe.fromLevel);
             const marker = document.createElement('div');
             marker.className = 'upgrade-drop-preview' + (valid ? '' : ' invalid');
             marker.textContent = valid ? 'Select item' : 'Iron Sword required';
@@ -159,7 +168,14 @@ export function mountUpgrade(root, options) {
     if (devControls)
         bindings.push(options.drag.registerControl(devControls.element, 'cancel'));
     function choose(value) {
-        const initial = previewItemLevel(value);
+        const initial = options.devPreview
+            ? previewItemLevel(value)
+            : (value.upgrade_level ?? null);
+        if (!options.devPreview) {
+            if (initial !== null && initial === 0 && !root.hidden && !disposed)
+                void submit('select', value);
+            return;
+        }
         if (initial === null || root.hidden || disposed)
             return;
         options.drag.cancel();
@@ -168,6 +184,93 @@ export function mountUpgrade(root, options) {
         confirmed = false;
         tip.hide();
         render();
+    }
+    function canUpgrade() {
+        if (!item || pending)
+            return false;
+        if (options.devPreview)
+            return level < MAX_UPGRADE_LEVEL;
+        return (recipe.active &&
+            'id' in recipe.candidate &&
+            recipe.candidate.level === recipe.fromLevel &&
+            recipe.materialOwned >= recipe.materialAmount &&
+            wallet.ready === true &&
+            (wallet.balance ?? 0) >= recipe.yangCost);
+    }
+    async function submit(action, value) {
+        if (!recipe.active || pending || disposed)
+            return { ok: false, error: 'unavailable' };
+        const token = generation;
+        const command = {
+            npc_instance_id: recipe.npcInstanceId,
+            service_id: recipe.serviceId,
+            id: value.id,
+            revision: value.revision,
+        };
+        pending = true;
+        notice = '';
+        render();
+        let result;
+        try {
+            result = (await options[action]?.(command)) ?? {
+                ok: false,
+                error: 'unavailable',
+            };
+        }
+        catch {
+            result = { ok: false, error: 'timeout' };
+        }
+        if (disposed || token !== generation)
+            return result;
+        pending = false;
+        notice = result.ok
+            ? action === 'execute'
+                ? 'Upgrade successful.'
+                : ''
+            : `Rejected: ${result.error ?? 'request'}`;
+        render();
+        return result;
+    }
+    function syncCandidate() {
+        if (options.devPreview || !recipe.active)
+            return;
+        const candidate = recipe.candidate;
+        item =
+            'id' in candidate
+                ? (inventory?.items.find((i) => i.id === candidate.id && i.revision === candidate.revision) ?? null)
+                : null;
+        level = 'level' in candidate ? candidate.level : 0;
+    }
+    function presentation() {
+        if (!item)
+            return null;
+        if (options.devPreview)
+            return upgradePreview(item, level);
+        const candidate = recipe.active ? recipe.candidate : {};
+        const next = recipe.active &&
+            'level' in candidate &&
+            candidate.level === recipe.fromLevel
+            ? {
+                ...item,
+                name: item.name.replace(/ \+[0-9]$/, ` +${recipe.toLevel}`),
+                tooltip: {
+                    ...item.tooltip,
+                    properties: [`Attack: ${candidate.nextAttack}`],
+                },
+            }
+            : null;
+        return {
+            current: {
+                ...item,
+                tooltip: {
+                    ...item.tooltip,
+                    properties: item.tooltip?.properties ?? [],
+                },
+            },
+            next,
+            cost: recipe.active ? recipe.yangCost : 0,
+            materialCount: recipe.active ? recipe.materialAmount : 0,
+        };
     }
     function lines(selector, values) {
         const node = find(selector);
@@ -181,7 +284,7 @@ export function mountUpgrade(root, options) {
     function render() {
         if (disposed)
             return;
-        const preview = item ? upgradePreview(item, level) : null;
+        const preview = presentation();
         slot.style.height = `${(item?.height ?? 2) * 40 - 2}px`;
         if (preview)
             paintItemIcon(slot, preview.current, {
@@ -203,7 +306,7 @@ export function mountUpgrade(root, options) {
         find('.upgrade-comparison').hidden = !item;
         find('.upgrade-transition').textContent = preview?.next
             ? `+${level} → +${level + 1}`
-            : `+${MAX_UPGRADE_LEVEL}`;
+            : `+${level}`;
         lines('.upgrade-properties', (preview?.current.tooltip.properties ?? []).map((line, index) => {
             const nextLine = preview?.next?.tooltip.properties[index];
             const currentLine = line.replace(/^Attack: /, 'Attack ');
@@ -214,11 +317,25 @@ export function mountUpgrade(root, options) {
         lines('.upgrade-affixes', item?.tooltip?.affixes?.flatMap((affix) => [...affix.lines]) ?? []);
         lines('.upgrade-requirements', item?.tooltip?.requirements ?? []);
         find('.upgrade-recipe').hidden = !preview?.next;
-        find('.upgrade-material-name').textContent =
-            `Upgrade material × ${preview?.materialCount ?? 0}`;
+        find('.upgrade-material-name').textContent = options.devPreview
+            ? `Upgrade material × ${preview?.materialCount ?? 0}`
+            : recipe.active
+                ? `${recipe.materialName} × ${recipe.materialAmount} (owned: ${recipe.materialOwned})`
+                : '';
         find('.upgrade-cost').textContent =
             `${(preview?.cost ?? 0).toLocaleString('en-US')} Yang`;
-        find('.upgrade-max').hidden = !item || level !== MAX_UPGRADE_LEVEL;
+        find('.upgrade-max').hidden = !item || !!preview?.next;
+        find('.upgrade-max').textContent = options.devPreview
+            ? 'Maximum upgrade level reached.'
+            : 'Only +0 → +1 is available.';
+        find('.upgrade-notice').textContent = options.devPreview
+            ? 'Preview only. Items and Yang are unchanged.'
+            : pending
+                ? 'Waiting for server…'
+                : notice ||
+                    (recipe.active
+                        ? 'The item stays in Inventory. Upgrade consumes material and Yang.'
+                        : 'Waiting for upgrade service…');
         if (devControls) {
             devControls.previous.setDisabled(!item || confirmed || level === 0);
             devControls.next.setDisabled(!item || confirmed || level === MAX_UPGRADE_LEVEL);
@@ -230,7 +347,9 @@ export function mountUpgrade(root, options) {
             `Upgrade to ${preview?.next?.name ?? ''} for ${(preview?.cost ?? 0).toLocaleString('en-US')} Yang?`;
         upgrade.element.hidden = confirmed;
         cancel.element.hidden = confirmed;
-        upgrade.setDisabled(!item || level === MAX_UPGRADE_LEVEL);
+        upgrade.setDisabled(!canUpgrade());
+        yes.setDisabled(!canUpgrade());
+        no.setDisabled(pending);
         shell.refresh();
         options.onRegionsChanged?.();
     }
@@ -239,7 +358,7 @@ export function mountUpgrade(root, options) {
             return false;
         options.drag.cancel();
         tip.hide();
-        if (confirmed) {
+        if (confirmed && !pending) {
             confirmed = false;
             render();
             upgrade.element.focus({ preventScroll: true });
@@ -250,6 +369,12 @@ export function mountUpgrade(root, options) {
     }
     return {
         regions: [shell.panel],
+        async selectItem(command) {
+            const selected = inventory?.items.find((i) => i.id === command.id && i.revision === command.revision);
+            if (!selected || root.hidden)
+                return { ok: false, error: 'unavailable' };
+            return submit('select', selected);
+        },
         closeIfActive,
         setNpcState(snapshot) {
             const opening = npcOpening(snapshot);
@@ -259,6 +384,9 @@ export function mountUpgrade(root, options) {
                 ? `${snapshot.npcInstanceId}:${opening.service.id}`
                 : '';
             if (key !== nextKey) {
+                generation++;
+                pending = false;
+                notice = '';
                 item = null;
                 level = 0;
                 confirmed = false;
@@ -272,7 +400,13 @@ export function mountUpgrade(root, options) {
                 shell.handle.activate();
         },
         setInventory(snapshot) {
-            if (!item || (options.devPreview && item.id === upgradeExample.id))
+            inventory = snapshot;
+            if (!options.devPreview) {
+                syncCandidate();
+                render();
+                return;
+            }
+            if (!item || item.id === upgradeExample.id)
                 return;
             const current = snapshot.items.find((entry) => entry.id === item.id);
             if (!current || previewItemLevel(current) === null) {
@@ -284,10 +418,33 @@ export function mountUpgrade(root, options) {
             else if (current.revision !== item.revision)
                 choose(current);
         },
+        setState(snapshot) {
+            const changed = recipe.active !== snapshot.active ||
+                (recipe.active &&
+                    snapshot.active &&
+                    (recipe.npcInstanceId !== snapshot.npcInstanceId ||
+                        recipe.serviceId !== snapshot.serviceId));
+            if (changed) {
+                generation++;
+                pending = false;
+                confirmed = false;
+                notice = '';
+            }
+            recipe = structuredClone(snapshot);
+            syncCandidate();
+            if (!recipe.active && !options.devPreview)
+                item = null;
+            render();
+        },
+        setWallet(snapshot) {
+            wallet = snapshot;
+            render();
+        },
         dispose() {
             if (disposed)
                 return;
             disposed = true;
+            generation++;
             bindings.forEach((binding) => binding.dispose());
             [upgrade, cancel, yes, no].forEach((button) => button.dispose());
             if (devControls)

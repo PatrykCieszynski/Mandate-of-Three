@@ -14,6 +14,8 @@ var _request_epoch: String = Crypto.new().generate_random_bytes(8).hex_encode()
 const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
 var ui_scale: float = 1.0
 var _scale_initialized: bool = false
+var _npc_target_elapsed: float = 0.0
+var _npc_targets_state: Dictionary = {}
 var _tooltip_alt: bool = false
 var _tooltip_focused: bool = true
 
@@ -46,6 +48,13 @@ func setup(game_world: SpikeWorld3D) -> void:
 	dispatcher.register_command("npc.clear_service", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary: return await _npc_submit("clear_service"))
 	dispatcher.register_command("shop.open", _valid_npc_service, func(p: Dictionary) -> Dictionary: return await _shop_submit("open", p))
 	dispatcher.register_command("shop.buy", _valid_shop_buy, func(p: Dictionary) -> Dictionary: return await _shop_submit("buy", p))
+	dispatcher.register_command("upgrade.select", _valid_upgrade, func(p: Dictionary) -> Dictionary: return await _upgrade_submit("select", p))
+	dispatcher.register_command("upgrade.execute", _valid_upgrade, func(p: Dictionary) -> Dictionary: return await _upgrade_submit("upgrade", p))
+	dispatcher.register_command("npc.upgrade_item", _valid_upgrade_drop, _drop_on_npc)
+	world.upgrade_endpoint.state_changed.connect(func(snapshot: Dictionary) -> void: dispatcher.set_domain("upgrade",snapshot))
+	world.upgrade_endpoint.operation_finished.connect(_operation_finished)
+	dispatcher.set_domain("upgrade",world.upgrade_endpoint.state)
+	dispatcher.set_domain("npc_targets",{"width":0,"height":0,"targets":[]})
 	world.shop_endpoint.state_changed.connect(_shop_state)
 	world.shop_endpoint.operation_finished.connect(_operation_finished)
 	dispatcher.set_domain("shop", world.shop_endpoint.state)
@@ -74,6 +83,21 @@ func setup(game_world: SpikeWorld3D) -> void:
 	# UI_READY receives the current snapshot, including updates during startup.
 	host.open()
 
+static func _valid_upgrade(p: Dictionary) -> bool:
+	return p.size() == 4 and _valid_identity(p) and _valid_npc_service({"npc_instance_id":p.get("npc_instance_id"),"service_id":p.get("service_id")})
+
+static func _valid_upgrade_drop(p: Dictionary) -> bool:
+	return p.size() == 3 and _valid_identity(p) and p.get("npc_instance_id") is String and NeutralNpc3D.valid_instance_id(p.npc_instance_id)
+
+func _upgrade_submit(action: String, p: Dictionary) -> Dictionary:
+	var id: String = _begin_command()
+	world.upgrade_endpoint.request_upgrade.rpc_id(1,action,p.npc_instance_id,p.service_id,p.id,int(p.revision),id)
+	return await _wait_command(id)
+
+func _drop_on_npc(p: Dictionary) -> Dictionary:
+	if not world.begin_npc_approach(p.npc_instance_id,{"id":p.id,"revision":int(p.revision)}): return {"ok":false,"error":"unavailable"}
+	return {"ok":true}
+
 func _shop_state(snapshot: Dictionary) -> void:
 	if snapshot.get("active", false):
 		opened = true
@@ -93,7 +117,7 @@ func _shop_submit(action: String, p: Dictionary) -> Dictionary:
 	return await _wait_command(id)
 
 func _npc_state(snapshot: Dictionary) -> void:
-	# Upgrade is a CEF preview only; opening Inventory changes presentation, not items.
+	# Opening Inventory changes presentation only; Upgrade owns its transaction.
 	if snapshot.get("active", false):
 		for service: Dictionary in snapshot.get("services", []):
 			if service.id == snapshot.get("selectedServiceId", "") and service.kind == NpcServiceDefinition.Kind.UPGRADE and service.enabled:
@@ -108,8 +132,16 @@ static func _valid_npc(p: Dictionary) -> bool:
 static func _valid_npc_service(p: Dictionary) -> bool:
 	return p.size() == 2 and p.get("npc_instance_id") is String and NeutralNpc3D.valid_instance_id(p.npc_instance_id) and p.get("service_id") is String and GameplayContentId.valid(StringName(p.service_id))
 
-func interact_npc(instance_id: String) -> Dictionary:
-	return await _npc_submit("interact", instance_id)
+func interact_npc(instance_id: String, preselected_item: Dictionary = {}) -> Dictionary:
+	var result: Dictionary = await _npc_submit("interact",instance_id)
+	if not result.ok or preselected_item.is_empty(): return result
+	# Same service and selection commands as the manual menu/Upgrade slot.
+	for service: Dictionary in world.npc_endpoint.state.get("services",[]):
+		if service.kind == NpcServiceDefinition.Kind.UPGRADE and service.enabled:
+			result = await _npc_submit("select",instance_id,service.id)
+			if not result.ok: return result
+			return await _upgrade_submit("select",{"npc_instance_id":instance_id,"service_id":service.id,"id":preselected_item.id,"revision":preselected_item.revision})
+	return {"ok":false,"error":"unknown_service"}
 
 func _npc_submit(action: String, instance_id: String = "", service_id: String = "") -> Dictionary:
 	var id: String = _begin_command()
@@ -124,16 +156,22 @@ static func _item_tooltip_details(item: Dictionary) -> Dictionary:
 		var value_text: String = str(affix.value)
 		if affix.value >= 0: value_text = "+" + value_text
 		affixes.append({"lines": ["%s %s" % [value_text, str(affix.stat).capitalize()]]})
-	return {"properties": ["Attack: %d" % int(item.get("stats", {}).get("attack", 0))], "affixes": affixes}
+	var properties: Array = []
+	for stat: Variant in item.get("stats",{}): properties.append("%s: %d" % [str(stat).capitalize(),int(item.stats[stat])])
+	return {"properties":properties,"affixes":affixes}
+
+static func _item_ui_model(item: Dictionary) -> Dictionary:
+	var definition: ItemDefinition = ItemDefinitions.get_definition(StringName(item.definition_id))
+	var name_text: String = str(item.item_name)
+	if definition != null and not definition.stats_per_upgrade.is_empty(): name_text += " +%d" % int(item.upgrade_level)
+	return {"id":str(item.uid),"revision":int(item.revision),"definition_id":str(item.definition_id),"upgrade_level":int(item.upgrade_level),"name":name_text,"icon_id":str(item.get("icon_id","")),"height":int(item.inventory_height),"quantity":int(item.amount),"tooltip":_item_tooltip_details(item)}
 
 func _inventory(snapshot: Dictionary) -> void:
 	if not snapshot.get("ok", false): return
 	var bag: Array = []
 	var equipped: Array = []
 	for item: Dictionary in snapshot.items:
-		var comparison: Dictionary = world.inventory_endpoint.weapon_comparison(item)
-		var display := {"id": str(item.uid), "revision": int(item.revision), "name": "%s +%d" % [item.item_name, item.upgrade_level], "icon_id": str(item.get("icon_id", "")), "height": int(item.inventory_height), "quantity": int(item.amount), "description": "After equipping: %d (%+d)." % [comparison.attack, comparison.delta]}
-		display["tooltip"] = _item_tooltip_details(item)
+		var display: Dictionary = _item_ui_model(item)
 		if item.location == "equipment":
 			display["slot"] = str(item.equipment_slot)
 			equipped.append(display)
@@ -144,7 +182,9 @@ func _inventory(snapshot: Dictionary) -> void:
 	var stored: Array = []
 	for item: Dictionary in snapshot.get("storage",{}).get("items",[]):
 		var position: int = int(item.bag_position)
-		stored.append({"id":str(item.uid),"revision":int(item.revision),"name":"%s +%d" % [item.item_name,item.upgrade_level],"icon_id":str(item.icon_id),"height":int(item.inventory_height),"quantity":int(item.amount),"tooltip":_item_tooltip_details(item),"x":position % 15,"y":(position % 135) / 15,"page":position / 135})
+		var display: Dictionary = _item_ui_model(item)
+		display.merge({"x":position % 15,"y":(position % 135) / 15,"page":position / 135})
+		stored.append(display)
 	if snapshot.get("storage",{}).get("ok",false): dispatcher.set_domain("storage",{"columns":15,"rows":9,"pages":2,"items":stored})
 	dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag})
 	dispatcher.set_domain("equipment", {"items":equipped, "stats":snapshot.get("stats", {})})
@@ -250,6 +290,32 @@ func set_open(active: bool) -> void:
 # Pointer-only CEF keeps gameplay keyboard ownership. Send modifier changes as
 # presentation input, never server RPCs or a request for keyboard focus.
 func _process(_delta: float) -> void:
+	_npc_target_elapsed += _delta
+	if _npc_target_elapsed >= 0.1 and is_instance_valid(world) and is_instance_valid(dispatcher):
+		_npc_target_elapsed = 0.0
+		var viewport: Vector2 = world.get_viewport().get_visible_rect().size
+		var targets: Array = []
+		var camera: Camera3D = world._camera
+		if camera != null:
+			for actor: NeutralNpc3D in world.npc_endpoint.actors.values():
+				if targets.size() >= 64: break
+				if not actor.interactable or camera.is_position_behind(actor.global_position): continue
+				var has_upgrade: bool = false
+				for service: NpcServiceDefinition in actor.definition.services:
+					if service.kind == NpcServiceDefinition.Kind.UPGRADE and actor.service_enabled(service.service_id): has_upgrade = true
+				if not has_upgrade: continue
+				var rect := Rect2(camera.unproject_position(actor.global_position),Vector2.ZERO)
+				for x: float in [-0.4,0.4]:
+					for y: float in [0.0,1.8]:
+						for z: float in [-0.4,0.4]: rect = rect.expand(camera.unproject_position(actor.global_position + Vector3(x,y,z)))
+				if not rect.position.is_finite() or not rect.size.is_finite(): continue
+				rect = rect.intersection(Rect2(Vector2.ZERO,viewport))
+				if not rect.has_area(): continue
+				targets.append({"id":actor.instance_id,"x":rect.position.x,"y":rect.position.y,"w":rect.size.x,"h":rect.size.y})
+		var snapshot: Dictionary = {"width":viewport.x,"height":viewport.y,"targets":targets}
+		if snapshot != _npc_targets_state:
+			_npc_targets_state = snapshot
+			dispatcher.set_domain("npc_targets",snapshot)
 	_set_tooltip_alt(_tooltip_focused and Input.is_key_pressed(KEY_ALT))
 
 func _set_tooltip_alt(pressed: bool) -> void:

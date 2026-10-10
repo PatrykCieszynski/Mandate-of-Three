@@ -15,6 +15,7 @@ var _sequence: int = 0
 var _input_accum: float = 0.0
 var _snapshot_accum: float = 0.0
 var _npc_approach := NpcApproach.new()
+var _npc_preselected_item: Dictionary = {}
 var _npc_repath_ms: int = 0
 var _npc_approach_until_ms: int = 0
 var _camera: Camera3D
@@ -23,6 +24,7 @@ var _ui_failure_label: Label
 var _status: Label
 var inventory_endpoint: SpikeInventory3D
 var combat_endpoint: SpikeCombat3D
+var upgrade_endpoint: Upgrade3D
 var shop_endpoint: Shop3D
 var npc_endpoint: NpcInteraction3D
 var currency_endpoint: SpikeCurrency3D
@@ -45,6 +47,9 @@ func _ready() -> void:
 	shop_endpoint = Shop3D.new()
 	shop_endpoint.name = "Shop"
 	add_child(shop_endpoint)
+	upgrade_endpoint = Upgrade3D.new()
+	upgrade_endpoint.name = "Upgrade"
+	add_child(upgrade_endpoint)
 	var blacksmith := preload("res://source/common/gameplay/npcs/blacksmith_fixture.tscn").instantiate() as NeutralNpc3D
 	add_child(blacksmith)
 	if not npc_endpoint.register_actor(blacksmith):
@@ -198,11 +203,18 @@ func _unhandled_input(event: InputEvent) -> void:
 				nearest = distance
 				npc_id = actor.instance_id
 	if npc_id != "":
-		_npc_approach.start(npc_id)
-		_npc_repath_ms = 0
-		_npc_approach_until_ms = Time.get_ticks_msec() + 15000
-		combat_endpoint.autoattack = false
+		begin_npc_approach(npc_id)
 		get_viewport().set_input_as_handled()
+
+func begin_npc_approach(instance_id: String, preselected_item: Dictionary = {}) -> bool:
+	var actor: NeutralNpc3D = npc_endpoint.actors.get(instance_id)
+	if _server or not input_enabled or ClientState.menu_open or not characters.has(local_peer) or not characters[local_peer].alive or not is_instance_valid(actor) or not actor.interactable: return false
+	_npc_approach.start(instance_id)
+	_npc_preselected_item = preselected_item.duplicate(true)
+	_npc_repath_ms = 0
+	_npc_approach_until_ms = Time.get_ticks_msec() + 15000
+	combat_endpoint.autoattack = false
+	return true
 
 func _npc_direction(manual: Vector2) -> Vector2:
 	if _npc_approach.target_id.is_empty(): return combat_endpoint.assist_direction(manual)
@@ -219,7 +231,8 @@ func _npc_direction(manual: Vector2) -> Vector2:
 	var result: Dictionary = _npc_approach.step(body.target_position, actor.global_position, actor.definition.interaction_radius, manual)
 	if not str(result.interact).is_empty():
 		var ui: InventoryWebController = get_node_or_null("WebInventory")
-		if ui != null: ui.interact_npc(result.interact)
+		if ui != null: ui.interact_npc(result.interact,_npc_preselected_item)
+		_npc_preselected_item = {}
 	return result.direction
 
 @rpc("any_peer", "call_remote", "reliable", 0)
@@ -250,6 +263,7 @@ func remove_peer(peer_id: int) -> void:
 		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 		if resource != null and WorldServer.curr.database != null:
 			WorldServer.curr.database.flush_character(resource.player_id)
+	upgrade_endpoint.remove_peer(peer_id)
 	shop_endpoint.remove_peer(peer_id)
 	npc_endpoint.remove_peer(peer_id)
 	combat_endpoint.remove_peer(peer_id)

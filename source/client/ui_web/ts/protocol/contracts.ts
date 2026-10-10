@@ -1,3 +1,4 @@
+import type {UpgradeSnapshot,UpgradeCommand,NpcDropTargets} from '../screens/upgrade/upgrade-model.js';
 import type {ShopSnapshot,ShopBuyCommand} from '../screens/shop/shop-model.js';
 import type {NpcInteractionSnapshot} from '../screens/npc/npc-model.js';
 import type { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES } from '../screens/storage/storage-model.js';
@@ -12,10 +13,10 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
-  shop?: ShopSnapshot; npc?: NpcInteractionSnapshot; storage?: StorageSnapshot; inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
+  upgrade?: UpgradeSnapshot; npc_targets?: NpcDropTargets; shop?: ShopSnapshot; npc?: NpcInteractionSnapshot; storage?: StorageSnapshot; inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
   player?: RawObject; hud?: HudSnapshot;
 }
 export interface Envelope { v: 1; type: string; id?: string; payload: RawObject }
@@ -30,6 +31,9 @@ export interface MoveItemCommand extends ItemCommand { x: number; y: number; pag
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'upgrade.select': UpgradeCommand;
+  'upgrade.execute': UpgradeCommand;
+  'npc.upgrade_item': ItemCommand & {npc_instance_id: string};
   'shop.open': {npc_instance_id:string;service_id:string};
   'shop.buy': ShopBuyCommand;
   'npc.clear_service': Record<string,never>;

@@ -160,6 +160,7 @@ See [the UI follow-up TODO](../../../docs/TODO.md) for the transfer controller's
 
 Neutral NPC services use `ts/screens/npc/` and the `npc` domain. The development
 Blacksmith opens its Core UI menu from the game (click or N in range); selection
-opens a service target placeholder, with actual Shop/Upgrade operations deferred.
+routes Shop and Upgrade to their feature windows. Upgrade selects Inventory
+items without relocation and executes the atomic +0 → +1 server transaction.
 See [NPC services](../../../docs/npc-services.md). Edit TypeScript, then rebuild
 committed static modules; CEF never loads development dependencies.

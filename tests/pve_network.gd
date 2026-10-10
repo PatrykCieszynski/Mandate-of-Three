@@ -61,6 +61,7 @@ func _ready() -> void:
 		api.peer_connected.connect(func(id: int) -> void:
 			var number: int = server.connected_players.size() + 1
 			var owner: int = server.database.store.create_player_character("pve%d" % number, {"name": "Pve%d" % number, "skin": 1})
+			check(db.query_with_bindings("UPDATE wallets SET yang=0 WHERE character_id=?;", [owner]), "explicit zero wallet fixture")
 			server.connected_players[id] = server.database.store.get_player(owner)
 			host.awaiting_peers[id] = {})
 		call_deferred("run_server")

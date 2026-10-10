@@ -38,6 +38,7 @@ const server = createServer(async (req, res) => {
       '.js': 'text/javascript',
       '.css': 'text/css',
       '.png': 'image/png',
+      '.svg': 'image/svg+xml',
     };
     res.setHeader(
       'Content-Type',
@@ -563,175 +564,116 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
     await capture('shop-pages-small-' + (fallback ? 'fallback' : 'legacy'));
     // Upgrade milestone uses the same production CEF composition and IPC fixture.
     await page.setViewportSize({ width: 1280, height: 720 });
+    const upgradeItem = {
+      ...snapshot.inventory!.items[0]!,
+      id: 'a'.repeat(32),
+      revision: 0,
+      name: 'Iron Sword +0',
+      definition_id: 'iron_sword',
+      upgrade_level: 0,
+      quantity: 1,
+      tooltip: { properties: ['Attack: 10'] },
+    };
     const upgradeState: DomainSnapshot = {
       ...snapshot,
       npc: { ...npc, selectedServiceId: 'upgrade' },
       hud: { ...snapshot.hud, inventory_open: true, ui_scale: 1 },
-      inventory: {
-        ...snapshot.inventory!,
-        items: snapshot.inventory!.items.map((item) => ({
-          ...item,
-          name: 'Żelazny miecz +0',
-          tooltip: { category: 'Sword', properties: ['Attack: 10'] },
-        })),
+      inventory: { ...snapshot.inventory!, items: [upgradeItem] },
+      upgrade: {
+        active: true,
+        npcInstanceId: npc.npcInstanceId,
+        serviceId: 'upgrade',
+        upgradeId: 'basic_upgrade',
+        itemDefinitionId: 'iron_sword',
+        fromLevel: 0,
+        toLevel: 1,
+        yangCost: 1000,
+        materialDefinitionId: 'upgrade_ore',
+        materialName: 'Upgrade Ore',
+        materialAmount: 1,
+        materialOwned: 1,
+        successRate: 100,
+        candidate: {
+          id: upgradeItem.id,
+          revision: 0,
+          level: 0,
+          attack: 10,
+          nextAttack: 12,
+        },
       },
     };
     await send(upgradeState);
     await frame();
     const upgradeWindow = page.locator('#upgrade');
     assert.equal(
-      await upgradeWindow.locator('.upgrade-window').isVisible(),
-      true,
+      await upgradeWindow.locator('.upgrade-name').textContent(),
+      'Iron Sword +0',
     );
-    assert.equal(await page.locator('#npc-service').isVisible(), false);
-    const original = await page.evaluate(() =>
-      structuredClone(window.shopFixture.inventory),
-    );
-    // Physical Inventory drop is inspection only: no move, equip or economic command.
-    const upgradeSource = await page
-      .locator('.inventory-item')
-      .first()
-      .boundingBox();
-    const destination = await upgradeWindow
-      .locator('.upgrade-item-target')
-      .boundingBox();
-    assert.ok(upgradeSource && destination);
-    const beforeCommands = await page.evaluate(() => sent.length);
-    await page.mouse.move(upgradeSource.x + 10, upgradeSource.y + 10);
-    await page.mouse.down();
-    await page.mouse.move(destination.x + 12, destination.y + 20, { steps: 8 });
-    await page.mouse.up();
-    await page.waitForFunction(
-      () =>
-        document.querySelector('.upgrade-name')?.textContent ===
-        'Żelazny miecz +0',
+    await upgradeWindow
+      .getByRole('button', { name: 'Upgrade', exact: true })
+      .click();
+    await upgradeWindow
+      .getByRole('button', { name: 'Confirm', exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      sent.some((m) => m.type === 'upgrade.execute'),
     );
     assert.equal(
-      await upgradeWindow
-        .getByRole('button', { name: 'Preview Iron Sword', exact: true })
-        .count(),
-      0,
+      await upgradeWindow.locator('.upgrade-name').textContent(),
+      'Iron Sword +0',
+      'Acknowledgement never increments a production item',
     );
-    assert.equal(
-      await upgradeWindow
-        .getByRole('button', { name: 'Next preview level', exact: true })
-        .count(),
-      0,
-    );
+    const upgraded: DomainSnapshot = {
+      ...upgradeState,
+      inventory: {
+        ...upgradeState.inventory!,
+        items: [
+          {
+            ...upgradeItem,
+            revision: 1,
+            name: 'Iron Sword +1',
+            upgrade_level: 1,
+          },
+        ],
+      },
+      upgrade: {
+        ...(upgradeState.upgrade as Extract<
+          NonNullable<DomainSnapshot['upgrade']>,
+          { active: true }
+        >),
+        materialOwned: 0,
+        candidate: {
+          id: upgradeItem.id,
+          revision: 1,
+          level: 1,
+          attack: 12,
+          nextAttack: 14,
+        },
+      },
+    };
+    await send(upgraded);
     await frame();
-    if (screenshotDirectory)
-      await upgradeWindow.locator('.upgrade-window').screenshot({
-        path: path.join(
-          screenshotDirectory,
-          `upgrade-panel-${fallback ? 'fallback' : 'legacy'}.png`,
-        ),
-      });
-    for (let level = 0; level < 9; level++) {
-      assert.equal(
-        await upgradeWindow.locator('.upgrade-name').textContent(),
-        `Żelazny miecz +${level}`,
-      );
-      await upgradeWindow
-        .getByRole('button', { name: 'Upgrade', exact: true })
-        .click();
-      assert.equal(
-        await upgradeWindow.locator('.upgrade-confirmation').isVisible(),
-        true,
-      );
-      if (level === 0) {
-        if (screenshotDirectory)
-          await upgradeWindow.locator('.upgrade-window').screenshot({
-            path: path.join(
-              screenshotDirectory,
-              `upgrade-confirm-${fallback ? 'fallback' : 'legacy'}.png`,
-            ),
-          });
-        await page.keyboard.press('Escape');
-        assert.equal(
-          await upgradeWindow.locator('.upgrade-confirmation').isVisible(),
-          false,
-        );
-        assert.equal(
-          await upgradeWindow.locator('.upgrade-name').textContent(),
-          'Żelazny miecz +0',
-        );
-        await upgradeWindow
-          .getByRole('button', { name: 'Upgrade', exact: true })
-          .click();
-      }
-      await upgradeWindow
-        .getByRole('button', { name: 'Confirm', exact: true })
-        .click();
-    }
-    assert.equal(await upgradeWindow.locator('.upgrade-max').isVisible(), true);
+    assert.equal(
+      await upgradeWindow.locator('.upgrade-name').textContent(),
+      'Iron Sword +1',
+    );
     assert.equal(
       await upgradeWindow
         .getByRole('button', { name: 'Upgrade', exact: true })
         .isDisabled(),
       true,
     );
-    assert.equal(
-      await upgradeWindow.locator('.upgrade-recipe').isVisible(),
-      false,
-    );
-    assert.deepEqual(
-      await page.evaluate(() => window.shopFixture.inventory),
-      original,
-    );
-    const previewCommands = await page.evaluate(
-      (start) => sent.slice(start).filter((message) => message.id),
-      beforeCommands,
-    );
-    assert.deepEqual(
-      previewCommands,
-      [],
-      'Upgrade UI never sends an item/economy command',
-    );
-    const smallUpgradeState: DomainSnapshot = {
-      ...upgradeState,
-      inventory: {
-        ...upgradeState.inventory!,
-        items: upgradeState.inventory!.items.map((item) => ({
-          ...item,
-          revision: 1,
-          name: 'Żelazny miecz +8',
-          tooltip: { category: 'Sword', properties: ['Attack: 26'] },
-        })),
-      },
-    };
-    for (const scale of [1, 1.5]) {
-      await page.setViewportSize({ width: 960, height: 540 });
-      await send({
-        ...smallUpgradeState,
-        hud: { ...upgradeState.hud, ui_scale: scale },
-      });
-      await frame();
-      const bounds = await upgradeWindow
+    if (screenshotDirectory)
+      await upgradeWindow
         .locator('.upgrade-window')
-        .boundingBox();
-      assert.ok(
-        bounds &&
-          bounds.x >= -1 &&
-          bounds.y >= -1 &&
-          bounds.x + bounds.width <= 961 &&
-          bounds.y + bounds.height <= 541,
-      );
-      await upgradeWindow
-        .getByRole('button', { name: 'Upgrade', exact: true })
-        .click();
-      await upgradeWindow
-        .getByRole('button', { name: 'Back', exact: true })
-        .click();
-    }
-    await upgradeWindow
-      .getByRole('button', { name: 'Cancel', exact: true })
-      .click();
-    await page.waitForFunction(
-      () => document.querySelector<HTMLElement>('#upgrade')?.hidden === true,
-    );
-    assert.equal(await page.locator('#npc-menu .npc-window').isVisible(), true);
+        .screenshot({
+          path: path.join(
+            screenshotDirectory,
+            `upgrade-panel-${fallback ? 'fallback' : 'legacy'}.png`,
+          ),
+        });
     console.log(
-      `Upgrade real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, Inventory inspection, +0 through +9, confirmation/Escape, bounds/scales, no mutations)`,
+      `Upgrade real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, server recipe/candidate, explicit command and authoritative +1)`,
     );
     // Development controls are opt-in on their own page, outside the game entry.
     await page.goto(new URL('../dev/upgrade.html', url).href);

@@ -1,3 +1,4 @@
+import { mountNpcWorldDrop } from '../screens/upgrade/npc-world-drop.js';
 import { mountUpgrade } from '../screens/upgrade/upgrade-view.js';
 import { setItemTooltipDetails } from '../game-ui/items/item-tooltip.js';
 import { mountShop } from '../screens/shop/shop-view.js';
@@ -20,7 +21,10 @@ import { mountEquipment } from '../screens/equipment/equipment-view.js';
 const legacy = await loadLegacySkin();
 await applySkin(document.documentElement, legacy.skin);
 uiIcons.replace(legacy.uiIcons, new URL('./', import.meta.url));
-const itemIcons = new ItemIconResolver(legacy.itemIcons);
+const itemIcons = new ItemIconResolver({
+    ...legacy.itemIcons,
+    upgrade_ore: new URL('../content/upgrade_ore.svg', import.meta.url).href,
+});
 export const resolveItemIcon = (id) => itemIcons.resolve(id);
 export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
@@ -52,7 +56,7 @@ const bridge = new WebBridge({
             message.type === 'inventory.updated' ||
             message.type === 'storage.updated' ||
             message.type === 'equipment.updated' ||
-            message.type === 'hud.updated' ||
+            message.type === 'upgrade.updated' ||
             message.type === 'shop.updated' ||
             message.type === 'npc.updated')
             drag.cancel();
@@ -86,14 +90,25 @@ const bridge = new WebBridge({
             message.type === 'inventory.updated') &&
             state.inventory)
             upgrade.setInventory(state.inventory);
+        if (message.type === 'ui.snapshot' || message.type === 'upgrade.updated')
+            upgrade.setState(state.upgrade ?? { active: false });
+        if (message.type === 'ui.snapshot' || message.type === 'wallet.updated')
+            upgrade.setWallet(state.wallet ?? {});
+        if (message.type === 'ui.snapshot' ||
+            message.type === 'npc_targets.updated')
+            worldDrop.setState(state.npc_targets ?? { width: 0, height: 0, targets: [] });
         if (message.type === 'ui.snapshot' || message.type === 'shop.updated')
             shop.setState(state.shop ?? { active: false });
     },
 });
 const drag = new ItemDragRuntime({
     scale: () => manager.scale,
-    onRegionsChanged: () => regions?.refresh(),
+    onRegionsChanged: () => {
+        worldDrop?.setCarrying(drag.active);
+        regions?.refresh();
+    },
 });
+const worldDrop = mountNpcWorldDrop(drag, (npc, item) => bridge.request('npc.upgrade_item', { npc_instance_id: npc, ...item }), () => regions?.refresh());
 const view = mountInventory(root, {
     drag,
     quickDeposit: (item) => storage.tryQuickDeposit(item),
@@ -102,7 +117,11 @@ const view = mountInventory(root, {
     receiveEquipped: (item, position) => equipment.unequip(item, position),
     manager,
     resolveItemIcon,
-    activateItem: (payload) => bridge.request('item.activate', payload),
+    activateItem: (payload) => {
+        if (!upgradeRoot.hidden)
+            return upgrade.selectItem(payload);
+        return bridge.request('item.activate', payload);
+    },
     moveItem: (payload) => bridge.request('inventory.move_item', payload),
     onClose: () => bridge.request('inventory.close', {}).catch(() => { }),
     onRegionsChanged: () => regions?.refresh(),
@@ -139,6 +158,8 @@ const shop = mountShop(shopRoot, {
     onRegionsChanged: () => regions?.refresh(),
 });
 const upgrade = mountUpgrade(upgradeRoot, {
+    select: (payload) => bridge.request('upgrade.select', payload),
+    execute: (payload) => bridge.request('upgrade.execute', payload),
     manager,
     drag,
     resolveItemIcon,
@@ -174,6 +195,7 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
     onRegionsChanged: () => regions?.refresh(),
 });
 regions = reportInteractiveRegions(bridge, [
+    ...worldDrop.regions,
     ...shop.regions,
     ...upgrade.regions,
     ...npc.regions,
@@ -183,6 +205,7 @@ regions = reportInteractiveRegions(bridge, [
     ...drag.regions,
 ]);
 window.addEventListener('pagehide', () => {
+    worldDrop.dispose();
     upgrade.dispose();
     shop.dispose();
     npc.dispose();

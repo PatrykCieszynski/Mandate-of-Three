@@ -20,7 +20,7 @@ foreach ($taskPreset in @('Windows','ServerWindows','ServerUbuntu')) {
         $taskReader = [IO.StreamReader]::new($taskEntry.Open())
         try { $taskExtensions = $taskReader.ReadToEnd() } finally { $taskReader.Dispose() }
         if ($taskPreset -eq 'Windows') {
-            foreach ($taskRequired in @('addons/godot_cef/godot_cef.gdextension','source/client/ui_web/web/inventory/game.html','source/client/ui_web/web/inventory/game.js','source/client/ui_web/web/inventory/inventory.css','source/client/ui_web/web/core/window/ui-window.js','source/client/ui_web/web/core/window/generated/ui-window-template.js')) {
+            foreach ($taskRequired in @('addons/godot_cef/godot_cef.gdextension','source/client/ui_web/web/content/upgrade_ore.svg','source/client/ui_web/web/inventory/game.html','source/client/ui_web/web/inventory/game.js','source/client/ui_web/web/inventory/inventory.css','source/client/ui_web/web/core/window/ui-window.js','source/client/ui_web/web/core/window/generated/ui-window-template.js')) {
                 if ($taskRequired -notin $taskNames) { throw "Missing client resource: $taskRequired" }
             }
             # Every local runtime module must survive packaging, including moved screens

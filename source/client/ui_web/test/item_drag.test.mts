@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { ItemDragRuntime } from '../web/game-ui/drag/item-drag-runtime.js';
+import { UiWindow } from '../web/core/window/ui-window.js';
 import { mountInventory } from '../web/screens/inventory/inventory-view.js';
 import { mountStorage } from '../web/screens/storage/storage-view.js';
 import { mountEquipment } from '../web/screens/equipment/equipment-view.js';
@@ -639,4 +640,37 @@ test('unregistering a target before its queued drop prevents dispatch', async ()
     f.runtime.dispose();
     f.manager.dispose();
   }
+});
+
+test('background refresh of a hidden window preserves carry; hiding the source window cancels it', () => {
+  const f = fixture();
+  const root = target();
+  root.hidden = true;
+  document.body.append(root);
+  const shell = new UiWindow(root, {
+    id: 'background',
+    title: 'Background',
+    manager: f.manager,
+    onCancel: () => f.runtime.cancel(),
+  });
+  const source = f.runtime.registerSource({
+    element: f.node,
+    payload: () => f.payload,
+  });
+  f.pointer(f.node, 'pointerdown');
+  f.pointer(f.node, 'pointerup');
+  assert.equal(f.runtime.latched, true);
+  shell.refresh();
+  shell.refresh();
+  assert.equal(f.runtime.latched, true);
+  root.hidden = false;
+  shell.refresh();
+  root.hidden = true;
+  shell.refresh();
+  assert.equal(f.runtime.active, false);
+  source.dispose();
+  shell.dispose();
+  f.runtime.dispose();
+  f.manager.dispose();
+  f.host.close();
 });

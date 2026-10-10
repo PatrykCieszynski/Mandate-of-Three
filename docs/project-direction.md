@@ -56,8 +56,8 @@ interactive development Blacksmith: Upgrade and Weapon Shop. Server contexts and
 service authorization are map/range scoped. Shop offers are editable resources;
 NPC Shop purchases now atomically receive items and spend persisted/pending Yang.
 The CEF Shop supports right-click, exact Inventory drops and automatic receiving;
-Upgrade now has a [CEF-only +0 through +9 preview](npc-upgrade-ui.md); its atomic
-transaction remains the next gameplay slice. See [NPC services](npc-services.md) and
+Upgrade now supports [atomic +0 → +1](npc-upgrade-ui.md), consuming Inventory
+material and Yang, with server selection and an Inventory-to-Blacksmith drop entry. See [NPC services](npc-services.md) and
 [NPC Shop](npc-shop.md). Global MVP Storage remains available through B.
 
 A full HUD/character sheet and final art remain outside this slice. No frontend framework. Use small headless smoke checks by
@@ -71,16 +71,14 @@ public alpha. Keep existing user data paths during cosmetic project renames.
 
 ## Next gameplay milestones
 
-Yang wallet/autoloot/test spend and the NPC Shop are implemented. The accepted
-order after this Shop slice:
+Yang wallet/autoloot/test spend, NPC Shop and the +0 → +1 Upgrade slice are
+implemented. Upgrade supports Inventory items only, one material, pending Yang
+and 100% success. Higher upgrades/failure/destruction remain deferred. Next:
 
-1. Upgrade +0 → +1: Yang + one material, 100% success, one atomic item/wallet
-   transaction and refreshed runtime stats. No failure, downgrade, destruction,
-   pity or scrolls.
-2. One affix reroll: consume material and mutate the item in one transaction.
-3. Party vertical slice: invite/accept/leave, shared instance and explicit XP,
+1. One affix reroll: consume material and mutate the item in one transaction.
+2. Party vertical slice: invite/accept/leave, shared instance and explicit XP,
    loot/contribution rules. Highest damage is a temporary solo reward rule.
-4. First regional event: kills increase pressure; a threshold spawns a Metin-like
+3. First regional event: kills increase pressure; a threshold spawns a Metin-like
    object at one of several points; shared combat, reward and pressure reset.
 
 World direction: one logical world, later transparent overflow layers, spawn

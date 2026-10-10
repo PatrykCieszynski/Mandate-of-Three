@@ -105,6 +105,7 @@ func _send_state(peer_id: int, error: String = "") -> void:
 	if error != "":
 		snapshot["error"] = error
 	receive_inventory.rpc_id(peer_id, snapshot)
+	if _world.upgrade_endpoint != null: _world.upgrade_endpoint.publish(peer_id)
 	if not snapshot.ok:
 		return
 	var definition_id: String = ""

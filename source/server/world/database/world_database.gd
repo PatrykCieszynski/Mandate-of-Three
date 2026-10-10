@@ -86,6 +86,14 @@ func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringNa
 	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
 	return result
 
+func upgrade_item(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> Dictionary:
+	if db == null or not runtime_wallets.has(owner_id): return {"ok":false, "error":"storage"}
+	if recipe == null or not recipe.validation_errors().is_empty(): return {"ok":false, "error":"invalid_definition"}
+	if wallet_balance(owner_id) < recipe.yang_cost: return {"ok":false, "error":"funds"}
+	var result: Dictionary = UpgradeStoreSqlite.new(db).upgrade(owner_id,int(runtime_wallets[owner_id].pending_currency_delta),recipe,uid,revision)
+	if result.ok: accept_committed_wallet_balance(owner_id,int(result.balance))
+	return result
+
 func release_wallet(owner_id: int) -> void:
 	# Failed offline saves remain authoritative until a later successful retry.
 	if not dirty_wallet.has(owner_id): runtime_wallets.erase(owner_id)
