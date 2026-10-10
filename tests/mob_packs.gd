@@ -29,6 +29,7 @@ func _ready() -> void:
 	combat.packs.clear()
 	var pack := combat.create_pack([entry(wild,10),entry(feral,4)],Vector3.ZERO,2,3,10,1)
 	var unrelated := combat.create_pack([entry(wild,3)],Vector3(10,0,0),1,2,6,1)
+	pack.rng.seed = 731
 	var ids: Array[int] = pack.actor_ids.duplicate()
 	assert(ids.size() == 14 and unrelated.pack_instance_id != pack.pack_instance_id)
 	var wild_count: int = 0
@@ -53,9 +54,14 @@ func _ready() -> void:
 	combat.aggro_pack(combat.dogs[ids[0]].pack_instance_id,1)
 	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == "CHASE")
 	for id: int in unrelated.actor_ids: assert(combat.dogs[id].target_peer == 0 and combat.dogs[id].ai_state == "IDLE")
-	# A single proximity detection recruits the whole pack too.
-	for id: int in ids: combat.dogs[id].ai_state = "IDLE"
+	# Passive dog definitions ignore proximity; opt-in content still recruits its pack.
+	for id: int in ids:
+		combat.dogs[id].ai_state = "IDLE"
+		combat.dogs[id].target_peer = 0
 	combat.dogs[ids[0]].position = pack.anchor
+	combat._tick_dog(combat.dogs[ids[0]],1.0/60,0)
+	for id: int in ids: assert(combat.dogs[id].ai_state == "IDLE" and combat.dogs[id].target_peer == 0, "Passive dogs ignore nearby players")
+	combat.dogs[ids[0]].proximity_aggro = true
 	combat._tick_dog(combat.dogs[ids[0]],1.0/60,0)
 	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == "CHASE")
 	var member := combat.dogs[ids[0]]
@@ -64,13 +70,19 @@ func _ready() -> void:
 	member.position = Vector3(11,0,0)
 	combat._tick_dog(member,1.0/60,1)
 	assert(member.ai_state == "RETURN" and member.target_peer == 0)
-	member.position = pack.anchor
+	assert(combat._horizontal_distance(member.return_target,pack.anchor) <= pack.wander_radius)
+	var return_point: Vector3 = member.return_target
+	combat._tick_dog(member,1.0/60,2)
+	assert(member.return_target == return_point, "Return destination is chosen once, not rerolled every tick")
+	combat._begin_return(combat.dogs[ids[1]])
+	assert(combat.dogs[ids[1]].return_target != return_point, "Members have independent return destinations")
+	member.position = member.return_target
 	combat._tick_dog(member,1.0/60,2)
 	assert(member.hp == member.max_hp and member.ai_state == "IDLE" and member.target_peer == 0 and member.contributions.is_empty())
 	member.ai_state = "CHASE"
 	member.target_peer = 1
 	hero.position = Vector3(30,0,0)
-	member.position = Vector3(3,0,0)
+	member.position = Vector3(8,0,0)
 	combat._tick_dog(member,1.0/60,3)
 	assert(member.ai_state == "RETURN", "Target outside pack leash triggers return")
 	world.characters.clear()

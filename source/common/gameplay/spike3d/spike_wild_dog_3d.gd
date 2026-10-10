@@ -20,6 +20,8 @@ var mob_id: int:
 	get: return mob_instance_id
 	set(value): mob_instance_id = value
 var pack_instance_id: int = 0
+var proximity_aggro: bool = true
+var return_target: Vector3
 var wander_target: Vector3
 var wander_at_ms: int = 0
 var ai_enabled: bool = true
