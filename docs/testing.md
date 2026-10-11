@@ -124,3 +124,8 @@ animation keys at both real clients, plus pending-toggle/interruption behavior.
 The optional [combo review](warrior-basic-combo-v2.md#verification-and-remaining-manual-review)
 uses the existing Warrior compatibility scene; rendered images are disposable
 verification artifacts, not snapshot assertions in smoke.
+
+`run-combat-trace.ps1` is the optional geometry plus two-client 50/100-target
+Warrior trace contract suite. It uses port 18098; run sequentially with PvE suites.
+`run-combat.ps1 -LegacyMelee` covers the retained fallback. Bake/native comparison
+commands and verification limits are in [Warrior Combat Trace v1](warrior-combat-trace-v1.md).

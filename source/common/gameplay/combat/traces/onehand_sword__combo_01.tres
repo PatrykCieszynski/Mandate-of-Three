@@ -1,0 +1,68 @@
+[gd_resource type="Resource" script_class="CombatTraceDefinition" format=3]
+
+[ext_resource type="Script" path="res://source/common/gameplay/combat/combat_trace_sample.gd" id="1_yh5fg"]
+[ext_resource type="Script" path="res://source/common/gameplay/combat/combat_trace_definition.gd" id="2_k0gav"]
+
+[sub_resource type="Resource" id="Resource_lw64s"]
+script = ExtResource("1_yh5fg")
+time_ms = 192
+base = Vector3(0.5082402, 1.4486908, -0.06442131)
+tip = Vector3(0.9417926, 1.7772839, 1.1162814)
+
+[sub_resource type="Resource" id="Resource_prgx6"]
+script = ExtResource("1_yh5fg")
+time_ms = 206
+base = Vector3(0.52634835, 1.3608716, -0.25058776)
+tip = Vector3(1.3138683, 1.7203325, 0.7192576)
+
+[sub_resource type="Resource" id="Resource_urcnp"]
+script = ExtResource("1_yh5fg")
+time_ms = 219
+base = Vector3(0.45182654, 1.2402778, -0.46526346)
+tip = Vector3(1.5660805, 1.621608, 0.08521399)
+
+[sub_resource type="Resource" id="Resource_xh41h"]
+script = ExtResource("1_yh5fg")
+time_ms = 233
+base = Vector3(0.262566, 1.1110972, -0.6382369)
+tip = Vector3(1.5113847, 1.4701806, -0.677109)
+
+[sub_resource type="Resource" id="Resource_wf8up"]
+script = ExtResource("1_yh5fg")
+time_ms = 247
+base = Vector3(-0.041610166, 0.96234816, -0.6980259)
+tip = Vector3(0.933671, 1.0584816, -1.5521834)
+
+[sub_resource type="Resource" id="Resource_otooy"]
+script = ExtResource("1_yh5fg")
+time_ms = 260
+base = Vector3(-0.3259229, 0.8611333, -0.60237205)
+tip = Vector3(-0.009832412, 0.6604285, -1.8472834)
+
+[sub_resource type="Resource" id="Resource_dhn31"]
+script = ExtResource("1_yh5fg")
+time_ms = 274
+base = Vector3(-0.54038775, 0.79913753, -0.3534244)
+tip = Vector3(-0.99696195, 0.25251073, -1.4409626)
+
+[sub_resource type="Resource" id="Resource_u3dmt"]
+script = ExtResource("1_yh5fg")
+time_ms = 288
+base = Vector3(-0.58859086, 0.7842762, -0.029181756)
+tip = Vector3(-1.5072569, -0.03575504, -0.44583666)
+
+[sub_resource type="Resource" id="Resource_w3lue"]
+script = ExtResource("1_yh5fg")
+time_ms = 301
+base = Vector3(-0.49333555, 0.8003845, 0.22292115)
+tip = Vector3(-1.3648676, -0.118231714, 0.51715934)
+
+[sub_resource type="Resource" id="Resource_qn72d"]
+script = ExtResource("1_yh5fg")
+time_ms = 315
+base = Vector3(-0.4843344, 0.8057284, 0.24724191)
+tip = Vector3(-1.3212423, -0.12220156, 0.60575485)
+
+[resource]
+script = ExtResource("2_k0gav")
+samples = Array[ExtResource("1_yh5fg")]([SubResource("Resource_lw64s"), SubResource("Resource_prgx6"), SubResource("Resource_urcnp"), SubResource("Resource_xh41h"), SubResource("Resource_wf8up"), SubResource("Resource_otooy"), SubResource("Resource_dhn31"), SubResource("Resource_u3dmt"), SubResource("Resource_w3lue"), SubResource("Resource_qn72d")])

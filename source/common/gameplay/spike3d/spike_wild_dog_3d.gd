@@ -122,3 +122,6 @@ func mark_selected(selected: bool) -> void:
 
 func present_hit_lock(down_ms: int, get_up_ms: int) -> void:
 	if presentation != null: presentation.set_hit_lock(down_ms/1000.0,get_up_ms/1000.0)
+
+func combat_radius() -> float: return 0.4
+func combat_height() -> float: return 0.8

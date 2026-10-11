@@ -1,11 +1,20 @@
-[gd_resource type="Resource" script_class="BasicAttackComboDefinition" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="BasicAttackComboDefinition" load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://source/common/gameplay/combat/basic_attack_combo_definition.gd" id="1"]
 [ext_resource type="Script" path="res://source/common/gameplay/combat/basic_attack_step_definition.gd" id="2"]
 
+[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_01.tres" id="Trace0"]
+[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_02.tres" id="Trace1"]
+[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_03.tres" id="Trace2"]
+[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_05.tres" id="Trace3"]
+[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_07.tres" id="Trace4"]
+
 [sub_resource type="Resource" id="Step0"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_01"
+hit_start_ms = 192
+hit_end_ms = 315
+combat_trace = ExtResource("Trace0")
 impact_ms = 260
 recovery_ms = 533
 damage_multiplier = 1.0
@@ -16,6 +25,9 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step1"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_02"
+hit_start_ms = 215
+hit_end_ms = 321
+combat_trace = ExtResource("Trace1")
 impact_ms = 270
 recovery_ms = 543
 damage_multiplier = 1.0
@@ -26,6 +38,9 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step2"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_03"
+hit_start_ms = 181
+hit_end_ms = 418
+combat_trace = ExtResource("Trace2")
 impact_ms = 290
 recovery_ms = 418
 damage_multiplier = 1.0
@@ -36,6 +51,9 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step3"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_05"
+hit_start_ms = 346
+hit_end_ms = 494
+combat_trace = ExtResource("Trace3")
 impact_ms = 410
 recovery_ms = 661
 damage_multiplier = 1.0
@@ -46,6 +64,9 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step4"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_07"
+hit_start_ms = 570
+hit_end_ms = 700
+combat_trace = ExtResource("Trace4")
 impact_ms = 620
 recovery_ms = 1267
 damage_multiplier = 1.5

@@ -34,3 +34,6 @@ func present(title: String, hp: int, max_hp: int, active: bool) -> void:
 	visible = active
 	collision_layer = 4 if active else 0
 	if hp_label != null: hp_label.text = "%s\n%d / %d" % [title,hp,max_hp]
+
+func combat_radius() -> float: return 0.7
+func combat_height() -> float: return 2.8

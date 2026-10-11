@@ -6,6 +6,8 @@ var _interactive := false
 var _review_generation := 0
 var _review_label: Label
 var _review_dog: DogVisual3D
+var _trace_overlays: Array[CombatTraceDebug3D] = []
+var _legacy_trace := false
 func check(value: bool, message: String) -> void:
 	if not value:
 		push_error(message)
@@ -212,7 +214,7 @@ func _setup_stage() -> void:
 	environment.environment.ambient_light_energy = .6
 	add_child(environment)
 	var label := Label.new()
-	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend 0/0.08 | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
+	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend 0/0.08 | T trace/cone | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
 	label.position = Vector2(16,16)
 	add_child(label)
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -223,6 +225,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	elif _review_dog == null and event.keycode >= KEY_1 and event.keycode < KEY_1+_clips.size(): _pose(_clips[event.keycode-KEY_1],false)
 	elif event.keycode == KEY_B and _review_dog != null:
 		for view: WarriorVisual3D in avatars: view.attack_blend_seconds = 0.0 if view.attack_blend_seconds > 0 else 0.08
+	elif event.keycode == KEY_T and not _trace_overlays.is_empty():
+		_legacy_trace = not _legacy_trace
+		for overlay: CombatTraceDebug3D in _trace_overlays:
+			overlay.legacy = _legacy_trace
+			overlay.redraw()
 	elif event.keycode == KEY_V:
 		for view: WarriorVisual3D in avatars: view.set_variant(view.visual_id != &"warrior_armor")
 	elif event.keycode == KEY_ESCAPE: get_tree().quit()
@@ -240,12 +247,39 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 			var swing := runtime.take_step(Time.get_ticks_msec())
 			var step: BasicAttackStepDefinition = swing.step
 			_review_label.text = "%s | step %d/%d | %s | impact %d ms / recovery %d ms / blend %.2f" % [combo.combo_key,i+1,combo.steps.size(),step.animation_key,step.impact_ms,step.recovery_ms,avatars[0].attack_blend_seconds]
+			for overlay: CombatTraceDebug3D in _trace_overlays: overlay.queue_free()
+			_trace_overlays.clear()
+			if OS.get_cmdline_user_args().has("--trace-review"):
+				for view: WarriorVisual3D in avatars:
+					var overlay := CombatTraceDebug3D.new()
+					add_child(overlay)
+					overlay.transform = view.transform
+					var targets: Array[Dictionary] = []
+					var feet := overlay.to_local(_review_dog.global_position)
+					var hit := CombatTraceResolver.hits_capsule(step.combat_trace,view.transform,_review_dog.position,.4,.8)
+					targets.append({"id":1,"position":feet,"radius":.4,"height":.8,"hit":hit,"predicted":true})
+					var pack_count := 0
+					for argument: String in OS.get_cmdline_user_args():
+						if argument.begins_with("--trace-pack="): pack_count = clampi(argument.get_slice("=",1).to_int(),0,100)
+					var measured_at := Time.get_ticks_usec()
+					var pack_hits := 0
+					for target_index: int in pack_count:
+						var pack_feet := Vector3((target_index%10-5)*.35,0,-.6-(target_index/10)*.3)
+						var pack_hit := CombatTraceResolver.hits_capsule(step.combat_trace,Transform3D.IDENTITY,pack_feet,.4,.8)
+						if pack_hit: pack_hits += 1
+						targets.append({"id":target_index+2,"position":pack_feet,"radius":.4,"height":.8,"hit":pack_hit,"predicted":true})
+					if pack_count > 0: print("TRACE_PREVIEW tests=",pack_count," hits=",pack_hits," usec=",Time.get_ticks_usec()-measured_at)
+					overlay.configure(step,targets,_legacy_trace)
+					_trace_overlays.append(overlay)
 			for view: WarriorVisual3D in avatars: view.play_basic_attack(step.animation_key,step.recovery_ms)
 			await get_tree().create_timer(step.impact_ms/1000.0).timeout
 			if ticket != _review_generation: return
 			var result := HitReactionResolver.resolve(step,HitReactionProfiles.NORMAL,1,100,false)
-			if result.reaction == HitReaction.Type.KNOCKDOWN: _review_dog.set_hit_lock(result.duration,result.get_up_duration)
-			else: _review_dog.play_hit()
+			var contact := _trace_overlays.is_empty()
+			for overlay: CombatTraceDebug3D in _trace_overlays: contact = contact or overlay.targets[0].hit
+			if contact:
+				if result.reaction == HitReaction.Type.KNOCKDOWN: _review_dog.set_hit_lock(result.duration,result.get_up_duration)
+				else: _review_dog.play_hit()
 			if OS.get_cmdline_user_args().has("--combo-capture"):
 				await RenderingServer.frame_post_draw
 				assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/combo-%d-step-%d.png" % [combo.steps.size(),i+1]) == OK)

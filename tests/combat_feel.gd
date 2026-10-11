@@ -90,8 +90,8 @@ func run_server() -> void:
 	for dog: SpikeWildDog3D in combat.dogs.values():
 		dog.hp = 120
 		dog.hit_reaction.clear()
-	combat.dogs[1].position = Vector3(-0.7,0,3.4)
-	combat.dogs[2].position = Vector3(0.7,0,3.4)
+	combat.dogs[1].position = Vector3(-0.25,0,3.8)
+	combat.dogs[2].position = Vector3(0.25,0,3.8)
 	for step_index: int in BasicAttackCombos.COMBO_6.steps.size():
 		await wait_until(func() -> bool: return combat.can_move(hero))
 		set_phase("EXT%d" % step_index,hero)

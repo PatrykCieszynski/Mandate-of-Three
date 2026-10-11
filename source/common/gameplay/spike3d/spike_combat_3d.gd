@@ -40,6 +40,7 @@ var _client_attack_accum: float = 0
 var selected_target: Dictionary = {}
 var autoattack: bool = false
 var state: Dictionary = {}
+var _trace_debug: Dictionary[int, CombatTraceDebug3D] = {}
 var navigation_region: NavigationRegion3D
 var _experience_label: Label
 var _experience_bar: ProgressBar
@@ -200,6 +201,9 @@ func initialize_peer(peer_id: int) -> void:
 	_send_snapshot()
 
 func remove_peer(peer_id: int) -> void:
+	if _trace_debug.has(peer_id):
+		_trace_debug[peer_id].queue_free()
+		_trace_debug.erase(peer_id)
 	for collection: Dictionary in [health, _respawn_ms, _next_attack_ms, _combo, _combo_states, _pending, _sequences, _pickup_ms]:
 		collection.erase(peer_id)
 	for dog: SpikeWildDog3D in dogs.values():
@@ -266,9 +270,10 @@ func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	var resolved := combo_state(peer_id).take_step(now)
 	if resolved.is_empty(): return false
 	var hit: BasicAttackStepDefinition = resolved.step
+	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-legacy-melee"): hit.combat_trace = null
 	_combo[peer_id] = int(resolved.step_index) + 1 # Display only; never resolves a hit.
 	_next_attack_ms[peer_id] = now + hit.recovery_ms
-	resolved.merge({"yaw":_world.characters[peer_id].rotation.y,"impact":now+hit.impact_ms,"attack":attack})
+	resolved.merge({"yaw":_world.characters[peer_id].rotation.y,"impact":now+hit.impact_ms,"started":now,"hit_set":{},"attack":attack})
 	_pending[peer_id] = resolved
 	for observer: int in _world.characters:
 		receive_swing.rpc_id(observer,peer_id,resolved.animation_key,resolved.step_index,hit.recovery_ms,resolved.finisher)
@@ -278,37 +283,47 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	var hit_ids: Array[int] = []
 	if not _living(peer_id) or _world.characters[peer_id].hit_reaction.locked(now): return hit_ids
 	var definition: BasicAttackStepDefinition = swing.step
+	if swing.get("resolved",false): return hit_ids
+	var traced := definition.combat_trace != null
+	if traced:
+		var elapsed: int = now-int(swing.get("started",int(swing.impact)-definition.impact_ms))
+		if elapsed < definition.hit_start_ms or elapsed > definition.hit_end_ms: return hit_ids
+	swing["resolved"] = true # One scheduled resolution; never repeat damage from this swing.
+	var hit_set: Dictionary = swing.get("hit_set",{})
+	swing["hit_set"] = hit_set
+	var measured_at := Time.get_ticks_usec()
+	var trace_tests := 0
 	var results: Array[Dictionary] = []
 	var body: SpikeCharacter3D = _world.characters[peer_id]
 	var yaw: float = swing.yaw
 	var forward := Vector3(-sin(yaw), 0, -cos(yaw))
-	var shape := SphereShape3D.new()
-	shape.radius = ATTACK_REACH + 0.4
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = shape
-	query.transform = Transform3D(Basis.IDENTITY, body.position + Vector3.UP * 0.5)
-	query.collision_mask = 4
-	for hit: Dictionary in _world.get_world_3d().direct_space_state.intersect_shape(query, 64):
+	var actor := Transform3D(Basis(Vector3.UP,yaw),body.global_position)
+	var candidates: Array[Dictionary]
+	if traced: candidates = CombatTraceResolver.candidates(_world.get_world_3d().direct_space_state,definition.combat_trace,actor)
+	else: candidates = _legacy_candidates(body)
+	for hit: Dictionary in candidates:
 		if hit.collider is MetinStone3D:
 			var metin: MetinEncounter = _world.metin_encounter
-			var offset: Vector3 = metin.stone.position - body.position
-			var horizontal := Vector3(offset.x,0,offset.z)
-			if metin.active() and horizontal.length() <= ATTACK_REACH and absf(offset.y) <= 1.2 and (horizontal.length_squared() < 0.001 or horizontal.normalized().dot(forward) >= cos(deg_to_rad(HALF_ANGLE))) and _visible_between(body.position,metin.stone.position):
+			if hit_set.has(-1): continue
+			trace_tests += 1
+			if metin.active() and _melee_hits(definition,actor,metin.stone,forward) and _visible_between(body.position,metin.stone.position):
 				var previous_hp: int = metin.runtime.hp
 				if metin.apply_damage(peer_id,int(swing.attack*definition.damage_multiplier),now):
+					hit_set[-1] = true
 					hit_ids.append(-1) # Stone is immovable and has no actor action lock.
 					results.append({"id":-1,"damage":previous_hp-metin.runtime.hp,"reaction":HitReaction.Type.NONE,"duration":0.0,"get_up_duration":0.0})
 			continue
 		var dog: SpikeWildDog3D = hit.collider as SpikeWildDog3D
-		if dog == null or hit_ids.has(dog.mob_id) or dog.ai_state in ["DEAD", "RETURN", "DISABLED"]: continue
+		if dog == null or hit_set.has(dog.mob_id) or dog.ai_state in ["DEAD", "RETURN", "DISABLED"]: continue
 		var offset: Vector3 = dog.position - body.position
 		var horizontal := Vector3(offset.x, 0, offset.z)
-		if horizontal.length() > ATTACK_REACH or absf(offset.y) > 1.2: continue
-		if horizontal.length_squared() > 0.001 and horizontal.normalized().dot(forward) < cos(deg_to_rad(HALF_ANGLE)): continue
+		trace_tests += 1
+		if not _melee_hits(definition,actor,dog,forward): continue
 		if not _visible_between(body.position, dog.position): continue
 		var result := HitReactionResolver.resolve(definition,dog.reaction_profile,int(swing.attack),dog.hp,dog.hit_reaction.locked(now))
 		var damage: int = result.damage
 		if damage <= 0: continue
+		hit_set[dog.mob_id] = true
 		hit_ids.append(dog.mob_id)
 		aggro_pack(dog.pack_instance_id,peer_id)
 		dog.hp -= damage
@@ -325,7 +340,25 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 		results.append(event)
 	for observer: int in _world.characters:
 		receive_hits.rpc_id(observer, peer_id, results)
+	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--combat-trace-metrics"):
+		print("COMBAT_TRACE_METRICS path=", "trace" if traced else "legacy", " candidates=",candidates.size()," tests=",trace_tests," hits=",hit_ids.size()," usec=",Time.get_ticks_usec()-measured_at)
 	return hit_ids
+
+func _legacy_candidates(body: SpikeCharacter3D) -> Array[Dictionary]:
+	var shape := SphereShape3D.new()
+	shape.radius = ATTACK_REACH+0.4
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.transform = Transform3D(Basis.IDENTITY,body.global_position+Vector3.UP*0.5)
+	query.collision_mask = 4
+	return _world.get_world_3d().direct_space_state.intersect_shape(query,CombatTraceResolver.MAX_CANDIDATES)
+
+func _melee_hits(step: BasicAttackStepDefinition, actor: Transform3D, target: Node3D, forward: Vector3) -> bool:
+	if step.combat_trace != null:
+		return CombatTraceResolver.hits_capsule(step.combat_trace,actor,target.global_position,target.combat_radius(),target.combat_height())
+	var offset := target.global_position-actor.origin
+	var horizontal := Vector3(offset.x,0,offset.z)
+	return horizontal.length() <= ATTACK_REACH and absf(offset.y) <= 1.2 and (horizontal.length_squared() < 0.001 or horizontal.normalized().dot(forward) >= cos(deg_to_rad(HALF_ANGLE)))
 
 func _die(dog: SpikeWildDog3D, now: int) -> void:
 	if dog.ai_state == "DEAD": return
@@ -381,11 +414,27 @@ func receive_swing(peer_id: int, animation_key: StringName, step_index: int, rec
 	if not GameMode.is_client(): return
 	var body: SpikeCharacter3D = _world.characters.get(peer_id)
 	if body != null: body.play_swing(animation_key,recovery_ms,finisher)
+	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--combat-trace-debug") and body != null:
+		var step: BasicAttackStepDefinition
+		for combo: BasicAttackComboDefinition in [BasicAttackCombos.BASE,BasicAttackCombos.COMBO_5,BasicAttackCombos.COMBO_6]:
+			for candidate: BasicAttackStepDefinition in combo.steps:
+				if candidate.animation_key == animation_key: step = candidate
+		if step != null:
+			if _trace_debug.has(peer_id): _trace_debug[peer_id].queue_free()
+			var overlay := CombatTraceDebug3D.new()
+			_world.add_child(overlay)
+			overlay.global_transform = Transform3D(Basis(Vector3.UP,body.rotation.y),body.global_position)
+			var targets: Array[Dictionary] = []
+			for dog: SpikeWildDog3D in dogs.values():
+				targets.append({"id":dog.mob_id,"position":overlay.to_local(dog.global_position),"radius":dog.combat_radius(),"height":dog.combat_height()})
+			overlay.configure(step,targets,OS.get_cmdline_user_args().has("--dev-legacy-melee"))
+			_trace_debug[peer_id] = overlay
 	swing_received.emit(peer_id,animation_key,step_index)
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_hits(peer_id: int, results: Array[Dictionary]) -> void:
 	if not GameMode.is_client(): return
+	if _trace_debug.has(peer_id): _trace_debug[peer_id].mark_hits(results)
 	for result: Dictionary in results:
 		var body: SpikeWildDog3D = dogs.get(int(result.id))
 		if body != null: _present_reaction(body,result)
@@ -636,6 +685,10 @@ func _send_snapshot() -> void:
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_state(snapshot: Dictionary) -> void:
 	if GameMode.is_world_server(): return
+	for peer_id: int in _trace_debug.keys():
+		if not snapshot.health.has(peer_id):
+			_trace_debug[peer_id].queue_free()
+			_trace_debug.erase(peer_id)
 	state = snapshot
 	state_changed.emit(snapshot)
 	for peer_id: int in snapshot.levels:
