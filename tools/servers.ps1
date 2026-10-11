@@ -2,10 +2,19 @@
 param(
     [ValidateSet('start','stop','restart','status')][string]$Action = 'status',
     [ValidateSet('all','game','world','gateway')][string]$Target = 'all',
-    [string]$DashboardToken = $env:MANDATE_DASHBOARD_TOKEN
+    [string]$DashboardToken = $env:MANDATE_DASHBOARD_TOKEN,
+    [switch]$DevCombat,
+    [switch]$DisableDevCombat
 )
 $ErrorActionPreference = 'Stop'
 $taskRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
+$taskDevCombatMarker = Join-Path $taskRoot '.godot/runtime/dev-combat.enabled'
+if ($DevCombat -and $DisableDevCombat) { throw 'Choose DevCombat or DisableDevCombat.' }
+if ($DevCombat) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $taskDevCombatMarker) | Out-Null
+    Set-Content -LiteralPath $taskDevCombatMarker -Value 'Local god mode and practice sword' -Encoding UTF8
+}
+if ($DisableDevCombat -and (Test-Path -LiteralPath $taskDevCombatMarker)) { Remove-Item -LiteralPath $taskDevCombatMarker }
 $taskRoles = switch ($Target) { 'all' { @('master','gateway','world') } 'game' { @('master','world') } default { @($Target) } }
 $taskPorts = @{master=8064; gateway=8088; world=8087}
 function Get-RoleProcesses([string]$Role) {
@@ -52,7 +61,9 @@ function Start-Role([string]$Role) {
     if (Get-NetTCPConnection -State Listen -LocalPort $taskPorts[$Role] -ErrorAction SilentlyContinue) { throw "$Role port is occupied by another process." }
     $taskLogs = Join-Path $taskRoot '.godot/runtime'
     New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
-    Start-Process -FilePath $taskEngine -ArgumentList @('--headless','--path',('"' + $taskRoot + '"'),('--mode=' + $Role + '-server')) -WorkingDirectory $taskRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $taskLogs "$Role-server.out.log") -RedirectStandardError (Join-Path $taskLogs "$Role-server.err.log") | Out-Null
+    $taskArguments = @('--headless','--path',('"' + $taskRoot + '"'),('--mode=' + $Role + '-server'))
+    if ($Role -eq 'world' -and (Test-Path -LiteralPath $taskDevCombatMarker)) { $taskArguments += @('--','--dev-god-mode','--dev-trace-sword') }
+    Start-Process -FilePath $taskEngine -ArgumentList $taskArguments -WorkingDirectory $taskRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $taskLogs "$Role-server.out.log") -RedirectStandardError (Join-Path $taskLogs "$Role-server.err.log") | Out-Null
     Wait-Role $Role $true
     Write-Output "$Role started."
 }

@@ -117,6 +117,13 @@ func run() -> void:
 	check(store.initialize_character(owner_b).ok and store.inventory(owner_b).items.is_empty(), "empty inventory does not regrant starter kit")
 	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 16, "schema v16")
 	_check_storage(db,legacy,store)
+	var dev_owner: int = legacy.create_player_character("dev_trace_fixture",{"name":"TraceFixture","skin":1})
+	check(store.initialize_character(dev_owner).ok,"dev fixture initialized")
+	var granted := store.grant_dev_trace_sword(dev_owner)
+	check(granted.ok and store.grant_dev_trace_sword(dev_owner).uid == granted.uid,"dev sword grant is idempotent")
+	check(store.change_equipment(dev_owner,granted.uid,0,"equip").ok,"practice sword equips")
+	check(store.inventory(dev_owner).stats.attack == 1,"practice weapon sets total attack to one")
+	check(store.change_equipment(dev_owner,granted.uid,1,"unequip").ok and store.inventory(dev_owner).stats.attack == 10,"unequip restores base attack")
 	db.close_db()
 	if not failed:
 		print("ITEM_INSTANCES_OK: distinct UID/rolls, exact equip, ownership, revisions, rollback, database reopen, legacy save isolation")
