@@ -134,3 +134,9 @@ commands and verification limits are in [Warrior Combat Trace v1](warrior-combat
 Attack Speed/buffer/facing and pooled confirmed-feedback contract check. Native
 AS 100/122/150 and four/five/six-hit preview commands and verification boundaries
 are in [Warrior Combat Feel & Presentation v2](warrior-combat-feel-v2.md).
+
+`run-combat.ps1 -Scene warrior_action_polish -MarkerPrefix ACTION` covers late
+scheduled impacts, full-motion movement locks, authoritative forward advance and
+scenery collision, visual turn blending, local finisher impulses and reusable
+trail resources. Preview controls and authoring sources are recorded in
+[Warrior basic action polish](warrior-action-polish.md).

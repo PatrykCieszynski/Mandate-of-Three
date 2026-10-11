@@ -18,6 +18,10 @@ var _name_label: Label3D
 var _display_name: String = ""
 var _swing_yaw := 0.0
 var _swing_until_ms := 0
+var _advance_yaw := 0.0
+var _advance_distance := 0.0
+var _advance_duration := 0.0
+var _advance_elapsed := 0.0
 var combat_collider: CollisionShape3D
 
 func setup(display_name: String, tint: Color) -> void:
@@ -41,8 +45,8 @@ func setup(display_name: String, tint: Color) -> void:
 		_name_label = label
 		label.text = display_name
 		label.position.y = 2.25
-		label.font_size = 48
-		label.pixel_size = 0.012
+		label.font_size = 22
+		label.pixel_size = 0.006
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label.no_depth_test = true
 		add_child(label)
@@ -51,14 +55,41 @@ func set_level(level: int) -> void:
 	if _name_label != null: _name_label.text = "Lv %d · %s" % [level, _display_name]
 
 func simulate(delta: float, direction: Vector2) -> void:
-	if hit_reaction.locked(Time.get_ticks_msec()) or knockback_active(): direction = Vector2.ZERO
-	var displacement_velocity := damp_knockback(delta)
+	if hit_reaction.locked(Time.get_ticks_msec()) or knockback_active():
+		direction = Vector2.ZERO
+		cancel_attack_advance()
+	var displacement_velocity := damp_knockback(delta) + _consume_attack_advance(delta)
 	velocity.x = direction.x * SPEED + displacement_velocity.x
 	velocity.z = direction.y * SPEED + displacement_velocity.z
 	velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
 	if direction.length_squared() > 0.001:
 		rotation.y = atan2(-direction.x, -direction.y)
 	move_and_slide()
+
+func start_attack_advance(yaw: float, distance: float, duration: float) -> void:
+	_advance_yaw = yaw
+	_advance_distance = maxf(0,distance)
+	_advance_duration = maxf(.001,duration)
+	_advance_elapsed = 0.0
+
+func cancel_attack_advance() -> void:
+	_advance_distance = 0.0
+	_advance_elapsed = _advance_duration
+
+func _consume_attack_advance(delta: float) -> Vector3:
+	if delta <= 0 or _advance_distance <= 0 or _advance_elapsed >= _advance_duration: return Vector3.ZERO
+	var previous := clampf(_advance_elapsed/_advance_duration,0,1)
+	_advance_elapsed = minf(_advance_elapsed+delta,_advance_duration)
+	var next := _advance_elapsed/_advance_duration
+	# Integrate smoothstep exactly across the tick; speed changes time, not distance.
+	var travel := _advance_distance*(next*next*(3-2*next)-previous*previous*(3-2*previous))
+	return Vector3(-sin(_advance_yaw),0,-cos(_advance_yaw))*travel/delta
+
+func accept_swing_facing(yaw: float) -> void:
+	var visible_yaw := rotation.y + (player_presentation.rotation.y if player_presentation != null else 0.0)
+	rotation.y = yaw
+	target_yaw = yaw
+	if player_presentation != null: player_presentation.blend_facing(wrapf(visible_yaw-yaw,-PI,PI))
 
 func apply_knockback(direction: Vector3, distance: float) -> void:
 	if not direction.is_finite() or not is_finite(distance) or distance <= 0: return

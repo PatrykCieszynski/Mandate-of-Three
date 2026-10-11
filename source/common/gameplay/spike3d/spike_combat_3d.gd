@@ -25,6 +25,7 @@ var ground: Dictionary[String, Dictionary] = {}
 var health: Dictionary[int, int] = {}
 var _respawn_ms: Dictionary[int, int] = {}
 var _next_attack_ms: Dictionary[int, int] = {}
+var _movement_unlock_ms: Dictionary[int, int] = {}
 var _combo: Dictionary[int, int] = {}
 var _combo_states: Dictionary[int, BasicAttackComboState] = {}
 var _pending: Dictionary[int, Dictionary] = {}
@@ -216,7 +217,7 @@ func remove_peer(peer_id: int) -> void:
 	if _trace_debug.has(peer_id):
 		_trace_debug[peer_id].queue_free()
 		_trace_debug.erase(peer_id)
-	for collection: Dictionary in [health, _respawn_ms, _next_attack_ms, _combo, _combo_states, _pending, _sequences, _pickup_ms, _active_attacks, _queued_attacks, _desired_facing]:
+	for collection: Dictionary in [health, _respawn_ms, _next_attack_ms, _movement_unlock_ms, _combo, _combo_states, _pending, _sequences, _pickup_ms, _active_attacks, _queued_attacks, _desired_facing]:
 		collection.erase(peer_id)
 	for dog: SpikeWildDog3D in dogs.values():
 		if dog.target_peer == peer_id:
@@ -232,7 +233,7 @@ func _living(peer_id: int) -> bool:
 
 func can_move(peer_id: int, now: int = Time.get_ticks_msec()) -> bool:
 	var body: SpikeCharacter3D = _world.characters.get(peer_id)
-	return health.get(peer_id,100) > 0 and now >= _next_attack_ms.get(peer_id,0) and (body == null or (not body.hit_reaction.locked(now) and not body.knockback_active()))
+	return health.get(peer_id,100) > 0 and now >= _movement_unlock_ms.get(peer_id,0) and (body == null or (not body.hit_reaction.locked(now) and not body.knockback_active()))
 
 func _visible_between(from: Vector3, to: Vector3) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from + Vector3.UP * 0.65, to + Vector3.UP * 0.65, 1)
@@ -330,12 +331,14 @@ func _start_attack(peer_id: int, sequence: int, now: int, chained: bool = false)
 	_combo[peer_id] = int(resolved.step_index)+1
 	var next_delay: int = timing.end if resolved.finisher else timing.direct
 	_next_attack_ms[peer_id] = now+next_delay
+	_movement_unlock_ms[peer_id] = now+int(timing.motion)
+	body.start_attack_advance(body.rotation.y,hit.advance_distance,next_delay/1000.0)
 	resolved.merge({"yaw":body.rotation.y,"impact":now+int(timing.impact),"started":now,"hit_set":{},
 		"attack":attack,"ratio":ratio,"timing":timing,"action_id":sequence})
 	_pending[peer_id] = resolved
 	_active_attacks[peer_id] = resolved
 	for observer: int in _world.characters:
-		receive_swing.rpc_id(observer,peer_id,resolved.animation_key,resolved.step_index,int(timing.end),resolved.finisher,
+		receive_swing.rpc_id(observer,peer_id,resolved.animation_key,resolved.step_index,int(timing.motion),resolved.finisher,
 			ratio,sequence,body.rotation.y,int(timing.preinput))
 	return true
 
@@ -352,11 +355,14 @@ func _advance_attack_queue(now: int) -> void:
 			_queued_attacks.erase(peer_id)
 			if active.get("restart_queued",false): combo_state(peer_id).reset()
 			_start_attack(peer_id,sequence,now,not active.get("restart_queued",false))
-		elif now > int(active.started)+maxi(int(active.timing.end),int(active.timing.limit)):
+		elif now > int(active.started)+maxi(int(active.timing.motion),int(active.timing.limit)):
 			combo_state(peer_id).reset()
 			_active_attacks.erase(peer_id)
 
 func _clear_attack_intents(peer_id: int) -> void:
+	_movement_unlock_ms.erase(peer_id)
+	var body: SpikeCharacter3D = _world.characters.get(peer_id)
+	if body != null: body.cancel_attack_advance()
 	_pending.erase(peer_id)
 	_active_attacks.erase(peer_id)
 	_queued_attacks.erase(peer_id)
@@ -367,11 +373,10 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	var hit_ids: Array[int] = []
 	if not _living(peer_id) or _world.characters[peer_id].hit_reaction.locked(now): return hit_ids
 	var definition: BasicAttackStepDefinition = swing.step
-	if swing.get("resolved",false): return hit_ids
+	if swing.get("resolved",false) or now < int(swing.get("impact",now)): return hit_ids
 	var traced := definition.combat_trace != null
 	if traced:
-		var elapsed: float = (now-int(swing.get("started",int(swing.impact)-definition.impact_ms)))*float(swing.get("ratio",1.0))
-		if elapsed < definition.hit_start_ms or elapsed > definition.hit_end_ms: return hit_ids
+		if definition.impact_ms < definition.hit_start_ms or definition.impact_ms > definition.hit_end_ms: return hit_ids
 	swing["resolved"] = true # One scheduled resolution; never repeat damage from this swing.
 	var hit_set: Dictionary = swing.get("hit_set",{})
 	swing["hit_set"] = hit_set
@@ -425,7 +430,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 		event["target_id"] = dog.mob_instance_id
 		results.append(event)
 	for observer: int in _world.characters:
-		receive_hits.rpc_id(observer, peer_id, results,int(swing.get("action_id",0)),int(swing.get("step_index",_combo.get(peer_id,1)-1)))
+		receive_hits.rpc_id(observer, peer_id, results,int(swing.get("action_id",0)),int(swing.get("step_index",_combo.get(peer_id,1)-1)),bool(swing.get("finisher",false)))
 	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--combat-trace-metrics"):
 		print("COMBAT_TRACE_METRICS path=", "trace" if traced else "legacy", " candidates=",candidates.size()," tests=",trace_tests," hits=",hit_ids.size()," usec=",Time.get_ticks_usec()-measured_at)
 	return hit_ids
@@ -496,13 +501,12 @@ func receive_experience(amount: int, levels_gained: int, level: int) -> void:
 	_refresh_hud()
 
 @rpc("authority", "call_remote", "reliable", 0)
-func receive_swing(peer_id: int, animation_key: StringName, step_index: int, recovery_ms: int, finisher: bool, ratio: float = 1.0, action_id: int = 0, yaw: float = 0.0, preinput_ms: int = 0) -> void:
+func receive_swing(peer_id: int, animation_key: StringName, step_index: int, motion_ms: int, finisher: bool, ratio: float = 1.0, action_id: int = 0, yaw: float = 0.0, preinput_ms: int = 0) -> void:
 	if not GameMode.is_client(): return
 	var body: SpikeCharacter3D = _world.characters.get(peer_id)
 	if body != null:
-		body.rotation.y = yaw
-		body.target_yaw = yaw
-		body.play_swing(animation_key,recovery_ms,finisher,ratio)
+		body.accept_swing_facing(yaw)
+		body.play_swing(animation_key,motion_ms,finisher,ratio)
 	if peer_id == _world.local_peer:
 		_client_intent_sent = false
 		_client_request_at = Time.get_ticks_msec()+preinput_ms+10
@@ -524,7 +528,7 @@ func receive_swing(peer_id: int, animation_key: StringName, step_index: int, rec
 	swing_received.emit(peer_id,animation_key,step_index)
 
 @rpc("authority", "call_remote", "reliable", 0)
-func receive_hits(peer_id: int, results: Array[Dictionary], action_id: int = 0, step_index: int = 0) -> void:
+func receive_hits(peer_id: int, results: Array[Dictionary], action_id: int = 0, step_index: int = 0, finisher: bool = false) -> void:
 	if not GameMode.is_client(): return
 	if _trace_debug.has(peer_id): _trace_debug[peer_id].mark_hits(results)
 	if _feedback == null:
@@ -535,8 +539,10 @@ func receive_hits(peer_id: int, results: Array[Dictionary], action_id: int = 0, 
 		if int(result.id) == -1 and _world.metin_encounter != null:
 			if str(result.get("target_id","")) == _world.metin_encounter.runtime.stone_instance_id: target = _world.metin_encounter.stone
 		var event := result.duplicate()
-		event.merge({"attacker":peer_id,"action_id":action_id,"step_index":step_index})
-		if target != null and _feedback.confirm(event,target,peer_id == _world.local_peer): confirmed_hit_received.emit(event)
+		event.merge({"attacker":peer_id,"action_id":action_id,"step_index":step_index,"finisher":finisher})
+		if target != null and _feedback.confirm(event,target,peer_id == _world.local_peer):
+			confirmed_hit_received.emit(event)
+			if _world.camera_controller != null: _world.camera_controller.confirm_finisher(event,peer_id == _world.local_peer)
 		var body: SpikeWildDog3D = dogs.get(int(result.id))
 		if body != null: _present_reaction(body,result)
 	if peer_id == _world.local_peer:

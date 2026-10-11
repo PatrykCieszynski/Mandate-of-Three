@@ -113,3 +113,6 @@ remain later work. [Warrior Combat Feel & Presentation v2](warrior-combat-feel-v
 shares authoritative Attack Speed with playback, buffers one next intent and adds
 client-only trails and confirmed feedback. Live combat feel is the next playtest;
 no further CombatTrace geometry pass is part of this milestone.
+[Warrior basic action polish](warrior-action-polish.md) adds hitch-safe scheduled
+resolution, full-motion input locks, data-authored forward advance, presentation
+turn blending and local confirmed-finisher camera feedback.

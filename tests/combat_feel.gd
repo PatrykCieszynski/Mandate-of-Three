@@ -14,6 +14,7 @@ var observed: Array[StringName] = []
 var observer_connected := false
 var saw_base_order := false
 var saw_extended_order := false
+var local_finisher_actions: Dictionary[int, bool] = {}
 
 @rpc("authority", "call_remote", "reliable", 0)
 func phase(command: String, uid: String) -> void:
@@ -30,6 +31,7 @@ func phase(command: String, uid: String) -> void:
 		else: saw_extended_order = true
 		observed.clear()
 	if command == "DONE":
+		check(world.camera_controller.finisher_impulses == local_finisher_actions.size(),"confirmed local finisher shakes once per action; remote finishers do not shake")
 		check(saw_base_order and saw_extended_order and saw_multi and saw_combo and saw_player_death and saw_respawn and saw_swing and saw_down and saw_get_up, "replicated multi/combo/death/respawn/swing")
 		if not failed:
 			print("COMBAT_CLIENT_OK: ", client_number, " multi-hit, combo, reaction, death and respawn")
@@ -62,11 +64,11 @@ func run_server() -> void:
 	check(combat.dogs[1].hp == 110 and combat.dogs[2].hp == 110, "one swing hits both front dogs exactly once")
 	check(combat.dogs[3].hp == 120 and combat.dogs[4].hp == 120, "behind and side excluded")
 	check(combat._combo[hero] == 1 and combat._pending.is_empty(), "fresh sequence flood cannot bypass recovery")
-	await wait_until(func() -> bool: return combat.can_move(hero))
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
 	set_phase("TWO", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp == 100)
 	check(combat._combo[hero] == 2 and combat.dogs[2].hp == 100, "second combo hit: dog2=%d" % combat.dogs[2].hp)
-	await wait_until(func() -> bool: return combat.can_move(hero))
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
 	set_phase("THREE", hero)
 	await wait_until(func() -> bool: return combat._combo.get(hero,0) == 3 and not combat._pending.has(hero))
 	check(not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()), "third hit is a non-locking flinch")
@@ -78,7 +80,7 @@ func run_server() -> void:
 	combat._tick_dog(attacking_dog,1.0/60,Time.get_ticks_msec())
 	check(combat.health[hero] < before_flinch_attack, "flinching mob can continue its range attack")
 	attacking_dog.ai_enabled = false
-	await wait_until(func() -> bool: return combat.can_move(hero))
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
 	set_phase("FOUR",hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
 	check(combat._combo[hero] == 4 and combat.dogs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets: dog2 hp=%d pos=%s" % [combat.dogs[2].hp,combat.dogs[2].position])
@@ -98,7 +100,7 @@ func run_server() -> void:
 	combat.dogs[1].position = Vector3(-0.25,0,3.8)
 	combat.dogs[2].position = Vector3(0.25,0,3.8)
 	for step_index: int in BasicAttackCombos.COMBO_6.steps.size():
-		await wait_until(func() -> bool: return combat.can_move(hero))
+		await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
 		set_phase("EXT%d" % step_index,hero)
 		await wait_until(func() -> bool: return combat._pending.has(hero))
 		var pending: Dictionary = combat._pending[hero]
@@ -214,12 +216,18 @@ func _process(delta: float) -> void:
 	if elapsed > 55:
 		check(false, "combat timeout phase=" + phase_name)
 		return
-	if GameMode.is_world_server() or world == null or world.combat_endpoint.state.is_empty(): return
+	if GameMode.is_world_server():
+		if world != null:
+			for body: SpikeCharacter3D in world.characters.values(): body.cancel_attack_advance()
+		return
+	if world == null or world.combat_endpoint.state.is_empty(): return
 	if not observer_connected:
 		observer_connected = true
 		world.combat_endpoint.swing_received.connect(func(_id: int,key: StringName,_index: int) -> void:
 			observed.append(key)
 			saw_swing = true)
+		world.combat_endpoint.confirmed_hit_received.connect(func(hit: Dictionary) -> void:
+			if hit.attacker == world.local_peer and hit.finisher: local_finisher_actions[int(hit.action_id)] = true)
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)

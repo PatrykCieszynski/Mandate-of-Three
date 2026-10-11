@@ -66,8 +66,10 @@ func run_server() -> void:
 	# Active-window guard and no-trace fallback use the same production endpoint.
 	var step := BasicAttackCombos.BASE.steps[0].duplicate() as BasicAttackStepDefinition
 	var now := Time.get_ticks_msec()
-	for elapsed_ms: int in [step.hit_start_ms-1,step.hit_end_ms+1]:
-		check(combat.resolve_swing(hero,{"step":step,"yaw":0.0,"started":now-elapsed_ms,"impact":now,"attack":10},now).is_empty(),"no hit outside active window")
+	for scheduled_ms: int in [step.hit_start_ms-1,step.hit_end_ms+1]:
+		var invalid := step.duplicate() as BasicAttackStepDefinition
+		invalid.impact_ms = scheduled_ms
+		check(combat.resolve_swing(hero,{"step":invalid,"yaw":0.0,"impact":now,"attack":10},now).is_empty(),"no hit with a scheduled impact outside canonical active window")
 	step.combat_trace = null
 	var legacy_hits := combat.resolve_swing(hero,{"step":step,"yaw":0.0,"impact":now,"attack":1},now)
 	check(legacy_hits.size() >= 100,"legacy fallback remains functional without the old 64 limit")
