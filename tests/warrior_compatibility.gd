@@ -1,13 +1,17 @@
 extends Node3D
 var _failed := false
 var avatars: Array[WarriorVisual3D] = []
-var _clips: Array[StringName] = [&"idle",&"run",&"attack_1",&"attack_2",&"attack_3",&"hit",&"death"]
+var _clips: Array[StringName] = [&"idle",&"run",&"hit",&"death"]
 var _interactive := false
+var _review_generation := 0
+var _review_label: Label
+var _review_dog: DogVisual3D
 func check(value: bool, message: String) -> void:
 	if not value:
 		push_error(message)
 		_failed = true
 func _ready() -> void:
+	_clips.append_array(BasicAttackCombos.animation_keys())
 	_interactive = OS.get_cmdline_user_args().has("--preview")
 	var require_dev := OS.get_cmdline_user_args().has("--require-dev")
 	for armored: bool in [false,true]:
@@ -24,6 +28,7 @@ func _ready() -> void:
 		check(view.content.find_children("*","CollisionObject3D",true,false).is_empty(),"visual has no collision")
 		if require_dev:
 			check(view.player != null and view.skeleton != null,"animated rig")
+			check(view.validate_combo_animations(),"complete required Warrior combo set")
 			check(view.skeleton.get_bone_count() == (76 if view.visual_id == &"warrior_armor" else 75),"bone count by variant")
 			check(view.socket is BoneAttachment3D and (view.socket as BoneAttachment3D).bone_name == "equip_right_hand","native hand socket")
 			check(view.weapon.scale.is_equal_approx(Vector3.ONE * 100),"metres to centimetres socket compensation")
@@ -70,14 +75,14 @@ func _ready() -> void:
 					var blade_direction := (view.weapon.global_basis * Vector3.UP).normalized()
 					check(blade_direction.dot(Vector3.UP) > 0.5,"sword blade points upward in idle for both variants")
 		view.set_locomotion(true)
-		view.play_attack(1)
-		check(view.animation_state == &"attack_1","first combo")
-		view.play_attack(2)
-		check(view.animation_state == &"attack_2","second combo")
-		view.play_attack(3)
-		check(view.animation_state == &"attack_3","third combo")
+		view.play_basic_attack(&"onehand_sword__combo_01",BasicAttackCombos.BASE.steps[0].recovery_ms)
+		check(view.animation_state == &"onehand_sword__combo_01","first combo")
+		view.play_basic_attack(&"onehand_sword__combo_02",BasicAttackCombos.BASE.steps[1].recovery_ms)
+		check(view.animation_state == &"onehand_sword__combo_02","second combo")
+		view.play_basic_attack(&"onehand_sword__combo_03",BasicAttackCombos.BASE.steps[2].recovery_ms)
+		check(view.animation_state == &"onehand_sword__combo_03","third combo")
 		view.play_hit()
-		check(view.animation_state == &"attack_3","flinch does not replace an ongoing combo swing")
+		check(view.animation_state == &"onehand_sword__combo_03","flinch does not replace an ongoing combo swing")
 		view._process(2)
 		check(view.animation_state == &"run","swing resumes running despite flinch")
 		view.play_hit()
@@ -93,7 +98,7 @@ func _ready() -> void:
 		check(view.animation_state == &"run","unlock restores locomotion")
 		view.set_alive(false)
 		check(view.animation_state == &"death" and not view.weapon.visible,"death")
-		view.play_attack(1)
+		view.play_basic_attack(&"onehand_sword__combo_01",BasicAttackCombos.BASE.steps[0].recovery_ms)
 		check(view.animation_state == &"death","death cannot be interrupted")
 		view.set_alive(true)
 		check(view.weapon.visible and view.animation_state == &"run","respawn")
@@ -110,10 +115,10 @@ func _ready() -> void:
 	var collider := body.get_children().filter(func(node): return node is CollisionShape3D)[0] as CollisionShape3D
 	check(is_equal_approx(collider.shape.radius,0.35) and is_equal_approx(collider.shape.height,1.8),"player collider unchanged")
 	check(body.collision_layer == 2 and body.collision_mask == 1 and body.player_presentation.equipped,"existing entity uses visual and original collision")
-	body.play_swing(2)
-	check(body.player_presentation.animation_state == &"attack_2","existing swing event selects combo")
+	body.play_swing(&"onehand_sword__combo_02",BasicAttackCombos.BASE.steps[1].recovery_ms)
+	check(body.player_presentation.animation_state == &"onehand_sword__combo_02","existing swing event selects combo")
 	body.play_hit()
-	check(body.player_presentation.animation_state == &"attack_2","existing flinch event preserves the swing")
+	check(body.player_presentation.animation_state == &"onehand_sword__combo_02","existing flinch event preserves the swing")
 	body.set_alive(false)
 	check(not body.alive and body.player_presentation.animation_state == &"death","existing death event")
 	body.set_alive(true)
@@ -149,7 +154,22 @@ func _ready() -> void:
 				get_viewport().get_texture().get_image().save_png("res://.godot/verification/warrior-"+str(clip)+".png")
 	if _interactive:
 		_pose(&"idle",false)
+		if OS.get_cmdline_user_args().has("--combo-review"):
+			_review_dog = DogVisual3D.new()
+			_review_dog.position = Vector3(0,0,-1.5)
+			_review_dog.rotation.y = PI
+			add_child(_review_dog)
+			_review_label = Label.new()
+			_review_label.position = Vector2(16,48)
+			add_child(_review_label)
+			_review_label.text = "Combo review: 1 base / 2 Combo Lv1 / 3 Combo Lv2. Loops at native speed. Esc closes."
 		print("WARRIOR_PREVIEW_READY")
+		if OS.get_cmdline_user_args().has("--combo-capture"):
+			for level: int in [0,1,2]:
+				_review_generation += 1
+				await _review_combo(level,_review_generation)
+			print("WARRIOR_COMBO_RENDER_OK")
+			get_tree().quit()
 		return
 	for view: WarriorVisual3D in avatars: view.free()
 	print("WARRIOR_COMPATIBILITY_OK")
@@ -192,12 +212,46 @@ func _setup_stage() -> void:
 	environment.environment.ambient_light_energy = .6
 	add_child(environment)
 	var label := Label.new()
-	label.text = "Warrior: base + armor | 1 idle  2 run  3/4/5 combo  6 hit  7 death | V swap armor | Esc close"
+	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
 	label.position = Vector2(16,16)
 	add_child(label)
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not _interactive or not event is InputEventKey or not event.pressed or event.echo: return
-	if event.keycode >= KEY_1 and event.keycode <= KEY_7: _pose(_clips[event.keycode-KEY_1],false)
+	if _review_dog != null and event.keycode in [KEY_1,KEY_2,KEY_3]:
+		_review_generation += 1
+		_review_combo(event.keycode-KEY_1,_review_generation)
+	elif _review_dog == null and event.keycode >= KEY_1 and event.keycode < KEY_1+_clips.size(): _pose(_clips[event.keycode-KEY_1],false)
 	elif event.keycode == KEY_V:
 		for view: WarriorVisual3D in avatars: view.set_variant(view.visual_id != &"warrior_armor")
 	elif event.keycode == KEY_ESCAPE: get_tree().quit()
+
+func _review_combo(skill_level: int, ticket: int) -> void:
+	var runtime := BasicAttackComboState.new()
+	runtime.set_skill_level(skill_level)
+	if skill_level > 0: runtime.set_enabled(true)
+	var combo := runtime.definition()
+	while ticket == _review_generation:
+		_review_dog.set_hit_lock(0,0)
+		for view: WarriorVisual3D in avatars: view.set_locomotion(false)
+		for i: int in combo.steps.size():
+			if ticket != _review_generation: return
+			var swing := runtime.take_step(Time.get_ticks_msec())
+			var step: BasicAttackStepDefinition = swing.step
+			_review_label.text = "%s | step %d/%d | %s | impact %d ms / recovery %d ms" % [combo.combo_key,i+1,combo.steps.size(),step.animation_key,step.impact_ms,step.recovery_ms]
+			for view: WarriorVisual3D in avatars: view.play_basic_attack(step.animation_key,step.recovery_ms)
+			await get_tree().create_timer(step.impact_ms/1000.0).timeout
+			if ticket != _review_generation: return
+			var result := HitReactionResolver.resolve(step,HitReactionProfiles.NORMAL,1,100,false)
+			if result.reaction == HitReaction.Type.KNOCKDOWN: _review_dog.set_hit_lock(result.duration,result.get_up_duration)
+			else: _review_dog.play_hit()
+			if OS.get_cmdline_user_args().has("--combo-capture"):
+				await RenderingServer.frame_post_draw
+				assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/combo-%d-step-%d.png" % [combo.steps.size(),i+1]) == OK)
+			await get_tree().create_timer((step.recovery_ms-step.impact_ms)/1000.0).timeout
+		_review_label.text = "%s complete; idle / recovery" % combo.combo_key
+		await get_tree().create_timer(1.8).timeout
+		if OS.get_cmdline_user_args().has("--combo-capture"):
+			await RenderingServer.frame_post_draw
+			assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/combo-%d-idle.png" % combo.steps.size()) == OK)
+			return
+		runtime.reset()

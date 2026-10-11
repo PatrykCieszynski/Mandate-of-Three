@@ -18,13 +18,14 @@ try {
         if ($taskRole -eq 'server') { Start-Sleep -Seconds 1 }
     }
     foreach ($taskEntry in $taskProcesses) {
-        if (-not $taskEntry.Process.WaitForExit(50000)) {
+        if (-not $taskEntry.Process.WaitForExit(65000)) {
             throw "Timeout: $($taskEntry.Role)"
         }
         $taskEntry.Process.Refresh()
         $taskOutput = Get-Content -LiteralPath (Join-Path $taskLogs "combat-test-$($taskEntry.Role).out.log") -Raw
+        $taskErrors = Get-Content -LiteralPath (Join-Path $taskLogs "combat-test-$($taskEntry.Role).err.log") -Raw
         $taskMarker = if ($taskEntry.Role -eq 'server') { 'COMBAT_SERVER_OK' } else { 'COMBAT_CLIENT_OK' }
-        if ($taskEntry.Process.ExitCode -ne 0 -or $taskOutput -notmatch $taskMarker) {
+        if ($taskEntry.Process.ExitCode -ne 0 -or $taskOutput -notmatch $taskMarker -or ($taskOutput + $taskErrors) -match 'SCRIPT ERROR|Parse Error') {
             throw "Failed: $($taskEntry.Role). Logs: $taskLogs"
         }
         Write-Output "$($taskEntry.Role): PASS"

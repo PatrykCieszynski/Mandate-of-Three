@@ -9,11 +9,11 @@ const MOB_REACH: float = 1.65
 const ATTACK_REACH: float = 2.4
 const HALF_ANGLE: float = 65.0
 const PICKUP_REACH: float = 2.5
-const COMBO_RESET_MS: int = 1100
 const PROTECTION_MS: int = 15000
 const LOOT_LIFETIME_MS: int = 120000
 const DOG_XP: int = 20
 
+signal swing_received(peer_id: int, animation_key: StringName, step_index: int)
 signal feedback_received(result: Dictionary)
 signal state_changed(snapshot: Dictionary)
 var dogs: Dictionary[int, SpikeWildDog3D] = {}
@@ -26,7 +26,7 @@ var health: Dictionary[int, int] = {}
 var _respawn_ms: Dictionary[int, int] = {}
 var _next_attack_ms: Dictionary[int, int] = {}
 var _combo: Dictionary[int, int] = {}
-var _last_swing_ms: Dictionary[int, int] = {}
+var _combo_states: Dictionary[int, BasicAttackComboState] = {}
 var _pending: Dictionary[int, Dictionary] = {}
 var _sequences: Dictionary[int, int] = {}
 var _pickup_ms: Dictionary[int, int] = {}
@@ -194,10 +194,13 @@ func _store() -> ItemStoreSqlite:
 
 func initialize_peer(peer_id: int) -> void:
 	health[peer_id] = 100
+	if OS.has_feature("editor"):
+		for arg: String in OS.get_cmdline_user_args():
+			if arg.begins_with("--dev-combo-skill="): set_combo_skill_level(peer_id,arg.get_slice("=",1).to_int())
 	_send_snapshot()
 
 func remove_peer(peer_id: int) -> void:
-	for collection: Dictionary in [health, _respawn_ms, _next_attack_ms, _combo, _last_swing_ms, _pending, _sequences, _pickup_ms]:
+	for collection: Dictionary in [health, _respawn_ms, _next_attack_ms, _combo, _combo_states, _pending, _sequences, _pickup_ms]:
 		collection.erase(peer_id)
 	for dog: SpikeWildDog3D in dogs.values():
 		if dog.target_peer == peer_id:
@@ -224,6 +227,35 @@ func request_attack(sequence: int) -> void:
 	if not GameMode.is_world_server() or _store() == null: return
 	begin_attack(multiplayer.get_remote_sender_id(), sequence, Time.get_ticks_msec())
 
+func combo_state(peer_id: int) -> BasicAttackComboState:
+	if not _combo_states.has(peer_id): _combo_states[peer_id] = BasicAttackComboState.new()
+	return _combo_states[peer_id]
+
+func set_combo_skill_level(peer_id: int, level: int) -> bool:
+	if not GameMode.is_world_server() or not _living(peer_id): return false
+	var accepted := combo_state(peer_id).set_skill_level(level)
+	if accepted and combo_state(peer_id).current_combo_step == -1: _combo.erase(peer_id)
+	return accepted
+
+func set_combo_enabled(peer_id: int, enabled: bool) -> bool:
+	if not GameMode.is_world_server() or not _living(peer_id): return false
+	var accepted := combo_state(peer_id).set_enabled(enabled)
+	if accepted and combo_state(peer_id).current_combo_step == -1: _combo.erase(peer_id)
+	return accepted
+
+func set_combo_weapon_mode(peer_id: int, mode: StringName) -> bool:
+	if not GameMode.is_world_server() or not _living(peer_id): return false
+	var accepted := combo_state(peer_id).set_weapon_mode(mode)
+	if accepted and combo_state(peer_id).current_combo_step == -1: _combo.erase(peer_id)
+	return accepted
+
+@rpc("any_peer", "call_remote", "reliable", 1)
+func request_combo_toggle() -> void:
+	if not GameMode.is_world_server(): return
+	var sender := multiplayer.get_remote_sender_id()
+	if not _living(sender): return
+	set_combo_enabled(sender,not combo_state(sender).combo_enabled)
+
 func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	if not _living(peer_id) or sequence < 0 or sequence > 2147483647 or sequence <= _sequences.get(peer_id, -1): return false
 	if _owner(peer_id) <= 0: return false
@@ -231,23 +263,21 @@ func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	if now < _next_attack_ms.get(peer_id, 0) or _world.characters[peer_id].hit_reaction.locked(now): return false
 	var attack: int = WorldServer.curr.runtime_attack(_owner(peer_id))
 	if attack < 0: return false
-	var stage: int = 1
-	if now - _last_swing_ms.get(peer_id, -10000) <= COMBO_RESET_MS:
-		stage = _combo.get(peer_id, 0) % BasicAttackHits.COMBO.size() + 1
-	_combo[peer_id] = stage
-	_last_swing_ms[peer_id] = now
-	var hit := BasicAttackHits.stage(stage)
+	var resolved := combo_state(peer_id).take_step(now)
+	if resolved.is_empty(): return false
+	var hit: BasicAttackStepDefinition = resolved.step
+	_combo[peer_id] = int(resolved.step_index) + 1 # Display only; never resolves a hit.
 	_next_attack_ms[peer_id] = now + hit.recovery_ms
-	_pending[peer_id] = {"stage": stage, "yaw": _world.characters[peer_id].rotation.y,
-		"impact": now + hit.impact_ms, "attack": attack}
+	resolved.merge({"yaw":_world.characters[peer_id].rotation.y,"impact":now+hit.impact_ms,"attack":attack})
+	_pending[peer_id] = resolved
 	for observer: int in _world.characters:
-		receive_swing.rpc_id(observer, peer_id, stage)
+		receive_swing.rpc_id(observer,peer_id,resolved.animation_key,resolved.step_index,hit.recovery_ms,resolved.finisher)
 	return true
 
 func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	var hit_ids: Array[int] = []
 	if not _living(peer_id) or _world.characters[peer_id].hit_reaction.locked(now): return hit_ids
-	var definition := BasicAttackHits.stage(int(swing.stage))
+	var definition: BasicAttackStepDefinition = swing.step
 	var results: Array[Dictionary] = []
 	var body: SpikeCharacter3D = _world.characters[peer_id]
 	var yaw: float = swing.yaw
@@ -347,10 +377,11 @@ func receive_experience(amount: int, levels_gained: int, level: int) -> void:
 	_refresh_hud()
 
 @rpc("authority", "call_remote", "reliable", 0)
-func receive_swing(peer_id: int, stage: int) -> void:
+func receive_swing(peer_id: int, animation_key: StringName, step_index: int, recovery_ms: int, finisher: bool) -> void:
 	if not GameMode.is_client(): return
 	var body: SpikeCharacter3D = _world.characters.get(peer_id)
-	if body != null: body.play_swing(stage)
+	if body != null: body.play_swing(animation_key,recovery_ms,finisher)
+	swing_received.emit(peer_id,animation_key,step_index)
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_hits(peer_id: int, results: Array[Dictionary]) -> void:
@@ -457,14 +488,14 @@ func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition =
 	if result.interrupts_attack:
 		_pending.erase(peer_id)
 		_combo.erase(peer_id)
-		_last_swing_ms.erase(peer_id)
+		combo_state(peer_id).reset()
 	for observer: int in _world.characters: receive_hurt.rpc_id(observer,peer_id,result.presentation())
 	if health[peer_id] == 0:
 		body.hit_reaction.clear()
 		_respawn_ms[peer_id] = now + 2000
 		_pending.erase(peer_id)
 		_combo.erase(peer_id)
-		_last_swing_ms.erase(peer_id)
+		combo_state(peer_id).reset()
 		_next_attack_ms.erase(peer_id)
 		_world.intentions[peer_id]["direction"] = Vector2.ZERO
 		_send_snapshot()
@@ -594,6 +625,7 @@ func _send_snapshot() -> void:
 				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner)}
 		var player: PlayerResource = WorldServer.curr.connected_players[peer_id]
 		receive_state.rpc_id(peer_id, {"mobs": mob_snapshots, "health": health.duplicate(), "drops": drops,
+			"combo_options":{"enabled":combo_state(peer_id).combo_enabled,"skill_level":combo_state(peer_id).combo_skill_level,"length":combo_state(peer_id).definition().steps.size()},
 			"combos": _combo.duplicate(), "respawns": respawns, "levels": levels, "hit_locks":hit_locks,
 			"metin": {} if _world.metin_encounter == null else _world.metin_encounter.snapshot(now),
 			"progression": {"level": player.level, "experience": player.experience, "next": player.level_xp_to_next()}})
@@ -661,8 +693,9 @@ func _refresh_hud() -> void:
 	elif actor is SpikeWildDog3D:
 		target = "%s: %d / %d" % [actor.title, actor.hp, actor.max_hp]
 	var combo: int = int(state.get("combos", {}).get(_world.local_peer, 0))
+	var options: Dictionary = state.get("combo_options",{"enabled":false,"skill_level":0,"length":4})
 	var status: String = "Odrodzenie za %.1f s" % float(state.get("respawns", {}).get(_world.local_peer, 0)) if hp == 0 else _notice
-	_hud.text = "HP: %d / 100 · Combo: %d / 3\nSpacja — combo · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, combo, "wł." if autoattack else "wył.", target, status]
+	_hud.text = "HP: %d / 100 · Combo: %d / %d (%s, Lv%d)\nSpacja — combo · C — Combo ON/OFF · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, combo, int(options.length), "ON" if options.enabled else "OFF", int(options.skill_level), "wł." if autoattack else "wył.", target, status]
 	var progression: Dictionary = state.get("progression", {"level": 1, "experience": 0, "next": PlayerResource.LEVEL_XP_BASE})
 	_experience_label.text = "Poziom %d · XP: %d / %d%s" % [int(progression.level), int(progression.experience), int(progression.next), "\n" + _xp_notice if _xp_notice != "" else ""]
 	_experience_bar.max_value = int(progression.next)
@@ -710,7 +743,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			select_target({})
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_F:
+		if event.physical_keycode == KEY_C:
+			request_combo_toggle.rpc_id(1)
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_F:
 			_clear_invalid_target()
 			autoattack = not autoattack and not selected_target.is_empty()
 			_refresh_hud()

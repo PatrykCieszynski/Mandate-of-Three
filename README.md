@@ -16,7 +16,7 @@ This repository contains a working technical vertical slice, not a game alpha.
   six mixed packs (104 mobs) of increasing difficulty, roads/shortcuts, landmarks,
   four Metin candidate sites and a visual water strip. [Pack AI](docs/mob-packs-v1.md),
   shared aggro and server-side straight-line movement; directional melee hitting multiple
-  targets, a four-hit combo, hit reactions and final-hit knockback.
+  targets, [Warrior 4/5/6-hit combo](docs/warrior-basic-combo-v2.md), hit reactions and final-hit knockdown/get-up.
 - [Metin Encounter v1](docs/metin-encounter-v1.md): one random active site, HP
   threshold waves, shared combat/contribution, one ground reward and timed respawn.
 - Player and mob death/respawn, ground loot, reservation and persistent pickup.
