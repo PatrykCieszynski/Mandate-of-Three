@@ -43,6 +43,11 @@ func run_server() -> void:
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
+	var before_god_mode: int = combat.health[hero]
+	combat.dev_god_mode = true
+	var ignored := combat.hurt_player(hero,100000,Time.get_ticks_msec(),BasicAttackCombos.BASE.steps.back(),Vector3.RIGHT)
+	check(ignored.damage == 0 and combat.health[hero] == before_god_mode and not world.characters[hero].hit_reaction.locked(Time.get_ticks_msec()) and not world.characters[hero].knockback_active(),"dev god mode blocks damage, death, action locks and knockback")
+	combat.dev_god_mode = false
 	for dog: SpikeWildDog3D in combat.dogs.values(): dog.ai_enabled = false
 	world.characters[hero].position = Vector3(0, 0, 5)
 	world.characters[hero].rotation.y = 0

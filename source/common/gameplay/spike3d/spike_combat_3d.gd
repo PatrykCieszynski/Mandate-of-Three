@@ -40,6 +40,8 @@ var _client_attack_accum: float = 0
 var selected_target: Dictionary = {}
 var autoattack: bool = false
 var state: Dictionary = {}
+var dev_god_mode: bool = false
+var trace_debug_enabled: bool = false
 var _trace_debug: Dictionary[int, CombatTraceDebug3D] = {}
 var navigation_region: NavigationRegion3D
 var _experience_label: Label
@@ -49,6 +51,9 @@ var _xp_notice_until_ms: int = 0
 
 func _ready() -> void:
 	_world = get_parent()
+	dev_god_mode = GameMode.is_world_server() and OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-god-mode")
+	trace_debug_enabled = OS.has_feature("editor") and (OS.get_cmdline_user_args().has("--combat-trace-debug") or (DisplayServer.get_name() != "headless" and FileAccess.file_exists("res://.godot/runtime/trace-debug.enabled")))
+	if dev_god_mode: print("DEV_GOD_MODE enabled for local World players")
 	_build_navigation() # Shared geometry also guides client NPC approach intentions.
 	if GameMode.is_world_server():
 		if _world.region != null:
@@ -414,7 +419,7 @@ func receive_swing(peer_id: int, animation_key: StringName, step_index: int, rec
 	if not GameMode.is_client(): return
 	var body: SpikeCharacter3D = _world.characters.get(peer_id)
 	if body != null: body.play_swing(animation_key,recovery_ms,finisher)
-	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--combat-trace-debug") and body != null:
+	if trace_debug_enabled and body != null:
 		var step: BasicAttackStepDefinition
 		for combo: BasicAttackComboDefinition in [BasicAttackCombos.BASE,BasicAttackCombos.COMBO_5,BasicAttackCombos.COMBO_6]:
 			for candidate: BasicAttackStepDefinition in combo.steps:
@@ -530,6 +535,7 @@ func _physics_process(delta: float) -> void:
 
 func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition = BasicAttackHits.MOB_MELEE, hit_direction: Vector3 = Vector3.ZERO) -> CombatHitResult:
 	if not _living(peer_id): return null
+	if dev_god_mode: return CombatHitResult.new() # No damage, action lock or impulse.
 	var body: SpikeCharacter3D = _world.characters[peer_id]
 	var result := HitReactionResolver.resolve(hit,body.reaction_profile,damage,int(health[peer_id]),body.hit_reaction.locked(now))
 	health[peer_id] -= result.damage
@@ -799,7 +805,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			select_target({})
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_C:
+		if event.physical_keycode == KEY_F8 and OS.has_feature("editor"):
+			trace_debug_enabled = not trace_debug_enabled
+			if not trace_debug_enabled:
+				for overlay: CombatTraceDebug3D in _trace_debug.values(): overlay.queue_free()
+				_trace_debug.clear()
+			_notice = "Combat trace debug: " + ("ON" if trace_debug_enabled else "OFF")
+			_refresh_hud()
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_C:
 			request_combo_toggle.rpc_id(1)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_F:

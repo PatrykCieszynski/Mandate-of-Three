@@ -22,6 +22,9 @@ func initialize_peer(peer_id: int) -> void:
 		return # Physics-only fixture has no database or item domain.
 	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 	var result: Dictionary = store.initialize_character(resource.player_id)
+	if result.ok and OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-trace-sword"):
+		result = store.grant_dev_trace_sword(resource.player_id)
+		print("DEV_TRACE_SWORD owner=",resource.player_id," result=",result)
 	_send_state(peer_id, "" if result.ok else str(result.error))
 	for other_id: int in public_weapons:
 		receive_weapon.rpc_id(peer_id, other_id, public_weapons[other_id])

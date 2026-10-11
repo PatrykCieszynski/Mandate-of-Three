@@ -112,6 +112,9 @@ func inventory(owner_id: int) -> Dictionary:
 			equipment[str(item.equipment_slot)] = item.uid
 			for stat: Variant in snapshot.stats:
 				stats[stat] = float(stats.get(stat, 0)) + float(snapshot.stats[stat])
+	# Explicit test content: total attack is one, not base character ten plus weapon one.
+	for item: Dictionary in items:
+		if item.uid == equipment.get("weapon","") and item.definition_id == "dev_trace_sword": stats["attack"] = 1.0
 	return {"ok": true, "items": items, "equipment": equipment, "stats": stats}
 
 func activate_item(owner_id: int, uid: String, expected_revision: int) -> Dictionary:
@@ -311,3 +314,20 @@ func _rollback(reason: String) -> Dictionary:
 
 func _error(reason: String) -> Dictionary:
 	return {"ok": false, "error": reason}
+
+func grant_dev_trace_sword(owner_id: int) -> Dictionary:
+	# Server tooling only. Atomic placement; relog cannot produce another owned copy.
+	if not db.query("BEGIN IMMEDIATE;"): return _error("storage")
+	if not db.query_with_bindings("SELECT player_id FROM players WHERE player_id=?;",[owner_id]): return _rollback("storage")
+	if db.query_result.is_empty(): return _rollback("owner")
+	if not db.query_with_bindings("SELECT uid FROM item_instances WHERE owner_character_id=? AND definition_id='dev_trace_sword' LIMIT 1;",[owner_id]): return _rollback("storage")
+	if not db.query_result.is_empty():
+		var uid: String = db.query_result[0].uid
+		db.query("ROLLBACK;")
+		return {"ok":true,"uid":uid}
+	var item := ItemInstance.create(ItemDefinitions.DEV_TRACE_SWORD,owner_id,[])
+	var inserted := receive_item_in_transaction(item)
+	if not inserted.ok: return _rollback(inserted.error)
+	var result := _commit()
+	if result.ok: result["uid"] = item.uid
+	return result

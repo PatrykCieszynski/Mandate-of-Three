@@ -145,3 +145,25 @@ Continuous human comparison of contact feel and a live 20–50 mob fight's CPU/r
 behavior remains outstanding. Native impact frames and headless assertions do not
 prove that subjective acceptance criterion. Keep the legacy path until that pass;
 especially tune authored 04/07 windows and sweep edge tolerance if necessary.
+
+## Local test assistance
+
+`tools/servers.ps1 -Action restart -Target world -DevCombat` enables local World
+god mode and a practice sword grant on character entry. The ignored runtime marker
+preserves this choice across launcher restarts. Use `-DisableDevCombat` with a
+World restart to restore ordinary damage and stop grants. Flags are server-local
+and editor-engine only; no client God Mode/grant RPC is exposed. God mode blocks
+HP damage, action locks and displacement for every character on this local World.
+
+Practice sword is a separate persistent, two-cell item using the existing sword
+icon/visual. Grant + placement commit atomically, and an already owned copy prevents
+a new grant on relog. A full bag fails cleanly; clear two adjacent cells and relog.
+Its explicit test-content stat rule sets total attack to 1 when equipped rather
+than adding 1 to base character attack 10. Unequip restores ordinary stats; no
+upgrade recipe accepts it. Normal combat stats/equipment behavior is unchanged.
+
+Development clients can toggle trace overlays with **F8** during gameplay.
+An ignored `.godot/runtime/trace-debug.enabled` marker enables initial overlays
+for a native local client. CLI `--combat-trace-debug` remains available. Turning
+it off frees overlays immediately; turning it on draws the next swing. Client
+restart is required to load changed scripts; no native window is launched by tests.
