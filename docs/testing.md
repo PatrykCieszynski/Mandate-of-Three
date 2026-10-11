@@ -113,6 +113,7 @@ material/item/wallet rollback fixture and small UI/bridge contracts.
 See [Camera v1](camera-v1.md) for the native input/framing acceptance checklist.
 
 Hit reaction smoke covers profiles, flinch without locks, bounded knockdown/get-up,
+independent displacement resistance, damped impulses and real scenery collision,
 interrupt independence and snapshot recovery. `run-combat` exercises the same
 authority with two clients, including the player-target pending-hit path. See
 [Hit Reactions v1](hit-reactions-v1.md).

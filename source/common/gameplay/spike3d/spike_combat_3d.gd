@@ -216,7 +216,7 @@ func _living(peer_id: int) -> bool:
 
 func can_move(peer_id: int, now: int = Time.get_ticks_msec()) -> bool:
 	var body: SpikeCharacter3D = _world.characters.get(peer_id)
-	return health.get(peer_id,100) > 0 and now >= _next_attack_ms.get(peer_id,0) and (body == null or not body.hit_reaction.locked(now))
+	return health.get(peer_id,100) > 0 and now >= _next_attack_ms.get(peer_id,0) and (body == null or (not body.hit_reaction.locked(now) and not body.knockback_active()))
 
 func _visible_between(from: Vector3, to: Vector3) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from + Vector3.UP * 0.65, to + Vector3.UP * 0.65, 1)
@@ -260,7 +260,7 @@ func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	if not _living(peer_id) or sequence < 0 or sequence > 2147483647 or sequence <= _sequences.get(peer_id, -1): return false
 	if _owner(peer_id) <= 0: return false
 	_sequences[peer_id] = sequence
-	if now < _next_attack_ms.get(peer_id, 0) or _world.characters[peer_id].hit_reaction.locked(now): return false
+	if now < _next_attack_ms.get(peer_id, 0) or _world.characters[peer_id].hit_reaction.locked(now) or _world.characters[peer_id].knockback_active(): return false
 	var attack: int = WorldServer.curr.runtime_attack(_owner(peer_id))
 	if attack < 0: return false
 	var resolved := combo_state(peer_id).take_step(now)
@@ -319,7 +319,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 			_die(dog, now)
 		else:
 			dog.hit_reaction.apply(result,now)
-			if result.reaction == HitReaction.Type.KNOCKDOWN: dog.knockback = Vector3.ZERO
+			dog.apply_knockback(horizontal if horizontal.length_squared() > 0.001 else forward,result.knockback_distance)
 		var event := result.presentation()
 		event["id"] = dog.mob_instance_id
 		results.append(event)
@@ -479,12 +479,13 @@ func _physics_process(delta: float) -> void:
 		_snapshot_accum = fmod(_snapshot_accum, 0.1)
 		_send_snapshot()
 
-func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition = BasicAttackHits.MOB_MELEE) -> CombatHitResult:
+func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition = BasicAttackHits.MOB_MELEE, hit_direction: Vector3 = Vector3.ZERO) -> CombatHitResult:
 	if not _living(peer_id): return null
 	var body: SpikeCharacter3D = _world.characters[peer_id]
 	var result := HitReactionResolver.resolve(hit,body.reaction_profile,damage,int(health[peer_id]),body.hit_reaction.locked(now))
 	health[peer_id] -= result.damage
 	body.hit_reaction.apply(result,now)
+	body.apply_knockback(hit_direction,result.knockback_distance)
 	if result.interrupts_attack:
 		_pending.erase(peer_id)
 		_combo.erase(peer_id)
@@ -492,6 +493,7 @@ func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition =
 	for observer: int in _world.characters: receive_hurt.rpc_id(observer,peer_id,result.presentation())
 	if health[peer_id] == 0:
 		body.hit_reaction.clear()
+		body.knockback_velocity = Vector3.ZERO
 		_respawn_ms[peer_id] = now + 2000
 		_pending.erase(peer_id)
 		_combo.erase(peer_id)
@@ -514,12 +516,13 @@ func _begin_return(dog: SpikeWildDog3D) -> void:
 	dog.target_peer = 0
 
 func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
-	if not dog.ai_enabled or dog.ai_state in ["DEAD","DISABLED"]: return
+	if dog.ai_state in ["DEAD","DISABLED"]: return
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if pack == null: return
-	if dog.hit_reaction.locked(now):
+	if dog.hit_reaction.locked(now) or dog.knockback_active():
 		dog.move_dog(delta,Vector2.ZERO,now)
 		return
+	if not dog.ai_enabled: return
 	if dog.proximity_aggro and dog.ai_state in ["IDLE","WANDER"]:
 		var nearest: float = AGGRO
 		var target: int = 0
@@ -544,7 +547,7 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 			dog.rotation.y = atan2(-offset.x,-offset.z)
 			if now >= dog.stunned_until_ms and now - dog.last_attack_ms >= 1200:
 				dog.last_attack_ms = now
-				hurt_player(dog.target_peer,dog.attack_damage,now)
+				hurt_player(dog.target_peer,dog.attack_damage,now,BasicAttackHits.MOB_MELEE,offset)
 	elif dog.ai_state == "RETURN":
 		if _horizontal_distance(dog.position,dog.return_target) < 0.4:
 			dog.hp = dog.max_hp
@@ -552,7 +555,7 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 			dog.contribution_players.clear()
 			dog.target_peer = 0
 			dog.ai_state = "IDLE"
-			dog.knockback = Vector3.ZERO
+			dog.knockback_velocity = Vector3.ZERO
 			dog.wander_at_ms = now + pack.rng.randi_range(1000,4000)
 		else:
 			direction = Vector2(dog.return_target.x-dog.position.x,dog.return_target.z-dog.position.z).normalized()
