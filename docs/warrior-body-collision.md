@@ -59,6 +59,15 @@ before impact to 9.424 afterwards; the dog moved from 9.0 to approximately 6.512
 No blocked displacement is banked or replayed. Only the remaining authored motion
 can use newly freed space, so a fully exhausted advance cannot catch up later.
 
+## Dead player freeze
+
+Lethal damage marks the authoritative character dead immediately and clears
+velocity, knockback and remaining advance. A dead character skips simulation
+including `move_and_slide`: zero input alone would still allow collision recovery
+against moving mob BODYs to displace the corpse. Respawn marks it alive again.
+The ACTION fixture checks a mob moving through an overlapping corpse, unchanged
+corpse position despite input, and resumed movement after the real respawn path.
+
 ## Verification and native preview
 
 The opt-in action network suite covers full-distance speed scaling, successor

@@ -226,6 +226,26 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikeCharacter3D, target:
 		body.simulate(1.0/60,Vector2.ZERO)
 	check(body.position.z<blocked_position-.3 and target.position.z<8,"remaining advance enters space freed by knockback")
 	print("ACTION_BODY walk=",walking_stop," finisher_before=",blocked_position," after=",body.position.z," mob=",target.position.z)
+	# A corpse never runs slide recovery, even with a mob chasing through it.
+	combat.health[hero] = 100
+	body.hit_reaction.clear()
+	combat.hurt_player(hero,10000,Time.get_ticks_msec())
+	check(not body.alive and body.velocity == Vector3.ZERO,"lethal damage freezes authoritative body immediately")
+	var death_position := body.position
+	target.hit_reaction.clear()
+	target.knockback_velocity = Vector3.ZERO
+	target.position = death_position+Vector3(0,0,.2)
+	for frame: int in 20:
+		await get_tree().physics_frame
+		target.move_dog(1.0/60,Vector2(0,-1),Time.get_ticks_msec())
+		body.simulate(1.0/60,Vector2.RIGHT)
+	check(body.position == death_position,"mob overlap and input cannot move corpse at all")
+	combat._respawn_ms[hero] = Time.get_ticks_msec()-1
+	combat._physics_process(0)
+	check(body.alive and combat.health[hero] == 100,"respawn restores authoritative living state")
+	var spawn_position := body.position
+	await physics_steps(body,2,Vector2.RIGHT)
+	check(body.position.x>spawn_position.x,"normal movement resumes after respawn")
 
 func _process(delta: float) -> void:
 	elapsed += delta
