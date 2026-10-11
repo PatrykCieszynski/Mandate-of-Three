@@ -5,6 +5,8 @@ var _clips: Array[StringName] = [&"idle",&"run",&"hit",&"death"]
 var _interactive := false
 var _review_generation := 0
 var _review_label: Label
+var _review_humanoid: WarriorVisual3D
+var _humanoid_target := false
 var _review_dog: DogVisual3D
 var _trace_overlays: Array[CombatTraceDebug3D] = []
 var _legacy_trace := false
@@ -161,11 +163,27 @@ func _ready() -> void:
 			_review_dog.position = Vector3(0,0,-1.5)
 			_review_dog.rotation.y = PI
 			add_child(_review_dog)
+			if OS.get_cmdline_user_args().has("--trace-review"):
+				# Put the defender in front of the right-hand reviewer, including the narrow 04.
+				_review_dog.position.x = avatars[1].position.x
+				_review_humanoid = WarriorVisual3D.new()
+				_review_humanoid.position = _review_dog.position
+				_review_humanoid.rotation.y = PI
+				_review_humanoid.visible = false
+				add_child(_review_humanoid)
 			_review_label = Label.new()
 			_review_label.position = Vector2(16,48)
 			add_child(_review_label)
 			_review_label.text = "Combo review: 1 base / 2 Combo Lv1 / 3 Combo Lv2. Loops at native speed. Esc closes."
 		print("WARRIOR_PREVIEW_READY")
+		if OS.get_cmdline_user_args().has("--vertical-capture"):
+			for humanoid: bool in [false,true]:
+				_set_review_target(humanoid)
+				_review_generation += 1
+				await _review_combo(0,_review_generation)
+			print("WARRIOR_VERTICAL_RENDER_OK")
+			get_tree().quit()
+			return
 		if OS.get_cmdline_user_args().has("--combo-capture"):
 			for level: int in [0,1,2]:
 				_review_generation += 1
@@ -214,7 +232,7 @@ func _setup_stage() -> void:
 	environment.environment.ambient_light_energy = .6
 	add_child(environment)
 	var label := Label.new()
-	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend 0/0.08 | T trace/cone | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
+	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend 0/0.08 | T trace/cone | H dog/humanoid | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
 	label.position = Vector2(16,16)
 	add_child(label)
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -230,6 +248,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		for overlay: CombatTraceDebug3D in _trace_overlays:
 			overlay.legacy = _legacy_trace
 			overlay.redraw()
+	elif event.keycode == KEY_H and _review_humanoid != null:
+		_set_review_target(not _humanoid_target)
+		_review_generation += 1
+		_review_combo(0,_review_generation)
 	elif event.keycode == KEY_V:
 		for view: WarriorVisual3D in avatars: view.set_variant(view.visual_id != &"warrior_armor")
 	elif event.keycode == KEY_ESCAPE: get_tree().quit()
@@ -241,12 +263,13 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 	var combo := runtime.definition()
 	while ticket == _review_generation:
 		_review_dog.set_hit_lock(0,0)
+		if _review_humanoid != null: _review_humanoid.set_hit_lock(0,0)
 		for view: WarriorVisual3D in avatars: view.set_locomotion(false)
 		for i: int in combo.steps.size():
 			if ticket != _review_generation: return
 			var swing := runtime.take_step(Time.get_ticks_msec())
 			var step: BasicAttackStepDefinition = swing.step
-			_review_label.text = "%s | step %d/%d | %s | impact %d ms / recovery %d ms / blend %.2f" % [combo.combo_key,i+1,combo.steps.size(),step.animation_key,step.impact_ms,step.recovery_ms,avatars[0].attack_blend_seconds]
+			_review_label.text = ("Warrior target | " if _humanoid_target else "Dog target | ")+"%s | step %d/%d | %s | impact %d ms / recovery %d ms / blend %.2f" % [combo.combo_key,i+1,combo.steps.size(),step.animation_key,step.impact_ms,step.recovery_ms,avatars[0].attack_blend_seconds]
 			for overlay: CombatTraceDebug3D in _trace_overlays: overlay.queue_free()
 			_trace_overlays.clear()
 			if OS.get_cmdline_user_args().has("--trace-review"):
@@ -256,8 +279,10 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 					overlay.transform = view.transform
 					var targets: Array[Dictionary] = []
 					var feet := overlay.to_local(_review_dog.global_position)
-					var hit := CombatTraceResolver.hits_capsule(step.combat_trace,view.transform,_review_dog.position,.4,.8)
-					targets.append({"id":1,"position":feet,"radius":.4,"height":.8,"hit":hit,"predicted":true})
+					var radius := .35 if _humanoid_target else .4
+					var height := 1.8 if _humanoid_target else .8
+					var hit := CombatTraceResolver.hits_capsule(step.combat_trace,view.transform,_review_dog.position,radius,height)
+					targets.append({"id":1,"position":feet,"radius":radius,"height":height,"hit":hit,"predicted":true})
 					var pack_count := 0
 					for argument: String in OS.get_cmdline_user_args():
 						if argument.begins_with("--trace-pack="): pack_count = clampi(argument.get_slice("=",1).to_int(),0,100)
@@ -278,16 +303,29 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 			var contact := _trace_overlays.is_empty()
 			for overlay: CombatTraceDebug3D in _trace_overlays: contact = contact or overlay.targets[0].hit
 			if contact:
-				if result.reaction == HitReaction.Type.KNOCKDOWN: _review_dog.set_hit_lock(result.duration,result.get_up_duration)
-				else: _review_dog.play_hit()
-			if OS.get_cmdline_user_args().has("--combo-capture"):
+				if _humanoid_target:
+					if result.reaction == HitReaction.Type.KNOCKDOWN: _review_humanoid.set_hit_lock(result.duration,result.get_up_duration)
+					else: _review_humanoid.play_hit()
+				else:
+					if result.reaction == HitReaction.Type.KNOCKDOWN: _review_dog.set_hit_lock(result.duration,result.get_up_duration)
+					else: _review_dog.play_hit()
+			if OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
 				await RenderingServer.frame_post_draw
-				assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/combo-%d-step-%d.png" % [combo.steps.size(),i+1]) == OK)
+				assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/%s-%d-step-%d.png" % [_capture_prefix(),combo.steps.size(),i+1]) == OK)
 			await get_tree().create_timer((step.recovery_ms-step.impact_ms)/1000.0).timeout
 		_review_label.text = "%s complete; idle / recovery" % combo.combo_key
 		await get_tree().create_timer(1.8).timeout
-		if OS.get_cmdline_user_args().has("--combo-capture"):
+		if OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
 			await RenderingServer.frame_post_draw
-			assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/combo-%d-idle.png" % combo.steps.size()) == OK)
+			assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/%s-%d-idle.png" % [_capture_prefix(),combo.steps.size()]) == OK)
 			return
 		runtime.reset()
+
+func _set_review_target(humanoid: bool) -> void:
+	_humanoid_target = humanoid
+	_review_dog.visible = not humanoid
+	_review_humanoid.visible = humanoid
+
+func _capture_prefix() -> String:
+	if OS.get_cmdline_user_args().has("--vertical-capture"): return "vertical-warrior" if _humanoid_target else "vertical-dog"
+	return "combo"

@@ -16,6 +16,7 @@ var weapon_definition_id: String = ""
 var alive: bool = true
 var _name_label: Label3D
 var _display_name: String = ""
+var combat_collider: CollisionShape3D
 
 func setup(display_name: String, tint: Color) -> void:
 	_display_name = display_name
@@ -25,6 +26,7 @@ func setup(display_name: String, tint: Color) -> void:
 	capsule.radius = 0.35
 	capsule.height = 1.8
 	var shape := CollisionShape3D.new()
+	combat_collider = shape
 	shape.shape = capsule
 	shape.position.y = 0.9
 	add_child(shape)
@@ -144,5 +146,6 @@ func present_hit_lock(down_ms: int, get_up_ms: int) -> void:
 	if player_presentation != null and alive:
 		player_presentation.set_hit_lock(down_ms/1000.0,get_up_ms/1000.0)
 
-func combat_radius() -> float: return 0.35
-func combat_height() -> float: return 1.8
+func combat_radius() -> float: return (combat_collider.shape as CapsuleShape3D).radius
+func combat_height() -> float: return (combat_collider.shape as CapsuleShape3D).height
+func combat_bottom_offset() -> float: return combat_collider.position.y-combat_height()/2.0

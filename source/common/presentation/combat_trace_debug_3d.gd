@@ -4,6 +4,7 @@ extends MeshInstance3D
 var step: BasicAttackStepDefinition
 var targets: Array[Dictionary] = []
 var legacy := false
+var _vertical_band: MeshInstance3D
 func configure(value: BasicAttackStepDefinition, candidates: Array[Dictionary], show_legacy: bool = false) -> void:
 	step = value
 	targets = candidates
@@ -17,6 +18,7 @@ func mark_hits(results: Array[Dictionary]) -> void:
 	redraw()
 func redraw() -> void:
 	if step == null or step.combat_trace == null: return
+	_draw_vertical_band(step.combat_trace)
 	var lines := ImmediateMesh.new()
 	lines.surface_begin(Mesh.PRIMITIVE_LINES)
 	var trace := step.combat_trace
@@ -49,9 +51,10 @@ func redraw() -> void:
 		var feet: Vector3 = target.position
 		if target.get("predicted",false):
 			var horizontal := Vector3(feet.x,0,feet.z)
-			target.hit = (horizontal.length() <= 2.4 and absf(feet.y) <= 1.2 and (horizontal.length_squared() < .001 or horizontal.normalized().dot(Vector3.FORWARD) >= cos(deg_to_rad(65)))) if legacy else CombatTraceResolver.hits_capsule(trace,Transform3D.IDENTITY,feet,target.radius,target.height)
+			target.hit = (horizontal.length() <= 2.4 and absf(feet.y) <= 1.2 and (horizontal.length_squared() < .001 or horizontal.normalized().dot(Vector3.FORWARD) >= cos(deg_to_rad(65)))) if legacy else CombatTraceResolver.hits_capsule(trace,Transform3D.IDENTITY,feet,target.radius,target.height,target.get("bottom_offset",0.0))
 		var color := Color.LIME_GREEN if target.get("hit",false) else Color.INDIAN_RED
 		var radius: float = target.radius
+		feet.y += target.get("bottom_offset",0.0)
 		var bottom := feet+Vector3.UP*radius
 		var top := feet+Vector3.UP*maxf(radius,target.height-radius)
 		_ring(lines,bottom,radius,color)
@@ -81,3 +84,36 @@ static func _ring(lines: ImmediateMesh, center: Vector3, radius: float, color: C
 		var a := i*TAU/16
 		var b := (i+1)*TAU/16
 		_line(lines,center+Vector3(cos(a),0,sin(a))*radius,center+Vector3(cos(b),0,sin(b))*radius,color)
+
+func _draw_vertical_band(trace: CombatTraceDefinition) -> void:
+	if _vertical_band == null:
+		_vertical_band = MeshInstance3D.new()
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_color = Color(0.1,0.8,1,0.035)
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_vertical_band.material_override = material
+		add_child(_vertical_band)
+	_vertical_band.visible = not legacy
+	if legacy: return
+	var band := ImmediateMesh.new()
+	band.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i: int in range(1,trace.samples.size()):
+		var previous := trace.samples[i-1]
+		var current := trace.samples[i]
+		var interval := trace.vertical_interval(previous,current)
+		# Swept blade footprint extruded vertically; blue wire bounds additionally
+		# show the conservative broadphase radius/rail padding.
+		var footprint := [previous.base,previous.tip,current.tip,current.base]
+		for edge: int in 4:
+			var a: Vector3 = footprint[edge]
+			var b: Vector3 = footprint[(edge+1)%4]
+			_quad(band,Vector3(a.x,interval.x,a.z),Vector3(b.x,interval.x,b.z),Vector3(b.x,interval.y,b.z),Vector3(a.x,interval.y,a.z))
+		for y: float in [interval.x,interval.y]:
+			_quad(band,Vector3(footprint[0].x,y,footprint[0].z),Vector3(footprint[1].x,y,footprint[1].z),Vector3(footprint[2].x,y,footprint[2].z),Vector3(footprint[3].x,y,footprint[3].z))
+	band.surface_end()
+	_vertical_band.mesh = band
+
+static func _quad(mesh_data: ImmediateMesh, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
+	for vertex: Vector3 in [a,b,c,a,c,d]: mesh_data.surface_add_vertex(vertex)

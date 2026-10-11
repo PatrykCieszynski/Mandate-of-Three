@@ -1,6 +1,7 @@
 class_name MetinStone3D
 extends StaticBody3D
 ## Presentation/attack collider only. The encounter owns HP and lifecycle.
+var combat_collider: CollisionShape3D
 var hp_label: Label3D
 func _ready() -> void:
 	collision_layer = 4
@@ -9,6 +10,7 @@ func _ready() -> void:
 	var shape := CapsuleShape3D.new()
 	shape.radius = 0.7
 	shape.height = 2.8
+	combat_collider = collider
 	collider.shape = shape
 	collider.position.y = 1.4
 	add_child(collider)
@@ -35,5 +37,6 @@ func present(title: String, hp: int, max_hp: int, active: bool) -> void:
 	collision_layer = 4 if active else 0
 	if hp_label != null: hp_label.text = "%s\n%d / %d" % [title,hp,max_hp]
 
-func combat_radius() -> float: return 0.7
-func combat_height() -> float: return 2.8
+func combat_radius() -> float: return (combat_collider.shape as CapsuleShape3D).radius
+func combat_height() -> float: return (combat_collider.shape as CapsuleShape3D).height
+func combat_bottom_offset() -> float: return combat_collider.position.y-combat_height()/2.0
