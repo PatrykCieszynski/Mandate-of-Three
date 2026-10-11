@@ -200,11 +200,11 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikeCharacter3D, target:
 	body.position = Vector3(15,0,10.2)
 	body.velocity = Vector3.ZERO
 	await physics_steps(body,12,Vector2(0,1))
-	check(body.position.z>11.2,"existing overlap permits outward movement")
+	check(body.position.z>11.18,"existing overlap permits the requested one-metre outward movement: %s" % body.position)
 	body.position = Vector3(15,0,10.2)
 	body.velocity = Vector3.ZERO
 	await physics_steps(body,12,Vector2(0,-1))
-	check(body.position.z>=10.2,"existing overlap blocks deeper inward movement: %s" % body.position)
+	check(body.position.z>=10.199,"existing overlap blocks deeper inward movement: %s" % body.position)
 	# No finisher exception: existing impulse frees space for the same advance.
 	body.position = Vector3(15,0,10)
 	body.velocity = Vector3.ZERO
@@ -226,6 +226,7 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikeCharacter3D, target:
 		body.simulate(1.0/60,Vector2.ZERO)
 	check(body.position.z<blocked_position-.3 and target.position.z<8,"remaining advance enters space freed by knockback")
 	print("ACTION_BODY walk=",walking_stop," finisher_before=",blocked_position," after=",body.position.z," mob=",target.position.z)
+	await check_body_edge_cases(combat,body,target,hero)
 	# A corpse never runs slide recovery, even with a mob chasing through it.
 	combat.health[hero] = 100
 	body.hit_reaction.clear()
@@ -246,6 +247,104 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikeCharacter3D, target:
 	var spawn_position := body.position
 	await physics_steps(body,2,Vector2.RIGHT)
 	check(body.position.x>spawn_position.x,"normal movement resumes after respawn")
+
+func check_body_edge_cases(combat: SpikeCombat3D, body: SpikeCharacter3D, target: SpikeWildDog3D, hero: int) -> void:
+	combat._clear_attack_intents(hero)
+	body.hit_reaction.clear()
+	body.knockback_velocity = Vector3.ZERO
+	target.hit_reaction.clear()
+	target.knockback_velocity = Vector3.ZERO
+	var step := BasicAttackCombos.BASE.steps[0]
+	var angle_results: Array[Dictionary] = []
+	# Offset the capsule so the frozen forward path first meets a 30/45 degree normal.
+	for angle: float in [30.0,45.0]:
+		body.position = Vector3(15,0,10)
+		body.velocity = Vector3.ZERO
+		body.rotation.y = 0
+		target.position = Vector3(15+.95*sin(deg_to_rad(angle)),0,8.85)
+		body.start_attack_advance(0,step.advance_distance,step.motion_duration_ms/1000.0)
+		var lateral := 0.0
+		for frame: int in 60:
+			await get_tree().physics_frame
+			body.simulate(1.0/60,Vector2.ZERO)
+			lateral = maxf(lateral,absf(body.position.x-15))
+		var result := {"angle":angle,"lateral":lateral,"forward":10-body.position.z,"position":body.position}
+		var stopped := body.position
+		target.position.x += 3
+		await physics_steps(body,2)
+		check(body.position.distance_to(stopped)<.001,"exhausted blocked advance cannot catch up when BODY leaves")
+		angle_results.append(result)
+		print("ACTION_ANGLED ",result)
+	target.collision_layer = 0
+	var pack_results: Array[Dictionary] = []
+	for count: int in [5,10,20]:
+		var pack: Array[SpikeWildDog3D] = []
+		var origin := Vector3(15,0,10)
+		for index: int in count:
+			var dog := SpikeWildDog3D.new()
+			dog.definition = target.definition
+			dog.ai_enabled = false
+			# Several penetration normals, with an outward route toward +Z.
+			var spread := lerpf(-.3,.3,float(index)/maxi(1,count-1))
+			dog.setup_dog(9000+index,origin+Vector3(spread,0,-.2-.04*(index%3)))
+			world.add_child(dog)
+			combat.dogs[dog.mob_id] = dog
+			pack.append(dog)
+		body.cancel_attack_advance()
+		body.position = origin
+		body.velocity = Vector3.ZERO
+		var idle_shift := 0.0
+		for frame: int in 12:
+			await get_tree().physics_frame
+			body.simulate(1.0/60,Vector2.ZERO)
+			idle_shift = maxf(idle_shift,Vector2(body.position.x-origin.x,body.position.z-origin.z).length())
+		check(body.get_collision_exceptions().is_empty(),"idle overlap exceptions are restored after simulation")
+		body.position = origin
+		body.velocity = Vector3.ZERO
+		await physics_steps(body,6,Vector2(0,-1))
+		check(Vector2(body.position.x-origin.x,body.position.z-origin.z).length()<.001,"overlapping pack cannot be penetrated more deeply")
+		body.position = origin
+		body.velocity = Vector3.ZERO
+		var max_tick := 0.0
+		for frame: int in 18:
+			await get_tree().physics_frame
+			var previous := body.position
+			body.simulate(1.0/60,Vector2(0,1))
+			max_tick = maxf(max_tick,Vector2(body.position.x-previous.x,body.position.z-previous.z).length())
+		var escape := body.position.z-origin.z
+		check(body.get_collision_exceptions().is_empty(),"escape exceptions are restored before subsequent BODY contacts")
+		# Re-entry must hit the same BODY after temporary overlap exceptions expire.
+		await physics_steps(body,24,Vector2(0,-1))
+		check(body.position.z>origin.z+.65 and body.position.z<origin.z+escape-.2,"new pack BODY contacts block after escape")
+		# Turn back into the same pack and use the production trace/reaction path.
+		body.rotation.y = 0
+		var impact := Time.get_ticks_msec()
+		var finisher := BasicAttackCombos.BASE.steps[3]
+		var swing := {"step":finisher,"impact":impact,"started":impact-finisher.impact_ms,"attack":1,"yaw":0.0,"finisher":true,"hit_set":{},"action_id":400+count,"step_index":3}
+		var hits := combat.resolve_swing(hero,swing,impact)
+		var displaced := 0
+		var starts: Array[Vector3] = []
+		for dog: SpikeWildDog3D in pack: starts.append(dog.position)
+		for frame: int in 40:
+			await get_tree().physics_frame
+			for dog: SpikeWildDog3D in pack: dog.move_dog(1.0/60,Vector2.ZERO,Time.get_ticks_msec())
+			body.simulate(1.0/60,Vector2.ZERO)
+		for index: int in count:
+			if pack[index].position.distance_to(starts[index]) > 1: displaced += 1
+		var result := {"count":count,"idle_shift":idle_shift,"max_escape_tick":max_tick,"escape":escape,"hits":hits.size(),"displaced":displaced}
+		pack_results.append(result)
+		print("ACTION_PACK ",result)
+		for dog: SpikeWildDog3D in pack:
+			combat.dogs.erase(dog.mob_id)
+			dog.free()
+	target.collision_layer = 4
+	for result: Dictionary in angle_results:
+		var expected_contact := 1.15-.95*cos(deg_to_rad(result.angle))
+		check(result.lateral < .02 and absf(result.forward-expected_contact)<.02,"angled attack stops at BODY without tangential slide: %s" % result)
+	for result: Dictionary in pack_results:
+		check(result.escape > 1,"pack overlap permits outward movement: %s" % result)
+		check(result.idle_shift < .01 and result.max_escape_tick < SpikeCharacter3D.SPEED/60+.01,"pack overlap has no significant spontaneous recovery or movement jump: %s" % result)
+		check(result.hits == result.count and result.displaced == result.count,"finisher displaces the overlapping pack through authoritative trace/knockback: %s" % result)
 
 func _process(delta: float) -> void:
 	elapsed += delta

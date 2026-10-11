@@ -62,13 +62,55 @@ func simulate(delta: float, direction: Vector2) -> void:
 	if hit_reaction.locked(Time.get_ticks_msec()) or knockback_active():
 		direction = Vector2.ZERO
 		cancel_attack_advance()
-	var displacement_velocity := damp_knockback(delta) + _consume_attack_advance(delta)
+	var advance_velocity := _consume_attack_advance(delta)
+	var displacement_velocity := damp_knockback(delta) + advance_velocity
 	velocity.x = direction.x * SPEED + displacement_velocity.x
 	velocity.z = direction.y * SPEED + displacement_velocity.z
 	velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
 	if direction.length_squared() > 0.001:
 		rotation.y = atan2(-direction.x, -direction.y)
+	# Mobs can chase into us. Existing penetration must not become an unsolicited
+	# recovery impulse; permit departure, but never movement deeper into a BODY.
+	var overlaps := _overlapping_mob_bodies()
+	var planar := Vector3(velocity.x,0,velocity.z)
+	for mob: PhysicsBody3D in overlaps:
+		var offset := mob.global_position-global_position
+		if planar.dot(Vector3(offset.x,0,offset.z)) > 0.0001:
+			velocity.x = 0
+			velocity.z = 0
+			break
+	var temporary_exceptions: Array[PhysicsBody3D] = []
+	var existing_exceptions := get_collision_exceptions()
+	for mob: PhysicsBody3D in overlaps:
+		if existing_exceptions.has(mob): continue
+		add_collision_exception_with(mob)
+		temporary_exceptions.append(mob)
+	if advance_velocity.length_squared() > 0 and delta > 0:
+		# Probe the straight advance before the normal slide. Consume the curve
+		# even when blocked, but discard the tangential remainder on actor BODY.
+		var collision := KinematicCollision3D.new()
+		var motion := Vector3(velocity.x,0,velocity.z)*delta
+		if test_move(global_transform,motion,collision,safe_margin):
+			var collider := collision.get_collider() as PhysicsBody3D
+			if collider != null and collider.collision_layer & 4:
+				var allowed := maxf(0,collision.get_travel().dot(motion.normalized()))
+				var fraction := clampf(allowed/motion.length(),0,1) if motion.length() > 0 else 0.0
+				velocity.x *= fraction
+				velocity.z *= fraction
 	move_and_slide()
+	for mob: PhysicsBody3D in temporary_exceptions: remove_collision_exception_with(mob)
+
+func _overlapping_mob_bodies() -> Array[PhysicsBody3D]:
+	var overlaps: Array[PhysicsBody3D] = []
+	if combat_collider == null or not collision_mask & 4: return overlaps
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = combat_collider.shape
+	query.transform = combat_collider.global_transform
+	query.collision_mask = 4
+	for hit: Dictionary in get_world_3d().direct_space_state.intersect_shape(query,256):
+		var mob := hit.collider as SpikeWildDog3D
+		if mob != null and not overlaps.has(mob): overlaps.append(mob)
+	return overlaps
 
 func start_attack_advance(yaw: float, distance: float, duration: float) -> void:
 	_advance_yaw = yaw
