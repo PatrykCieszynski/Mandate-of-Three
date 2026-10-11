@@ -1,7 +1,9 @@
-[gd_resource type="Resource" script_class="MobDefinition" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="MobDefinition" load_steps=3 format=3]
 [ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_definition.gd" id="1"]
+[ext_resource type="Resource" path="res://source/common/gameplay/combat/elite_reactions.tres" id="2"]
 [resource]
 script = ExtResource("1")
+reaction_profile = ExtResource("2")
 mob_key = &"metin_hound_elite"
 display_name = "Metin Elite"
 max_hp = 300

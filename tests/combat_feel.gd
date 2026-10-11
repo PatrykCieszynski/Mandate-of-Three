@@ -1,12 +1,14 @@
 extends "res://tests/pve_network.gd"
 ## Two production WebSocket clients plus isolated SQLite; validates combat
-## geometry, timing, physical knockback, straight-line chase, death and respawn.
+## geometry, timing, hit reactions, straight-line chase, death and respawn.
 
 var saw_multi: bool = false
 var saw_combo: bool = false
 var saw_player_death: bool = false
 var saw_respawn: bool = false
 var saw_swing: bool = false
+var saw_down: bool = false
+var saw_get_up: bool = false
 var dead_peer: int = 0
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -16,7 +18,7 @@ func phase(command: String, uid: String) -> void:
 	drop_uid = uid
 	attempted = false
 	if command == "DONE":
-		check(saw_multi and saw_combo and saw_player_death and saw_respawn and saw_swing, "replicated multi/combo/death/respawn/swing")
+		check(saw_multi and saw_combo and saw_player_death and saw_respawn and saw_swing and saw_down and saw_get_up, "replicated multi/combo/death/respawn/swing")
 		if not failed:
 			print("COMBAT_CLIENT_OK: ", client_number, " multi-hit, combo, reaction, death and respawn")
 			finished.rpc_id(1)
@@ -49,16 +51,48 @@ func run_server() -> void:
 	check(combat._combo[hero] == 2 and combat.dogs[2].hp == 100, "second combo hit")
 	await get_tree().create_timer(0.5).timeout
 	set_phase("THREE", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp == 85)
-	check(combat._combo[hero] == 3 and combat.dogs[2].hp == 85, "finisher damage")
-	check(combat.dogs[1].knockback.length() > 0 and combat.dogs[2].knockback.length() > 0, "finisher knocks every surviving hit dog")
+	await wait_until(func() -> bool: return combat._combo.get(hero,0) == 3 and not combat._pending.has(hero))
+	check(not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()), "third hit is a non-locking flinch")
+	var attacking_dog: SpikeWildDog3D = combat.dogs[1]
+	attacking_dog.position = world.characters[hero].position + Vector3(0,0,-1.2)
+	attacking_dog.ai_enabled = true
+	attacking_dog.last_attack_ms = -10000
+	var before_flinch_attack: int = combat.health[hero]
+	combat._tick_dog(attacking_dog,1.0/60,Time.get_ticks_msec())
+	check(combat.health[hero] < before_flinch_attack, "flinching mob can continue its range attack")
+	attacking_dog.ai_enabled = false
+	await get_tree().create_timer(0.5).timeout
+	set_phase("FOUR",hero)
+	await wait_until(func() -> bool: return combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
+	check(combat._combo[hero] == 4 and combat.dogs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets")
 	var hit_position: Vector3 = combat.dogs[1].position
 	for dog: SpikeWildDog3D in combat.dogs.values():
 		if dog.mob_id <= 2: dog.ai_enabled = true
+	var hp_before: int = combat.health[hero]
 	await get_tree().create_timer(0.3).timeout
-	check(combat.dogs[1].position.distance_to(hit_position) > 0.4, "knockback moves server physics body")
+	check(combat.health[hero] == hp_before and combat.dogs[1].position.distance_to(hit_position) < 0.1, "down mob cannot attack or chase")
+	await wait_until(func() -> bool: return not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
 	for dog: SpikeWildDog3D in combat.dogs.values(): dog.ai_enabled = false
-	await get_tree().create_timer(0.9).timeout
+	# Player-target path, also used for a future authorized PvP hit. No friendly-fire policy here.
+	var now := Time.get_ticks_msec()
+	check(combat.begin_attack(other,1,now), "player can begin a swing")
+	combat.hurt_player(other,1,now,BasicAttackHits.stage(1))
+	check(combat._pending.has(other) and not world.characters[other].hit_reaction.locked(now), "flinch preserves player pending attack")
+	var canceled_swing: Dictionary = combat._pending[other].duplicate()
+	combat.hurt_player(other,1,now,BasicAttackHits.stage(4))
+	check(combat.resolve_swing(other,canceled_swing,now+1).is_empty(), "canceled delayed hit cannot resolve during knockdown")
+	var deadline: int = world.characters[other].hit_reaction.get_up_until_ms
+	check(not combat._pending.has(other) and not combat.can_move(other,now) and not combat.begin_attack(other,2,now), "knockdown cancels pending player damage and blocks actions")
+	combat.hurt_player(other,1,now+1,BasicAttackHits.stage(4))
+	check(world.characters[other].hit_reaction.get_up_until_ms == deadline, "re-hit does not extend player lock")
+	await wait_until(func() -> bool: return not world.characters[other].hit_reaction.locked(Time.get_ticks_msec()))
+	world.characters[other].reaction_profile = HitReactionProfiles.BOSS
+	now = Time.get_ticks_msec()
+	check(combat.begin_attack(other,3,now), "actions resume after get-up")
+	combat.hurt_player(other,1,now,BasicAttackHits.stage(4))
+	check(combat._pending.has(other) and not world.characters[other].hit_reaction.locked(now), "immune target keeps its pending attack")
+	world.characters[other].reaction_profile = HitReactionProfiles.PLAYER
+	await get_tree().create_timer(0.3).timeout
 	set_phase("RESET", hero)
 	await wait_until(func() -> bool: return combat._combo[hero] == 1)
 	await get_tree().create_timer(0.2).timeout
@@ -120,7 +154,7 @@ func run_server() -> void:
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
 	if not failed:
-		print("COMBAT_SERVER_OK: directional multi-hit, combo/replay, finisher knockback, straight-line obstacle/return, player death/respawn")
+		print("COMBAT_SERVER_OK: directional multi-hit, combo/replay, finisher knockdown and player-target interruption, straight-line obstacle/return, player death/respawn")
 		peer.close()
 		db.close_db()
 		get_tree().quit()
@@ -135,8 +169,11 @@ func _process(delta: float) -> void:
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
 	var combat: SpikeCombat3D = world.combat_endpoint
+	for dog: SpikeWildDog3D in combat.dogs.values():
+		saw_down = saw_down or dog.presentation.animation_state == &"knockdown"
+		saw_get_up = saw_get_up or dog.presentation.animation_state == &"get_up"
 	saw_multi = saw_multi or (combat.dogs[1].hp < 120 and combat.dogs[2].hp < 120)
-	for stage: int in combat.state.combos.values(): saw_combo = saw_combo or stage == 3
+	for stage: int in combat.state.combos.values(): saw_combo = saw_combo or stage == 4
 	for id: int in combat.state.health:
 		var hp: int = int(combat.state.health[id])
 		if hp == 0:
@@ -148,7 +185,7 @@ func _process(delta: float) -> void:
 		for node: Node in body.get_children():
 			if node is MeshInstance3D and node.mesh is ArrayMesh: saw_swing = true
 	if attempted: return
-	if phase_name in ["ONE", "TWO", "THREE", "RESET", "DYING", "RESTART"]:
+	if phase_name in ["ONE", "TWO", "THREE", "FOUR", "RESET", "DYING", "RESTART"]:
 		attempted = true
 		combat.select_target({"kind":&"mob","id":3}) # selected dog behind the player cannot redirect manual damage
 		for i: int in 40:

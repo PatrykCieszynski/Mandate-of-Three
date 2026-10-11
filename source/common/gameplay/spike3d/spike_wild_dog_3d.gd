@@ -72,7 +72,7 @@ func _label(text: String, height: float, size: int) -> Label3D:
 	return label
 
 func move_dog(delta: float, direction: Vector2, now: int) -> void:
-	if now < stunned_until_ms: direction = Vector2.ZERO
+	if now < stunned_until_ms or hit_reaction.locked(now): direction = Vector2.ZERO
 	velocity.x = direction.x * move_speed + knockback.x
 	velocity.z = direction.y * move_speed + knockback.z
 	velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
@@ -83,6 +83,7 @@ func move_dog(delta: float, direction: Vector2, now: int) -> void:
 
 func die(now: int) -> void:
 	ai_state = "DEAD"
+	hit_reaction.clear()
 	target_peer = 0
 	dead_until_ms = now + 6000
 	knockback = Vector3.ZERO
@@ -101,6 +102,7 @@ func present_snapshot(snapshot: Array) -> void:
 	hp_label.visible = active
 	if ai_state == "DEAD" and previous_state != "DEAD": presentation.play_death()
 	elif active and previous_state in ["DEAD", "DISABLED"]: presentation.reset_alive()
+	presentation.set_hit_lock(snapshot[MobSnapshot.Field.DOWN_REMAINING]/1000.0,snapshot[MobSnapshot.Field.GET_UP_REMAINING]/1000.0)
 	apply_snapshot(snapshot[MobSnapshot.Field.POSITION], snapshot[MobSnapshot.Field.YAW])
 	hp_label.text = "%d / %d" % [hp, max_hp]
 
@@ -115,3 +117,6 @@ func play_hit() -> void:
 
 func mark_selected(selected: bool) -> void:
 	if name_label != null: name_label.modulate = Color("ffe291") if selected else Color.WHITE
+
+func present_hit_lock(down_ms: int, get_up_ms: int) -> void:
+	if presentation != null: presentation.set_hit_lock(down_ms/1000.0,get_up_ms/1000.0)

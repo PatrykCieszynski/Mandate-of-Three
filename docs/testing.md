@@ -111,3 +111,8 @@ material/item/wallet rollback fixture and small UI/bridge contracts.
 
 `run-camera.ps1` is the optional headless Camera v1 collision/picking fixture.
 See [Camera v1](camera-v1.md) for the native input/framing acceptance checklist.
+
+Hit reaction smoke covers profiles, flinch without locks, bounded knockdown/get-up,
+interrupt independence and snapshot recovery. `run-combat` exercises the same
+authority with two clients, including the player-target pending-hit path. See
+[Hit Reactions v1](hit-reactions-v1.md).

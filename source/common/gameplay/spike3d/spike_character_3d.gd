@@ -4,6 +4,8 @@ extends CharacterBody3D
 
 const SPEED: float = 5.0
 const GRAVITY: float = 20.0
+var hit_reaction := HitReactionState.new()
+var reaction_profile: HitReactionProfile = HitReactionProfiles.PLAYER
 var target_position: Vector3
 var target_yaw: float = 0.0
 var has_snapshot: bool = false
@@ -104,7 +106,7 @@ func play_swing(stage: int) -> void:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color = Color(1, 0.8, 0.25, 0.8) if stage == 3 else Color(0.6, 0.9, 1, 0.6)
+	material.albedo_color = Color(1, 0.8, 0.25, 0.8) if stage == BasicAttackHits.COMBO.size() else Color(0.6, 0.9, 1, 0.6)
 	slash.material_override = material
 	add_child(slash)
 	var tween := create_tween()
@@ -113,3 +115,7 @@ func play_swing(stage: int) -> void:
 
 func get_display_name() -> String:
 	return _display_name
+
+func present_hit_lock(down_ms: int, get_up_ms: int) -> void:
+	if player_presentation != null and alive:
+		player_presentation.set_hit_lock(down_ms/1000.0,get_up_ms/1000.0)
