@@ -14,6 +14,11 @@ var _review_ratio := 1.0
 var _review_skill := 0
 var _feel_feedback: CombatFeedback3D
 var _feel_targets: Array[SpikeWildDog3D] = []
+var _feel_actors: Array[Node3D] = []
+var _preview_advances: Array[Tween] = []
+var _review_single := false
+var _review_turn := false
+var _preview_camera: MandateCamera3D
 func check(value: bool, message: String) -> void:
 	if not value:
 		push_error(message)
@@ -182,6 +187,20 @@ func _ready() -> void:
 		if OS.get_cmdline_user_args().has("--feel-review"):
 			_setup_feel_pack()
 		print("WARRIOR_PREVIEW_READY")
+		if OS.get_cmdline_user_args().has("--action-capture"):
+			_review_ratio = 1.22
+			_review_single = true
+			_review_generation += 1
+			await _review_combo(0,_review_generation)
+			_review_single = false
+			_review_generation += 1
+			await _review_combo(0,_review_generation)
+			_review_turn = true
+			_review_generation += 1
+			await _review_combo(0,_review_generation)
+			print("WARRIOR_ACTION_RENDER_OK")
+			get_tree().quit()
+			return
 		if OS.get_cmdline_user_args().has("--feel-capture"):
 			for blend: float in [.08,.05]:
 				for view: WarriorVisual3D in avatars: view.attack_blend_seconds = blend
@@ -229,7 +248,7 @@ func _pose(clip: StringName, frozen: bool = true) -> void:
 func _setup_stage() -> void:
 	var plane := MeshInstance3D.new()
 	var mesh := PlaneMesh.new()
-	mesh.size = Vector2(7,7)
+	mesh.size = Vector2(12,12) if OS.get_cmdline_user_args().has("--feel-review") else Vector2(7,7)
 	plane.mesh = mesh
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.15,0.17,0.20)
@@ -243,6 +262,12 @@ func _setup_stage() -> void:
 	camera.position = Vector3(3.0,2.3,-4.5)
 	add_child(camera)
 	camera.look_at(Vector3(0,1,0))
+	if OS.get_cmdline_user_args().has("--feel-review"):
+		_preview_camera = MandateCamera3D.new()
+		add_child(_preview_camera)
+		_preview_camera.camera.global_position = Vector3(5,5,6)
+		_preview_camera.camera.look_at(Vector3(0,1,-2))
+		camera.queue_free()
 	var environment := WorldEnvironment.new()
 	environment.environment = Environment.new()
 	environment.environment.background_mode = Environment.BG_COLOR
@@ -252,7 +277,7 @@ func _setup_stage() -> void:
 	environment.environment.ambient_light_energy = .6
 	add_child(environment)
 	var label := Label.new()
-	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend .08/.05 | Q/E/R AS100/122/150 | T trace/cone | H dog/humanoid | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
+	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend .08/.05 | Q/E/R AS100/122/150 | S single/chain | G turn each step | T trace/cone | H dog/humanoid | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
 	label.position = Vector2(16,16)
 	add_child(label)
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -264,6 +289,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	elif _review_dog == null and event.keycode >= KEY_1 and event.keycode < KEY_1+_clips.size(): _pose(_clips[event.keycode-KEY_1],false)
 	elif event.keycode in [KEY_Q,KEY_E,KEY_R] and _review_dog != null:
 		_review_ratio = 1.0 if event.keycode == KEY_Q else (1.22 if event.keycode == KEY_E else 1.5)
+		_review_generation += 1
+		_review_combo(_review_skill,_review_generation)
+	elif event.keycode in [KEY_S,KEY_G] and not _feel_actors.is_empty():
+		if event.keycode == KEY_S: _review_single = not _review_single
+		else: _review_turn = not _review_turn
 		_review_generation += 1
 		_review_combo(_review_skill,_review_generation)
 	elif event.keycode == KEY_B and _review_dog != null:
@@ -287,10 +317,16 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 	if skill_level > 0: runtime.set_enabled(true)
 	var combo := runtime.definition()
 	while ticket == _review_generation:
+		for motion: Tween in _preview_advances: motion.kill()
+		_preview_advances.clear()
+		for index: int in _feel_actors.size():
+			_feel_actors[index].position = Vector3(.9 if index == 1 else -.9,0,0)
+			_feel_actors[index].rotation.y = 0
+			avatars[index].blend_facing(0)
 		_review_dog.set_hit_lock(0,0)
 		if _review_humanoid != null: _review_humanoid.set_hit_lock(0,0)
 		for view: WarriorVisual3D in avatars: view.set_locomotion(false)
-		for i: int in combo.steps.size():
+		for i: int in (1 if _review_single else combo.steps.size()):
 			if ticket != _review_generation: return
 			var swing := runtime.take_step(Time.get_ticks_msec(),i > 0)
 			var step: BasicAttackStepDefinition = swing.step
@@ -323,7 +359,18 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 					if pack_count > 0: print("TRACE_PREVIEW tests=",pack_count," hits=",pack_hits," usec=",Time.get_ticks_usec()-measured_at)
 					overlay.configure(step,targets,_legacy_trace)
 					_trace_overlays.append(overlay)
-			for view: WarriorVisual3D in avatars: view.play_basic_attack(step.animation_key,int(timing.end),_review_ratio)
+			for index: int in avatars.size():
+				var view := avatars[index]
+				if not _feel_actors.is_empty():
+					var actor := _feel_actors[index]
+					var visible_yaw := actor.rotation.y+view.rotation.y
+					actor.rotation.y = PI/2 if _review_turn and i%2 == 1 else 0.0
+					view.blend_facing(wrapf(visible_yaw-actor.rotation.y,-PI,PI))
+					var direction := Vector3(-sin(actor.rotation.y),0,-cos(actor.rotation.y))
+					var motion := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+					motion.tween_property(actor,"position",actor.position+direction*step.advance_distance,float(timing.end if swing.finisher else timing.direct)/1000.0)
+					_preview_advances.append(motion)
+				view.play_basic_attack(step.animation_key,int(timing.motion),_review_ratio)
 			await get_tree().create_timer(float(timing.impact)/1000.0).timeout
 			if ticket != _review_generation: return
 			var result := HitReactionResolver.resolve(step,HitReactionProfiles.NORMAL,1,100,false)
@@ -336,14 +383,14 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 				else:
 					if result.reaction == HitReaction.Type.KNOCKDOWN: _review_dog.set_hit_lock(result.duration,result.get_up_duration)
 					else: _review_dog.play_hit()
-			if _feel_feedback != null: _show_feel_hits(step,ticket*100+i)
-			if OS.get_cmdline_user_args().has("--feel-capture") or OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
+			if _feel_feedback != null: _show_feel_hits(step,ticket*100+i,bool(swing.finisher))
+			if OS.get_cmdline_user_args().has("--action-capture") or OS.get_cmdline_user_args().has("--feel-capture") or OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
 				await RenderingServer.frame_post_draw
 				assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/%s-%d-step-%d.png" % [_capture_prefix(),combo.steps.size(),i+1]) == OK)
-			await get_tree().create_timer((float(timing.end)-float(timing.impact))/1000.0).timeout
+			await get_tree().create_timer((float(timing.motion if _review_single else timing.end)-float(timing.impact))/1000.0).timeout
 		_review_label.text = "%s complete; idle / recovery" % combo.combo_key
 		await get_tree().create_timer(1.8).timeout
-		if OS.get_cmdline_user_args().has("--feel-capture") or OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
+		if OS.get_cmdline_user_args().has("--action-capture") or OS.get_cmdline_user_args().has("--feel-capture") or OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
 			await RenderingServer.frame_post_draw
 			assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/%s-%d-idle.png" % [_capture_prefix(),combo.steps.size()]) == OK)
 			return
@@ -355,6 +402,7 @@ func _set_review_target(humanoid: bool) -> void:
 	_review_humanoid.visible = humanoid
 
 func _capture_prefix() -> String:
+	if OS.get_cmdline_user_args().has("--action-capture"): return "action-single%d-turn%d" % [int(_review_single),int(_review_turn)]
 	if OS.get_cmdline_user_args().has("--feel-capture"): return "feel-as%d-blend%d" % [int(_review_ratio*100),int(avatars[0].attack_blend_seconds*1000)]
 	if OS.get_cmdline_user_args().has("--vertical-capture"): return "vertical-warrior" if _humanoid_target else "vertical-dog"
 	return "combo"
@@ -363,28 +411,39 @@ func _setup_feel_pack() -> void:
 	_feel_feedback = CombatFeedback3D.new()
 	add_child(_feel_feedback)
 	_review_dog.visible = false
+	for view: WarriorVisual3D in avatars:
+		var actor := Node3D.new()
+		actor.position = view.position
+		add_child(actor)
+		view.reparent(actor,false)
+		view.position = Vector3.ZERO
+		_feel_actors.append(actor)
 	var count := 20
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--feel-pack="): count = clampi(arg.get_slice("=",1).to_int(),1,50)
 	for i: int in count:
 		var dog := SpikeWildDog3D.new()
-		dog.setup_dog(1000+i,Vector3(.9+(i%5-2)*.35,0,-1.2-(i/5)*.25))
+		dog.setup_dog(1000+i,Vector3(.9+(i%5-2)*.35,0,-1.2-(i/5)*.4))
 		dog.ai_enabled = false
 		add_child(dog)
 		_feel_targets.append(dog)
 
-func _show_feel_hits(step: BasicAttackStepDefinition, action_id: int) -> void:
+func _show_feel_hits(step: BasicAttackStepDefinition, action_id: int, finisher: bool) -> void:
 	var count := 0
 	var started := Time.get_ticks_usec()
 	for dog: SpikeWildDog3D in _feel_targets:
-		if not CombatTraceResolver.hits_capsule(step.combat_trace,avatars[1].transform,dog.position,dog.combat_radius(),dog.combat_height(),dog.combat_bottom_offset()): continue
+		if not CombatTraceResolver.hits_capsule(step.combat_trace,_feel_actors[1].transform,dog.position,dog.combat_radius(),dog.combat_height(),dog.combat_bottom_offset()): continue
 		var result := HitReactionResolver.resolve(step,HitReactionProfiles.NORMAL,13,120,false)
 		var event := result.presentation()
-		event.merge({"attacker":1,"action_id":action_id,"target_kind":"mob","target_id":dog.mob_id})
+		event.merge({"attacker":1,"action_id":action_id,"target_kind":"mob","target_id":dog.mob_id,"finisher":finisher})
 		_feel_feedback.confirm(event,dog,true)
+		if _preview_camera != null: _preview_camera.confirm_finisher(event,true)
 		if result.reaction == HitReaction.Type.KNOCKDOWN: dog.present_hit_lock(int(result.duration*1000),int(result.get_up_duration*1000))
 		else: dog.play_hit()
 		dog.hp = 120-result.damage
 		dog._update_hp_bar()
 		count += 1
 	print("FEEL_PREVIEW AS=",int(_review_ratio*100)," clip=",step.animation_key," pack=",_feel_targets.size()," hits=",count," feedback_usec=",Time.get_ticks_usec()-started)
+
+func _process(delta: float) -> void:
+	if _preview_camera != null: _preview_camera._tick_impulse(delta)

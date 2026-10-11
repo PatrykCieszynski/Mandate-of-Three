@@ -21,6 +21,9 @@ var _since_manual: float = 0.0
 var _previous_pointer: Vector2
 var _previous_mouse_mode: Input.MouseMode = Input.MOUSE_MODE_VISIBLE
 var _sphere := SphereShape3D.new()
+var _shake_age := -1.0
+var _shaken_actions: Array[int] = []
+var finisher_impulses := 0
 
 func _ready() -> void:
 	assert(settings.min_distance > 0 and settings.max_distance >= settings.min_distance)
@@ -170,3 +173,26 @@ func update_camera(delta: float, target: Vector3, controls_enabled: bool) -> voi
 		resolved_distance = minf(resolved_distance, _safe_motion(eye, boom * resolved_distance).length())
 	camera.global_position = _pivot + boom * resolved_distance
 	camera.look_at(camera.global_position - boom, Vector3.UP)
+	_tick_impulse(delta)
+
+## Confirmed local action only. Offset changes no persistent orbit/follow state.
+func confirm_finisher(event: Dictionary, local_attacker: bool) -> bool:
+	if not local_attacker or not event.get("finisher",false) or int(event.get("damage",0)) <= 0: return false
+	var action: int = event.action_id
+	if _shaken_actions.has(action): return false
+	_shaken_actions.append(action)
+	if _shaken_actions.size() > 32: _shaken_actions.pop_front()
+	_shake_age = 0.0
+	finisher_impulses += 1
+	return true
+
+func _tick_impulse(delta: float) -> void:
+	if _shake_age < 0: return
+	_shake_age += delta
+	var envelope := pow(maxf(0,1-_shake_age/.11),2)
+	camera.h_offset = sin(_shake_age*145)*.025*envelope
+	camera.v_offset = sin(_shake_age*190)*.018*envelope
+	if _shake_age >= .11:
+		_shake_age = -1.0
+		camera.h_offset = 0
+		camera.v_offset = 0

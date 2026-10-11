@@ -32,10 +32,10 @@ from the original onehand-sword MSA files, in canonical milliseconds at AS 100:
 | 06 | 214 | 694 | 944 |
 | 07 | 1267 | 1267 | 1267 |
 
-Runtime deadlines use `ceil(canonical_ms / ratio)`. Trace resolution converts
-elapsed runtime milliseconds back to canonical time with the same accepted
-ratio before checking the active window. Neither samples nor spatial bounds
-are scaled. AnimationPlayer receives that accepted ratio directly; it does not
+Runtime deadlines use `ceil(canonical_ms / ratio)`. The subsequent
+[action polish](warrior-action-polish.md) evaluates the accepted scheduled impact
+against the canonical window, so a late server tick cannot discard it. Neither
+samples nor spatial bounds are scaled. AnimationPlayer receives that accepted ratio directly; it does not
 derive a separate speed from client inventory state. Nonattack clips keep their
 normal playback speed.
 

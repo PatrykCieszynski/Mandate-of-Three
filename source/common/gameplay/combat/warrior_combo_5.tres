@@ -12,6 +12,8 @@
 [sub_resource type="Resource" id="Step0"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_01"
+motion_duration_ms = 1000
+advance_distance = 1.3176
 preinput_ms = 167
 direct_input_ms = 533
 input_limit_ms = 603
@@ -28,6 +30,8 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step1"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_02"
+motion_duration_ms = 934
+advance_distance = 0.8525
 preinput_ms = 101
 direct_input_ms = 543
 input_limit_ms = 637
@@ -44,6 +48,8 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step2"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_03"
+motion_duration_ms = 1067
+advance_distance = 1.4301
 preinput_ms = 85
 direct_input_ms = 418
 input_limit_ms = 665
@@ -60,6 +66,8 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step3"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_05"
+motion_duration_ms = 1167
+advance_distance = 0.7
 preinput_ms = 295
 direct_input_ms = 661
 input_limit_ms = 849
@@ -76,6 +84,8 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step4"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_07"
+motion_duration_ms = 1267
+advance_distance = 0.7
 preinput_ms = 1267
 direct_input_ms = 1267
 input_limit_ms = 1267

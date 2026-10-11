@@ -22,6 +22,7 @@ var _attack_ratio := 1.0
 var _attack_elapsed := 0.0
 var _attack_step: BasicAttackStepDefinition
 var _blade_tip: Marker3D
+var _turn: Tween
 var _trail: SwordTrail3D
 var _scene_path: String = ""
 var _weapon_path: String = ""
@@ -136,6 +137,13 @@ func set_equipped(value: bool) -> void:
 func set_locomotion(moving: bool) -> void:
 	_locomotion = &"run" if moving else &"idle"
 	if alive and _shot == &"" and not _knockdown.active(): _play(_locomotion)
+
+func blend_facing(offset: float) -> void:
+	if _turn != null: _turn.kill()
+	rotation.y = offset
+	_turn = create_tween()
+	_turn.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_turn.tween_property(self,"rotation:y",0.0,.07)
 
 func play_basic_attack(animation_key: StringName, recovery_ms: int, ratio: float = 1.0) -> void:
 	if not alive or _knockdown.active(): return

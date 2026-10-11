@@ -5,7 +5,9 @@ const LIFETIME := 0.10
 const MAX_SAMPLES := 10
 var points: Array[Dictionary] = []
 var clock := 0.0
+var _ribbon := ImmediateMesh.new()
 func _ready() -> void:
+	mesh = _ribbon
 	top_level = true
 	global_transform = Transform3D.IDENTITY
 	var material := StandardMaterial3D.new()
@@ -23,17 +25,16 @@ func sample(delta: float, base: Vector3, tip: Vector3, active: bool) -> void:
 		if points.size() > MAX_SAMPLES: points.pop_front()
 	visible = points.size() > 1
 	if not visible: return
-	var ribbon := ImmediateMesh.new()
-	ribbon.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	_ribbon.clear_surfaces()
+	_ribbon.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i: int in range(1,points.size()):
 		var a: Dictionary = points[i-1]
 		var b: Dictionary = points[i]
 		for vertex: Array in [[a.base,a.time],[a.tip,a.time],[b.tip,b.time],[a.base,a.time],[b.tip,b.time],[b.base,b.time]]:
-			ribbon.surface_set_color(Color(.7,.9,1,.35*(1-(clock-float(vertex[1]))/LIFETIME)))
-			ribbon.surface_add_vertex(vertex[0])
-	ribbon.surface_end()
-	mesh = ribbon
+			_ribbon.surface_set_color(Color(.7,.9,1,.35*(1-(clock-float(vertex[1]))/LIFETIME)))
+			_ribbon.surface_add_vertex(vertex[0])
+	_ribbon.surface_end()
 func clear() -> void:
 	points.clear()
 	visible = false
-	mesh = null
+	_ribbon.clear_surfaces()
