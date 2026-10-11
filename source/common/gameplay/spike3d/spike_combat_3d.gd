@@ -618,6 +618,7 @@ func _physics_process(delta: float) -> void:
 	for peer_id: int in _respawn_ms.keys():
 		if now >= _respawn_ms[peer_id] and _world.characters.has(peer_id):
 			health[peer_id] = 100
+			_world.characters[peer_id].set_alive(true)
 			var body: SpikeCharacter3D = _world.characters[peer_id]
 			body.position = _world.player_spawn()
 			body.velocity = Vector3.ZERO
@@ -650,6 +651,7 @@ func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition =
 		combo_state(peer_id).reset()
 	for observer: int in _world.characters: receive_hurt.rpc_id(observer,peer_id,result.presentation())
 	if health[peer_id] == 0:
+		body.set_alive(false)
 		body.hit_reaction.clear()
 		body.knockback_velocity = Vector3.ZERO
 		_respawn_ms[peer_id] = now + 2000

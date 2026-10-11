@@ -55,6 +55,10 @@ func set_level(level: int) -> void:
 	if _name_label != null: _name_label.text = "Lv %d · %s" % [level, _display_name]
 
 func simulate(delta: float, direction: Vector2) -> void:
+	# Never run collision recovery on a corpse: moving mob BODYs could push it.
+	if not alive:
+		velocity = Vector3.ZERO
+		return
 	if hit_reaction.locked(Time.get_ticks_msec()) or knockback_active():
 		direction = Vector2.ZERO
 		cancel_attack_advance()
@@ -140,7 +144,11 @@ func play_hit() -> void:
 func set_alive(value: bool) -> void:
 	if alive == value: return
 	alive = value
-	if not alive: _swing_until_ms = 0
+	if not alive:
+		_swing_until_ms = 0
+		velocity = Vector3.ZERO
+		knockback_velocity = Vector3.ZERO
+		cancel_attack_advance()
 	if player_presentation != null: player_presentation.set_alive(value)
 
 func play_swing(animation_key: StringName, recovery_ms: int, _finisher: bool = false, ratio: float = 1.0) -> void:
