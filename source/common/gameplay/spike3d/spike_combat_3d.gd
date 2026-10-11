@@ -332,7 +332,7 @@ func _start_attack(peer_id: int, sequence: int, now: int, chained: bool = false)
 	var next_delay: int = timing.end if resolved.finisher else timing.direct
 	_next_attack_ms[peer_id] = now+next_delay
 	_movement_unlock_ms[peer_id] = now+int(timing.motion)
-	body.start_attack_advance(body.rotation.y,hit.advance_distance,next_delay/1000.0)
+	body.start_attack_advance(body.rotation.y,hit.advance_distance,int(timing.motion)/1000.0)
 	resolved.merge({"yaw":body.rotation.y,"impact":now+int(timing.impact),"started":now,"hit_set":{},
 		"attack":attack,"ratio":ratio,"timing":timing,"action_id":sequence})
 	_pending[peer_id] = resolved

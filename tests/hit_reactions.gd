@@ -118,7 +118,7 @@ func _ready() -> void:
 		await get_tree().physics_frame
 		blocked.simulate(1.0/60,Vector2.ZERO)
 	assert(blocked.position.x > 0.1 and blocked.position.x < wall.position.x-0.4, "Knockdown displacement is blocked by scenery without disabling the collider")
-	assert(blocked.collision_layer == 2 and blocked.collision_mask == 1)
+	assert(blocked.collision_layer == 2 and blocked.collision_mask == (1 | 4))
 	physics_fixture.free()
 	print("HIT_REACTIONS_OK: profiles, noninterrupting flinch, authoritative lock, bounded re-hits, interrupt independence and snapshot recovery")
 	get_tree().quit()

@@ -27,7 +27,7 @@ var combat_collider: CollisionShape3D
 func setup(display_name: String, tint: Color) -> void:
 	_display_name = display_name
 	collision_layer = 2
-	collision_mask = 1
+	collision_mask = 1 | 4 # Scenery + mob movement BODY; mobs do not mask players.
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.35
 	capsule.height = 1.8

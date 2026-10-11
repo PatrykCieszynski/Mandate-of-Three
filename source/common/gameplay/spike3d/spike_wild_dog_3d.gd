@@ -41,6 +41,7 @@ var _hp_fill: Sprite3D
 static var _bar_texture: Texture2D
 var name_label: Label3D
 var presentation: DogVisual3D
+var movement_collider: CollisionShape3D
 
 func setup_dog(id: int, spawn: Vector3) -> void:
 	hp = max_hp
@@ -56,7 +57,15 @@ func setup_dog(id: int, spawn: Vector3) -> void:
 	combat_collider = collision
 	collision.shape = shape
 	collision.position.y = 0.4
+	collision.disabled = true # Defending metadata only; never the movement BODY.
 	add_child(collision)
+	movement_collider = CollisionShape3D.new()
+	var body_shape := CapsuleShape3D.new()
+	body_shape.radius = definition.movement_body_radius if definition != null else .6
+	body_shape.height = definition.movement_body_height if definition != null else 1.2
+	movement_collider.shape = body_shape
+	movement_collider.position.y = body_shape.height/2
+	add_child(movement_collider)
 	if not GameMode.is_world_server():
 		presentation = DogVisual3D.new()
 		presentation.visual_id = visual_id

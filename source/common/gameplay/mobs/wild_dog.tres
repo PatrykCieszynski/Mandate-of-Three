@@ -9,3 +9,5 @@ attack_damage = 6
 move_speed = 2.8
 visual_id = &"stray_dog"
 proximity_aggro = false
+movement_body_radius = 0.6
+movement_body_height = 1.2
