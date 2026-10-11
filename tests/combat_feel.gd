@@ -217,7 +217,9 @@ func _process(delta: float) -> void:
 	if GameMode.is_world_server() or world == null or world.combat_endpoint.state.is_empty(): return
 	if not observer_connected:
 		observer_connected = true
-		world.combat_endpoint.swing_received.connect(func(_id: int,key: StringName,_index: int) -> void: observed.append(key))
+		world.combat_endpoint.swing_received.connect(func(_id: int,key: StringName,_index: int) -> void:
+			observed.append(key)
+			saw_swing = true)
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
@@ -234,9 +236,6 @@ func _process(delta: float) -> void:
 			dead_peer = id
 		if id == dead_peer and hp == 100 and world.characters.has(id) and world.characters[id].alive:
 			saw_respawn = true
-	for body: SpikeCharacter3D in world.characters.values():
-		for node: Node in body.get_children():
-			if node is MeshInstance3D and node.mesh is ArrayMesh: saw_swing = true
 	if attempted: return
 	if phase_name.begins_with("EXT") or phase_name in ["ONE", "TWO", "THREE", "FOUR", "RESET", "DYING", "RESTART"]:
 		attempted = true

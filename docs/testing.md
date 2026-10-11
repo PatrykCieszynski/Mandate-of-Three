@@ -129,3 +129,8 @@ verification artifacts, not snapshot assertions in smoke.
 Warrior trace contract suite. It uses port 18098; run sequentially with PvE suites.
 `run-combat.ps1 -LegacyMelee` covers the retained fallback. Bake/native comparison
 commands and verification limits are in [Warrior Combat Trace v1](warrior-combat-trace-v1.md).
+
+`run-combat.ps1 -Scene combat_feel_v2 -MarkerPrefix FEEL2` is the opt-in two-client
+Attack Speed/buffer/facing and pooled confirmed-feedback contract check. Native
+AS 100/122/150 and four/five/six-hit preview commands and verification boundaries
+are in [Warrior Combat Feel & Presentation v2](warrior-combat-feel-v2.md).

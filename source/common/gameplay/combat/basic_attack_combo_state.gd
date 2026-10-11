@@ -32,10 +32,10 @@ func set_weapon_mode(mode: StringName) -> bool:
 		weapon_mode = mode
 		reset()
 	return true
-func take_step(now: int) -> Dictionary:
+func take_step(now: int, chained: bool = false) -> Dictionary:
 	var combo := definition()
 	if combo == null: return {}
-	if _combo_key != combo.combo_key or now-last_swing_ms > combo.reset_ms: reset()
+	if _combo_key != combo.combo_key or (not chained and now-last_swing_ms > combo.reset_ms): reset()
 	_combo_key = combo.combo_key
 	current_combo_step = (current_combo_step + 1) % combo.steps.size()
 	last_swing_ms = now

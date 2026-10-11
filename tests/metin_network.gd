@@ -52,6 +52,7 @@ func run_server() -> void:
 	set_phase("FIGHT",attacker)
 	await wait_until(func() -> bool: return victim.hp < victim.max_hp)
 	set_phase("WAIT")
+	await _settle_attacks()
 	for id: int in pack.actor_ids: check(combat.dogs[id].target_peer == attacker and combat.dogs[id].ai_state == "CHASE","melee recruits entire mixed pack")
 	check(combat.dogs[other_pack.actor_ids[0]].target_peer == 0,"unrelated pack stays idle")
 	for id: int in pack.actor_ids.duplicate() + other_pack.actor_ids.duplicate(): combat._remove_mob(id)
@@ -71,6 +72,7 @@ func run_server() -> void:
 	set_phase("FIGHT")
 	await get_tree().create_timer(0.35).timeout
 	set_phase("WAIT")
+	await _settle_attacks()
 	check(encounter.runtime.hp==encounter.definition.max_hp and encounter.runtime.spawned_mobs.is_empty(),"directional melee behind player misses stone")
 	for id: int in world.characters: world.characters[id].rotation.y = 0
 	await get_tree().create_timer(0.5).timeout
@@ -123,6 +125,12 @@ func run_server() -> void:
 		peer.close()
 		db.close_db()
 		get_tree().quit()
+func _settle_attacks() -> void:
+	# Releasing input does not cancel an already accepted current/queued swing.
+	# Keep fixture yaw/position stable until both finish before the next scenario.
+	await get_tree().create_timer(.15).timeout
+	await wait_until(func() -> bool: return world.combat_endpoint._pending.is_empty() and world.combat_endpoint._queued_attacks.is_empty())
+
 func _process(delta: float) -> void:
 	elapsed += delta
 	if elapsed > 35: check(false,"timeout phase="+phase_name)

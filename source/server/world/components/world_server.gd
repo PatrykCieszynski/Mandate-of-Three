@@ -36,6 +36,12 @@ func runtime_attack(owner_id: int) -> int:
 	if not runtime_equipment.has(owner_id): return -1
 	return int(runtime_equipment[owner_id].stats.get("attack", 10))
 
+func runtime_attack_speed_ratio(owner_id: int) -> float:
+	if not runtime_equipment.has(owner_id): return -1.0
+	var speed := float(runtime_equipment[owner_id].stats.get("attack_speed",100.0))
+	if not is_finite(speed) or speed <= 0: return -1.0
+	return speed/100.0
+
 static var curr: WorldServer
 
 

@@ -108,4 +108,8 @@ must not replace the next gameplay milestone with another large refactor.
 
 [Hit Reactions v1](hit-reactions-v1.md) adds a four-hit basic combo, noninterrupting
 flinch and server-authoritative knockdown/get-up with per-mob resistance profiles.
-Physical knockback, final reaction clips and PvP rules remain later work.
+Physical knockback is now separate step data. Final reaction clips and PvP rules
+remain later work. [Warrior Combat Feel & Presentation v2](warrior-combat-feel-v2.md)
+shares authoritative Attack Speed with playback, buffers one next intent and adds
+client-only trails and confirmed feedback. Live combat feel is the next playtest;
+no further CombatTrace geometry pass is part of this milestone.

@@ -10,6 +10,10 @@ var _humanoid_target := false
 var _review_dog: DogVisual3D
 var _trace_overlays: Array[CombatTraceDebug3D] = []
 var _legacy_trace := false
+var _review_ratio := 1.0
+var _review_skill := 0
+var _feel_feedback: CombatFeedback3D
+var _feel_targets: Array[SpikeWildDog3D] = []
 func check(value: bool, message: String) -> void:
 	if not value:
 		push_error(message)
@@ -175,7 +179,23 @@ func _ready() -> void:
 			_review_label.position = Vector2(16,48)
 			add_child(_review_label)
 			_review_label.text = "Combo review: 1 base / 2 Combo Lv1 / 3 Combo Lv2. Loops at native speed. Esc closes."
+		if OS.get_cmdline_user_args().has("--feel-review"):
+			_setup_feel_pack()
 		print("WARRIOR_PREVIEW_READY")
+		if OS.get_cmdline_user_args().has("--feel-capture"):
+			for blend: float in [.08,.05]:
+				for view: WarriorVisual3D in avatars: view.attack_blend_seconds = blend
+				_review_ratio = 1.22
+				_review_generation += 1
+				await _review_combo(0,_review_generation)
+			for ratio: float in [1.0,1.22,1.5]:
+				_review_ratio = ratio
+				for skill: int in [0,1,2]:
+					_review_generation += 1
+					await _review_combo(skill,_review_generation)
+			print("WARRIOR_FEEL_RENDER_OK")
+			get_tree().quit()
+			return
 		if OS.get_cmdline_user_args().has("--vertical-capture"):
 			for humanoid: bool in [false,true]:
 				_set_review_target(humanoid)
@@ -232,17 +252,22 @@ func _setup_stage() -> void:
 	environment.environment.ambient_light_energy = .6
 	add_child(environment)
 	var label := Label.new()
-	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend 0/0.08 | T trace/cone | H dog/humanoid | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
+	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend .08/.05 | Q/E/R AS100/122/150 | T trace/cone | H dog/humanoid | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
 	label.position = Vector2(16,16)
 	add_child(label)
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not _interactive or not event is InputEventKey or not event.pressed or event.echo: return
 	if _review_dog != null and event.keycode in [KEY_1,KEY_2,KEY_3]:
 		_review_generation += 1
-		_review_combo(event.keycode-KEY_1,_review_generation)
+		_review_skill = event.keycode-KEY_1
+		_review_combo(_review_skill,_review_generation)
 	elif _review_dog == null and event.keycode >= KEY_1 and event.keycode < KEY_1+_clips.size(): _pose(_clips[event.keycode-KEY_1],false)
+	elif event.keycode in [KEY_Q,KEY_E,KEY_R] and _review_dog != null:
+		_review_ratio = 1.0 if event.keycode == KEY_Q else (1.22 if event.keycode == KEY_E else 1.5)
+		_review_generation += 1
+		_review_combo(_review_skill,_review_generation)
 	elif event.keycode == KEY_B and _review_dog != null:
-		for view: WarriorVisual3D in avatars: view.attack_blend_seconds = 0.0 if view.attack_blend_seconds > 0 else 0.08
+		for view: WarriorVisual3D in avatars: view.attack_blend_seconds = .05 if view.attack_blend_seconds > .06 else .08
 	elif event.keycode == KEY_T and not _trace_overlays.is_empty():
 		_legacy_trace = not _legacy_trace
 		for overlay: CombatTraceDebug3D in _trace_overlays:
@@ -267,9 +292,11 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 		for view: WarriorVisual3D in avatars: view.set_locomotion(false)
 		for i: int in combo.steps.size():
 			if ticket != _review_generation: return
-			var swing := runtime.take_step(Time.get_ticks_msec())
+			var swing := runtime.take_step(Time.get_ticks_msec(),i > 0)
 			var step: BasicAttackStepDefinition = swing.step
-			_review_label.text = ("Warrior target | " if _humanoid_target else "Dog target | ")+"%s | step %d/%d | %s | impact %d ms / recovery %d ms / blend %.2f" % [combo.combo_key,i+1,combo.steps.size(),step.animation_key,step.impact_ms,step.recovery_ms,avatars[0].attack_blend_seconds]
+			var timing := step.scaled_timing(_review_ratio)
+			_review_label.text = ("Warrior target | " if _humanoid_target else "Dog target | ")+"%s | step %d/%d | %s | impact %d ms / recovery %d ms / blend %.2f" % [combo.combo_key,i+1,combo.steps.size(),step.animation_key,int(timing.impact),int(timing.end),avatars[0].attack_blend_seconds]
+			_review_label.text += " | AS %d | blend %.2f" % [int(_review_ratio*100),avatars[0].attack_blend_seconds]
 			for overlay: CombatTraceDebug3D in _trace_overlays: overlay.queue_free()
 			_trace_overlays.clear()
 			if OS.get_cmdline_user_args().has("--trace-review"):
@@ -296,8 +323,8 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 					if pack_count > 0: print("TRACE_PREVIEW tests=",pack_count," hits=",pack_hits," usec=",Time.get_ticks_usec()-measured_at)
 					overlay.configure(step,targets,_legacy_trace)
 					_trace_overlays.append(overlay)
-			for view: WarriorVisual3D in avatars: view.play_basic_attack(step.animation_key,step.recovery_ms)
-			await get_tree().create_timer(step.impact_ms/1000.0).timeout
+			for view: WarriorVisual3D in avatars: view.play_basic_attack(step.animation_key,int(timing.end),_review_ratio)
+			await get_tree().create_timer(float(timing.impact)/1000.0).timeout
 			if ticket != _review_generation: return
 			var result := HitReactionResolver.resolve(step,HitReactionProfiles.NORMAL,1,100,false)
 			var contact := _trace_overlays.is_empty()
@@ -309,13 +336,14 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 				else:
 					if result.reaction == HitReaction.Type.KNOCKDOWN: _review_dog.set_hit_lock(result.duration,result.get_up_duration)
 					else: _review_dog.play_hit()
-			if OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
+			if _feel_feedback != null: _show_feel_hits(step,ticket*100+i)
+			if OS.get_cmdline_user_args().has("--feel-capture") or OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
 				await RenderingServer.frame_post_draw
 				assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/%s-%d-step-%d.png" % [_capture_prefix(),combo.steps.size(),i+1]) == OK)
-			await get_tree().create_timer((step.recovery_ms-step.impact_ms)/1000.0).timeout
+			await get_tree().create_timer((float(timing.end)-float(timing.impact))/1000.0).timeout
 		_review_label.text = "%s complete; idle / recovery" % combo.combo_key
 		await get_tree().create_timer(1.8).timeout
-		if OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
+		if OS.get_cmdline_user_args().has("--feel-capture") or OS.get_cmdline_user_args().has("--combo-capture") or OS.get_cmdline_user_args().has("--vertical-capture"):
 			await RenderingServer.frame_post_draw
 			assert(get_viewport().get_texture().get_image().save_png("res://.godot/verification/%s-%d-idle.png" % [_capture_prefix(),combo.steps.size()]) == OK)
 			return
@@ -327,5 +355,36 @@ func _set_review_target(humanoid: bool) -> void:
 	_review_humanoid.visible = humanoid
 
 func _capture_prefix() -> String:
+	if OS.get_cmdline_user_args().has("--feel-capture"): return "feel-as%d-blend%d" % [int(_review_ratio*100),int(avatars[0].attack_blend_seconds*1000)]
 	if OS.get_cmdline_user_args().has("--vertical-capture"): return "vertical-warrior" if _humanoid_target else "vertical-dog"
 	return "combo"
+
+func _setup_feel_pack() -> void:
+	_feel_feedback = CombatFeedback3D.new()
+	add_child(_feel_feedback)
+	_review_dog.visible = false
+	var count := 20
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--feel-pack="): count = clampi(arg.get_slice("=",1).to_int(),1,50)
+	for i: int in count:
+		var dog := SpikeWildDog3D.new()
+		dog.setup_dog(1000+i,Vector3(.9+(i%5-2)*.35,0,-1.2-(i/5)*.25))
+		dog.ai_enabled = false
+		add_child(dog)
+		_feel_targets.append(dog)
+
+func _show_feel_hits(step: BasicAttackStepDefinition, action_id: int) -> void:
+	var count := 0
+	var started := Time.get_ticks_usec()
+	for dog: SpikeWildDog3D in _feel_targets:
+		if not CombatTraceResolver.hits_capsule(step.combat_trace,avatars[1].transform,dog.position,dog.combat_radius(),dog.combat_height(),dog.combat_bottom_offset()): continue
+		var result := HitReactionResolver.resolve(step,HitReactionProfiles.NORMAL,13,120,false)
+		var event := result.presentation()
+		event.merge({"attacker":1,"action_id":action_id,"target_kind":"mob","target_id":dog.mob_id})
+		_feel_feedback.confirm(event,dog,true)
+		if result.reaction == HitReaction.Type.KNOCKDOWN: dog.present_hit_lock(int(result.duration*1000),int(result.get_up_duration*1000))
+		else: dog.play_hit()
+		dog.hp = 120-result.damage
+		dog._update_hp_bar()
+		count += 1
+	print("FEEL_PREVIEW AS=",int(_review_ratio*100)," clip=",step.animation_key," pack=",_feel_targets.size()," hits=",count," feedback_usec=",Time.get_ticks_usec()-started)

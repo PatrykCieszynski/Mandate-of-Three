@@ -336,6 +336,7 @@ func submit_input(sequence: int, direction: Vector2) -> void:
 	if sequence <= int(previous.sequence):
 		return
 	# Bounded storage and work: even a packet flood cannot advance physics.
+	combat_endpoint.remember_next_facing(peer_id,direction.limit_length())
 	intentions[peer_id] = {"direction": direction.limit_length(), "sequence": sequence, "time": Time.get_ticks_msec()}
 
 func _physics_process(delta: float) -> void:
