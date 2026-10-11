@@ -109,8 +109,7 @@ function fixture(): DomainSnapshot {
           x: 0,
           y: 0,
           page: 0,
-          description:
-            'A well-balanced blade, forged for a steady hand.',
+          description: 'A well-balanced blade, forged for a steady hand.',
           tooltip: {
             category: 'One-handed sword',
             properties: ['Attack: 24–32'],
