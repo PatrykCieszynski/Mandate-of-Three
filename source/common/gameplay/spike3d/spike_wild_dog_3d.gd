@@ -57,8 +57,8 @@ func setup_dog(id: int, spawn: Vector3) -> void:
 		presentation = DogVisual3D.new()
 		presentation.visual_id = visual_id
 		add_child(presentation)
-	name_label = _label(title, 1.3, 32)
-	hp_label = _label("%d / %d" % [hp,max_hp], 1.65, 24)
+		name_label = _label(title, 1.3, 32)
+		hp_label = _label("%d / %d" % [hp,max_hp], 1.65, 24)
 
 func _label(text: String, height: float, size: int) -> Label3D:
 	var label := Label3D.new()
@@ -114,4 +114,4 @@ func play_hit() -> void:
 	presentation.play_hit()
 
 func mark_selected(selected: bool) -> void:
-	name_label.modulate = Color("ffe291") if selected else Color.WHITE
+	if name_label != null: name_label.modulate = Color("ffe291") if selected else Color.WHITE

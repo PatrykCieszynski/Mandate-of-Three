@@ -19,6 +19,7 @@ const DOG_XP: int = 20
 signal feedback_received(result: Dictionary)
 signal state_changed(snapshot: Dictionary)
 var dogs: Dictionary[int, SpikeWildDog3D] = {}
+var _warned_unknown_mob_keys: Dictionary[StringName, bool] = {}
 var packs: Dictionary[int, MobPackRuntime] = {}
 var _next_mob_id: int = 0
 var _next_pack_id: int = 0
@@ -87,7 +88,12 @@ func _ready() -> void:
 func create_pack(members: Array[MobSpawnEntry], anchor: Vector3, spawn_radius: float, wander_radius: float, leash_radius: float, respawn_seconds: float = 15, source_metinstone_id: String = "", expires_at: int = 0) -> MobPackRuntime:
 	assert(GameMode.is_world_server() and anchor.is_finite() and not members.is_empty())
 	assert(spawn_radius >= 0 and wander_radius >= spawn_radius and leash_radius > wander_radius and respawn_seconds >= 0)
-	for entry: MobSpawnEntry in members: assert(entry != null and entry.valid())
+	# Reject the whole composition before allocating IDs or spawning any members.
+	# This guard also runs in release builds where assertions are disabled.
+	for entry: MobSpawnEntry in members:
+		if entry == null or not entry.valid():
+			push_warning("Rejected mob pack: invalid or noncanonical spawn definition")
+			return null
 	var pack := MobPackRuntime.new()
 	_next_pack_id += 1
 	pack.pack_instance_id = _next_pack_id
@@ -106,7 +112,10 @@ func create_pack(members: Array[MobSpawnEntry], anchor: Vector3, spawn_radius: f
 	return pack
 
 func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntime) -> SpikeWildDog3D:
-	assert(GameMode.is_world_server() and definition.valid() and packs.get(pack.pack_instance_id) == pack)
+	if not MobDefinitions.is_registered(definition) or not definition.valid():
+		push_warning("Rejected mob spawn: invalid or noncanonical definition")
+		return null
+	assert(GameMode.is_world_server() and packs.get(pack.pack_instance_id) == pack)
 	_next_mob_id += 1
 	var dog := SpikeWildDog3D.new()
 	dog.name = "Mob_%d" % _next_mob_id
@@ -497,7 +506,6 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 		else:
 			direction = Vector2(dog.wander_target.x-dog.position.x,dog.wander_target.z-dog.position.z).normalized()
 	dog.move_dog(delta,direction,now)
-	dog.hp_label.text = "%d / %d" % [dog.hp,dog.max_hp]
 
 func _mob_snapshots() -> Array:
 	var records: Array = []
@@ -508,9 +516,12 @@ func _receive_mob_snapshots(records: Array) -> void:
 	var present: Dictionary[int, bool] = {}
 	for record: Array in records:
 		var id: int = record[MobSnapshot.Field.ID]
-		var definition := MobDefinitions.resolve(StringName(record[MobSnapshot.Field.MOB_KEY]))
+		var key := StringName(record[MobSnapshot.Field.MOB_KEY])
+		var definition := MobDefinitions.resolve(key)
 		if definition == null:
-			push_warning("Unknown replicated mob definition: %s" % record[MobSnapshot.Field.MOB_KEY])
+			if not _warned_unknown_mob_keys.has(key):
+				_warned_unknown_mob_keys[key] = true
+				push_warning("Unknown replicated mob definition: %s" % key)
 			continue
 		present[id] = true
 		if not dogs.has(id):

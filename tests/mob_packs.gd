@@ -9,6 +9,14 @@ func _ready() -> void:
 	var wild: MobDefinition = preload("res://source/common/gameplay/mobs/wild_dog.tres")
 	var feral: MobDefinition = preload("res://source/common/gameplay/mobs/feral_dog.tres")
 	assert(wild.valid() and feral.valid())
+	assert(entry(wild,1).valid() and MobDefinitions.is_registered(wild))
+	assert(not MobDefinitions.is_registered(null))
+	var unregistered := wild.duplicate() as MobDefinition
+	unregistered.mob_key = &"big_dog"
+	assert(unregistered.valid() and not entry(unregistered,1).valid())
+	var duplicate := wild.duplicate() as MobDefinition
+	duplicate.max_hp = 999
+	assert(duplicate.valid() and not entry(duplicate,1).valid())
 	var invalid := wild.duplicate() as MobDefinition
 	invalid.move_speed = NAN
 	assert(not invalid.valid())
@@ -27,6 +35,9 @@ func _ready() -> void:
 	var combat := world.combat_endpoint
 	for id: int in combat.dogs.keys(): combat._remove_mob(id)
 	combat.packs.clear()
+	assert(combat.create_pack([entry(wild,1),entry(unregistered,1)],Vector3.ZERO,2,3,10,1) == null)
+	assert(combat.create_pack([entry(duplicate,1)],Vector3.ZERO,2,3,10,1) == null)
+	assert(combat.packs.is_empty() and combat.dogs.is_empty(), "Invalid content cannot partially spawn a pack")
 	var pack := combat.create_pack([entry(wild,10),entry(feral,4)],Vector3.ZERO,2,3,10,1)
 	var unrelated := combat.create_pack([entry(wild,3)],Vector3(10,0,0),1,2,6,1)
 	pack.rng.seed = 731
@@ -37,6 +48,7 @@ func _ready() -> void:
 	for id: int in ids:
 		var mob := combat.dogs[id]
 		assert(mob.mob_instance_id == id and mob.pack_instance_id == pack.pack_instance_id and mob.home == pack.anchor)
+		assert(mob.presentation == null and mob.name_label == null and mob.hp_label == null and mob.find_children("*","Label3D",true,false).is_empty(), "World actors contain no presentation labels")
 		assert(mob.definition.valid() and mob.move_speed == mob.definition.move_speed and mob.hp == mob.definition.max_hp)
 		assert(combat._horizontal_distance(mob.position,pack.anchor) <= pack.spawn_radius)
 		assert(mob.find_children("*","NavigationAgent3D",true,false).is_empty() and mob.collision_mask == 16)
