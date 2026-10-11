@@ -24,12 +24,13 @@ MotionDuration to milliseconds, not a replacement for existing recovery/direct v
 
 World starts a small forward action on each accepted swing. SpikeCharacter3D
 integrates a smoothstep travel curve through its existing `move_and_slide()`.
-The direction is the frozen attack yaw. Nonfinal travel ends at the existing
-link time; terminal travel ends at recovery. Both durations are divided by the
-accepted ratio. Distance is never multiplied by Attack Speed. A successor starts
+The direction is the frozen attack yaw. The original version compressed travel
+into link/recovery time. [The follow-up BODY pass](warrior-body-collision.md)
+stretches travel over the full scaled motion instead; early chaining discards the
+unused remainder. Distance is never multiplied by Attack Speed. A successor starts
 its own advance in its newly accepted direction. Interruption clears remaining
-advance; knockback retains its separate simulation. Existing collision masks
-remain unchanged: this pass adds no new dynamic actor-blocking policy.
+advance; knockback retains its separate simulation. The follow-up also adds
+asymmetric player-to-mob movement blocking without changing defending geometry.
 
 ## Authoring evidence
 
@@ -87,8 +88,9 @@ local shake, miss/remote suppression and trail mesh identity:
 & ./tests/run-combat.ps1 -Scene warrior_action_polish -MarkerPrefix ACTION
 ```
 
-The measured first-step distances were approximately 1.317601 / 1.317601 /
-1.317600 m; advance completed in 32 / 27 / 22 physics ticks at AS 100/122/150.
+The original link-compressed measurement completed in 32 / 27 / 22 physics ticks
+at AS 100/122/150. The follow-up full-motion measurement completes in 60 / 50 / 41
+ticks while retaining approximately 1.3176 m for an uninterrupted first step.
 The real wall test uses the same physics world as the authoritative character.
 Existing combat and trace fixtures separate fixed-position geometry assertions
 from advance; combat also verifies camera impulses against unique received local

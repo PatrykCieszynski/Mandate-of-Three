@@ -367,9 +367,11 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 					actor.rotation.y = PI/2 if _review_turn and i%2 == 1 else 0.0
 					view.blend_facing(wrapf(visible_yaw-actor.rotation.y,-PI,PI))
 					var direction := Vector3(-sin(actor.rotation.y),0,-cos(actor.rotation.y))
+					if index < _preview_advances.size(): _preview_advances[index].kill()
 					var motion := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-					motion.tween_property(actor,"position",actor.position+direction*step.advance_distance,float(timing.end if swing.finisher else timing.direct)/1000.0)
-					_preview_advances.append(motion)
+					motion.tween_property(actor,"position",actor.position+direction*step.advance_distance,float(timing.motion)/1000.0)
+					if index < _preview_advances.size(): _preview_advances[index] = motion
+					else: _preview_advances.append(motion)
 				view.play_basic_attack(step.animation_key,int(timing.motion),_review_ratio)
 			await get_tree().create_timer(float(timing.impact)/1000.0).timeout
 			if ticket != _review_generation: return

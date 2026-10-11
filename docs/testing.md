@@ -140,3 +140,8 @@ scheduled impacts, full-motion movement locks, authoritative forward advance and
 scenery collision, visual turn blending, local finisher impulses and reusable
 trail resources. Preview controls and authoring sources are recorded in
 [Warrior basic action polish](warrior-action-polish.md).
+
+The same ACTION suite also checks full-motion advance versus interrupted chaining,
+asymmetric movement BODY blocking, existing-overlap escape and finisher knockback
+freeing space. The actual-physics native volume preview and measurements are in
+[Warrior BODY collision](warrior-body-collision.md). These checks remain opt-in.
