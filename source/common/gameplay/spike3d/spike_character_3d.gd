@@ -143,3 +143,6 @@ func get_display_name() -> String:
 func present_hit_lock(down_ms: int, get_up_ms: int) -> void:
 	if player_presentation != null and alive:
 		player_presentation.set_hit_lock(down_ms/1000.0,get_up_ms/1000.0)
+
+func combat_radius() -> float: return 0.35
+func combat_height() -> float: return 1.8

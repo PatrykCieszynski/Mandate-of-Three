@@ -96,6 +96,12 @@ can carry profile-scaled distance; resisted/repeated knockdowns carry zero. Serv
 physics applies a horizontal impulse with exponential damping and scenery collision,
 while AI/input remain locked. Existing position snapshots replicate the motion.
 
+## Combat geometry
+
+[Warrior Combat Trace v1](warrior-combat-trace-v1.md) now supplies baked actor-local
+blade geometry for all seven one-handed combo clips. Damage/reaction/timing remain
+in the step. A definition without a trace retains the sphere/cone fallback.
+
 ## Playback boundary
 
 `receive_swing(peer_id, animation_key, step_index, recovery_ms, finisher)` is an

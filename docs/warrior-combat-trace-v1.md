@@ -1,0 +1,147 @@
+# Warrior Combat Trace v1
+
+Warrior one-handed basic combo uses actor-local baked blade geometry instead of
+the generic sphere/cone. World loads seven small `CombatTraceDefinition` resources
+(about 18.7 KiB total), never the GLB, AnimationPlayer, Skeleton3D or weapon bones.
+The client still sends only `request_attack(sequence)`. Damage, reactions and
+finisher displacement remain in the accepted `BasicAttackStepDefinition`.
+
+## Bake source and coordinate contract
+
+The inspected local source is `dev_assets/legacy/players/warrior/warrior_all_motions.glb`
+(SHA256 `23434ccff5098c81a5167d863e73e57308e6f9398a6629473b5e85f3f3db4adc`).
+The actual rig is `Warrior/Bip01/Skeleton3D`; the production `SwordSocket` is a
+BoneAttachment3D bound to `equip_right_hand`. The separate iron sword is attached
+under that socket, with the existing grip correction and centimetre/metre scale
+compensation. The tool uses the production Warrior presentation adapter, including
+its in-place private clips; it does not invent a second attachment transform.
+
+Base is the equipped weapon origin. Tip is origin plus its transformed, normalized
+local +Y axis times **1.3 m**: original MSA WeaponLength is 130 cm. No mesh vertices
+or AABB define gameplay length. Both endpoints are converted with `view.to_local()`
+to Warrior actor-root coordinates. An offline assertion changes preview translation
+and yaw and confirms that the local endpoints do not change.
+
+Only ten samples per active window are stored; no per-frame animation data. Radius
+is 0.20 m. The configuration is `tools/combat/warrior-trace-bake.json`.
+
+| Clip suffix | Active start/end (ms) | Effective impact (ms) |
+| --- | ---: | ---: |
+| 01 | 192–315 | 260 |
+| 02 | 215–321 | 270 |
+| 03 | 181–418 | 290 |
+| 04 | 570–700 | 620 |
+| 05 | 346–494 | 410 |
+| 06 | 324–587 | 420 |
+| 07 | 570–700 | 620 |
+
+01/02/05/06 use rounded MSA attack windows. 03's native window ends at 522 ms;
+it is clipped at its existing 418 ms link/recovery so no geometry is borrowed from
+after the next accepted step. 04/07 have zero/missing ordinary attack windows;
+570–700 ms is an explicit initial gameplay window around the tuned imported-clip
+impact, not a value claimed to come from MSA. These two windows still need a human
+contact-feel pass. Recovery and reaction content did not change in this slice.
+
+Bake from the repository root (requires the existing local development assets):
+
+```powershell
+& ./tools/combat/bake-warrior-trace.ps1
+```
+
+The wrapper checks the completion marker/script errors and stores its log in
+`.godot/verification`. Review generated `.tres` changes alongside window edits.
+The source GLB and reference extraction stay local/ignored; shipped gameplay
+Resources contain coordinates and times only. Missing real rig/socket fails the
+bake rather than silently producing traces from a procedural placeholder.
+
+## Server resolution
+
+At acceptance World freezes the step, yaw, start/impact timestamps and runtime
+attack stat. The existing scheduler resolves once at effective impact, provided
+that the current time is within the active window. It tests the complete baked
+window sweep against current target positions. This is the explicitly chosen v1
+single-resolution approximation, not continuous per-time-sample damage. A delayed
+resolution beyond the window produces no hit.
+
+One conservative oriented box covers all blade endpoints plus sweep radius and
+padding. One `intersect_shape` broadphase returns up to **256 collider shapes**.
+That is a bound, not an unlimited target count; multi-shape actors consume entries.
+Then World rejects fully behind, out-of-range/vertical candidates and performs
+capsule distance tests. The existing scenery line-of-sight ray still runs for a
+geometric hit. There is no physics query for each blade sample.
+
+Between samples, previous/current blades and nine interpolated blade rails form
+a ruled sweep. Half the rail spacing is added as conservative padding (about
+0.081 m for a 1.3 m blade), preventing holes in the swept interior. This can admit
+slightly generous edge hits; it is deliberately not mesh collision or an exact
+rotational continuous solver. Bounds include the same padding.
+
+Target gameplay capsules match current colliders: player radius/height 0.35/1.8 m,
+dog 0.4/0.8 m, stone 0.7/2.8 m. Visual meshes are never queried. Basic melee rejects
+a target wholly behind the actor even if a wind-up passes behind its back.
+
+Each accepted swing has a hit set, keyed by actor identity. Extra collider shapes
+or many intersecting samples cannot repeat damage. A resolved swing cannot run
+again. Surviving targets continue through the existing HitReactionResolver and
+profile-scaled physical finisher knockback. Metin stones use their encounter damage
+path and remain immovable. Mob/boss attacks and other classes are unchanged.
+
+## Fallback and developer review
+
+A step without `combat_trace` uses the retained sphere/cone resolver. Its query
+also permits 256 shapes instead of the former 64. For a local editor-engine World,
+append `-- --dev-legacy-melee` to force accepted basic steps onto that fallback;
+this is a process-local development option, never a client command or RPC.
+
+For server logs append `--combat-trace-metrics` in the user arguments. Logs show
+path, candidate shape count, trace-test count, hits and total resolve microseconds.
+For a development client append `--combat-trace-debug`: yellow blades, cyan sweep
+rails/radius rings, blue bounds, target capsule outlines and green authoritative
+hits use the very same shared Resources. Overlay yaw/positions are sampled from
+client presentation at swing receipt; this is a debug approximation of the frozen
+server transform, not another source of hit authority.
+
+Focused native preview:
+
+```powershell
+& ./.godot/Godot_v4.7.2-stable_win64.exe --path . --mode=client res://tests/warrior_compatibility.tscn -- --require-dev --preview --combo-review --trace-review
+```
+
+1/2/3 select the 4/5/6-hit chain. T switches trace/cone outlines and recomputes
+predicted target hits; B toggles attack blend 0/0.08. V toggles Warrior variant;
+Esc closes. Optional `--trace-pack=50` adds simulated capsule targets and geometry
+measurements, not fifty simulated AI actors. Real-game debug coloring instead uses
+server hit results. The preview does not authorize damage or simulate knockback.
+
+## Verification and limits
+
+```powershell
+& ./tests/run-combat-trace.ps1
+& ./tests/run-combat.ps1
+& ./tests/run-combat.ps1 -LegacyMelee
+```
+
+The trace suite is opt-in, keeping default smoke small. It covers front hit, side,
+behind and height misses, an interior hit between samples, transformed actor roots,
+valid finite baked samples/windows, 100 real broadphase targets plus an extra
+collider shape, and two-client production damage with baked 01 for 50/100 targets.
+The network case checks one damage per target, repeat-swing rejection, out-of-window
+rejection, authoritative observer state and no-trace fallback. Existing four/six-hit
+network combat also passes on trace and legacy paths, including finisher locks,
+physical displacement and pending swing interruption. The six-hit fixture puts its
+finisher targets in front of the actual blade rather than assuming cone-wide reach.
+Metin encounter network, Warrior development/placeholder checks and default smoke
+passed. No pixel, timing or performance benchmark gate was added to CI.
+
+On this Windows/RTX 4070 development machine, a representative run measured about
+4.4 ms for 50 and 6.1 ms for 100 targets in the full server resolve fixture (including
+LOS/damage/RPC work). Native preview's 50 geometric tests were roughly 1–3 ms per
+variant/step. These are rough local observations, not stable benchmark thresholds.
+Native Vulkan Mobile captures show all 4/5/6 chains with baked trajectory overlays,
+including the broad 01 sweep and narrower downward 04. Assets/animation were not
+re-exported. Existing extension teardown ObjectDB/resource warnings remain.
+
+Continuous human comparison of contact feel and a live 20–50 mob fight's CPU/render
+behavior remains outstanding. Native impact frames and headless assertions do not
+prove that subjective acceptance criterion. Keep the legacy path until that pass;
+especially tune authored 04/07 windows and sweep edge tolerance if necessary.
