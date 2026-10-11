@@ -16,6 +16,8 @@ var weapon_definition_id: String = ""
 var alive: bool = true
 var _name_label: Label3D
 var _display_name: String = ""
+var _swing_yaw := 0.0
+var _swing_until_ms := 0
 var combat_collider: CollisionShape3D
 
 func setup(display_name: String, tint: Color) -> void:
@@ -91,7 +93,7 @@ func interpolate(delta: float) -> void:
 	var previous_position := position
 	var weight: float = 1.0 - exp(-20.0 * delta)
 	position = position.lerp(target_position, weight)
-	rotation.y = lerp_angle(rotation.y, target_yaw, weight)
+	rotation.y = _swing_yaw if Time.get_ticks_msec() < _swing_until_ms else lerp_angle(rotation.y,target_yaw,weight)
 	if player_presentation != null:
 		player_presentation.set_locomotion(Vector2(position.x - previous_position.x,position.z - previous_position.z).length() > delta * 0.1)
 
@@ -107,37 +109,13 @@ func play_hit() -> void:
 func set_alive(value: bool) -> void:
 	if alive == value: return
 	alive = value
+	if not alive: _swing_until_ms = 0
 	if player_presentation != null: player_presentation.set_alive(value)
 
-func play_swing(animation_key: StringName, recovery_ms: int, finisher: bool = false) -> void:
-	if player_presentation != null: player_presentation.play_basic_attack(animation_key,recovery_ms)
-	# Brief sweeping ribbon; presentation only, never the damage authority.
-	var vertices := PackedVector3Array()
-	for i: int in 16:
-		var first: float = deg_to_rad(-65.0 + i * 130.0 / 16)
-		var second: float = deg_to_rad(-65.0 + (i + 1) * 130.0 / 16)
-		var a := Vector3(sin(first), 0.65, -cos(first)) * Vector3(1.9, 1, 1.9)
-		var b := Vector3(sin(first), 0.65, -cos(first)) * Vector3(2.3, 1, 2.3)
-		var c := Vector3(sin(second), 0.65, -cos(second)) * Vector3(2.3, 1, 2.3)
-		var d := Vector3(sin(second), 0.65, -cos(second)) * Vector3(1.9, 1, 1.9)
-		vertices.append_array(PackedVector3Array([a, b, c, a, c, d]))
-	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	var slash := MeshInstance3D.new()
-	slash.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color = Color(1, 0.8, 0.25, 0.8) if finisher else Color(0.6, 0.9, 1, 0.6)
-	slash.material_override = material
-	add_child(slash)
-	var tween := create_tween()
-	tween.tween_property(material, "albedo_color:a", 0.0, 0.25)
-	tween.tween_callback(slash.queue_free)
+func play_swing(animation_key: StringName, recovery_ms: int, _finisher: bool = false, ratio: float = 1.0) -> void:
+	_swing_yaw = rotation.y
+	_swing_until_ms = Time.get_ticks_msec()+recovery_ms
+	if player_presentation != null: player_presentation.play_basic_attack(animation_key,recovery_ms,ratio)
 
 func get_display_name() -> String:
 	return _display_name

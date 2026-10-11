@@ -70,6 +70,7 @@ func run() -> void:
 	activation_definition.primary_action = original_action
 	check(store.activate_item(owner_a, weak.uid, 0).ok, "activate equips weak instance by UID")
 	check(store.inventory(owner_a).stats.attack == 23, "base plus weak stats")
+	check(store.inventory(owner_a).stats.attack_speed == 122,"equipment adds data-defined speed to base 100")
 	check(store.change_equipment(owner_a, strong.uid, 0, "equip").ok, "swap to strong instance")
 	var swapped: Dictionary = store.inventory(owner_a)
 	check(swapped.equipment.weapon == strong.uid and swapped.stats.attack == 27, "strong instance equipped")
@@ -87,6 +88,7 @@ func run() -> void:
 	check(store.change_equipment(owner_a, strong.uid, 1, "unequip", 10).ok, "exact unequip commits selected position")
 	check(_find(store.inventory(owner_a), strong.uid).bag_position == 10, "unequip respects exact anchor")
 	check(store.inventory(owner_a).stats.attack == 10, "unequip restores base stats")
+	check(store.inventory(owner_a).stats.attack_speed == 100,"unequip restores speed 100")
 	check(store.change_equipment(owner_a, strong.uid, 2, "equip").ok, "re-equip instance")
 	var before_failure: Dictionary = store.inventory(owner_a)
 	check(db.query("CREATE TEMP TRIGGER fail_exact_unequip BEFORE UPDATE ON item_instances BEGIN SELECT RAISE(ABORT,'intentional unequip failure'); END;"), "inject exact unequip failure")

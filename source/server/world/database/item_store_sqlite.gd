@@ -94,7 +94,7 @@ func inventory(owner_id: int) -> Dictionary:
 	var rows: Array = db.query_result.duplicate(true)
 	var items: Array = []
 	var equipment: Dictionary = {}
-	var stats: Dictionary = {"attack": 10.0}
+	var stats: Dictionary = {"attack": 10.0, "attack_speed": PlayerResource.BASE_STATS[Stat.ATTACK_SPEED]}
 	for row: Dictionary in rows:
 		var item: ItemInstance = ItemInstance.from_row(row)
 		if item == null:

@@ -2,7 +2,7 @@ class_name WarriorVisual3D
 extends Node3D
 ## One optional player visual, one variant and one rigid sword. Presentation only.
 const SWORD_GRIP_ROTATION_RADIANS := PI * 0.5
-@export_range(0.0,0.15,0.01) var attack_blend_seconds: float = 0.08
+@export_range(0.0,0.15,0.01) var attack_blend_seconds: float = 0.05
 var visual_id: StringName = &"warrior"
 var tint: Color = Color.WHITE
 var content: Node3D
@@ -18,6 +18,11 @@ var _locomotion: StringName = &"idle"
 var _remaining: float = 0.0
 var _shot: StringName = &""
 var _basic_attack: bool = false
+var _attack_ratio := 1.0
+var _attack_elapsed := 0.0
+var _attack_step: BasicAttackStepDefinition
+var _blade_tip: Marker3D
+var _trail: SwordTrail3D
 var _scene_path: String = ""
 var _weapon_path: String = ""
 # Retain active scenes so development polling can reuse ResourceLoader cache.
@@ -28,6 +33,8 @@ var _flash: Tween
 var _swing: Tween
 
 func _ready() -> void:
+	_trail = SwordTrail3D.new()
+	add_child(_trail)
 	reload_visual()
 
 func set_variant(armored: bool) -> void:
@@ -44,6 +51,8 @@ func reload_visual() -> void:
 	if _swing != null: _swing.kill()
 	if content != null: content.free()
 	weapon = null
+	_blade_tip = null
+	if _trail != null: _trail.clear()
 	socket = null
 	player = null
 	skeleton = null
@@ -71,6 +80,7 @@ func reload_visual() -> void:
 	_remaining = 0.0
 	animation_state = &""
 	if not alive:
+		if _trail != null: _trail.clear()
 		play_death()
 		if player != null and player.has_animation(&"death"): player.seek(player.get_animation(&"death").length,true)
 	elif previous_shot != &"":
@@ -78,8 +88,9 @@ func reload_visual() -> void:
 		_shot = previous_shot
 		_remaining = previous_remaining
 		_play(previous_shot,true)
+		if previous_attack and player != null: player.speed_scale = _attack_ratio
 		if player != null and player.has_animation(previous_shot):
-			player.seek(clampf(player.get_animation(previous_shot).length - previous_remaining,0.0,player.get_animation(previous_shot).length),true)
+			player.seek(clampf(player.get_animation(previous_shot).length - previous_remaining*(_attack_ratio if previous_attack else 1.0),0.0,player.get_animation(previous_shot).length),true)
 	else:
 		_play(_locomotion,true)
 
@@ -112,6 +123,9 @@ func _attach_weapon() -> void:
 		weapon.scale = Vector3.ONE / parent_scale
 		# Shared grip correction for swords authored with the blade along local +Y.
 		weapon.rotate_object_local(Vector3.BACK, SWORD_GRIP_ROTATION_RADIANS)
+	_blade_tip = Marker3D.new()
+	_blade_tip.position = Vector3.UP*1.3 # Current sword visual is 1.3 m along its local +Y.
+	weapon.add_child(_blade_tip)
 	weapon.visible = alive
 
 func set_equipped(value: bool) -> void:
@@ -123,14 +137,22 @@ func set_locomotion(moving: bool) -> void:
 	_locomotion = &"run" if moving else &"idle"
 	if alive and _shot == &"" and not _knockdown.active(): _play(_locomotion)
 
-func play_basic_attack(animation_key: StringName, recovery_ms: int) -> void:
+func play_basic_attack(animation_key: StringName, recovery_ms: int, ratio: float = 1.0) -> void:
 	if not alive or _knockdown.active(): return
 	if player != null and not player.has_animation(animation_key):
 		push_warning("Warrior missing required combo animation: %s (%s)" % [animation_key,_scene_path])
 		return
+	_attack_ratio = ratio
+	_attack_elapsed = 0
+	_attack_step = null
+	for combo: BasicAttackComboDefinition in BasicAttackCombos.ALL:
+		for step: BasicAttackStepDefinition in combo.steps:
+			if step.animation_key == animation_key: _attack_step = step
 	_one_shot(animation_key,recovery_ms/1000.0,attack_blend_seconds)
+	_remaining = player.get_animation(animation_key).length/ratio if player != null else recovery_ms/1000.0
+	if player != null: player.speed_scale = ratio
 	_basic_attack = true
-	# Native clip speed stays 1.0. A successor can crossfade at the server's
+	# A successor can crossfade at the server's
 	# link/recovery time before this clip's full duration has elapsed.
 	if player == null and weapon != null:
 		if _swing != null: _swing.kill()
@@ -190,6 +212,7 @@ func set_alive(value: bool) -> void:
 	alive = value
 	if content == null: return
 	if not alive:
+		if _trail != null: _trail.clear()
 		play_death()
 	else:
 		_basic_attack = false
@@ -225,6 +248,11 @@ func _play(clip: StringName, restart: bool = false, blend_seconds: float = 0.08)
 		player.play(clip,blend_seconds)
 
 func _process(delta: float) -> void:
+	_attack_elapsed += delta*_attack_ratio
+	if _trail != null:
+		var active := _basic_attack and alive and not _knockdown.active() and _attack_step != null and _attack_elapsed*1000 >= _attack_step.hit_start_ms and _attack_elapsed*1000 <= _attack_step.hit_end_ms
+		if is_instance_valid(weapon) and is_instance_valid(_blade_tip): _trail.sample(delta,weapon.global_position,_blade_tip.global_position,active)
+		else: _trail.clear()
 	if VisualResolver.local_development_enabled():
 		_refresh += delta
 		if _refresh >= 0.25:

@@ -8,5 +8,5 @@ item_name = "Practice sword (1 damage)"
 equipment_slot = &"weapon"
 primary_action = 1
 stack_limit = 1
-base_stats = Dictionary[StringName, float]({&"attack": 1.0})
+base_stats = Dictionary[StringName, float]({&"attack": 1.0, &"attack_speed": 22.0})
 inventory_height = 2

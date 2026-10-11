@@ -12,6 +12,9 @@
 [sub_resource type="Resource" id="Step0"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_01"
+preinput_ms = 167
+direct_input_ms = 533
+input_limit_ms = 603
 hit_start_ms = 192
 hit_end_ms = 315
 combat_trace = ExtResource("Trace0")
@@ -25,6 +28,9 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step1"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_02"
+preinput_ms = 101
+direct_input_ms = 543
+input_limit_ms = 637
 hit_start_ms = 215
 hit_end_ms = 321
 combat_trace = ExtResource("Trace1")
@@ -38,6 +44,9 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step2"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_03"
+preinput_ms = 85
+direct_input_ms = 418
+input_limit_ms = 665
 hit_start_ms = 181
 hit_end_ms = 418
 combat_trace = ExtResource("Trace2")
@@ -51,6 +60,9 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step3"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_05"
+preinput_ms = 295
+direct_input_ms = 661
+input_limit_ms = 849
 hit_start_ms = 346
 hit_end_ms = 494
 combat_trace = ExtResource("Trace3")
@@ -64,6 +76,9 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step4"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_07"
+preinput_ms = 1267
+direct_input_ms = 1267
+input_limit_ms = 1267
 hit_start_ms = 570
 hit_end_ms = 700
 combat_trace = ExtResource("Trace4")
