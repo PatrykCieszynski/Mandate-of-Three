@@ -49,6 +49,7 @@ func setup_dog(id: int, spawn: Vector3) -> void:
 	var shape := CapsuleShape3D.new()
 	shape.radius = 0.4
 	shape.height = 0.8
+	combat_collider = collision
 	collision.shape = shape
 	collision.position.y = 0.4
 	add_child(collision)
@@ -122,6 +123,3 @@ func mark_selected(selected: bool) -> void:
 
 func present_hit_lock(down_ms: int, get_up_ms: int) -> void:
 	if presentation != null: presentation.set_hit_lock(down_ms/1000.0,get_up_ms/1000.0)
-
-func combat_radius() -> float: return 0.4
-func combat_height() -> float: return 0.8

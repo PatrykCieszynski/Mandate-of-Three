@@ -360,7 +360,7 @@ func _legacy_candidates(body: SpikeCharacter3D) -> Array[Dictionary]:
 
 func _melee_hits(step: BasicAttackStepDefinition, actor: Transform3D, target: Node3D, forward: Vector3) -> bool:
 	if step.combat_trace != null:
-		return CombatTraceResolver.hits_capsule(step.combat_trace,actor,target.global_position,target.combat_radius(),target.combat_height())
+		return CombatTraceResolver.hits_capsule(step.combat_trace,actor,target.global_position,target.combat_radius(),target.combat_height(),target.combat_bottom_offset())
 	var offset := target.global_position-actor.origin
 	var horizontal := Vector3(offset.x,0,offset.z)
 	return horizontal.length() <= ATTACK_REACH and absf(offset.y) <= 1.2 and (horizontal.length_squared() < 0.001 or horizontal.normalized().dot(forward) >= cos(deg_to_rad(HALF_ANGLE)))
@@ -431,7 +431,7 @@ func receive_swing(peer_id: int, animation_key: StringName, step_index: int, rec
 			overlay.global_transform = Transform3D(Basis(Vector3.UP,body.rotation.y),body.global_position)
 			var targets: Array[Dictionary] = []
 			for dog: SpikeWildDog3D in dogs.values():
-				targets.append({"id":dog.mob_id,"position":overlay.to_local(dog.global_position),"radius":dog.combat_radius(),"height":dog.combat_height()})
+				targets.append({"id":dog.mob_id,"position":overlay.to_local(dog.global_position),"radius":dog.combat_radius(),"height":dog.combat_height(),"bottom_offset":dog.combat_bottom_offset()})
 			overlay.configure(step,targets,OS.get_cmdline_user_args().has("--dev-legacy-melee"))
 			_trace_debug[peer_id] = overlay
 	swing_received.emit(peer_id,animation_key,step_index)

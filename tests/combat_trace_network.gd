@@ -44,6 +44,25 @@ func run_server() -> void:
 		check(combat.resolve_swing(hero,swing,now).is_empty(),"same swing cannot apply damage twice")
 		for id: int in range(1001,1001+count): check(combat.dogs[id].hp == 110,"one damage per target despite several samples/shapes")
 		print("TRACE_DENSE count=",count," hits=",dense," usec=",Time.get_ticks_usec()-started)
+	# Low defenders beneath an unmodified high production swing (02). The literal
+	# broadphase cannot reach their capsule tops; forgiveness must include them.
+	var high_step := BasicAttackCombos.BASE.steps[1].duplicate() as BasicAttackStepDefinition
+	for id: int in range(1001,1101):
+		combat.dogs[id].hp = 120
+		combat.dogs[id].position = Vector3((id%10-5)*.04,-.5,3.6 if id < 1051 else -10)
+	await get_tree().physics_frame
+	var high_now := Time.get_ticks_msec()
+	var high_swing := {"step":high_step,"yaw":0.0,"started":high_now-high_step.impact_ms,"impact":high_now,"attack":10,"hit_set":{}}
+	var low_hits := combat.resolve_swing(hero,high_swing,high_now)
+	var low_count := 0
+	for id: int in low_hits: if id >= 1001: low_count += 1
+	check(low_count == 50,"high baked swing reaches 50 low defenders")
+	check(combat.resolve_swing(hero,high_swing,high_now).is_empty(),"low target swing cannot repeat damage")
+	for id: int in range(1001,1101):
+		check(combat.dogs[id].hp == (110 if id < 1051 else 120),"low target damage is unique and horizontal range is preserved")
+		combat.dogs[id].position = Vector3((id%10-5)*.04,0,3.6)
+	await get_tree().physics_frame
+	print("TRACE_LOW_DENSE count=50 hits=",low_count)
 	# Active-window guard and no-trace fallback use the same production endpoint.
 	var step := BasicAttackCombos.BASE.steps[0].duplicate() as BasicAttackStepDefinition
 	var now := Time.get_ticks_msec()

@@ -66,18 +66,22 @@ resolution beyond the window produces no hit.
 One conservative oriented box covers all blade endpoints plus sweep radius and
 padding. One `intersect_shape` broadphase returns up to **256 collider shapes**.
 That is a bound, not an unlimited target count; multi-shape actors consume entries.
-Then World rejects fully behind, out-of-range/vertical candidates and performs
-capsule distance tests. The existing scenery line-of-sight ray still runs for a
+The box includes asymmetric gameplay Y padding, while XZ keeps the existing
+radius/rail padding. World rejects fully behind and out-of-range candidates. Each
+adjacent sample pair gates its XZ distance tests on defending-capsule Y overlap. The existing scenery line-of-sight ray still runs for a
 geometric hit. There is no physics query for each blade sample.
 
 Between samples, previous/current blades and nine interpolated blade rails form
 a ruled sweep. Half the rail spacing is added as conservative padding (about
 0.081 m for a 1.3 m blade), preventing holes in the swept interior. This can admit
 slightly generous edge hits; it is deliberately not mesh collision or an exact
-rotational continuous solver. Bounds include the same padding.
+rotational continuous solver. XZ bounds include the same rail padding; Y bounds use blade radius and the
+separate vertical allowances.
 
-Target gameplay capsules match current colliders: player radius/height 0.35/1.8 m,
-dog 0.4/0.8 m, stone 0.7/2.8 m. Visual meshes are never queried. Basic melee rejects
+Target gameplay capsules read radius, height and bottom offset directly from
+current authoritative upright, unscaled colliders: player 0.35/1.8 m, dog 0.4/0.8 m,
+stone 0.7/2.8 m. Bottom offset is collider Y minus half its height; these values
+are not separately configured in the attack resolver. Visual meshes are never queried. Basic melee rejects
 a target wholly behind the actor even if a wind-up passes behind its back.
 
 Each accepted swing has a hit set, keyed by actor identity. Extra collider shapes
@@ -95,9 +99,9 @@ this is a process-local development option, never a client command or RPC.
 
 For server logs append `--combat-trace-metrics` in the user arguments. Logs show
 path, candidate shape count, trace-test count, hits and total resolve microseconds.
-For a development client append `--combat-trace-debug`: yellow blades, cyan sweep
-rails/radius rings, blue bounds, target capsule outlines and green authoritative
-hits use the very same shared Resources. Overlay yaw/positions are sampled from
+For a development client append `--combat-trace-debug`: yellow literal blades,
+cyan sweep rails/radius rings, translucent vertical prisms, blue broadphase bounds,
+target capsule outlines and green authoritative hits use the very same shared Resources. Overlay yaw/positions are sampled from
 client presentation at swing receipt; this is a debug approximation of the frozen
 server transform, not another source of hit authority.
 
@@ -109,7 +113,9 @@ Focused native preview:
 
 1/2/3 select the 4/5/6-hit chain. T switches trace/cone outlines and recomputes
 predicted target hits; B toggles attack blend 0/0.08. V toggles Warrior variant;
-Esc closes. Optional `--trace-pack=50` adds simulated capsule targets and geometry
+H switches the preview defender between a real dog and Warrior with their current
+capsule dimensions. It is placed in front of the right-hand reviewer so narrow
+04 can be reviewed alongside the wide sweeps. Esc closes. Optional `--trace-pack=50` adds simulated capsule targets and geometry
 measurements, not fifty simulated AI actors. Real-game debug coloring instead uses
 server hit results. The preview does not authorize damage or simulate knockback.
 
@@ -167,3 +173,48 @@ An ignored `.godot/runtime/trace-debug.enabled` marker enables initial overlays
 for a native local client. CLI `--combat-trace-debug` remains available. Turning
 it off frees overlays immediately; turning it on draws the next swing. Client
 restart is required to load changed scripts; no native window is launched by tests.
+
+## Vertical forgiveness v1
+
+Shared defaults on `CombatTraceDefinition` are **0.9 m down / 0.3 m up** for all
+seven clips. They are gameplay tuning, not animation-derived or final balance.
+Neither baked endpoints nor bake tools, impact/window timings, playback, damage,
+reactions or knockdown change. No target-specific trace shifting or vertical aim.
+
+For every adjacent pair, the four endpoint Y values define min/max, expanded by
+blade radius, then by the asymmetric allowances. This interval must overlap
+`actor Y + bottom_offset .. actor Y + bottom_offset + height`. Only then are the
+same blade edges and nine rails projected onto XZ and tested against the target
+capsule's horizontal circle. Vertical padding cannot widen XZ or borrow overlap
+from an unrelated segment elsewhere in the sweep. The broadphase remains one box
+query per swing (maximum 256 shapes), now covering the complete vertical extrusion.
+
+Debug keeps the literal blades at their baked heights. Translucent prisms show the
+swept blade footprint and its gameplay Y interval; blue wire bounds additionally
+show conservative broadphase radius/rail padding. This is a diagnostic sweep view,
+not final combat VFX. Target capsules include their collider-derived bottom offset.
+
+The focused trace tests cover a high blade missing a low dog without padding and
+hitting with defaults, humanoids, small downward differences, behind/side/range
+misses, far-below/above misses, bottom offsets, per-pair interval isolation, invalid
+padding, unchanged horizontal bounds, and an actual query that finds 100 low bodies
+only after Y extrusion. Network coverage adds an unmodified baked 02 against 50
+low dogs with one damage each, duplicate shapes, repeated-swing rejection and
+out-of-range exclusions. The old combat fixture's lateral miss is now explicitly
+outside the full projected sweep rather than depending on literal blade height.
+
+Default smoke, focused trace/two-client damage, four/six-hit combat, and Metin
+encounter/network checks passed. Native Vulkan Mobile captures review 01/03/04 with
+dog and Warrior-sized defenders, separating blade geometry from vertical allowance.
+These frame checks establish rendering, not a continuous human judgement of feel;
+the live fight/manual contact-feel pass remains open. Tune the shared allowance
+first if high hits look excessive, rather than adding animation-specific exceptions.
+
+To reproduce a single automatic native render review (local development assets):
+
+```powershell
+& ./.godot/Godot_v4.7.2-stable_win64_console.exe --path . --mode=client res://tests/warrior_compatibility.tscn -- --require-dev --preview --combo-review --trace-review --vertical-capture
+```
+
+It captures the four-hit chain once per defender type under `.godot/verification`
+and exits. This remains an optional manual milestone tool, outside default smoke.

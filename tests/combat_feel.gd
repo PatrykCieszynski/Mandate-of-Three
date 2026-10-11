@@ -55,7 +55,7 @@ func run_server() -> void:
 	combat.dogs[1].position = Vector3(-0.7, 0, 3.4)
 	combat.dogs[2].position = Vector3(0.7, 0, 3.4)
 	combat.dogs[3].position = Vector3(0, 0, 6.5)
-	combat.dogs[4].position = Vector3(2.2, 0, 5)
+	combat.dogs[4].position = Vector3(4, 0, 5)
 	await get_tree().create_timer(0.2).timeout
 	set_phase("ONE", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
@@ -65,7 +65,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return combat.can_move(hero))
 	set_phase("TWO", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp == 100)
-	check(combat._combo[hero] == 2 and combat.dogs[2].hp == 100, "second combo hit")
+	check(combat._combo[hero] == 2 and combat.dogs[2].hp == 100, "second combo hit: dog2=%d" % combat.dogs[2].hp)
 	await wait_until(func() -> bool: return combat.can_move(hero))
 	set_phase("THREE", hero)
 	await wait_until(func() -> bool: return combat._combo.get(hero,0) == 3 and not combat._pending.has(hero))
@@ -81,7 +81,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return combat.can_move(hero))
 	set_phase("FOUR",hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
-	check(combat._combo[hero] == 4 and combat.dogs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets")
+	check(combat._combo[hero] == 4 and combat.dogs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets: dog2 hp=%d pos=%s" % [combat.dogs[2].hp,combat.dogs[2].position])
 	set_phase("CHECK_BASE")
 	var hit_position: Vector3 = combat.dogs[1].position
 	for dog: SpikeWildDog3D in combat.dogs.values():
