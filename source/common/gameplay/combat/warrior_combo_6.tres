@@ -6,7 +6,7 @@
 [sub_resource type="Resource" id="Step0"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_01"
-impact_ms = 254
+impact_ms = 260
 recovery_ms = 533
 damage_multiplier = 1.0
 reaction = 1
@@ -16,7 +16,7 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step1"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_02"
-impact_ms = 268
+impact_ms = 270
 recovery_ms = 543
 damage_multiplier = 1.0
 reaction = 1
@@ -26,7 +26,7 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step2"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_03"
-impact_ms = 351
+impact_ms = 290
 recovery_ms = 418
 damage_multiplier = 1.0
 reaction = 1
@@ -36,7 +36,7 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step3"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_05"
-impact_ms = 420
+impact_ms = 410
 recovery_ms = 661
 damage_multiplier = 1.0
 reaction = 1
@@ -46,7 +46,7 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step4"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_06"
-impact_ms = 456
+impact_ms = 420
 recovery_ms = 694
 damage_multiplier = 1.0
 reaction = 1
@@ -56,10 +56,11 @@ get_up_duration = 0.4
 [sub_resource type="Resource" id="Step5"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_04"
-impact_ms = 659
+impact_ms = 620
 recovery_ms = 1267
 damage_multiplier = 1.5
 reaction = 3
+knockback_distance = 2.5
 reaction_duration = 1.2
 get_up_duration = 0.4
 

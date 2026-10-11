@@ -16,6 +16,7 @@ static func resolve(hit: AttackHitDefinition, profile: HitReactionProfile, attac
 			if not profile.allow_knockdown or locked: result.reaction = _fallback(profile)
 	result.duration = hit.reaction_duration if result.reaction != HitReaction.Type.NONE else 0.0
 	if result.reaction == HitReaction.Type.KNOCKDOWN:
+		if profile.allow_knockback: result.knockback_distance = maxf(0.0,hit.knockback_distance * profile.knockback_scale)
 		result.get_up_duration = hit.get_up_duration
 		result.interrupts_attack = true
 	# A dedicated interrupt is independent of knockdown resistance. Flinch never interrupts.

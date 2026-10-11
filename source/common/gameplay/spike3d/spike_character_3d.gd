@@ -4,6 +4,8 @@ extends CharacterBody3D
 
 const SPEED: float = 5.0
 const GRAVITY: float = 20.0
+const KNOCKBACK_DAMPING: float = 8.0
+var knockback_velocity: Vector3 = Vector3.ZERO
 var hit_reaction := HitReactionState.new()
 var reaction_profile: HitReactionProfile = HitReactionProfiles.PLAYER
 var target_position: Vector3
@@ -45,12 +47,33 @@ func set_level(level: int) -> void:
 	if _name_label != null: _name_label.text = "Lv %d · %s" % [level, _display_name]
 
 func simulate(delta: float, direction: Vector2) -> void:
-	velocity.x = direction.x * SPEED
-	velocity.z = direction.y * SPEED
+	if hit_reaction.locked(Time.get_ticks_msec()) or knockback_active(): direction = Vector2.ZERO
+	var displacement_velocity := damp_knockback(delta)
+	velocity.x = direction.x * SPEED + displacement_velocity.x
+	velocity.z = direction.y * SPEED + displacement_velocity.z
 	velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
 	if direction.length_squared() > 0.001:
 		rotation.y = atan2(-direction.x, -direction.y)
 	move_and_slide()
+
+func apply_knockback(direction: Vector3, distance: float) -> void:
+	if not direction.is_finite() or not is_finite(distance) or distance <= 0: return
+	var planar := Vector3(direction.x,0,direction.z)
+	if planar.length_squared() < 0.0001: return
+	# Integral of v0 * exp(-damping*t) is distance. No position mutation here.
+	knockback_velocity = planar.normalized() * distance * KNOCKBACK_DAMPING
+
+func knockback_active() -> bool:
+	return knockback_velocity.length_squared() > 0.0025
+
+func damp_knockback(delta: float) -> Vector3:
+	if delta <= 0: return Vector3.ZERO
+	var decay := exp(-KNOCKBACK_DAMPING * delta)
+	# Average velocity keeps travel independent of physics tick duration.
+	var motion := knockback_velocity * (1.0-decay) / (KNOCKBACK_DAMPING*delta)
+	knockback_velocity *= decay
+	if not knockback_active(): knockback_velocity = Vector3.ZERO
+	return motion
 
 func apply_snapshot(next_position: Vector3, yaw: float) -> void:
 	if not has_snapshot or position.distance_to(next_position) > 5.0:

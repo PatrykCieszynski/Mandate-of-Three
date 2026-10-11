@@ -34,7 +34,6 @@ var contributions: Dictionary[int, int] = {}
 var contribution_players: Dictionary[int, PlayerResource] = {}
 var last_attack_ms: int = -1000
 var stunned_until_ms: int = 0
-var knockback: Vector3 = Vector3.ZERO
 var hp_label: Label3D
 var name_label: Label3D
 var presentation: DogVisual3D
@@ -72,21 +71,24 @@ func _label(text: String, height: float, size: int) -> Label3D:
 	return label
 
 func move_dog(delta: float, direction: Vector2, now: int) -> void:
-	if now < stunned_until_ms or hit_reaction.locked(now): direction = Vector2.ZERO
-	velocity.x = direction.x * move_speed + knockback.x
-	velocity.z = direction.y * move_speed + knockback.z
+	if now < stunned_until_ms or hit_reaction.locked(now) or knockback_active(): direction = Vector2.ZERO
+	var displaced := knockback_active()
+	var displacement_velocity := damp_knockback(delta)
+	velocity.x = direction.x * move_speed + displacement_velocity.x
+	velocity.z = direction.y * move_speed + displacement_velocity.z
 	velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
-	knockback *= exp(-5.0 * delta)
-	if knockback.length_squared() < 0.01: knockback = Vector3.ZERO
 	if direction.length_squared() > 0.001: rotation.y = atan2(-direction.x, -direction.y)
+	var regular_mask := collision_mask
+	if displaced: collision_mask |= 1 # Impulses respect scenery; normal pack AI stays unchanged.
 	move_and_slide()
+	collision_mask = regular_mask
 
 func die(now: int) -> void:
 	ai_state = "DEAD"
 	hit_reaction.clear()
 	target_peer = 0
 	dead_until_ms = now + 6000
-	knockback = Vector3.ZERO
+	knockback_velocity = Vector3.ZERO
 	visible = false
 	collision_layer = 0
 

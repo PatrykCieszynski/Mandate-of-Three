@@ -14,7 +14,8 @@ independent of later Combo changes. Timing remains server-authoritative.
 The v1 finisher has 1.2 seconds down and 0.4 seconds getting up. These are prototype
 content values. The attacker can continue its own combo; the target's lock does not
 lock the attacker. The former per-hit stun and third-hit physical knockback are
-removed from the basic combo.
+removed from the basic combo. The final step now separately requests 2.5 m
+physical displacement alongside KNOCKDOWN.
 
 Stable reaction wire values: NONE=0, FLINCH=1, KNOCKBACK=2, KNOCKDOWN=3. Stun remains
 separate (`stunned_until_ms` on the existing mob runtime); flinch never installs it.
@@ -32,8 +33,18 @@ get-up duration and interrupt decision. A resisted/repeated knockdown falls back
 to visual flinch if permitted. Lethal damage wins over reactions. A dedicated
 `interrupt_attack` is separate from knockdown immunity; ordinary flinch never
 interrupts. KNOCKBACK's contract includes scaled distance and optional interrupt,
-but no shipped attack uses physical knockback in this slice. Movement/displacement
-for that reaction remains a later server physics task.
+and accepted KNOCKDOWN can independently carry the same scaled distance. Profiles
+can permit knockdown while disabling displacement. Rejected/repeated knockdowns
+have zero displacement; the default elite/boss profiles therefore do not move.
+
+`SpikeCharacter3D` owns runtime `knockback_velocity`. Applying a hit sets a planar
+impulse, never position. `move_and_slide()` advances the server actor using the
+exponentially decaying velocity (damping 8/s); the impulse integral matches the
+authored distance in free space. Scenery can shorten travel. Mob displacement
+adds the scenery mask for its physics move and restores the regular AI mask;
+colliders stay enabled. Down/get-up or an active impulse prevents movement intent
+and attacks. Death clears the impulse. Player-target damage takes a server-supplied
+hit direction; it does not introduce a client-selected displacement or PvP RPC.
 
 Each actor has `HitReactionState` with down/get-up deadlines. Both phases block
 new attacks and movement. Re-hits during either phase still deal damage but cannot
@@ -54,7 +65,8 @@ Accepted hit events carry presentation results. Full mob snapshots append remain
 down and get-up milliseconds; player combat snapshots carry the same two values
 in `hit_locks`. An actor created or reconnected during a lock reconstructs its
 presentation from those remaining times. Repeated full snapshots synchronize the
-phase without replaying the fall. Buffers remain 1 MiB. Server and client must be
+phase without replaying the fall. Physical displacement uses the existing
+authoritative position snapshots; no extra velocity wire field is required. Buffers remain 1 MiB. Server and client must be
 restarted together for the changed wire record.
 
 FLINCH is presentation only. An ongoing player swing keeps its clip and receives
@@ -72,7 +84,8 @@ remaining live manual feel review. Headless tests do not prove animation quality
 
 Default smoke adds one durable `hit_reactions` case: flinch, profile resistance,
 interrupt independence, bounded repeated hits, death precedence and late-join
-remaining time. Existing two-client `run-combat` covers four/six directional/multitarget
-hits and observer animation order, replicated down/get-up, AI movement/attack lock, player pending-hit cancellation,
+remaining time, independent knockdown/displacement resistance, impulse damping
+and real scenery collision. Existing two-client `run-combat` covers four/six directional/multitarget
+hits and observer animation order, replicated down/get-up, AI movement/attack lock during physical displacement, player displacement and pending-hit cancellation,
 immune target continuity, death and respawn. Dog/warrior headless presentation
 checks verify state transitions and keep animation out of gameplay authority.

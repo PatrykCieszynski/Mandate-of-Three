@@ -83,7 +83,7 @@ func run_server() -> void:
 		if dog.mob_id <= 2: dog.ai_enabled = true
 	var hp_before: int = combat.health[hero]
 	await get_tree().create_timer(0.3).timeout
-	check(combat.health[hero] == hp_before and combat.dogs[1].position.distance_to(hit_position) < 0.1, "down mob cannot attack or chase")
+	check(combat.health[hero] == hp_before and combat.dogs[1].position.z < hit_position.z-0.3 and combat.dogs[1].position.distance_to(hit_position) < BasicAttackCombos.BASE.steps.back().knockback_distance * 1.2, "down mob is displaced away without AI attacks or chase")
 	await wait_until(func() -> bool: return not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
 	for dog: SpikeWildDog3D in combat.dogs.values(): dog.ai_enabled = false
 	check(combat.set_combo_skill_level(hero,2) and combat.set_combo_enabled(hero,true),"server selects six-hit combo")
@@ -121,13 +121,16 @@ func run_server() -> void:
 	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[0])
 	check(combat._pending.has(other) and not world.characters[other].hit_reaction.locked(now), "flinch preserves player pending attack")
 	var canceled_swing: Dictionary = combat._pending[other].duplicate()
-	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[3])
+	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[3],Vector3.RIGHT)
 	check(combat.resolve_swing(other,canceled_swing,now+1).is_empty(), "canceled delayed hit cannot resolve during knockdown")
 	var deadline: int = world.characters[other].hit_reaction.get_up_until_ms
+	var player_hit_position: Vector3 = world.characters[other].position
+	check(world.characters[other].knockback_active(),"accepted player knockdown has physical impulse")
 	check(not combat._pending.has(other) and not combat.can_move(other,now) and not combat.begin_attack(other,3,now), "knockdown cancels pending player damage and blocks actions")
 	combat.hurt_player(other,1,now+1,BasicAttackCombos.BASE.steps[3])
 	check(world.characters[other].hit_reaction.get_up_until_ms == deadline, "re-hit does not extend player lock")
 	await wait_until(func() -> bool: return not world.characters[other].hit_reaction.locked(Time.get_ticks_msec()))
+	check(world.characters[other].position.x > player_hit_position.x+0.3,"player displacement is simulated on World")
 	world.characters[other].reaction_profile = HitReactionProfiles.BOSS
 	now = Time.get_ticks_msec()
 	check(combat.begin_attack(other,4,now), "actions resume after get-up")
@@ -147,7 +150,7 @@ func run_server() -> void:
 	var dog: SpikeWildDog3D = combat.dogs[1]
 	dog.position = SpikeCombat3D.HOME
 	dog.hp = 120
-	dog.knockback = Vector3.ZERO
+	dog.knockback_velocity = Vector3.ZERO
 	dog.stunned_until_ms = 0
 	dog.ai_enabled = true
 	dog.ai_state = "CHASE"

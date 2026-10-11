@@ -21,7 +21,8 @@ level and weapon mode. The shared `BasicAttackComboDefinition` holds an array of
 animation number.** Each authored final step requests KNOCKDOWN with the existing
 1.5 damage multiplier; other steps request FLINCH with multiplier 1.0. Requested
 reactions still pass through `HitReactionResolver` and target profiles. Knockdown
-remains 1.2 s down + 0.4 s get-up; no per-hit stun or third-hit displacement returns.
+remains 1.2 s down + 0.4 s get-up. Final steps separately author 2.5 m physical
+knockback; no per-hit stun or hardcoded third-hit displacement returns.
 
 Changing enabled state, skill level/selected definition or supported weapon mode
 resets the next chain to step zero. Completing the definition or exceeding its
@@ -55,13 +56,13 @@ It contains separate `onehand_sword__combo_01..07` and
 
 | One-handed clip | Imported duration (s) | Impact (ms) | Recovery / next accepted swing (ms) |
 | --- | ---: | ---: | ---: |
-| onehand_sword__combo_01 | 1.000000 | 254 | 533 |
-| onehand_sword__combo_02 | 0.933333 | 268 | 543 |
-| onehand_sword__combo_03 | 1.066667 | 351 | 418 |
-| onehand_sword__combo_04 | 1.266667 | 659 | 1267 |
-| onehand_sword__combo_05 | 1.166667 | 420 | 661 |
-| onehand_sword__combo_06 | 1.333333 | 456 | 694 |
-| onehand_sword__combo_07 | 1.266667 | 653 | 1267 |
+| onehand_sword__combo_01 | 1.000000 | 260 | 533 |
+| onehand_sword__combo_02 | 0.933333 | 270 | 543 |
+| onehand_sword__combo_03 | 1.066667 | 290 | 418 |
+| onehand_sword__combo_04 | 1.266667 | 620 | 1267 |
+| onehand_sword__combo_05 | 1.166667 | 410 | 661 |
+| onehand_sword__combo_06 | 1.333333 | 420 | 694 |
+| onehand_sword__combo_07 | 1.266667 | 620 | 1267 |
 
 Two-handed durations for 01..07 are respectively 1.666667, 1.500000, 1.333333,
 1.600000, 1.600000, 1.500000, 1.600000 s. They are inspected, not playable content yet.
@@ -69,16 +70,31 @@ Two-handed durations for 01..07 are respectively 1.666667, 1.500000, 1.333333,
 The staged `combo-reference.json` contains MSA provenance. Original files were
 also inspected under the external local reference
 `N:/Mandate Local/metin2/bin/pack/PC/ymir work/pc/warrior/onehand_sword/`.
-Intermediate impact is the rounded midpoint of AttackingStartTime/AttackingEndTime,
+The initial intermediate impact was the rounded midpoint of AttackingStartTime/AttackingEndTime,
 a first-pass single-hit approximation of native continuous weapon collisions.
 Recovery uses rounded DirectInputTime. In particular 03 can link before the end
 of its full attack window; this implementation resolves one hit, not the original
 continuous window or input buffer.
 
-Finishers 04/07 use MotionEventType 4 StartingTime: 0.659316 / 0.653366 s.
+Initial finisher impacts used MotionEventType 4 StartingTime: 0.659316 / 0.653366 s.
 Their normal attack-window fields are zero/missing, not evidence of no attack.
 Finisher recovery uses the complete native duration. All timings are explicit
-Resource data, independent of animation callbacks and blending.
+Resource data, independent of animation callbacks.
+
+The Combat Feel pass retuned impact against final Godot-imported, retargeted
+clips at native speed. A disposable diagnostic sampled the equipped blade segment
+against a fixed frontal contact point (1.5 m ahead, height 0.7 m), in 10 ms samples
+with 5 ms AnimationPlayer advances. It evaluated 4/5/6 chains, including 04 after
+03 and after 06, with blend 0 and 0.08 s. Both blends produced the same nearest
+contact sample. Updated impacts are 260/270/290/620/410/420/620 ms for 01..07;
+recovery is unchanged. This geometric proxy is a tuning baseline, not a human
+assessment of hit feel or a server hitbox test. Final live review can adjust each
+step independently. No animation callback or marker authorizes damage.
+
+Finisher displacement is resolved independently from reaction. Accepted KNOCKDOWN
+can carry profile-scaled distance; resisted/repeated knockdowns carry zero. Server
+physics applies a horizontal impulse with exponential damping and scenery collision,
+while AI/input remain locked. Existing position snapshots replicate the motion.
 
 ## Playback boundary
 
@@ -88,7 +104,8 @@ only colors the temporary slash ribbon; damage/reaction come from the frozen ste
 One-based `combos` in snapshots remains a display field only. `combo_options`
 reports enabled state, runtime skill level and selected definition length.
 
-Playback keeps native speed 1.0 and the existing 0.08 s crossfade. An accepted
+Playback keeps native speed 1.0 and default 0.08 s crossfade.
+`attack_blend_seconds` is a small presentation setting for focused comparison. An accepted
 successor replaces the preceding native clip at its server recovery/link time;
 an isolated swing can finish naturally before idle. No silent attack_3 fallback
 remains. Missing required clips report their exact key and asset path. The optional
@@ -130,10 +147,11 @@ Launch one focused native review window from the repository root:
 & ./.godot/Godot_v4.7.2-stable_win64.exe --path . --mode=client res://tests/warrior_compatibility.tscn -- --require-dev --preview --combo-review
 ```
 
-Keys 1/2/3 loop 4/5/6 respectively; Esc closes. This is a presentation fixture
+Keys 1/2/3 loop 4/5/6 respectively; B toggles attack blend 0/0.08 s; Esc closes. This is a presentation fixture
 using the production visual, definitions and reaction resolver, not an alternative
 authoritative gameplay path. Review chain transitions, root/facing, impact feel,
-finisher/down/get-up and idle return. `--combo-capture` instead renders each chain
+finisher/down/get-up and idle return. The fixture shows reaction presentation;
+physical displacement is verified separately by server/network checks. `--combo-capture` instead renders each chain
 once, saves fixed-name diagnostic PNGs under `.godot/verification`, then exits.
 It is optional, not part of smoke or a pixel snapshot test. In-world gameplay still
 needs a final human feel pass after restarting both World and client for the new RPC.

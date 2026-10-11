@@ -212,7 +212,7 @@ func _setup_stage() -> void:
 	environment.environment.ambient_light_energy = .6
 	add_child(environment)
 	var label := Label.new()
-	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
+	label.text = "Warrior: base + armor | Combo review: 1/2/3 = 4/5/6 hits | V armor | B blend 0/0.08 | Esc close" if OS.get_cmdline_user_args().has("--combo-review") else "Warrior poses: number keys | V armor | Esc close"
 	label.position = Vector2(16,16)
 	add_child(label)
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -221,6 +221,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_review_generation += 1
 		_review_combo(event.keycode-KEY_1,_review_generation)
 	elif _review_dog == null and event.keycode >= KEY_1 and event.keycode < KEY_1+_clips.size(): _pose(_clips[event.keycode-KEY_1],false)
+	elif event.keycode == KEY_B and _review_dog != null:
+		for view: WarriorVisual3D in avatars: view.attack_blend_seconds = 0.0 if view.attack_blend_seconds > 0 else 0.08
 	elif event.keycode == KEY_V:
 		for view: WarriorVisual3D in avatars: view.set_variant(view.visual_id != &"warrior_armor")
 	elif event.keycode == KEY_ESCAPE: get_tree().quit()
@@ -237,7 +239,7 @@ func _review_combo(skill_level: int, ticket: int) -> void:
 			if ticket != _review_generation: return
 			var swing := runtime.take_step(Time.get_ticks_msec())
 			var step: BasicAttackStepDefinition = swing.step
-			_review_label.text = "%s | step %d/%d | %s | impact %d ms / recovery %d ms" % [combo.combo_key,i+1,combo.steps.size(),step.animation_key,step.impact_ms,step.recovery_ms]
+			_review_label.text = "%s | step %d/%d | %s | impact %d ms / recovery %d ms / blend %.2f" % [combo.combo_key,i+1,combo.steps.size(),step.animation_key,step.impact_ms,step.recovery_ms,avatars[0].attack_blend_seconds]
 			for view: WarriorVisual3D in avatars: view.play_basic_attack(step.animation_key,step.recovery_ms)
 			await get_tree().create_timer(step.impact_ms/1000.0).timeout
 			if ticket != _review_generation: return

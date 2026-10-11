@@ -2,6 +2,7 @@ class_name WarriorVisual3D
 extends Node3D
 ## One optional player visual, one variant and one rigid sword. Presentation only.
 const SWORD_GRIP_ROTATION_RADIANS := PI * 0.5
+@export_range(0.0,0.15,0.01) var attack_blend_seconds: float = 0.08
 var visual_id: StringName = &"warrior"
 var tint: Color = Color.WHITE
 var content: Node3D
@@ -127,7 +128,7 @@ func play_basic_attack(animation_key: StringName, recovery_ms: int) -> void:
 	if player != null and not player.has_animation(animation_key):
 		push_warning("Warrior missing required combo animation: %s (%s)" % [animation_key,_scene_path])
 		return
-	_one_shot(animation_key,recovery_ms/1000.0)
+	_one_shot(animation_key,recovery_ms/1000.0,attack_blend_seconds)
 	_basic_attack = true
 	# Native clip speed stays 1.0. A successor can crossfade at the server's
 	# link/recovery time before this clip's full duration has elapsed.
@@ -210,18 +211,18 @@ func play_death() -> void:
 		content.position = Vector3(0.9,0.4,0)
 	if weapon != null: weapon.visible = false
 
-func _one_shot(clip: StringName, fallback_duration: float) -> void:
+func _one_shot(clip: StringName, fallback_duration: float, blend_seconds: float = 0.08) -> void:
 	_basic_attack = false
 	_shot = clip
 	_remaining = player.get_animation(clip).length if player != null and player.has_animation(clip) else fallback_duration
-	_play(clip,true)
+	_play(clip,true,blend_seconds)
 
-func _play(clip: StringName, restart: bool = false) -> void:
+func _play(clip: StringName, restart: bool = false, blend_seconds: float = 0.08) -> void:
 	if animation_state == clip and not restart: return
 	animation_state = clip
 	if player != null and player.has_animation(clip):
 		player.speed_scale = 1.0
-		player.play(clip,0.08)
+		player.play(clip,blend_seconds)
 
 func _process(delta: float) -> void:
 	if VisualResolver.local_development_enabled():

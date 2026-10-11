@@ -84,7 +84,7 @@ func _ready() -> void:
 	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,120,MobSnapshot.State.IDLE,dog.mob_key,"",0,0])
 	check(view.visible and dog.collision_layer == 4,"respawn restores presentation and original collision")
 	check(dog.position == position_before and dog.rotation.y == yaw_before,"clips never move gameplay body")
-	check(dog.home == Vector3(3,0,2) and dog.knockback == Vector3.ZERO,"visuals do not mutate gameplay state")
+	check(dog.home == Vector3(3,0,2) and dog.knockback_velocity == Vector3.ZERO,"visuals do not mutate gameplay state")
 	if expected == "dev" and OS.get_cmdline_user_args().has("--visual-remove-live"):
 		var original := ProjectSettings.globalize_path(VisualResolver.DEV_DOG)
 		var temporary := ProjectSettings.globalize_path("res://.godot/verification/visual-hot-stash.glb")
