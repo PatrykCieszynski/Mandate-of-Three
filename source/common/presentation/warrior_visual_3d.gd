@@ -12,6 +12,7 @@ var socket: Node3D
 var equipped: bool = false
 var alive: bool = true
 var animation_state: StringName = &"idle"
+var _knockdown := KnockdownVisual.new()
 var _locomotion: StringName = &"idle"
 var _remaining: float = 0.0
 var _shot: StringName = &""
@@ -49,6 +50,7 @@ func reload_visual() -> void:
 	_scene_path = scene.resource_path
 	content = scene.instantiate() as Node3D
 	add_child(content)
+	_knockdown.rebind()
 	if content.has_method("set_tint"): content.call("set_tint",tint)
 	var players := content.find_children("*","AnimationPlayer",true,false)
 	if not players.is_empty():
@@ -111,11 +113,18 @@ func set_equipped(value: bool) -> void:
 
 func set_locomotion(moving: bool) -> void:
 	_locomotion = &"run" if moving else &"idle"
-	if alive and _shot == &"": _play(_locomotion)
+	if alive and _shot == &"" and not _knockdown.active(): _play(_locomotion)
 
 func play_attack(stage: int) -> void:
-	if not alive: return
-	_one_shot(StringName("attack_%d" % clampi(stage,1,3)),0.3)
+	if not alive or _knockdown.active(): return
+	var hit := BasicAttackHits.stage(stage)
+	var clip := hit.presentation_clip
+	# The current development export only has three attack clips.
+	if player != null and not player.has_animation(clip): clip = &"attack_3"
+	_one_shot(clip,hit.recovery_ms/1000.0)
+	_remaining = hit.recovery_ms/1000.0
+	if player != null and player.has_animation(clip):
+		player.speed_scale = player.get_animation(clip).length / maxf(0.001,_remaining)
 	if player == null and weapon != null:
 		if _swing != null: _swing.kill()
 		weapon.rotation.z = -1.4 if stage != 2 else 1.4
@@ -124,8 +133,9 @@ func play_attack(stage: int) -> void:
 		_swing.tween_property(weapon,"rotation:z",0.0,0.12)
 
 func play_hit() -> void:
-	if not alive: return
-	_one_shot(&"hit",0.18)
+	if not alive or _knockdown.active(): return
+	# Preserve an ongoing swing visually as well as on the server.
+	if not str(_shot).begins_with("attack_"): _one_shot(&"hit",0.18)
 	if content == null: return
 	if _flash != null: _flash.kill()
 	content.scale = Vector3.ONE * 1.04
@@ -147,6 +157,7 @@ func set_alive(value: bool) -> void:
 		_play(_locomotion,true)
 
 func play_death() -> void:
+	_knockdown.clear(content)
 	_shot = &"death"
 	_remaining = 0.0
 	_play(&"death",true)
@@ -163,7 +174,9 @@ func _one_shot(clip: StringName, fallback_duration: float) -> void:
 func _play(clip: StringName, restart: bool = false) -> void:
 	if animation_state == clip and not restart: return
 	animation_state = clip
-	if player != null and player.has_animation(clip): player.play(clip,0.08)
+	if player != null and player.has_animation(clip):
+		player.speed_scale = 1.0
+		player.play(clip,0.08)
 
 func _process(delta: float) -> void:
 	if VisualResolver.local_development_enabled():
@@ -174,8 +187,24 @@ func _process(delta: float) -> void:
 			var sword_scene := VisualResolver.resolve(&"iron_sword") if equipped else null
 			if scene != null and scene.resource_path != _scene_path: reload_visual()
 			elif sword_scene != null and sword_scene.resource_path != _weapon_path: _attach_weapon()
-	if not alive or _shot == &"": return
+	if not alive: return
+	var was_locked := _knockdown.phase != HitReaction.Phase.NONE
+	if _knockdown.update(delta,content,player):
+		animation_state = &"knockdown" if _knockdown.phase == HitReaction.Phase.DOWN else &"get_up"
+		return
+	if was_locked: _play(_locomotion,true)
+	if _shot == &"": return
 	_remaining -= delta
 	if _remaining <= 0.0:
 		_shot = &""
 		_play(_locomotion)
+
+func set_hit_lock(down: float, get_up: float) -> void:
+	if not alive: return
+	_knockdown.sync(down,get_up)
+	if down > 0 or get_up > 0:
+		_shot = &""
+		_remaining = 0
+		if _flash != null: _flash.kill()
+		if _swing != null: _swing.kill()
+		if content != null: content.scale = Vector3.ONE

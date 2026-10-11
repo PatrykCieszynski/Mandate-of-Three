@@ -74,7 +74,14 @@ func run_server() -> void:
 	check(encounter.runtime.hp==encounter.definition.max_hp and encounter.runtime.spawned_mobs.is_empty(),"directional melee behind player misses stone")
 	for id: int in world.characters: world.characters[id].rotation.y = 0
 	await get_tree().create_timer(0.5).timeout
-	set_phase("FIGHT")
+	# Sequential contributors isolate the stone reward. Simultaneous 300-attack
+	# impacts can legitimately kill a wave spawned earlier in the same physics tick.
+	var contributors: Array = world.characters.keys()
+	set_phase("FIGHT",int(contributors[0]))
+	await wait_until(func() -> bool: return encounter.runtime.participants.has(combat._owner(int(contributors[0]))))
+	set_phase("WAIT")
+	await get_tree().create_timer(0.3).timeout
+	set_phase("FIGHT",int(contributors[1]))
 	await wait_until(func() -> bool: return encounter.runtime.reward_claimed)
 	set_phase("WAIT")
 	check(world.combat_endpoint.ground.size()==1 and world.currency_endpoint.ground.size()==1,"one ground item and Yang reward")

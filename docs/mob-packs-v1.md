@@ -91,7 +91,7 @@ listed in [Godot's WebSocketMultiplayerPeer API](https://docs.godotengine.org/en
 The full snapshot now carries `mobs` as an array of compact records:
 
 ```text
-[instance_id, position, yaw, hp, numeric_state, mob_key, source_metinstone_id]
+[instance_id, position, yaw, hp, numeric_state, mob_key, source_metinstone_id, down_remaining_ms, get_up_remaining_ms]
 ```
 
 `MobSnapshot.Field` defines the indices. `MobSnapshot.State` defines stable wire
@@ -122,11 +122,11 @@ they exclude other combat fields, RPC framing and WebSocket overhead.
 
 | Actors | Previous | Compact | Reduction |
 | --- | --- | --- | --- |
-| 50 | 20,116 bytes / 19.64 KiB | 4,104 bytes / 4.01 KiB | 79.6% |
-| 100 | 39,916 bytes / 38.98 KiB | 8,104 bytes / 7.91 KiB | 79.7% |
+| 50 | 20,108 bytes / 19.64 KiB | 4,904 bytes / 4.79 KiB | 75.6% |
+| 100 | 39,908 bytes / 38.97 KiB | 9,704 bytes / 9.48 KiB | 75.7% |
 
-Measured headlessly with Godot 4.7.2 on Windows. This is roughly a 4.9x reduction
-for this fixture, not a total bandwidth or frame-time benchmark. Names, source
+Measured headlessly with Godot 4.7.2 on Windows. This is roughly a 4.1x reduction
+including the two reaction recovery fields for this fixture, not a total bandwidth or frame-time benchmark. Names, source
 IDs and composition affect byte counts. The regression check requires a broad
 reduction, not these exact numbers.
 

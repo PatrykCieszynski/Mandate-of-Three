@@ -15,6 +15,7 @@ $taskCases = [ordered]@{
     progression_checkpoint = 'CHECKPOINT_OK'
     yang_wallet = 'WALLET_OK'
     mob_packs = 'MOB_PACKS_OK'
+    hit_reactions = 'HIT_REACTIONS_OK'
 }
 foreach ($taskCase in $taskCases.GetEnumerator()) {
     $taskLog = Join-Path $taskLogs "$($taskCase.Key).smoke.log"

@@ -1,6 +1,6 @@
 # Accepted project direction
 
-Current policy as of 2026-10-10. This file describes accepted scope and next work;
+Current policy as of 2026-10-11. This file describes accepted scope and next work;
 [decision history](history/project-direction-2026-10-09.md) records prior stages.
 
 ## Keep the technical foundation small
@@ -18,7 +18,7 @@ stat, crafting or persistence frameworks.
 ## Working vertical slice
 
 - Server-side 3D movement/physics and remote interpolation.
-- Directional melee against multiple targets, three-hit combo, final knockback,
+- Directional melee against multiple targets, four-hit combo, final knockdown/get-up,
   data-defined mixed mob packs with cheap straight-line AI, hit reactions, death and respawn. Targets only assist
   autoattack/future skills. Balance is deferred.
 - Ground item loot, reservation, pickup, transactional inventory/equipment and
@@ -104,3 +104,7 @@ Bosses, free base dungeons, keyed tiers, classes/auras, potions/lure, AOI, local
 prediction, layering and PostgreSQL remain later work. For AOI, consider reusing
 Tiny MMO's grid on the XZ plane. Further technical cleanup must stay bounded and
 must not replace the next gameplay milestone with another large refactor.
+
+[Hit Reactions v1](hit-reactions-v1.md) adds a four-hit basic combo, noninterrupting
+flinch and server-authoritative knockdown/get-up with per-mob resistance profiles.
+Physical knockback, final reaction clips and PvP rules remain later work.

@@ -6,6 +6,7 @@ var visual_id: StringName = VisualResolver.STRAY_DOG
 var content: Node3D
 var player: AnimationPlayer
 var animation_state: StringName = &"idle"
+var _knockdown := KnockdownVisual.new()
 var _locomotion: StringName = &"idle"
 var _one_shot: StringName = &""
 var _remaining: float = 0.0
@@ -36,6 +37,7 @@ func reload_visual() -> void:
 	_base_scale = content.scale
 	_base_rotation = content.rotation
 	add_child(content)
+	_knockdown.rebind()
 	var players := content.find_children("*", "AnimationPlayer", true, false)
 	if not players.is_empty():
 		player = players[0] as AnimationPlayer
@@ -58,10 +60,10 @@ func _prepare_animations() -> void:
 
 func set_locomotion(state: String, moving: bool) -> void:
 	_locomotion = &"attack" if state == "ATTACK" else (&"run" if moving else &"idle")
-	if _one_shot == &"": _play(_locomotion)
+	if _one_shot == &"" and not _knockdown.active(): _play(_locomotion)
 
 func play_hit() -> void:
-	if _one_shot == &"death": return
+	if _one_shot == &"death" or _knockdown.active(): return
 	_one_shot = &"hit"
 	_remaining = 0.2
 	if player != null and player.has_animation(&"hit"):
@@ -74,6 +76,7 @@ func play_hit() -> void:
 	_flash.tween_property(content, "scale", _base_scale, 0.18)
 
 func play_death() -> void:
+	_knockdown.clear(content)
 	_one_shot = &"death"
 	_remaining = DEATH_DISPLAY_SECONDS
 	visible = true
@@ -81,6 +84,7 @@ func play_death() -> void:
 	if player == null and content != null: content.rotation.z = _base_rotation.z + PI * 0.5
 
 func reset_alive() -> void:
+	_knockdown.clear(content)
 	_one_shot = &""
 	_remaining = 0.0
 	visible = true
@@ -99,6 +103,11 @@ func _process(delta: float) -> void:
 			_refresh_accum = 0.0
 			var scene := VisualResolver.resolve(visual_id)
 			if scene != null and scene.resource_path != _selected_scene: reload_visual()
+	var was_locked := _knockdown.phase != HitReaction.Phase.NONE
+	if _knockdown.update(delta,content,player):
+		animation_state = &"knockdown" if _knockdown.phase == HitReaction.Phase.DOWN else &"get_up"
+		return
+	if was_locked: _play(_locomotion,true)
 	if _one_shot == &"": return
 	_remaining -= delta
 	if _remaining > 0: return
@@ -107,3 +116,12 @@ func _process(delta: float) -> void:
 		return
 	_one_shot = &""
 	_play(_locomotion)
+
+func set_hit_lock(down: float, get_up: float) -> void:
+	if _one_shot == &"death": return
+	_knockdown.sync(down,get_up)
+	if down > 0 or get_up > 0:
+		_one_shot = &""
+		_remaining = 0
+		if _flash != null: _flash.kill()
+		if content != null: content.scale = _base_scale
