@@ -18,7 +18,7 @@ stat, crafting or persistence frameworks.
 ## Working vertical slice
 
 - Server-side 3D movement/physics and remote interpolation.
-- Directional melee against multiple targets, four-hit combo, final knockdown/get-up,
+- Directional melee against multiple targets, data-defined Warrior 4/5/6-hit combo, final knockdown/get-up,
   data-defined mixed mob packs with cheap straight-line AI, hit reactions, death and respawn. Targets only assist
   autoattack/future skills. Balance is deferred.
 - Ground item loot, reservation, pickup, transactional inventory/equipment and

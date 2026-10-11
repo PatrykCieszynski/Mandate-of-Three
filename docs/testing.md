@@ -116,3 +116,10 @@ Hit reaction smoke covers profiles, flinch without locks, bounded knockdown/get-
 interrupt independence and snapshot recovery. `run-combat` exercises the same
 authority with two clients, including the player-target pending-hit path. See
 [Hit Reactions v1](hit-reactions-v1.md).
+
+Warrior combo v2 reuses the durable `hit_reactions` smoke case for exact 4/5/6
+sequence and runtime reset contracts. `run-combat.ps1` verifies four/six native
+animation keys at both real clients, plus pending-toggle/interruption behavior.
+The optional [combo review](warrior-basic-combo-v2.md#verification-and-remaining-manual-review)
+uses the existing Warrior compatibility scene; rendered images are disposable
+verification artifacts, not snapshot assertions in smoke.

@@ -20,7 +20,7 @@ static func paths(visual_id: StringName) -> PackedStringArray:
 	match visual_id:
 		&"warrior_male": return paths(&"warrior")
 		&"stray_dog": return [FINAL_DOG, DEV_DOG, PLACEHOLDER_DOG]
-		&"warrior": return ["res://assets/final/players/warrior.tscn", "res://dev_assets/legacy/players/warrior/warrior.glb", PLACEHOLDER_WARRIOR]
+		&"warrior": return ["res://assets/final/players/warrior.tscn", "res://dev_assets/legacy/players/warrior/warrior_all_motions.glb", PLACEHOLDER_WARRIOR]
 		&"warrior_armor": return ["res://assets/final/players/warrior_armor.tscn", "res://dev_assets/legacy/players/warrior/warrior_armor.glb", PLACEHOLDER_WARRIOR]
 		&"iron_sword": return ["res://assets/final/weapons/iron_sword.tscn", "res://dev_assets/legacy/weapons/iron_sword/iron_sword.glb", PLACEHOLDER_SWORD]
 	if MOB_IDS.has(visual_id):

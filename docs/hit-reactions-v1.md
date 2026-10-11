@@ -6,10 +6,11 @@ CrowdControlManager or generic effect framework.
 
 ## Basic attacks
 
-`BasicAttackHits.COMBO` contains four resources: hits 1–3 request FLINCH, hit 4
-requests KNOCKDOWN. Each defines damage multiplier, impact/recovery timing,
-reaction/down duration, get-up duration and presentation clip. Timing is defined
-on the server; the visual is an independent presentation of the accepted swing.
+[Warrior basic combo v2](warrior-basic-combo-v2.md) selects shared 4/5/6-step
+Resource definitions. Intermediate steps request FLINCH; only the authored last
+step requests KNOCKDOWN. Steps define exact native animation identity, multiplier,
+impact/recovery and reaction durations. Pending impact uses a frozen accepted step,
+independent of later Combo changes. Timing remains server-authoritative.
 The v1 finisher has 1.2 seconds down and 0.4 seconds getting up. These are prototype
 content values. The attacker can continue its own combo; the target's lock does not
 lock the attacker. The former per-hit stun and third-hit physical knockback are
@@ -60,19 +61,18 @@ FLINCH is presentation only. An ongoing player swing keeps its clip and receives
 visual feedback; otherwise the hit clip plays. Mob hit presentation returns to its
 current attack/locomotion independently of its uninterrupted server cooldown.
 
-Current development GLBs have three attack clips and no knockdown/get-up clips.
-The fourth attack temporarily reuses `attack_3`; the server still executes the
-fourth definition. `KnockdownVisual` uses supplied `knockdown`/`get_up` clips when
-available, otherwise a short visual fall and interpolated upright recovery. Only
-the content node rotates; collision, position and server simulation stay intact.
-Final attack_4/fall/get-up assets and native feel/timing review remain a manual
-milestone. Headless tests prove state/input authority, not animation quality.
+The local all-motion Warrior asset now supplies the real seven combo clips;
+there is no fourth-hit attack_3 reuse. `KnockdownVisual` still uses supplied
+`knockdown`/`get_up` clips when available, otherwise a short visual fall and
+interpolated upright recovery. Only content rotates; collision and authority stay
+intact. See the combo document for exact timings, asset validation and the
+remaining live manual feel review. Headless tests do not prove animation quality.
 
 ## Checks
 
 Default smoke adds one durable `hit_reactions` case: flinch, profile resistance,
 interrupt independence, bounded repeated hits, death precedence and late-join
-remaining time. Existing two-client `run-combat` covers four directional/multitarget
-hits, replicated down/get-up, AI movement/attack lock, player pending-hit cancellation,
+remaining time. Existing two-client `run-combat` covers four/six directional/multitarget
+hits and observer animation order, replicated down/get-up, AI movement/attack lock, player pending-hit cancellation,
 immune target continuity, death and respawn. Dog/warrior headless presentation
 checks verify state transitions and keep animation out of gameplay authority.

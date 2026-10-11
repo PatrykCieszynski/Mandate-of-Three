@@ -8,4 +8,3 @@ extends Resource
 @export var interrupt_attack: bool = false
 @export var impact_ms: int = 120
 @export var recovery_ms: int = 450
-@export var presentation_clip: StringName = &"attack_1"

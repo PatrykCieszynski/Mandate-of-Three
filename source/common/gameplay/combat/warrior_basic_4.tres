@@ -1,0 +1,49 @@
+[gd_resource type="Resource" script_class="BasicAttackComboDefinition" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://source/common/gameplay/combat/basic_attack_combo_definition.gd" id="1"]
+[ext_resource type="Script" path="res://source/common/gameplay/combat/basic_attack_step_definition.gd" id="2"]
+
+[sub_resource type="Resource" id="Step0"]
+script = ExtResource("2")
+animation_key = &"onehand_sword__combo_01"
+impact_ms = 254
+recovery_ms = 533
+damage_multiplier = 1.0
+reaction = 1
+reaction_duration = 0.18
+get_up_duration = 0.4
+
+[sub_resource type="Resource" id="Step1"]
+script = ExtResource("2")
+animation_key = &"onehand_sword__combo_02"
+impact_ms = 268
+recovery_ms = 543
+damage_multiplier = 1.0
+reaction = 1
+reaction_duration = 0.18
+get_up_duration = 0.4
+
+[sub_resource type="Resource" id="Step2"]
+script = ExtResource("2")
+animation_key = &"onehand_sword__combo_03"
+impact_ms = 351
+recovery_ms = 418
+damage_multiplier = 1.0
+reaction = 1
+reaction_duration = 0.18
+get_up_duration = 0.4
+
+[sub_resource type="Resource" id="Step3"]
+script = ExtResource("2")
+animation_key = &"onehand_sword__combo_04"
+impact_ms = 659
+recovery_ms = 1267
+damage_multiplier = 1.5
+reaction = 3
+reaction_duration = 1.2
+get_up_duration = 0.4
+
+[resource]
+script = ExtResource("1")
+combo_key = &"warrior_basic_4"
+steps = Array[ExtResource("2")]([SubResource("Step0"), SubResource("Step1"), SubResource("Step2"), SubResource("Step3")])

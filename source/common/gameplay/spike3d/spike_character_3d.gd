@@ -26,19 +26,20 @@ func setup(display_name: String, tint: Color) -> void:
 	shape.shape = capsule
 	shape.position.y = 0.9
 	add_child(shape)
-	player_presentation = WarriorVisual3D.new()
-	player_presentation.visual_id = &"warrior"
-	player_presentation.tint = tint
-	add_child(player_presentation)
-	var label := Label3D.new()
-	_name_label = label
-	label.text = display_name
-	label.position.y = 2.25
-	label.font_size = 48
-	label.pixel_size = 0.012
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	add_child(label)
+	if not GameMode.is_world_server():
+		player_presentation = WarriorVisual3D.new()
+		player_presentation.visual_id = &"warrior"
+		player_presentation.tint = tint
+		add_child(player_presentation)
+		var label := Label3D.new()
+		_name_label = label
+		label.text = display_name
+		label.position.y = 2.25
+		label.font_size = 48
+		label.pixel_size = 0.012
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		add_child(label)
 
 func set_level(level: int) -> void:
 	if _name_label != null: _name_label.text = "Lv %d · %s" % [level, _display_name]
@@ -83,8 +84,8 @@ func set_alive(value: bool) -> void:
 	alive = value
 	if player_presentation != null: player_presentation.set_alive(value)
 
-func play_swing(stage: int) -> void:
-	if player_presentation != null: player_presentation.play_attack(stage)
+func play_swing(animation_key: StringName, recovery_ms: int, finisher: bool = false) -> void:
+	if player_presentation != null: player_presentation.play_basic_attack(animation_key,recovery_ms)
 	# Brief sweeping ribbon; presentation only, never the damage authority.
 	var vertices := PackedVector3Array()
 	for i: int in 16:
@@ -106,7 +107,7 @@ func play_swing(stage: int) -> void:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color = Color(1, 0.8, 0.25, 0.8) if stage == BasicAttackHits.COMBO.size() else Color(0.6, 0.9, 1, 0.6)
+	material.albedo_color = Color(1, 0.8, 0.25, 0.8) if finisher else Color(0.6, 0.9, 1, 0.6)
 	slash.material_override = material
 	add_child(slash)
 	var tween := create_tween()

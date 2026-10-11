@@ -175,7 +175,7 @@ func run_server() -> void:
 	combat.dogs[1].target_peer = 0
 	combat._pending.clear()
 	combat._combo.clear()
-	combat._last_swing_ms.clear()
+	combat._combo_states.clear()
 	combat._next_attack_ms.clear()
 	combat.dogs[1].ai_enabled = true
 	place_near()
