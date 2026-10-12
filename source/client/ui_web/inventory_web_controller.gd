@@ -12,6 +12,7 @@ var session := UiCommandSession.new()
 var items := ItemUiAdapter.new()
 var npcs := NpcUiAdapter.new()
 var upgrades := UpgradeUiAdapter.new()
+var shop := ShopUiAdapter.new()
 const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
 var ui_scale: float = 1.0
 var _scale_initialized: bool = false
@@ -47,14 +48,11 @@ func setup(game_world: SpikeWorld3D) -> void:
 	npcs.context_updated.connect(_npc_state)
 	npcs.attach(world.npc_endpoint, dispatcher, session, get_tree())
 	upgrades.attach(world.upgrade_endpoint, dispatcher, session, get_tree())
+	shop.state_updated.connect(_shop_state)
+	shop.attach(world.shop_endpoint, dispatcher, session, get_tree())
 	items.attach(world.inventory_endpoint, dispatcher, session, get_tree(), func() -> bool: return storage_opened)
-	dispatcher.register_command("shop.open", NpcUiAdapter.valid_service, func(p: Dictionary) -> Dictionary: return await _shop_submit("open", p))
-	dispatcher.register_command("shop.buy", _valid_shop_buy, func(p: Dictionary) -> Dictionary: return await _shop_submit("buy", p))
 	dispatcher.register_command("npc.upgrade_item", UpgradeUiAdapter.valid_item, _drop_on_npc)
 	dispatcher.set_domain("npc_targets",{"width":0,"height":0,"targets":[]})
-	world.shop_endpoint.state_changed.connect(_shop_state)
-	world.shop_endpoint.operation_finished.connect(session.finish)
-	dispatcher.set_domain("shop", world.shop_endpoint.state)
 	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
 	dispatcher.register_command("equipment.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_equipment)
 	dispatcher.register_command("inventory.close", func(p: Dictionary) -> bool: return p.is_empty(), _close)
@@ -80,20 +78,8 @@ func _shop_state(snapshot: Dictionary) -> void:
 	if snapshot.get("active", false):
 		opened = true
 		_layout()
-	dispatcher.set_domain("shop", snapshot)
 
-static func _valid_shop_buy(p: Dictionary) -> bool:
-	if p.size() not in [3, 6] or not p.has_all(["npc_instance_id", "service_id", "offer_id"]): return false
-	if not NpcUiAdapter.valid_service({"npc_instance_id":p.npc_instance_id, "service_id":p.service_id}) or not p.offer_id is String or not GameplayContentId.valid(StringName(p.offer_id)): return false
-	if p.size() == 3: return true
-	return p.has_all(["x", "y", "page"]) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and p.page >= 0 and p.page < InventoryGrid.PAGES
 
-func _shop_submit(action: String, p: Dictionary) -> Dictionary:
-	var id: String = session.begin()
-	if id.is_empty(): return session.closed_result()
-	var position: int = int(p.page) * InventoryGrid.PAGE_CELLS + int(p.y) * InventoryGrid.COLUMNS + int(p.x) if p.has("x") else -1
-	world.shop_endpoint.request_shop.rpc_id(1, action, p.npc_instance_id, p.service_id, p.get("offer_id", ""), position, id)
-	return await session.wait(id, get_tree())
 
 func _npc_state(snapshot: Dictionary) -> void:
 	# Opening Inventory changes presentation only; Upgrade owns its transaction.
@@ -218,6 +204,7 @@ func _exit_tree() -> void:
 	items.dispose()
 	npcs.dispose()
 	upgrades.dispose()
+	shop.dispose()
 	ClientState.menu_open = false
 	if is_instance_valid(host): host.destroy_browser()
 

@@ -187,22 +187,22 @@ func _run() -> void:
 	assert(NpcUiAdapter.valid_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop"}))
 	assert(not NpcUiAdapter.valid_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop", "kind":1}))
 	var buy: Dictionary = {"npc_instance_id":"spike-blacksmith-01","service_id":"weapon_shop","offer_id":"iron_sword"}
-	assert(InventoryWebController._valid_shop_buy(buy))
+	assert(ShopUiAdapter.valid_buy(buy))
 	var exact_buy: Dictionary = buy.duplicate()
 	exact_buy.merge({"x":2,"y":3,"page":1})
-	assert(InventoryWebController._valid_shop_buy(exact_buy))
+	assert(ShopUiAdapter.valid_buy(exact_buy))
 	for field: String in ["x","y","page"]:
 		var partial: Dictionary = exact_buy.duplicate()
 		partial.erase(field)
-		assert(not InventoryWebController._valid_shop_buy(partial))
+		assert(not ShopUiAdapter.valid_buy(partial))
 		for bad: Variant in [-1,1.5,NAN,INF,"1",1000]:
 			var invalid: Dictionary = exact_buy.duplicate()
 			invalid[field]=bad
-			assert(not InventoryWebController._valid_shop_buy(invalid))
+			assert(not ShopUiAdapter.valid_buy(invalid))
 	for field: String in ["price","quantity","item_definition_id"]:
 		var invalid: Dictionary = buy.duplicate()
 		invalid[field]=1
-		assert(not InventoryWebController._valid_shop_buy(invalid))
+		assert(not ShopUiAdapter.valid_buy(invalid))
 	var configured_url: Variant = ProjectSettings.get_setting("network/api/base_url")
 	ProjectSettings.set_setting("network/api/base_url", "")
 	assert(GatewayAPI.base_url() == "http://127.0.0.1:8088")
