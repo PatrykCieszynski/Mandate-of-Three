@@ -64,24 +64,24 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	# Same entry point used by melee and proximity; every live member reacts.
 	combat.aggro_pack(combat.dogs[ids[0]].pack_instance_id,1)
-	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == "CHASE")
-	for id: int in unrelated.actor_ids: assert(combat.dogs[id].target_peer == 0 and combat.dogs[id].ai_state == "IDLE")
+	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == MobState.Value.CHASE)
+	for id: int in unrelated.actor_ids: assert(combat.dogs[id].target_peer == 0 and combat.dogs[id].ai_state == MobState.Value.IDLE)
 	# Passive dog definitions ignore proximity; opt-in content still recruits its pack.
 	for id: int in ids:
-		combat.dogs[id].ai_state = "IDLE"
+		combat.dogs[id].ai_state = MobState.Value.IDLE
 		combat.dogs[id].target_peer = 0
 	combat.dogs[ids[0]].position = pack.anchor
 	combat._tick_dog(combat.dogs[ids[0]],1.0/60,0)
-	for id: int in ids: assert(combat.dogs[id].ai_state == "IDLE" and combat.dogs[id].target_peer == 0, "Passive dogs ignore nearby players")
+	for id: int in ids: assert(combat.dogs[id].ai_state == MobState.Value.IDLE and combat.dogs[id].target_peer == 0, "Passive dogs ignore nearby players")
 	combat.dogs[ids[0]].proximity_aggro = true
 	combat._tick_dog(combat.dogs[ids[0]],1.0/60,0)
-	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == "CHASE")
+	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == MobState.Value.CHASE)
 	var member := combat.dogs[ids[0]]
 	member.hp = 1
 	member.contributions[1] = 12
 	member.position = Vector3(11,0,0)
 	combat._tick_dog(member,1.0/60,1)
-	assert(member.ai_state == "RETURN" and member.target_peer == 0)
+	assert(member.ai_state == MobState.Value.RETURN and member.target_peer == 0)
 	assert(combat._horizontal_distance(member.return_target,pack.anchor) <= pack.wander_radius)
 	var return_point: Vector3 = member.return_target
 	combat._tick_dog(member,1.0/60,2)
@@ -90,13 +90,13 @@ func _ready() -> void:
 	assert(combat.dogs[ids[1]].return_target != return_point, "Members have independent return destinations")
 	member.position = member.return_target
 	combat._tick_dog(member,1.0/60,2)
-	assert(member.hp == member.max_hp and member.ai_state == "IDLE" and member.target_peer == 0 and member.contributions.is_empty())
-	member.ai_state = "CHASE"
+	assert(member.hp == member.max_hp and member.ai_state == MobState.Value.IDLE and member.target_peer == 0 and member.contributions.is_empty())
+	member.ai_state = MobState.Value.CHASE
 	member.target_peer = 1
 	hero.position = Vector3(30,0,0)
 	member.position = Vector3(8,0,0)
 	combat._tick_dog(member,1.0/60,3)
-	assert(member.ai_state == "RETURN", "Target outside pack leash triggers return")
+	assert(member.ai_state == MobState.Value.RETURN, "Target outside pack leash triggers return")
 	world.characters.clear()
 	for mob: SpikeWildDog3D in combat.dogs.values(): mob.ai_enabled = false
 	var killed_id := member.mob_instance_id
@@ -135,12 +135,12 @@ func _ready() -> void:
 	assert(combat.dogs.size() == 50)
 	for mob: SpikeWildDog3D in combat.dogs.values():
 		mob.ai_enabled = true
-		mob.ai_state = "IDLE"
+		mob.ai_state = MobState.Value.IDLE
 		mob.wander_at_ms = 0
 	for i: int in 20:
 		combat._tick_mobs(1.0/60,11000+i*17)
 		for mob: SpikeWildDog3D in combat.dogs.values():
-			assert(mob.position.is_finite() and mob.hp > 0 and mob.ai_state in ["IDLE","WANDER"])
+			assert(mob.position.is_finite() and mob.hp > 0 and mob.ai_state in [MobState.Value.IDLE,MobState.Value.WANDER])
 		await get_tree().physics_frame
 	measure_snapshots(combat,50)
 	combat.create_pack([entry(wild,50)],Vector3.ZERO,1,2,8,1)
@@ -175,11 +175,11 @@ func measure_snapshots(combat: SpikeCombat3D, count: int) -> void:
 		assert(record[MobSnapshot.Field.POSITION] == mob.position and record[MobSnapshot.Field.YAW] == mob.rotation.y)
 		assert(record[MobSnapshot.Field.HP] == mob.hp and record[MobSnapshot.Field.SOURCE_METIN] == mob.source_metinstone_id)
 		assert(typeof(record[MobSnapshot.Field.STATE]) == TYPE_INT)
-		assert(MobSnapshot.state_name(record[MobSnapshot.Field.STATE]) == mob.ai_state)
+		assert(record[MobSnapshot.Field.STATE] == mob.ai_state)
 	var probe: SpikeWildDog3D = combat.dogs.values()[0]
 	var original_state := probe.ai_state
-	for name: String in MobSnapshot.STATE_NAMES.values():
-		probe.ai_state = name
+	for name: String in MobState.NAMES.values():
+		probe.ai_state = MobState.Value[name]
 		assert(MobSnapshot.state_name(MobSnapshot.capture(probe)[MobSnapshot.Field.STATE]) == name)
 	probe.ai_state = original_state
 	for key: StringName in [&"wild_dog",&"feral_dog",&"hollow_hound",&"metin_hound_elite"]:

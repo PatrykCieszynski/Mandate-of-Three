@@ -160,7 +160,7 @@ func run_server() -> void:
 	dog.knockback_velocity = Vector3.ZERO
 	dog.stunned_until_ms = 0
 	dog.ai_enabled = true
-	dog.ai_state = "CHASE"
+	dog.ai_state = MobState.Value.CHASE
 	dog.target_peer = hero
 	world.characters[hero].position = Vector3(0, 0, -7)
 	var crossed_scenery: bool = false
@@ -171,8 +171,8 @@ func run_server() -> void:
 	check(crossed_scenery, "direct chase passes through scenery")
 	dog.hp = 50
 	world.characters[hero].position = Vector3(-12, 0, 12)
-	await wait_until(func() -> bool: return dog.ai_state == "RETURN")
-	await wait_until(func() -> bool: return dog.ai_state == "IDLE")
+	await wait_until(func() -> bool: return dog.ai_state == MobState.Value.RETURN)
+	await wait_until(func() -> bool: return dog.ai_state == MobState.Value.IDLE)
 	check(dog.hp == 120 and dog.position.distance_to(dog.home) < 0.5, "straight-line return heals at anchor")
 	world.characters[hero].position = dog.home + Vector3(0, 0, 1)
 	combat.health[hero] = 6
@@ -181,7 +181,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return not combat.attack_runtime(hero).pending_impact.is_empty())
 	dog.last_attack_ms = -10000
 	dog.target_peer = hero
-	dog.ai_state = "ATTACK"
+	dog.ai_state = MobState.Value.ATTACK
 	dog.ai_enabled = true
 	await wait_until(func() -> bool: return combat.health[hero] == 0)
 	check(not combat.can_move(hero) and combat.attack_runtime(hero).pending_impact.is_empty() and combat.attack_runtime(hero).display_combo_step == 0, "death interrupts attack and movement")

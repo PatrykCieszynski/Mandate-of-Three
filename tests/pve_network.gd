@@ -143,26 +143,26 @@ func run_server() -> void:
 	var combat: SpikeCombat3D = world.combat_endpoint
 	for id: int in combat.dogs:
 		if id != 1:
-			combat.dogs[id].ai_state = "DISABLED"
+			combat.dogs[id].ai_state = MobState.Value.DISABLED
 			combat.dogs[id].collision_layer = 0
 	place_far()
 	combat.dogs[1].position = SpikeCombat3D.HOME
-	combat.dogs[1].ai_state = "IDLE"
+	combat.dogs[1].ai_state = MobState.Value.IDLE
 	combat.dogs[1].target_peer = 0
 	await get_tree().create_timer(0.3).timeout
-	check(combat.dogs[1].ai_state == "IDLE", "idle outside aggro")
+	check(combat.dogs[1].ai_state == MobState.Value.IDLE, "idle outside aggro")
 	for id: int in world.characters: world.characters[id].position = SpikeCombat3D.HOME + Vector3(0, 0, 5)
 	fixture_checkpoint = "CHASE"
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "CHASE")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == MobState.Value.CHASE)
 	fixture_checkpoint = "ATTACK"
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "ATTACK")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == MobState.Value.ATTACK)
 	check(combat.health.values().min() < 100, "server mob attack")
 	combat.dogs[1].hp = 50
 	place_far()
 	fixture_checkpoint = "RETURN"
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "RETURN")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == MobState.Value.RETURN)
 	fixture_checkpoint = "IDLE"
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "IDLE")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == MobState.Value.IDLE)
 	check(combat.dogs[1].hp == SpikeCombat3D.MOB_HP and combat.dogs[1].contributions.is_empty(), "return heals and resets encounter")
 	set_phase("RANGE")
 	await get_tree().create_timer(0.5).timeout
@@ -173,13 +173,13 @@ func run_server() -> void:
 	for id: int in world.characters: combat.attack_runtime(id).pending_impact = {}
 	for id: int in world.characters: combat.attack_runtime(id).next_attack_ms = 0
 	combat.dogs[1].position = Vector3(-1.5, 0, -3.5)
-	combat.dogs[1].ai_state = "CHASE"
+	combat.dogs[1].ai_state = MobState.Value.CHASE
 	for id: int in world.characters: world.characters[id].position = Vector3(-1.5, 0, -1.6)
 	await get_tree().create_timer(0.4).timeout
 	check(combat.attack_runtime(world.characters.keys()[0]).pending_impact.is_empty(), "obstructed swing reached its impact")
 	check(combat.dogs[1].hp == SpikeCombat3D.MOB_HP, "attack through obstacle denied")
 	combat.dogs[1].position = SpikeCombat3D.HOME
-	combat.dogs[1].ai_state = "IDLE"
+	combat.dogs[1].ai_state = MobState.Value.IDLE
 	combat.dogs[1].target_peer = 0
 	for id: int in world.characters: combat.attack_runtime(id).pending_impact = {}
 	for id: int in world.characters: combat.attack_runtime(id).display_combo_step = 0
@@ -189,7 +189,7 @@ func run_server() -> void:
 	place_near()
 	var fight_started_ms: int = Time.get_ticks_msec()
 	set_phase("FIGHT")
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == MobState.Value.DEAD)
 	check(Time.get_ticks_msec() - fight_started_ms >= 1800, "spam/replay cannot bypass server combo recovery")
 	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
 	check(combat.dogs[1].contributions.size() == 2 and world.ground_loot.drops.size() == 1, "two attackers, one death and one drop")
@@ -261,7 +261,7 @@ func _physics_process(_delta: float) -> void:
 	if not aim_fixture_fight or not GameMode.is_world_server() or phase_name!="FIGHT" or world==null: return
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var dog: SpikeWildDog3D = combat.dogs.get(1)
-	if dog==null or dog.ai_state=="DEAD": return
+	if dog==null or dog.ai_state==MobState.Value.DEAD: return
 	for id: int in world.characters:
 		var body: SpikeCharacter3D = world.characters[id]
 		var offset: Vector3 = dog.position-body.position
@@ -279,7 +279,7 @@ func _process(delta: float) -> void:
 		register_ready.rpc_id(1)
 	var combat: SpikeCombat3D = world.combat_endpoint
 	saw_damage = saw_damage or combat.dogs[1].hp < SpikeCombat3D.MOB_HP
-	saw_death = saw_death or combat.dogs[1].ai_state == "DEAD"
+	saw_death = saw_death or combat.dogs[1].ai_state == MobState.Value.DEAD
 	saw_loot = saw_loot or not combat.state.drops.is_empty()
 	accumulator += delta
 	if accumulator >= 0.05 and phase_name in ["RANGE", "FIGHT"]:

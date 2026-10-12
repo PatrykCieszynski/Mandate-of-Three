@@ -37,12 +37,12 @@ func run_server() -> void:
 	currency.set_physics_process(false) # Explicit phases control the live autoloot tick.
 	for dog: SpikeWildDog3D in combat.dogs.values():
 		dog.ai_enabled = false
-		dog.ai_state = "DISABLED"
+		dog.ai_state = MobState.Value.DISABLED
 		dog.collision_layer = 0
 	place_far()
 	var dog: SpikeWildDog3D = combat.dogs[1]
 	dog.hp = 0
-	dog.ai_state = "IDLE"
+	dog.ai_state = MobState.Value.IDLE
 	dog.contributions = {owner:20, other_owner:15}
 	dog.contribution_players[owner] = server.connected_players[hero]
 	combat._die(dog,Time.get_ticks_msec())

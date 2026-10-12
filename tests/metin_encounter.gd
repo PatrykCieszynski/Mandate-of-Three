@@ -48,10 +48,10 @@ func _check_target_identity() -> void:
 	assert(combat.selected_target.is_empty() and combat._resolve_target({"kind":&"mob","id":17}) == null, "Replacement identity never revives old selection")
 	combat.select_target({"kind":&"mob","id":18})
 	combat.autoattack = true
-	dog.ai_state = "DISABLED"
+	dog.ai_state = MobState.Value.DISABLED
 	combat._clear_invalid_target()
 	assert(combat.selected_target.is_empty() and not combat.autoattack)
-	dog.ai_state = "IDLE"
+	dog.ai_state = MobState.Value.IDLE
 	combat.select_target({"kind":&"mob","id":18})
 	combat.autoattack = true
 	combat.dogs.erase(18)

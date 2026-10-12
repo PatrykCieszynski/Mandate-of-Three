@@ -46,7 +46,7 @@ func run() -> void:
 		var nearest: float = INF
 		var point: Vector3 = Vector3.ZERO
 		for dog: SpikeWildDog3D in combat.dogs.values():
-			if dog.ai_state in ["DEAD", "DISABLED"]: continue
+			if dog.ai_state in [MobState.Value.DEAD, MobState.Value.DISABLED]: continue
 			var distance: float = world.characters[world.local_peer].target_position.distance_to(dog.target_position)
 			if distance < nearest:
 				nearest = distance

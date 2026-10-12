@@ -31,7 +31,7 @@ func run_server() -> void:
 	encounter.definition.respawn_seconds = 5
 	encounter.runtime.definition = encounter.definition
 	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():
-		dog.ai_state = "DISABLED"
+		dog.ai_state = MobState.Value.DISABLED
 		dog.ai_enabled = false
 		dog.collision_layer = 0
 	# A real melee RPC hits one mixed-pack member and recruits its siblings.
@@ -53,7 +53,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return victim.hp < victim.max_hp)
 	set_phase("WAIT")
 	await _settle_attacks()
-	for id: int in pack.actor_ids: check(combat.dogs[id].target_peer == attacker and combat.dogs[id].ai_state == "CHASE","melee recruits entire mixed pack")
+	for id: int in pack.actor_ids: check(combat.dogs[id].target_peer == attacker and combat.dogs[id].ai_state == MobState.Value.CHASE,"melee recruits entire mixed pack")
 	check(combat.dogs[other_pack.actor_ids[0]].target_peer == 0,"unrelated pack stays idle")
 	for id: int in pack.actor_ids.duplicate() + other_pack.actor_ids.duplicate(): combat._remove_mob(id)
 	combat.packs.erase(pack.pack_instance_id)

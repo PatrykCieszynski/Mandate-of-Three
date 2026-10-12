@@ -5,8 +5,6 @@ var services: MandateWorldServices
 
 const MOB_HP: int = 120
 const HOME: Vector3 = Vector3(-4, 0, 0)
-const AGGRO: float = 6.0
-const MOB_REACH: float = 1.65
 
 signal swing_received(peer_id: int, animation_key: StringName, step_index: int)
 signal feedback_received(result: Dictionary)
@@ -146,9 +144,9 @@ func aggro_pack(pack_id: int, peer_id: int) -> void:
 	if _horizontal_distance(_world.characters[peer_id].position,pack.anchor) > pack.leash_radius: return
 	for id: int in pack.actor_ids:
 		var dog: SpikeWildDog3D = dogs.get(id)
-		if dog == null or dog.ai_state in ["DEAD","DISABLED"]: continue
+		if dog == null or dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: continue
 		dog.target_peer = peer_id
-		dog.ai_state = "CHASE"
+		dog.ai_state = MobState.Value.CHASE
 
 static func _horizontal_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x-b.x,a.z-b.z).length()
@@ -164,7 +162,7 @@ func _remove_mob(id: int) -> void:
 func _tick_mobs(delta: float, now: int) -> void:
 	for id: int in dogs.keys():
 		var dog: SpikeWildDog3D = dogs[id]
-		if (dog.expires_at > 0 and now >= dog.expires_at) or (dog.ai_state == "DEAD" and now >= dog.dead_until_ms):
+		if (dog.expires_at > 0 and now >= dog.expires_at) or (dog.ai_state == MobState.Value.DEAD and now >= dog.dead_until_ms):
 			_remove_mob(id)
 		else: _tick_dog(dog,delta,now)
 	for pack_id: int in packs.keys():
@@ -209,7 +207,7 @@ func remove_peer(peer_id: int) -> void:
 	for dog: SpikeWildDog3D in dogs.values():
 		if dog.target_peer == peer_id:
 			dog.target_peer = 0
-			if dog.ai_state not in ["DEAD", "DISABLED"]: _begin_return(dog)
+			if dog.ai_state not in [MobState.Value.DEAD, MobState.Value.DISABLED]: _begin_return(dog)
 
 func _owner(peer_id: int) -> int:
 	var resource: PlayerResource = services.player_for_peer(peer_id)
@@ -283,7 +281,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 
 
 func _die(dog: SpikeWildDog3D, now: int) -> void:
-	if dog.ai_state == "DEAD": return
+	if dog.ai_state == MobState.Value.DEAD: return
 	dog.die(now)
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if dog.respawn_enabled and pack != null:
@@ -455,19 +453,19 @@ func receive_hurt(peer_id: int, result: Dictionary) -> void:
 func _begin_return(dog: SpikeWildDog3D) -> void:
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	dog.return_target = pack.random_point(pack.wander_radius) if pack != null else dog.home
-	dog.ai_state = "RETURN"
+	dog.ai_state = MobState.Value.RETURN
 	dog.target_peer = 0
 
 func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
-	if dog.ai_state in ["DEAD","DISABLED"]: return
+	if dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: return
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if pack == null: return
 	if dog.hit_reaction.locked(now) or dog.knockback_active():
 		dog.move_dog(delta,Vector2.ZERO,now)
 		return
 	if not dog.ai_enabled: return
-	if dog.proximity_aggro and dog.ai_state in ["IDLE","WANDER"]:
-		var nearest: float = AGGRO
+	if dog.proximity_aggro and dog.ai_state in [MobState.Value.IDLE,MobState.Value.WANDER]:
+		var nearest: float = dog.definition.aggro_radius
 		var target: int = 0
 		for peer_id: int in _world.characters:
 			var distance := _horizontal_distance(dog.position,_world.characters[peer_id].position)
@@ -475,39 +473,39 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 				target = peer_id
 				nearest = distance
 		if target != 0: aggro_pack(pack.pack_instance_id,target)
-	if dog.ai_state in ["CHASE","ATTACK"]:
+	if dog.ai_state in [MobState.Value.CHASE,MobState.Value.ATTACK]:
 		if not is_player_alive(dog.target_peer) or _horizontal_distance(dog.position,pack.anchor) > pack.leash_radius or _horizontal_distance(_world.characters[dog.target_peer].position,pack.anchor) > pack.leash_radius:
 			_begin_return(dog)
 	var direction := Vector2.ZERO
-	if dog.ai_state in ["CHASE","ATTACK"]:
+	if dog.ai_state in [MobState.Value.CHASE,MobState.Value.ATTACK]:
 		var body: SpikeCharacter3D = _world.characters[dog.target_peer]
 		var offset: Vector3 = body.position - dog.position
-		if _horizontal_distance(dog.position,body.position) > MOB_REACH or absf(offset.y) > 1.2 or not _world.has_line_of_sight(dog.position,body.position):
-			dog.ai_state = "CHASE"
+		if _horizontal_distance(dog.position,body.position) > dog.definition.attack_reach or absf(offset.y) > 1.2 or not _world.has_line_of_sight(dog.position,body.position):
+			dog.ai_state = MobState.Value.CHASE
 			direction = Vector2(offset.x,offset.z).normalized()
 		else:
-			dog.ai_state = "ATTACK"
+			dog.ai_state = MobState.Value.ATTACK
 			dog.rotation.y = atan2(-offset.x,-offset.z)
-			if now >= dog.stunned_until_ms and now - dog.last_attack_ms >= 1200:
+			if now >= dog.stunned_until_ms and now - dog.last_attack_ms >= int(dog.definition.attack_interval*1000):
 				dog.last_attack_ms = now
-				hurt_player(dog.target_peer,dog.attack_damage,now,BasicAttackHits.MOB_MELEE,offset)
-	elif dog.ai_state == "RETURN":
+				hurt_player(dog.target_peer,dog.attack_damage,now,dog.definition.basic_attack,offset)
+	elif dog.ai_state == MobState.Value.RETURN:
 		if _horizontal_distance(dog.position,dog.return_target) < 0.4:
 			dog.hp = dog.max_hp
 			dog.contributions.clear()
 			dog.contribution_players.clear()
 			dog.target_peer = 0
-			dog.ai_state = "IDLE"
+			dog.ai_state = MobState.Value.IDLE
 			dog.knockback_velocity = Vector3.ZERO
 			dog.wander_at_ms = now + pack.rng.randi_range(1000,4000)
 		else:
 			direction = Vector2(dog.return_target.x-dog.position.x,dog.return_target.z-dog.position.z).normalized()
-	elif dog.ai_state == "IDLE" and pack.wander_radius > 0 and now >= dog.wander_at_ms:
+	elif dog.ai_state == MobState.Value.IDLE and pack.wander_radius > 0 and now >= dog.wander_at_ms:
 		dog.wander_target = pack.random_point(pack.wander_radius)
-		dog.ai_state = "WANDER"
-	elif dog.ai_state == "WANDER":
+		dog.ai_state = MobState.Value.WANDER
+	elif dog.ai_state == MobState.Value.WANDER:
 		if _horizontal_distance(dog.position,dog.wander_target) < 0.4:
-			dog.ai_state = "IDLE"
+			dog.ai_state = MobState.Value.IDLE
 			dog.wander_at_ms = now + pack.rng.randi_range(2000,5000)
 		else:
 			direction = Vector2(dog.wander_target.x-dog.position.x,dog.wander_target.z-dog.position.z).normalized()
@@ -650,7 +648,7 @@ func _resolve_target(target: Dictionary) -> Node3D:
 	match target.get("kind"):
 		&"mob":
 			var dog: SpikeWildDog3D = dogs.get(int(target.get("id",0)))
-			if not is_instance_valid(dog) or dog.is_queued_for_deletion() or dog.hp <= 0 or dog.ai_state in ["DEAD","DISABLED"]: return null
+			if not is_instance_valid(dog) or dog.is_queued_for_deletion() or dog.hp <= 0 or dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: return null
 			return dog
 		&"metin":
 			var encounter: MetinEncounter = _world.metin_encounter

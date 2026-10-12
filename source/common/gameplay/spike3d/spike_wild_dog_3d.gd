@@ -27,7 +27,7 @@ var wander_at_ms: int = 0
 var ai_enabled: bool = true
 var home: Vector3
 var hp: int = MAX_HP
-var ai_state: String = "IDLE"
+var ai_state: MobState.Value = MobState.Value.IDLE
 var target_peer: int = 0
 var dead_until_ms: int = 0
 var contributions: Dictionary[int, int] = {}
@@ -108,7 +108,7 @@ func move_dog(delta: float, direction: Vector2, now: int) -> void:
 	collision_mask = regular_mask
 
 func die(now: int) -> void:
-	ai_state = "DEAD"
+	ai_state = MobState.Value.DEAD
 	hit_reaction.clear()
 	target_peer = 0
 	dead_until_ms = now + 6000
@@ -119,17 +119,17 @@ func die(now: int) -> void:
 func present_snapshot(snapshot: Array) -> void:
 	var previous_state := ai_state
 	hp = snapshot[MobSnapshot.Field.HP]
-	ai_state = MobSnapshot.state_name(snapshot[MobSnapshot.Field.STATE])
-	var active := ai_state not in ["DEAD", "DISABLED"]
+	ai_state = MobState.from_wire(int(snapshot[MobSnapshot.Field.STATE]))
+	var active := ai_state not in [MobState.Value.DEAD, MobState.Value.DISABLED]
 	# The corpse is presentation only. Collision disables immediately as before.
-	visible = ai_state != "DISABLED"
+	visible = ai_state != MobState.Value.DISABLED
 	collision_layer = 4 if active else 0
 	name_label.visible = active
 	hp_label.visible = active and _selected
 	_hp_bar.visible = active
 	_hp_fill.visible = active
-	if ai_state == "DEAD" and previous_state != "DEAD": presentation.play_death()
-	elif active and previous_state in ["DEAD", "DISABLED"]: presentation.reset_alive()
+	if ai_state == MobState.Value.DEAD and previous_state != MobState.Value.DEAD: presentation.play_death()
+	elif active and previous_state in [MobState.Value.DEAD, MobState.Value.DISABLED]: presentation.reset_alive()
 	presentation.set_hit_lock(snapshot[MobSnapshot.Field.DOWN_REMAINING]/1000.0,snapshot[MobSnapshot.Field.GET_UP_REMAINING]/1000.0)
 	apply_snapshot(snapshot[MobSnapshot.Field.POSITION], snapshot[MobSnapshot.Field.YAW])
 	hp_label.text = "%d / %d" % [hp, max_hp]
@@ -139,14 +139,14 @@ func interpolate(delta: float) -> void:
 	var previous_position := position
 	super.interpolate(delta)
 	var moving := Vector2(position.x - previous_position.x, position.z - previous_position.z).length() > delta * 0.1
-	presentation.set_locomotion(ai_state, moving)
+	presentation.set_locomotion(MobState.name_for(ai_state), moving)
 
 func play_hit() -> void:
 	presentation.play_hit()
 
 func mark_selected(selected: bool) -> void:
 	_selected = selected
-	if hp_label != null: hp_label.visible = selected and ai_state not in ["DEAD","DISABLED"]
+	if hp_label != null: hp_label.visible = selected and ai_state not in [MobState.Value.DEAD,MobState.Value.DISABLED]
 	if name_label != null: name_label.modulate = Color("ffe291") if selected else Color.WHITE
 
 func present_hit_lock(down_ms: int, get_up_ms: int) -> void:

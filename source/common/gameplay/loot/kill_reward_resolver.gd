@@ -1,7 +1,6 @@
 class_name KillRewardResolver
 extends RefCounted
 ## Only kill rewards: contribution winner and the current prototype drop policy.
-const EXPERIENCE_REWARD: int = 20
 var _services: MandateWorldServices
 var _ground: GroundLootSystem
 var _currency: SpikeCurrency3D
@@ -24,7 +23,7 @@ func handle_mob_death(mob: SpikeWildDog3D, now: int) -> void:
 	var owner_id := owner_for_contributions(mob.contributions)
 	spawn_reward(mob.position,owner_id,now)
 	var player := _services.current_player(owner_id,mob.contribution_players.get(owner_id))
-	if owner_id>0 and player!=null and _services.progression()!=null: _services.progression().award_experience(player,EXPERIENCE_REWARD)
+	if owner_id>0 and player!=null and _services.progression()!=null: _services.progression().award_experience(player,mob.definition.experience_reward)
 
 func spawn_reward(position: Vector3, owner_id: int, now: int, yang: int = SpikeCurrency3D.DOG_YANG) -> void:
 	var owner_name := _ground.owner_name_for_owner(owner_id)

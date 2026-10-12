@@ -75,13 +75,13 @@ func _ready() -> void:
 			check(roots_checked == 1,"root position track found")
 		check(view.player.get_animation(&"idle").loop_mode == Animation.LOOP_LINEAR,"idle loops")
 		check(view.player.get_animation(&"run").loop_mode == Animation.LOOP_LINEAR,"run loops")
-	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,0,MobSnapshot.State.DEAD,dog.mob_key,"",0,0])
-	check(dog.ai_state == "DEAD" and dog.collision_layer == 0,"death disables collision immediately")
+	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,0,MobState.Value.DEAD,dog.mob_key,"",0,0])
+	check(dog.ai_state == MobState.Value.DEAD and dog.collision_layer == 0,"death disables collision immediately")
 	check(view.animation_state == &"death" and view.visible,"death presentation")
-	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,0,MobSnapshot.State.DEAD,dog.mob_key,"",0,0])
+	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,0,MobState.Value.DEAD,dog.mob_key,"",0,0])
 	view._process(1.1)
 	check(not view.visible,"corpse hides after presentation without affecting server respawn")
-	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,120,MobSnapshot.State.IDLE,dog.mob_key,"",0,0])
+	dog.present_snapshot([dog.mob_instance_id,dog.position,dog.rotation.y,120,MobState.Value.IDLE,dog.mob_key,"",0,0])
 	check(view.visible and dog.collision_layer == 4,"respawn restores presentation and original collision")
 	check(dog.position == position_before and dog.rotation.y == yaw_before,"clips never move gameplay body")
 	check(dog.home == Vector3(3,0,2) and dog.knockback_velocity == Vector3.ZERO,"visuals do not mutate gameplay state")
@@ -103,7 +103,7 @@ func _ready() -> void:
 	var snapshot_world := SpikeWorld3D.new()
 	var combat := SpikeCombat3D.new()
 	combat._world = snapshot_world
-	var record: Array = [101,Vector3(4,0,2),0.5,80,MobSnapshot.State.IDLE,&"feral_dog","stone-test",0,0]
+	var record: Array = [101,Vector3(4,0,2),0.5,80,MobState.Value.IDLE,&"feral_dog","stone-test",0,0]
 	combat._receive_mob_snapshots([record])
 	var replicated: SpikeWildDog3D = combat.dogs[101]
 	check(replicated.definition == MobDefinitions.FERAL_DOG and replicated.max_hp == MobDefinitions.FERAL_DOG.max_hp and replicated.title == MobDefinitions.FERAL_DOG.display_name, "new actor uses local presentation definition")

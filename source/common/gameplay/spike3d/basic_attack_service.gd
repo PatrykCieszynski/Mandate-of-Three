@@ -183,7 +183,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 					results.append({"id":-1,"damage":previous_hp-metin.runtime.hp,"reaction":HitReaction.Type.NONE,"duration":0.0,"get_up_duration":0.0,"target_kind":"metin","target_id":metin.runtime.stone_instance_id})
 			continue
 		var dog: SpikeWildDog3D = hit.collider as SpikeWildDog3D
-		if dog == null or hit_set.has(dog.mob_id) or dog.ai_state in ["DEAD", "RETURN", "DISABLED"]: continue
+		if dog == null or hit_set.has(dog.mob_id) or dog.ai_state in [MobState.Value.DEAD, MobState.Value.RETURN, MobState.Value.DISABLED]: continue
 		var offset: Vector3 = dog.position - body.position
 		var horizontal := Vector3(offset.x, 0, offset.z)
 		trace_tests += 1

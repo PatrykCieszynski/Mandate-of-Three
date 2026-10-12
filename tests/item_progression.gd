@@ -43,7 +43,7 @@ func run_server() -> void:
 	for dog: SpikeWildDog3D in combat.dogs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
-			dog.ai_state = "DISABLED"
+			dog.ai_state = MobState.Value.DISABLED
 			dog.collision_layer = 0
 	world.characters[hero].position = Vector3(0, 0, 3)
 	world.characters[hero].rotation.y = 0
@@ -63,7 +63,7 @@ func run_server() -> void:
 	set_phase("WAIT")
 	await get_tree().create_timer(0.5).timeout
 	set_phase("FIGHT", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == MobState.Value.DEAD)
 	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
 	for ticket: Dictionary in combat.packs[combat.dogs[1].pack_instance_id].replacements: ticket.at = Time.get_ticks_msec() + 60000
 	set_phase("WAIT")
@@ -141,7 +141,7 @@ func _process(delta: float) -> void:
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var inventory: SpikeInventory3D = world.inventory_endpoint
 	saw_damage = saw_damage or (combat.dogs.has(1) and combat.dogs[1].hp < 120)
-	saw_death = saw_death or (combat.dogs.has(1) and combat.dogs[1].ai_state == "DEAD")
+	saw_death = saw_death or (combat.dogs.has(1) and combat.dogs[1].ai_state == MobState.Value.DEAD)
 	saw_loot = saw_loot or not combat.state.drops.is_empty()
 	accumulator += delta
 	if phase_name == "FIGHT" and accumulator >= 0.05:

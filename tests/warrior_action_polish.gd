@@ -142,7 +142,7 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikeCharacter3D, target:
 		dog.hit_reaction.clear()
 		dog.knockback_velocity = Vector3.ZERO
 	target.collision_layer = 4
-	target.ai_state = "IDLE"
+	target.ai_state = MobState.Value.IDLE
 	target.hp = target.max_hp
 	body.hit_reaction.clear()
 	body.knockback_velocity = Vector3.ZERO

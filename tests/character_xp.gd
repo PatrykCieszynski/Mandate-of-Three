@@ -34,7 +34,7 @@ func run_server() -> void:
 	for dog: SpikeWildDog3D in combat.dogs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
-			dog.ai_state = "DISABLED"
+			dog.ai_state = MobState.Value.DISABLED
 			dog.collision_layer = 0
 	for id: int in world.characters:
 		world.characters[id].position = Vector3(-0.3 if id == hero else 0.3, 0, 3)
@@ -51,7 +51,7 @@ func run_server() -> void:
 	set_phase("WAIT")
 	check(store.get_player(owner_id).experience == 0, "hitting a living dog gives no XP")
 	set_phase("FINISH", other)
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
+	await wait_until(func() -> bool: return combat.dogs[1].ai_state == MobState.Value.DEAD)
 	set_phase("WAIT")
 	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
 	check(combat.dogs[1].contributions[owner_id] == 20 and combat.dogs[1].contributions[other_id] == 15, "actual damage contribution, including clamped final hit")
@@ -70,11 +70,11 @@ func run_server() -> void:
 		world.characters[hero].position = Vector3(0,0,3)
 		world.characters[hero].rotation.y = 0
 		dog.position = Vector3(0, 0, 1.4)
-		dog.ai_state = "IDLE"
+		dog.ai_state = MobState.Value.IDLE
 		dog.collision_layer = 4
 		dog.hp = 10
 		set_phase("HIT", hero)
-		await wait_until(func() -> bool: return dog.ai_state == "DEAD")
+		await wait_until(func() -> bool: return dog.ai_state == MobState.Value.DEAD)
 		dog.dead_until_ms = Time.get_ticks_msec() + 60000
 		set_phase("WAIT")
 	var player: PlayerResource = server.connected_players[hero]
