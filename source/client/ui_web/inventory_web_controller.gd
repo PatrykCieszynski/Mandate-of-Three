@@ -8,9 +8,7 @@ var world: SpikeWorld3D
 var opened: bool = false
 var equipment_opened: bool = false
 var storage_opened: bool = false
-var _sequence: int = 0
-var _pending_commands: Dictionary[String, Dictionary] = {}
-var _request_epoch: String = Crypto.new().generate_random_bytes(8).hex_encode()
+var session := UiCommandSession.new()
 const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
 var ui_scale: float = 1.0
 var _scale_initialized: bool = false
@@ -36,9 +34,9 @@ func setup(game_world: SpikeWorld3D) -> void:
 	add_child(dispatcher)
 	host.message_received.connect(bridge.receive)
 	host.navigation_started.connect(bridge.reset_transport)
-	host.navigation_started.connect(func() -> void: _cancel_pending("ui_reload"))
+	host.navigation_started.connect(func() -> void: session.cancel("ui_reload"))
 	Client.connection_changed.connect(func(connected: bool) -> void:
-		if not connected: _cancel_pending("disconnected"))
+		if not connected: session.cancel("disconnected"))
 	bridge.ui_ready.connect(func() -> void: bridge.send("ui.tooltip_details", {"alt": _tooltip_alt}))
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
@@ -53,14 +51,14 @@ func setup(game_world: SpikeWorld3D) -> void:
 	dispatcher.register_command("upgrade.execute", _valid_upgrade, func(p: Dictionary) -> Dictionary: return await _upgrade_submit("upgrade", p))
 	dispatcher.register_command("npc.upgrade_item", _valid_upgrade_drop, _drop_on_npc)
 	world.upgrade_endpoint.state_changed.connect(func(snapshot: Dictionary) -> void: dispatcher.set_domain("upgrade",snapshot))
-	world.upgrade_endpoint.operation_finished.connect(_operation_finished)
+	world.upgrade_endpoint.operation_finished.connect(session.finish)
 	dispatcher.set_domain("upgrade",world.upgrade_endpoint.state)
 	dispatcher.set_domain("npc_targets",{"width":0,"height":0,"targets":[]})
 	world.shop_endpoint.state_changed.connect(_shop_state)
-	world.shop_endpoint.operation_finished.connect(_operation_finished)
+	world.shop_endpoint.operation_finished.connect(session.finish)
 	dispatcher.set_domain("shop", world.shop_endpoint.state)
 	world.npc_endpoint.state_changed.connect(_npc_state)
-	world.npc_endpoint.operation_finished.connect(_operation_finished)
+	world.npc_endpoint.operation_finished.connect(session.finish)
 	_npc_state(world.npc_endpoint.state)
 	dispatcher.register_command("storage.transfer", _valid_storage, _storage_transfer)
 	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
@@ -74,7 +72,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	host.resized.connect(_layout)
 	host.failure.connect(_failure)
 	world.inventory_endpoint.state_changed.connect(_inventory)
-	world.inventory_endpoint.operation_finished.connect(_operation_finished)
+	world.inventory_endpoint.operation_finished.connect(session.finish)
 	world.currency_endpoint.state_changed.connect(_wallet)
 	_inventory(world.inventory_endpoint.state)
 	_wallet(world.currency_endpoint.state)
@@ -91,9 +89,10 @@ static func _valid_upgrade_drop(p: Dictionary) -> bool:
 	return _valid_upgrade(p)
 
 func _upgrade_submit(action: String, p: Dictionary) -> Dictionary:
-	var id: String = _begin_command()
+	var id: String = session.begin()
+	if id.is_empty(): return session.closed_result()
 	world.upgrade_endpoint.request_upgrade.rpc_id(1,action,p.npc_instance_id,p.service_id,p.id,int(p.revision),id)
-	return await _wait_command(id)
+	return await session.wait(id, get_tree())
 
 func _drop_on_npc(p: Dictionary) -> Dictionary:
 	if not world.begin_npc_approach(p.npc_instance_id,{"id":p.id,"revision":int(p.revision),"service_id":p.service_id}): return {"ok":false,"error":"unavailable"}
@@ -112,10 +111,11 @@ static func _valid_shop_buy(p: Dictionary) -> bool:
 	return p.has_all(["x", "y", "page"]) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and p.page >= 0 and p.page < InventoryGrid.PAGES
 
 func _shop_submit(action: String, p: Dictionary) -> Dictionary:
-	var id: String = _begin_command()
+	var id: String = session.begin()
+	if id.is_empty(): return session.closed_result()
 	var position: int = int(p.page) * InventoryGrid.PAGE_CELLS + int(p.y) * InventoryGrid.COLUMNS + int(p.x) if p.has("x") else -1
 	world.shop_endpoint.request_shop.rpc_id(1, action, p.npc_instance_id, p.service_id, p.get("offer_id", ""), position, id)
-	return await _wait_command(id)
+	return await session.wait(id, get_tree())
 
 func _npc_state(snapshot: Dictionary) -> void:
 	# Opening Inventory changes presentation only; Upgrade owns its transaction.
@@ -134,20 +134,24 @@ static func _valid_npc_service(p: Dictionary) -> bool:
 	return p.size() == 2 and p.get("npc_instance_id") is String and NeutralNpc3D.valid_instance_id(p.npc_instance_id) and p.get("service_id") is String and GameplayContentId.valid(StringName(p.service_id))
 
 func interact_npc(instance_id: String, preselected_item: Dictionary = {}) -> Dictionary:
+	var generation: int = bridge.generation() if is_instance_valid(bridge) else -1
 	var result: Dictionary = await _npc_submit("interact",instance_id)
 	if not result.ok or preselected_item.is_empty(): return result
+	if is_instance_valid(bridge) and bridge.generation() != generation: return {"ok":false,"error":"ui_reload"}
 	# Same service and selection commands as the manual menu/Upgrade slot.
 	for service: Dictionary in world.npc_endpoint.state.get("services",[]):
 		if service.id == preselected_item.get("service_id","") and service.kind == NpcServiceDefinition.Kind.UPGRADE and service.enabled:
 			result = await _npc_submit("select",instance_id,service.id)
 			if not result.ok: return result
+			if is_instance_valid(bridge) and bridge.generation() != generation: return {"ok":false,"error":"ui_reload"}
 			return await _upgrade_submit("select",{"npc_instance_id":instance_id,"service_id":service.id,"id":preselected_item.id,"revision":preselected_item.revision})
 	return {"ok":false,"error":"unknown_service"}
 
 func _npc_submit(action: String, instance_id: String = "", service_id: String = "") -> Dictionary:
-	var id: String = _begin_command()
+	var id: String = session.begin()
+	if id.is_empty(): return session.closed_result()
 	world.npc_endpoint.request_interaction.rpc_id(1, action, instance_id, service_id, id)
-	return await _wait_command(id)
+	return await session.wait(id, get_tree())
 
 static func _item_tooltip_details(item: Dictionary) -> Dictionary:
 	# Existing rolls are shown faithfully. Prefix/suffix metadata is absent until
@@ -217,9 +221,10 @@ static func _valid_storage(p: Dictionary) -> bool:
 func _storage_transfer(payload: Dictionary) -> Dictionary:
 	# UX guard only. World authorizes account access; Storage currently has no NPC/range restriction.
 	if not storage_opened: return {"ok":false,"error":"closed"}
-	var id: String = _begin_command()
+	var id: String = session.begin()
+	if id.is_empty(): return session.closed_result()
 	world.inventory_endpoint.request_storage.rpc_id(1,payload.id,int(payload.revision),payload.from,payload.to,int(payload.x),int(payload.y),int(payload.page),payload.quick,id)
-	return await _wait_command(id)
+	return await session.wait(id, get_tree())
 func _close_storage(_payload: Dictionary) -> Dictionary:
 	storage_opened = false
 	_layout()
@@ -237,37 +242,20 @@ func _unequip(payload: Dictionary) -> Dictionary:
 func _move(payload: Dictionary) -> Dictionary:
 	return await _submit(payload)
 
-func _begin_command() -> String:
-	_sequence += 1
-	var id: String = "web-%s-%d" % [_request_epoch, _sequence]
-	_pending_commands[id] = {"result":{}}
-	return id
 
 func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
-	var id: String = _begin_command()
+	var id: String = session.begin()
+	if id.is_empty(): return session.closed_result()
 	if action == "move":
 		world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), id)
 	elif action == "activate":
 		world.inventory_endpoint.request_activate_item.rpc_id(1, payload.id, int(payload.revision), id)
 	else:
 		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id, int(payload.page) * InventoryGrid.PAGE_CELLS + int(payload.y) * InventoryGrid.COLUMNS + int(payload.x) if payload.has("x") else -1)
-	return await _wait_command(id)
+	return await session.wait(id, get_tree())
 
-func _wait_command(id: String, timeout_ms: int = 2500) -> Dictionary:
-	var deadline: int = Time.get_ticks_msec() + timeout_ms
-	while _pending_commands.has(id) and _pending_commands[id].result.is_empty() and Time.get_ticks_msec() < deadline:
-		await get_tree().create_timer(0.025).timeout
-	var result: Dictionary = _pending_commands.get(id, {"result":{}}).result.duplicate(true)
-	_pending_commands.erase(id)
-	return result if not result.is_empty() else {"ok":false, "error":"timeout"}
 
-func _operation_finished(id: String, result: Dictionary) -> void:
-	if _pending_commands.has(id) and _pending_commands[id].result.is_empty():
-		_pending_commands[id].result = result.duplicate(true)
 
-func _cancel_pending(reason: String) -> void:
-	for entry: Dictionary in _pending_commands.values():
-		if entry.result.is_empty(): entry.result = {"ok":false, "error":reason}
 
 func _close(_payload: Dictionary) -> Dictionary:
 	opened = false
@@ -358,7 +346,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _failure(reason: String) -> void:
 	opened = false
 	ClientState.menu_open = false
-	_cancel_pending("ui_unavailable")
+	session.close("ui_unavailable")
 	host.destroy_browser()
 	equipment_opened = false
 	storage_opened = false
@@ -366,7 +354,7 @@ func _failure(reason: String) -> void:
 	set_process_unhandled_key_input(false)
 
 func _exit_tree() -> void:
-	_cancel_pending("teardown")
+	session.close("teardown")
 	ClientState.menu_open = false
 	if is_instance_valid(host): host.destroy_browser()
 

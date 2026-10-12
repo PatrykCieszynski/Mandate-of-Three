@@ -2,6 +2,8 @@ extends Node
 ## Small contract test: no browser, mock inventory, layout or gameplay fixture.
 var messages: Array[Dictionary] = []
 var handled: int = 0
+signal release_old_handler
+signal release_new_handler
 class DropControllerFixture extends InventoryWebController:
 	var commands: Array[Dictionary] = []
 	func _npc_submit(action: String, instance_id: String = "", service_id: String = "") -> Dictionary:
@@ -153,19 +155,22 @@ func _run() -> void:
 	assert(controller.opened, "Shop opening ensures Inventory is visible")
 	controller._shop_state({"active":false})
 	assert(controller.opened, "Shop closing leaves Inventory available in v1")
-	var first := controller._begin_command()
-	var second := controller._begin_command()
-	controller._operation_finished(second, {"ok":true, "request":"second"})
-	controller._operation_finished(first, {"ok":false, "error":"first"})
-	assert((await controller._wait_command(first)).error == "first")
-	assert((await controller._wait_command(second)).request == "second")
-	var expired := controller._begin_command()
-	assert((await controller._wait_command(expired, 0)).error == "timeout")
-	controller._operation_finished(expired, {"ok":true})
-	assert(controller._pending_commands.is_empty())
-	var cancelled := controller._begin_command()
-	controller._cancel_pending("disconnected")
-	assert((await controller._wait_command(cancelled)).error == "disconnected")
+	var first := controller.session.begin()
+	var second := controller.session.begin()
+	controller.session.finish(second, {"ok":true, "request":"second"})
+	controller.session.finish(first, {"ok":false, "error":"first"})
+	assert((await controller.session.wait(first, get_tree())).error == "first")
+	assert((await controller.session.wait(second, get_tree())).request == "second")
+	var expired := controller.session.begin()
+	assert((await controller.session.wait(expired, get_tree(), 0)).error == "timeout")
+	controller.session.finish(expired, {"ok":true})
+	var after_expiry := controller.session.begin()
+	controller.session.finish(expired, {"ok":true})
+	controller.session.finish(after_expiry, {"ok":true,"request":"fresh"})
+	assert((await controller.session.wait(after_expiry, get_tree())).request == "fresh")
+	var cancelled := controller.session.begin()
+	controller.session.cancel("disconnected")
+	assert((await controller.session.wait(cancelled, get_tree())).error == "disconnected")
 	controller.free()
 	assert(InventoryWebController._valid_npc({"npc_instance_id":"spike-blacksmith-01"}))
 	assert(not InventoryWebController._valid_npc({"npc_instance_id":"../NPC"}))
@@ -232,6 +237,19 @@ func _run() -> void:
 	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	assert(messages.back().payload.wallet.balance == 30, "Reload gets current full state")
 	assert(messages.back().payload.shop == shop_snapshot, "Reload restores published Shop without new purchase")
+	# Concrete bug: a native awaited handler must not reply into a replacement page.
+	dispatcher.register_command("fixture.blocked", func(p: Dictionary) -> bool: return p.has("old"), _blocked_command)
+	bridge.receive(JSON.stringify({"v":1,"type":"fixture.blocked","id":"42","payload":{"old":true}}))
+	bridge.reset_transport()
+	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+	bridge.receive(JSON.stringify({"v":1,"type":"fixture.blocked","id":"42","payload":{"old":false}}))
+	# Repeated ready is not a navigation and must leave the new handler valid.
+	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+	release_old_handler.emit()
+	assert(messages.filter(func(m: Dictionary) -> bool: return m.get("id", "") == "42").is_empty(), "Old generation result is suppressed")
+	release_new_handler.emit()
+	var delivered: Array = messages.filter(func(m: Dictionary) -> bool: return m.get("id", "") == "42")
+	assert(delivered.size() == 1 and delivered[0].payload == {"ok":true,"new":true}, "New generation result is delivered exactly once")
 	var count: int = messages.size()
 	bridge.send("storage.updated",{"items":"x".repeat(WebUiBridge.MAX_BYTES+1)})
 	assert(messages.size()==count+1,"Bounded large state reaches CEF")
@@ -264,3 +282,10 @@ func _run() -> void:
 func _command(_payload: Dictionary) -> Dictionary:
 	handled += 1
 	return {"ok":true}
+
+func _blocked_command(payload: Dictionary) -> Dictionary:
+	if payload.old:
+		await release_old_handler
+	else:
+		await release_new_handler
+	return {"ok":true,"new":not payload.old}

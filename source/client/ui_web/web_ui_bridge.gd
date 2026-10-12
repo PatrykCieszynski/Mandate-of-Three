@@ -10,13 +10,18 @@ signal command_received(type: String, id: String, payload: Dictionary)
 signal interactive_regions_received(payload: Dictionary)
 signal rejected(reason: String)
 var is_ready: bool = false
+var _transport_generation: int = 0
 var _commands: Dictionary = {}
 
 func allow_command(type: String, validator: Callable) -> void:
 	assert(not type.begins_with("ui.") and validator.is_valid())
 	_commands[type] = validator
 
+func generation() -> int:
+	return _transport_generation
+
 func reset_transport() -> void:
+	_transport_generation += 1
 	is_ready = false
 
 func receive(message: String) -> void:
