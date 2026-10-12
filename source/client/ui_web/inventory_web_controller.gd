@@ -10,6 +10,8 @@ var equipment_opened: bool = false
 var storage_opened: bool = false
 var session := UiCommandSession.new()
 var items := ItemUiAdapter.new()
+var npcs := NpcUiAdapter.new()
+var upgrades := UpgradeUiAdapter.new()
 const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
 var ui_scale: float = 1.0
 var _scale_initialized: bool = false
@@ -42,26 +44,17 @@ func setup(game_world: SpikeWorld3D) -> void:
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
+	npcs.context_updated.connect(_npc_state)
+	npcs.attach(world.npc_endpoint, dispatcher, session, get_tree())
+	upgrades.attach(world.upgrade_endpoint, dispatcher, session, get_tree())
 	items.attach(world.inventory_endpoint, dispatcher, session, get_tree(), func() -> bool: return storage_opened)
-	dispatcher.register_command("npc.interact", _valid_npc, func(p: Dictionary) -> Dictionary: return await interact_npc(p.npc_instance_id))
-	dispatcher.register_command("npc.select_service", _valid_npc_service, func(p: Dictionary) -> Dictionary: return await _npc_submit("select", p.npc_instance_id, p.service_id))
-	dispatcher.register_command("npc.close", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary: return await _npc_submit("close"))
-	dispatcher.register_command("npc.clear_service", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary: return await _npc_submit("clear_service"))
-	dispatcher.register_command("shop.open", _valid_npc_service, func(p: Dictionary) -> Dictionary: return await _shop_submit("open", p))
+	dispatcher.register_command("shop.open", NpcUiAdapter.valid_service, func(p: Dictionary) -> Dictionary: return await _shop_submit("open", p))
 	dispatcher.register_command("shop.buy", _valid_shop_buy, func(p: Dictionary) -> Dictionary: return await _shop_submit("buy", p))
-	dispatcher.register_command("upgrade.select", _valid_upgrade, func(p: Dictionary) -> Dictionary: return await _upgrade_submit("select", p))
-	dispatcher.register_command("upgrade.execute", _valid_upgrade, func(p: Dictionary) -> Dictionary: return await _upgrade_submit("upgrade", p))
-	dispatcher.register_command("npc.upgrade_item", _valid_upgrade_drop, _drop_on_npc)
-	world.upgrade_endpoint.state_changed.connect(func(snapshot: Dictionary) -> void: dispatcher.set_domain("upgrade",snapshot))
-	world.upgrade_endpoint.operation_finished.connect(session.finish)
-	dispatcher.set_domain("upgrade",world.upgrade_endpoint.state)
+	dispatcher.register_command("npc.upgrade_item", UpgradeUiAdapter.valid_item, _drop_on_npc)
 	dispatcher.set_domain("npc_targets",{"width":0,"height":0,"targets":[]})
 	world.shop_endpoint.state_changed.connect(_shop_state)
 	world.shop_endpoint.operation_finished.connect(session.finish)
 	dispatcher.set_domain("shop", world.shop_endpoint.state)
-	world.npc_endpoint.state_changed.connect(_npc_state)
-	world.npc_endpoint.operation_finished.connect(session.finish)
-	_npc_state(world.npc_endpoint.state)
 	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
 	dispatcher.register_command("equipment.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_equipment)
 	dispatcher.register_command("inventory.close", func(p: Dictionary) -> bool: return p.is_empty(), _close)
@@ -76,17 +69,8 @@ func setup(game_world: SpikeWorld3D) -> void:
 	# UI_READY receives the current snapshot, including updates during startup.
 	host.open()
 
-static func _valid_upgrade(p: Dictionary) -> bool:
-	return p.size() == 4 and ItemUiAdapter.valid_item_identity(p) and _valid_npc_service({"npc_instance_id":p.get("npc_instance_id"),"service_id":p.get("service_id")})
 
-static func _valid_upgrade_drop(p: Dictionary) -> bool:
-	return _valid_upgrade(p)
 
-func _upgrade_submit(action: String, p: Dictionary) -> Dictionary:
-	var id: String = session.begin()
-	if id.is_empty(): return session.closed_result()
-	world.upgrade_endpoint.request_upgrade.rpc_id(1,action,p.npc_instance_id,p.service_id,p.id,int(p.revision),id)
-	return await session.wait(id, get_tree())
 
 func _drop_on_npc(p: Dictionary) -> Dictionary:
 	if not world.begin_npc_approach(p.npc_instance_id,{"id":p.id,"revision":int(p.revision),"service_id":p.service_id}): return {"ok":false,"error":"unavailable"}
@@ -100,7 +84,7 @@ func _shop_state(snapshot: Dictionary) -> void:
 
 static func _valid_shop_buy(p: Dictionary) -> bool:
 	if p.size() not in [3, 6] or not p.has_all(["npc_instance_id", "service_id", "offer_id"]): return false
-	if not _valid_npc_service({"npc_instance_id":p.npc_instance_id, "service_id":p.service_id}) or not p.offer_id is String or not GameplayContentId.valid(StringName(p.offer_id)): return false
+	if not NpcUiAdapter.valid_service({"npc_instance_id":p.npc_instance_id, "service_id":p.service_id}) or not p.offer_id is String or not GameplayContentId.valid(StringName(p.offer_id)): return false
 	if p.size() == 3: return true
 	return p.has_all(["x", "y", "page"]) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and p.page >= 0 and p.page < InventoryGrid.PAGES
 
@@ -119,35 +103,22 @@ func _npc_state(snapshot: Dictionary) -> void:
 				opened = true
 				_layout()
 				break
-	dispatcher.set_domain("npc", snapshot)
 
-static func _valid_npc(p: Dictionary) -> bool:
-	return p.size() == 1 and p.get("npc_instance_id") is String and NeutralNpc3D.valid_instance_id(p.npc_instance_id)
 
-static func _valid_npc_service(p: Dictionary) -> bool:
-	return p.size() == 2 and p.get("npc_instance_id") is String and NeutralNpc3D.valid_instance_id(p.npc_instance_id) and p.get("service_id") is String and GameplayContentId.valid(StringName(p.service_id))
 
 func interact_npc(instance_id: String, preselected_item: Dictionary = {}) -> Dictionary:
 	var generation: int = bridge.generation() if is_instance_valid(bridge) else -1
-	var result: Dictionary = await _npc_submit("interact",instance_id)
+	var result: Dictionary = await npcs.interact(instance_id)
 	if not result.ok or preselected_item.is_empty(): return result
 	if is_instance_valid(bridge) and bridge.generation() != generation: return {"ok":false,"error":"ui_reload"}
 	# Same service and selection commands as the manual menu/Upgrade slot.
-	for service: Dictionary in world.npc_endpoint.state.get("services",[]):
+	for service: Dictionary in npcs.state().get("services",[]):
 		if service.id == preselected_item.get("service_id","") and service.kind == NpcServiceDefinition.Kind.UPGRADE and service.enabled:
-			result = await _npc_submit("select",instance_id,service.id)
+			result = await npcs.select_service(instance_id,service.id)
 			if not result.ok: return result
 			if is_instance_valid(bridge) and bridge.generation() != generation: return {"ok":false,"error":"ui_reload"}
-			return await _upgrade_submit("select",{"npc_instance_id":instance_id,"service_id":service.id,"id":preselected_item.id,"revision":preselected_item.revision})
+			return await upgrades.select_item({"npc_instance_id":instance_id,"service_id":service.id,"id":preselected_item.id,"revision":preselected_item.revision})
 	return {"ok":false,"error":"unknown_service"}
-
-func _npc_submit(action: String, instance_id: String = "", service_id: String = "") -> Dictionary:
-	var id: String = session.begin()
-	if id.is_empty(): return session.closed_result()
-	world.npc_endpoint.request_interaction.rpc_id(1, action, instance_id, service_id, id)
-	return await session.wait(id, get_tree())
-
-
 
 
 func _wallet(snapshot: Dictionary) -> void:
@@ -227,7 +198,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if storage_opened: opened = true
 		_layout()
 		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_ESCAPE and (opened or equipment_opened or storage_opened or world.npc_endpoint.state.get("active", false)):
+	elif event.keycode == KEY_ESCAPE and (opened or equipment_opened or storage_opened or npcs.state().get("active", false)):
 		# Presentation shortcut only: web cancels carry first, otherwise requests close.
 		bridge.send("ui.shortcut", {"key": "Escape"})
 		get_viewport().set_input_as_handled()
@@ -245,6 +216,8 @@ func _failure(reason: String) -> void:
 func _exit_tree() -> void:
 	session.close("teardown")
 	items.dispose()
+	npcs.dispose()
+	upgrades.dispose()
 	ClientState.menu_open = false
 	if is_instance_valid(host): host.destroy_browser()
 

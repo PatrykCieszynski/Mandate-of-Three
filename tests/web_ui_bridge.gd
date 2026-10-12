@@ -4,23 +4,30 @@ var messages: Array[Dictionary] = []
 var handled: int = 0
 signal release_old_handler
 signal release_new_handler
-class DropControllerFixture extends InventoryWebController:
-	var commands: Array[Dictionary] = []
-	func _npc_submit(action: String, instance_id: String = "", service_id: String = "") -> Dictionary:
-		commands.append({"action":action,"npc":instance_id,"service":service_id})
+class NpcAdapterFixture extends NpcUiAdapter:
+	var calls: Array[Dictionary] = []
+	var context: Dictionary = {}
+	func interact(instance_id: String) -> Dictionary:
+		calls.append({"action":"interact","npc":instance_id,"service":""})
 		return {"ok":true}
-	func _upgrade_submit(action: String, p: Dictionary) -> Dictionary:
-		commands.append({"action":action,"payload":p.duplicate(true)})
+	func select_service(instance_id: String, service_id: String) -> Dictionary:
+		calls.append({"action":"select","npc":instance_id,"service":service_id})
+		return {"ok":true}
+	func state() -> Dictionary: return context
+class UpgradeAdapterFixture extends UpgradeUiAdapter:
+	var calls: Array[Dictionary] = []
+	func select_item(p: Dictionary) -> Dictionary:
+		calls.append({"action":"select","payload":p.duplicate(true)})
 		return {"ok":true}
 func _ready() -> void:
 	_run.call_deferred()
 func _run() -> void:
 	var upgrade: Dictionary = {"npc_instance_id":"spike-blacksmith-01","service_id":"upgrade","id":"a".repeat(32),"revision":0}
-	assert(InventoryWebController._valid_upgrade(upgrade))
-	assert(InventoryWebController._valid_upgrade_drop(upgrade))
+	assert(UpgradeUiAdapter.valid_item(upgrade))
+	assert(UpgradeUiAdapter.valid_item(upgrade))
 	var missing_service: Dictionary = upgrade.duplicate()
 	missing_service.erase("service_id")
-	assert(not InventoryWebController._valid_upgrade_drop(missing_service), "World drop requires the exact service")
+	assert(not UpgradeUiAdapter.valid_item(missing_service), "World drop requires the exact service")
 	var drop_actor := NeutralNpc3D.new()
 	drop_actor.instance_id = "content-smith"
 	drop_actor.definition = NpcDefinitions.get_definition(&"blacksmith").duplicate(true)
@@ -46,25 +53,28 @@ func _run() -> void:
 	drop_actor.definition.get_service(&"upgrade").content_ref = &"missing"
 	assert(NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4)).is_empty())
 	drop_actor.free()
-	var drop_controller := DropControllerFixture.new()
-	drop_controller.world = SpikeWorld3D.new()
-	drop_controller.world.npc_endpoint = NpcInteraction3D.new()
-	drop_controller.world.npc_endpoint.state = {"services":[{"id":"first_upgrade","kind":1,"enabled":true},{"id":"exact_upgrade","kind":1,"enabled":true}]}
+	var drop_controller := InventoryWebController.new()
+	var npc_fixture := NpcAdapterFixture.new()
+	var upgrade_fixture := UpgradeAdapterFixture.new()
+	var drop_commands: Array[Dictionary] = []
+	npc_fixture.calls = drop_commands
+	upgrade_fixture.calls = drop_commands
+	drop_controller.npcs = npc_fixture
+	drop_controller.upgrades = upgrade_fixture
+	npc_fixture.context = {"services":[{"id":"first_upgrade","kind":1,"enabled":true},{"id":"exact_upgrade","kind":1,"enabled":true}]}
 	var preselection: Dictionary = {"id":upgrade.id,"revision":0,"service_id":"exact_upgrade"}
 	assert((await drop_controller.interact_npc(upgrade.npc_instance_id,preselection)).ok)
-	assert(drop_controller.commands[1].service == "exact_upgrade" and drop_controller.commands[2].payload.service_id == "exact_upgrade", "Arrival selects the requested service rather than the first Upgrade")
-	drop_controller.commands.clear()
+	assert(drop_commands[1].service == "exact_upgrade" and drop_commands[2].payload.service_id == "exact_upgrade", "Arrival selects the requested service rather than the first Upgrade")
+	drop_commands.clear()
 	preselection.service_id = "missing_upgrade"
 	assert((await drop_controller.interact_npc(upgrade.npc_instance_id,preselection)).error == "unknown_service")
-	assert(drop_controller.commands.size() == 1, "Unavailable service never falls back to another upgrade")
-	drop_controller.world.npc_endpoint.free()
-	drop_controller.world.free()
+	assert(drop_commands.size() == 1, "Unavailable service never falls back to another upgrade")
 	drop_controller.free()
 	upgrade["yang_cost"] = 1
-	assert(not InventoryWebController._valid_upgrade(upgrade))
+	assert(not UpgradeUiAdapter.valid_item(upgrade))
 	upgrade.erase("yang_cost")
 	upgrade.revision = NAN
-	assert(not InventoryWebController._valid_upgrade(upgrade))
+	assert(not UpgradeUiAdapter.valid_item(upgrade))
 	assert(not WebUiHost.supported_client(), "Headless must never compose a browser")
 	if OS.has_feature("dedicated_server"):
 		assert(not ClassDB.class_exists("CefTexture"), "Server export must exclude native CEF")
@@ -172,10 +182,10 @@ func _run() -> void:
 	controller.session.cancel("disconnected")
 	assert((await controller.session.wait(cancelled, get_tree())).error == "disconnected")
 	controller.free()
-	assert(InventoryWebController._valid_npc({"npc_instance_id":"spike-blacksmith-01"}))
-	assert(not InventoryWebController._valid_npc({"npc_instance_id":"../NPC"}))
-	assert(InventoryWebController._valid_npc_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop"}))
-	assert(not InventoryWebController._valid_npc_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop", "kind":1}))
+	assert(NpcUiAdapter.valid_npc({"npc_instance_id":"spike-blacksmith-01"}))
+	assert(not NpcUiAdapter.valid_npc({"npc_instance_id":"../NPC"}))
+	assert(NpcUiAdapter.valid_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop"}))
+	assert(not NpcUiAdapter.valid_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop", "kind":1}))
 	var buy: Dictionary = {"npc_instance_id":"spike-blacksmith-01","service_id":"weapon_shop","offer_id":"iron_sword"}
 	assert(InventoryWebController._valid_shop_buy(buy))
 	var exact_buy: Dictionary = buy.duplicate()
