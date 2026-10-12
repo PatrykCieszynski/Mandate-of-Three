@@ -155,15 +155,15 @@ func _process(delta: float) -> void:
 		saw_stone = true
 		if initial_stone_id.is_empty():
 			initial_stone_id = encounter.runtime.stone_instance_id
-			world.combat_endpoint.select_target({"kind":&"metin","id":initial_stone_id})
-			check(not world.combat_endpoint.selected_target.is_empty(),"living Metin is selectable")
+			world.combat_endpoint.client_combat.select_target({"kind":&"metin","id":initial_stone_id})
+			check(not world.combat_endpoint.client_combat.selected_target.is_empty(),"living Metin is selectable")
 		elif encounter.runtime.stone_instance_id != initial_stone_id:
 			saw_respawn = true
-			check(world.combat_endpoint.selected_target.is_empty(),"respawn does not revive selection")
+			check(world.combat_endpoint.client_combat.selected_target.is_empty(),"respawn does not revive selection")
 	else:
 		saw_stone_death = saw_stone_death or saw_stone
 		if saw_stone:
-			check(world.combat_endpoint.selected_target.is_empty() and not world.combat_endpoint.autoattack,"death snapshot clears selection even without autoattack")
+			check(world.combat_endpoint.client_combat.selected_target.is_empty() and not world.combat_endpoint.client_combat.autoattack,"death snapshot clears selection even without autoattack")
 	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
 		check(dog.mob_instance_id > 0 and dog.definition == MobDefinitions.resolve(dog.mob_key),"compact snapshot reconstructs identity and local definition")
 		check(dog.max_hp == dog.definition.max_hp and dog.title == dog.definition.display_name and dog.visual_id == dog.definition.visual_id,"presentation metadata comes from local definition")
