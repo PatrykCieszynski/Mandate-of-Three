@@ -1,7 +1,8 @@
 extends Node3D
 ## Navigation/content contracts only; no exact graybox layout or balance assertions.
 func _ready() -> void:
-	var world := preload("res://source/common/gameplay/maps/graybox/first_region_3d.tscn").instantiate() as GameWorld3D
+	var region_entry := preload("res://source/common/gameplay/maps/instance/instance_collection/first_region.tres")
+	var world := load(region_entry.map_path).instantiate() as GameWorld3D
 	add_child(world)
 	await get_tree().physics_frame
 	await get_tree().physics_frame

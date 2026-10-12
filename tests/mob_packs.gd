@@ -28,7 +28,7 @@ func _ready() -> void:
 	var player := PlayerResource.new()
 	player.player_id = 1
 	server.connected_players[1] = player
-	var world := preload("res://source/common/gameplay/maps/spike/spike_map_3d.tscn").instantiate() as GameWorld3D
+	var world := preload("res://tests/fixtures/world3d/test_arena.tscn").instantiate() as GameWorld3D
 	add_child(world)
 	world.set_physics_process(false)
 	world.combat_endpoint.set_physics_process(false)

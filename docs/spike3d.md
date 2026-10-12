@@ -47,11 +47,11 @@ broadcast player cap exists yet. This first stage targets a small local spike.
 
 | File | Responsibility |
 | --- | --- |
-| `source/common/gameplay/spike3d/game_world_3d.gd` | Arena, shared RPCs, input validation, snapshots, camera and overlay. |
-| `source/common/gameplay/spike3d/actor_3d.gd` | Shared body/reaction/knockback and interpolation plumbing. |
-| `source/common/gameplay/spike3d/player_actor_3d.gd` | Player movement/advance/BODY policy, equipment and Warrior presentation. |
-| `source/common/gameplay/spike3d/mob_actor_3d.gd` | Mob body/visual and AI-facing state; lifecycle belongs to MobSystem. |
-| `source/common/gameplay/maps/spike/spike_map_3d.tscn` | Default Spike map scene. |
+| `source/common/gameplay/world3d/game_world_3d.gd` | Arena, shared RPCs, input validation, snapshots, camera and overlay. |
+| `source/common/gameplay/world3d/actors/actor_3d.gd` | Shared body/reaction/knockback and interpolation plumbing. |
+| `source/common/gameplay/world3d/actors/player_actor_3d.gd` | Player movement/advance/BODY policy, equipment and Warrior presentation. |
+| `source/common/gameplay/world3d/actors/mob_actor_3d.gd` | Mob body/visual and AI-facing state; lifecycle belongs to MobSystem. |
+| `tests/fixtures/world3d/test_arena.tscn` | Default Spike map scene. |
 | `source/server/world/components/world_instance_3d.gd` | Server instance adapter. |
 | `source/client/network/world_instance_3d.gd` | Client instance adapter. |
 | `tests/spike3d_network.gd` | Two-client WebSocket test without changing accounts or DB. |

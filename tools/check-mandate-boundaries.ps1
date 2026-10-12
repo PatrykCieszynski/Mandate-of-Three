@@ -4,14 +4,14 @@ $ErrorActionPreference = 'Stop'
 $taskRoot = [IO.Path]::GetFullPath($RootDirectory)
 # Production Mandate scopes; upstream TinyMMO and test fixtures are separate.
 $taskScopes = @(
-    'source/common/gameplay/spike3d', 'source/common/gameplay/mandate',
+    'source/common/gameplay/world3d', 'source/common/gameplay/mandate',
     'source/common/gameplay/loot', 'source/common/gameplay/mobs',
     'source/common/gameplay/npcs', 'source/common/gameplay/shops',
     'source/common/gameplay/upgrades', 'source/common/gameplay/encounters/metin',
-    'source/client/ui_web'
+    'source/client/ui_web', 'source/client/gameplay'
 )
 $taskAdapter = 'source/common/gameplay/mandate/mandate_world_services.gd'
-if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'source/common/gameplay/spike3d')) -or
+if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'source/common/gameplay/world3d')) -or
     -not (Test-Path -LiteralPath (Join-Path $taskRoot $taskAdapter) -PathType Leaf)) {
     throw 'Architecture boundaries: missing production scope or adapter'
 }
@@ -46,25 +46,25 @@ foreach ($taskScope in $taskScopes) {
                 $taskFailures.Add("$taskRelative : private world presentation field $($taskMatch.Value)")
             }
         }
-        if ($taskRelative -eq 'source/common/gameplay/spike3d/player_combat_runtime.gd' -and
+        if ($taskRelative -eq 'source/common/gameplay/world3d/combat/player_combat_runtime.gd' -and
             $taskCode -match '\b(?:GameWorld3D|Actor3D|PlayerActor3D|MobActor3D|MandateWorldServices|WorldDatabase|ItemStoreSqlite|SQLite)\b|@rpc') {
             $taskFailures.Add("$taskRelative : attack runtime depends on world/actor/persistence/RPC")
         }
-        if ($taskRelative -in @('source/common/gameplay/spike3d/basic_attack_service.gd','source/common/gameplay/mobs/mob_system.gd') -and
+        if ($taskRelative -in @('source/common/gameplay/world3d/combat/basic_attack_service.gd','source/common/gameplay/mobs/mob_system.gd') -and
             $taskCode -match '\b(?:WorldDatabase|ItemStoreSqlite|SQLite|claim_ground_item|add_experience|award_experience|spawn_currency|GroundLootSystem|KillRewardResolver)\b|services\s*\.\s*(?:economy|progression|item_store)\s*\(') {
             $taskFailures.Add("$taskRelative : attack/mob system owns economy/reward operations")
         }
         if ($taskRelative -eq 'source/common/gameplay/mobs/mob_system.gd' -and $taskCode -match '\bHitReactionResolver\b') {
             $taskFailures.Add("$taskRelative : mob lifecycle calculates hit results")
         }
-        if ($taskRelative -eq 'source/common/gameplay/spike3d/basic_attack_service.gd' -and $taskCode -match '\.\s*hp\s*(?:[-+*/]=|=(?!=))') {
+        if ($taskRelative -eq 'source/common/gameplay/world3d/combat/basic_attack_service.gd' -and $taskCode -match '\.\s*hp\s*(?:[-+*/]=|=(?!=))') {
             $taskFailures.Add("$taskRelative : attack service mutates target life directly")
         }
-        if ($taskRelative -eq 'source/common/gameplay/spike3d/client_combat_controller.gd' -and
+        if ($taskRelative -eq 'source/client/gameplay/combat/client_combat_controller.gd' -and
             $taskCode -match '\b(?:GroundLootSystem|KillRewardResolver|WorldDatabase|ItemStoreSqlite|SQLite|ProgressBar|_xp_notice|_visual_drops|experience_awarded)\b') {
             $taskFailures.Add("$taskRelative : client combat controller owns loot/progression/HUD")
         }
-        if ($taskRelative -eq 'source/common/gameplay/spike3d/actor_3d.gd' -and
+        if ($taskRelative -eq 'source/common/gameplay/world3d/actors/actor_3d.gd' -and
             $taskCode -match '\b(?:MobActor3D|PlayerActor3D|WarriorVisual3D|ItemDefinitions|PlayerCombatRuntime)\b|\b[A-Za-z_]*respawn[A-Za-z_]*\b') {
             $taskFailures.Add("$taskRelative : actor base owns player/mob/lifecycle policy")
         }
@@ -92,7 +92,7 @@ foreach ($taskScope in $taskScopes) {
             $taskCode -match '\.\s*request_\w+\s*\.\s*rpc_id\s*\(|\b(?:ItemDefinition|ItemDefinitions|stats_per_upgrade|inventory_height)\b') {
             $taskFailures.Add("$taskRelative : UI composition submits domain RPCs/models items")
         }
-        if ($taskRelative -eq 'source/common/gameplay/spike3d/combat_endpoint_3d.gd' -and
+        if ($taskRelative -eq 'source/common/gameplay/world3d/combat/combat_endpoint_3d.gd' -and
             $taskCode -match '\b(?:SQLite|ItemStoreSqlite|claim_ground_item|dirty_progression|add_experience|spawn_currency)\b|func\s+(?:drop_reward|_award_experience)\b|var\s+ground\b|ground_loot\s*\.\s*drops\b|services\s*\.\s*(?:item_store|economy|progression)\s*\(') {
             $taskFailures.Add("$taskRelative : combat owns persistence/rewards/ground state")
         }

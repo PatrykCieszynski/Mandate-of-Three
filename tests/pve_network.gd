@@ -3,7 +3,7 @@ extends Node
 ## coordinate assertions; gameplay commands go through CombatEndpoint3D unchanged.
 
 const PORT: int = 18098
-var map_scene_path: String = "res://source/common/gameplay/maps/spike/spike_map_3d.tscn"
+var map_scene_path: String = "res://tests/fixtures/world3d/test_arena.tscn"
 var peer := WebSocketMultiplayerPeer.new()
 var world: GameWorld3D
 var server: WorldServer
@@ -58,10 +58,10 @@ func _ready() -> void:
 		var host: ServerInstance = preload("res://source/server/world/components/world_instance_3d.gd").new()
 		host.name = "Instance"
 		host.instance_resource = InstanceResource.new()
-		host.instance_resource.instance_name = &"Spike"
+		host.instance_resource.instance_name = &"FirstRegion"
 		host.load_map(map_scene_path)
 		add_child(host)
-		world = host.get_node("SpikeMap")
+		world = host.get_node("GameWorld")
 		# Opt in only in the fixture to retain natural-aggro/return coverage.
 		for dog: MobActor3D in world.mob_system.mobs.values(): dog.proximity_aggro = true
 		api.peer_connected.connect(func(id: int) -> void:

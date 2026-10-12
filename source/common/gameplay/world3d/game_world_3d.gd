@@ -155,7 +155,7 @@ func _mesh(parent: Node3D, dimensions: Vector3, color: Color) -> void:
 	parent.add_child(visual)
 
 func _build_camera_and_ui() -> void:
-	DisplayServer.window_set_title("Mandate of Three — %s | %d" % ["First Region" if region != null else "Spike 3D", local_peer])
+	DisplayServer.window_set_title("Mandate of Three — %s | %d" % ["First Region" if region != null else "Test Arena", local_peer])
 	camera_controller = MandateCamera3D.new()
 	camera_controller.name = "CameraRig"
 	camera_controller.can_control = func() -> bool: return input_enabled and not ClientState.menu_open and DisplayServer.window_is_focused() and characters.has(local_peer)
@@ -167,7 +167,7 @@ func _build_camera_and_ui() -> void:
 	panel.position = Vector2(20, 20)
 	canvas.add_child(panel)
 	_status = Label.new()
-	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nŁączenie ze światem…" % ("First Region" if region != null else "Spike 3D")
+	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nŁączenie ze światem…" % ("First Region" if region != null else "Test Arena")
 	_status.add_theme_font_size_override("font_size", 18)
 	var controls := VBoxContainer.new()
 	panel.add_child(controls)
@@ -339,7 +339,7 @@ func receive_roster(roster: Dictionary) -> void:
 	for peer_id: int in roster:
 		if not characters.has(peer_id):
 			_add_character(peer_id, str(roster[peer_id]))
-	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nGracze: %d" % ["First Region" if region != null else "Spike 3D", characters.size()]
+	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nGracze: %d" % ["First Region" if region != null else "Test Arena", characters.size()]
 
 func _add_character(peer_id: int, display_name: String) -> PlayerActor3D:
 	var body := PlayerActor3D.new()

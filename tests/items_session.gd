@@ -36,7 +36,7 @@ func api(url: String, payload: Dictionary) -> Dictionary:
 	return result
 
 func _ready_world(_player: Node) -> void:
-	world = Client.instance_manager.current_instance.get_node("SpikeMap")
+	world = Client.instance_manager.current_instance.get_node("GameWorld")
 	world.input_enabled = false
 	world.inventory_endpoint.state_changed.connect(func(_state: Dictionary) -> void: updates += 1)
 

@@ -36,10 +36,10 @@ func _ready() -> void:
 		var host: ServerInstance = preload("res://source/server/world/components/world_instance_3d.gd").new()
 		host.name = "Instance"
 		host.instance_resource = InstanceResource.new()
-		host.instance_resource.instance_name = &"Spike"
-		host.load_map("res://source/common/gameplay/maps/spike/spike_map_3d.tscn")
+		host.instance_resource.instance_name = &"FirstRegion"
+		host.load_map("res://tests/fixtures/world3d/test_arena.tscn")
 		add_child(host)
-		world = host.get_node("SpikeMap")
+		world = host.get_node("GameWorld")
 		api.peer_connected.connect(func(id: int) -> void:
 			var resource := PlayerResource.new()
 			resource.display_name = "Test_%d" % server.connected_players.size()
@@ -51,7 +51,7 @@ func _ready() -> void:
 		api.connected_to_server.connect(func() -> void:
 			var instance: InstanceClient = preload("res://source/client/network/world_instance_3d.gd").new()
 			instance.name = "Instance"
-			world = load("res://source/common/gameplay/maps/spike/spike_map_3d.tscn").instantiate()
+			world = load("res://tests/fixtures/world3d/test_arena.tscn").instantiate()
 			world.input_enabled = false
 			instance.add_child(world)
 			add_child(instance))
