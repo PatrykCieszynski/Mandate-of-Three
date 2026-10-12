@@ -104,8 +104,8 @@ func _ready() -> void:
 	var combat := SpikeCombat3D.new()
 	combat._world = snapshot_world
 	var record: Array = [101,Vector3(4,0,2),0.5,80,MobState.Value.IDLE,&"feral_dog","stone-test",0,0]
-	combat._receive_mob_snapshots([record])
-	var replicated: SpikeWildDog3D = combat.dogs[101]
+	world.mob_system.apply_snapshot([record])
+	var replicated: SpikeWildDog3D = world.mob_system.mobs[101]
 	check(replicated.definition == MobDefinitions.FERAL_DOG and replicated.max_hp == MobDefinitions.FERAL_DOG.max_hp and replicated.title == MobDefinitions.FERAL_DOG.display_name, "new actor uses local presentation definition")
 	check(replicated.hp == 80 and replicated.source_metinstone_id == "stone-test", "dynamic fields and provenance survive reconciliation")
 	check(replicated.pack_instance_id == 0, "client has no replicated pack runtime")
@@ -113,15 +113,15 @@ func _ready() -> void:
 	var unknown := record.duplicate()
 	unknown[MobSnapshot.Field.ID] = 102
 	unknown[MobSnapshot.Field.MOB_KEY] = &"future_unknown_mob"
-	combat._receive_mob_snapshots([unknown,record])
-	combat._receive_mob_snapshots([unknown,unknown,record])
+	world.mob_system.apply_snapshot([unknown,record])
+	world.mob_system.apply_snapshot([unknown,unknown,record])
 	check(combat._warned_unknown_mob_keys.size() == 1 and combat._warned_unknown_mob_keys.has(&"future_unknown_mob"), "unknown key warnings are cached per endpoint")
-	check(not combat.dogs.has(102) and combat.dogs.size() == 1, "unknown key skips only that actor and continues processing the snapshot")
-	check(combat.dogs[101] == replicated and replicated.hp == 60, "later full snapshot updates existing actor")
-	combat._receive_mob_snapshots([])
-	check(combat.dogs.is_empty(), "empty full snapshot removes all actors")
-	combat._receive_mob_snapshots([record])
-	check(combat.dogs[101] != replicated and combat.dogs[101].hp == 60, "full snapshot can reconstruct after removal")
+	check(not world.mob_system.mobs.has(102) and world.mob_system.mobs.size() == 1, "unknown key skips only that actor and continues processing the snapshot")
+	check(world.mob_system.mobs[101] == replicated and replicated.hp == 60, "later full snapshot updates existing actor")
+	world.mob_system.apply_snapshot([])
+	check(world.mob_system.mobs.is_empty(), "empty full snapshot removes all actors")
+	world.mob_system.apply_snapshot([record])
+	check(world.mob_system.mobs[101] != replicated and world.mob_system.mobs[101].hp == 60, "full snapshot can reconstruct after removal")
 	snapshot_world.free()
 	combat.free()
 	await get_tree().process_frame

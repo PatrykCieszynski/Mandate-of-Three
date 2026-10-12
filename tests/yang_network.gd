@@ -35,20 +35,20 @@ func run_server() -> void:
 	var currency: SpikeCurrency3D = world.currency_endpoint
 	var combat: SpikeCombat3D = world.combat_endpoint
 	currency.set_physics_process(false) # Explicit phases control the live autoloot tick.
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		dog.ai_state = MobState.Value.DISABLED
 		dog.collision_layer = 0
 	place_far()
-	var dog: SpikeWildDog3D = combat.dogs[1]
+	var dog: SpikeWildDog3D = world.mob_system.mobs[1]
 	dog.hp = 0
 	dog.ai_state = MobState.Value.IDLE
 	dog.contributions = {owner:20, other_owner:15}
 	dog.contribution_players[owner] = server.connected_players[hero]
-	combat._die(dog,Time.get_ticks_msec())
+	world.mob_system.die(dog,Time.get_ticks_msec())
 	check(currency.ground.size() == 1 and server.database.wallet_balance(owner) == 0, "death creates currency on ground, not directly in wallet")
 	currency_id = currency.ground.keys()[0]
-	combat._die(dog,Time.get_ticks_msec())
+	world.mob_system.die(dog,Time.get_ticks_msec())
 	check(currency.ground.size() == 1, "repeated death cannot duplicate currency")
 	var point: Vector3 = currency.ground[currency_id].position
 	world.characters[other].position = point + Vector3(0,0,0.5)

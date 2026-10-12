@@ -31,7 +31,7 @@ func run_server() -> void:
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var store: WorldStoreSqlite = server.database.store
 	var starting_points: int = store.get_player(owner_id).available_attributes_points
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
 			dog.ai_state = MobState.Value.DISABLED
@@ -39,26 +39,26 @@ func run_server() -> void:
 	for id: int in world.characters:
 		world.characters[id].position = Vector3(-0.3 if id == hero else 0.3, 0, 3)
 		world.characters[id].rotation.y = 0
-	combat.dogs[1].position = Vector3(0, 0, 1.4)
-	combat.dogs[1].hp = 35
+	world.mob_system.mobs[1].position = Vector3(0, 0, 1.4)
+	world.mob_system.mobs[1].hp = 35
 	await get_tree().create_timer(0.2).timeout
 	set_phase("HIT", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp == 25)
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp == 25)
 	set_phase("WAIT")
 	await wait_until(func() -> bool: return combat.can_move(hero))
 	set_phase("HIT", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp == 15)
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp == 15)
 	set_phase("WAIT")
 	check(store.get_player(owner_id).experience == 0, "hitting a living dog gives no XP")
 	set_phase("FINISH", other)
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == MobState.Value.DEAD)
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.DEAD)
 	set_phase("WAIT")
-	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
-	check(combat.dogs[1].contributions[owner_id] == 20 and combat.dogs[1].contributions[other_id] == 15, "actual damage contribution, including clamped final hit")
+	world.mob_system.mobs[1].dead_until_ms = Time.get_ticks_msec() + 60000
+	check(world.mob_system.mobs[1].contributions[owner_id] == 20 and world.mob_system.mobs[1].contributions[other_id] == 15, "actual damage contribution, including clamped final hit")
 	check(server.connected_players[hero].experience == 20 and server.connected_players[other].experience == 0, "highest contributor gets runtime XP, not final hitter")
 	check(store.get_player(owner_id).experience == 0, "kill does not write XP to SQLite")
 	drop_uid = world.ground_loot.drops.keys()[0]
-	combat._die(combat.dogs[1], Time.get_ticks_msec())
+	world.mob_system.die(world.mob_system.mobs[1], Time.get_ticks_msec())
 	check(world.ground_loot.drops.size() == 1 and server.connected_players[hero].experience == 20, "repeated runtime death callback cannot grant twice")
 	set_phase("RECIPIENT", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
@@ -66,7 +66,7 @@ func run_server() -> void:
 	world.characters[other].position = Vector3(-12, 0, 12)
 	for id: int in [2, 3, 4]:
 		await get_tree().create_timer(1.2).timeout
-		var dog: SpikeWildDog3D = combat.dogs[id]
+		var dog: SpikeWildDog3D = world.mob_system.mobs[id]
 		world.characters[hero].position = Vector3(0,0,3)
 		world.characters[hero].rotation.y = 0
 		dog.position = Vector3(0, 0, 1.4)

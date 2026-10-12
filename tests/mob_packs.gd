@@ -33,24 +33,24 @@ func _ready() -> void:
 	world.set_physics_process(false)
 	world.combat_endpoint.set_physics_process(false)
 	var combat := world.combat_endpoint
-	for id: int in combat.dogs.keys(): combat._remove_mob(id)
-	combat.packs.clear()
-	assert(combat.create_pack([entry(wild,1),entry(unregistered,1)],Vector3.ZERO,2,3,10,1) == null)
-	assert(combat.create_pack([entry(duplicate,1)],Vector3.ZERO,2,3,10,1) == null)
-	assert(combat.packs.is_empty() and combat.dogs.is_empty(), "Invalid content cannot partially spawn a pack")
-	var pack := combat.create_pack([entry(wild,10),entry(feral,4)],Vector3.ZERO,2,3,10,1)
-	var unrelated := combat.create_pack([entry(wild,3)],Vector3(10,0,0),1,2,6,1)
+	for id: int in world.mob_system.mobs.keys(): world.mob_system.remove_mob(id)
+	world.mob_system.packs.clear()
+	assert(world.mob_system.create_pack([entry(wild,1),entry(unregistered,1)],Vector3.ZERO,2,3,10,1) == null)
+	assert(world.mob_system.create_pack([entry(duplicate,1)],Vector3.ZERO,2,3,10,1) == null)
+	assert(world.mob_system.packs.is_empty() and world.mob_system.mobs.is_empty(), "Invalid content cannot partially spawn a pack")
+	var pack := world.mob_system.create_pack([entry(wild,10),entry(feral,4)],Vector3.ZERO,2,3,10,1)
+	var unrelated := world.mob_system.create_pack([entry(wild,3)],Vector3(10,0,0),1,2,6,1)
 	pack.rng.seed = 731
 	var ids: Array[int] = pack.actor_ids.duplicate()
 	assert(ids.size() == 14 and unrelated.pack_instance_id != pack.pack_instance_id)
 	var wild_count: int = 0
 	var feral_count: int = 0
 	for id: int in ids:
-		var mob := combat.dogs[id]
+		var mob := world.mob_system.mobs[id]
 		assert(mob.mob_instance_id == id and mob.pack_instance_id == pack.pack_instance_id and mob.home == pack.anchor)
 		assert(mob.presentation == null and mob.name_label == null and mob.hp_label == null and mob.find_children("*","Label3D",true,false).is_empty(), "World actors contain no presentation labels")
 		assert(mob.definition.valid() and mob.move_speed == mob.definition.move_speed and mob.hp == mob.definition.max_hp)
-		assert(combat._horizontal_distance(mob.position,pack.anchor) <= pack.spawn_radius)
+		assert(world.mob_system.horizontal_distance(mob.position,pack.anchor) <= pack.spawn_radius)
 		assert(mob.find_children("*","NavigationAgent3D",true,false).is_empty() and mob.collision_mask == 16)
 		if mob.mob_key == wild.mob_key: wild_count += 1
 		if mob.mob_key == feral.mob_key: feral_count += 1
@@ -63,105 +63,111 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	# Same entry point used by melee and proximity; every live member reacts.
-	combat.aggro_pack(combat.dogs[ids[0]].pack_instance_id,1)
-	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == MobState.Value.CHASE)
-	for id: int in unrelated.actor_ids: assert(combat.dogs[id].target_peer == 0 and combat.dogs[id].ai_state == MobState.Value.IDLE)
+	world.mob_system.aggro_pack(world.mob_system.mobs[ids[0]].pack_instance_id,1)
+	for id: int in ids: assert(world.mob_system.mobs[id].target_peer == 1 and world.mob_system.mobs[id].ai_state == MobState.Value.CHASE)
+	for id: int in unrelated.actor_ids: assert(world.mob_system.mobs[id].target_peer == 0 and world.mob_system.mobs[id].ai_state == MobState.Value.IDLE)
 	# Passive dog definitions ignore proximity; opt-in content still recruits its pack.
 	for id: int in ids:
-		combat.dogs[id].ai_state = MobState.Value.IDLE
-		combat.dogs[id].target_peer = 0
-	combat.dogs[ids[0]].position = pack.anchor
-	combat._tick_dog(combat.dogs[ids[0]],1.0/60,0)
-	for id: int in ids: assert(combat.dogs[id].ai_state == MobState.Value.IDLE and combat.dogs[id].target_peer == 0, "Passive dogs ignore nearby players")
-	combat.dogs[ids[0]].proximity_aggro = true
-	combat._tick_dog(combat.dogs[ids[0]],1.0/60,0)
-	for id: int in ids: assert(combat.dogs[id].target_peer == 1 and combat.dogs[id].ai_state == MobState.Value.CHASE)
-	var member := combat.dogs[ids[0]]
+		world.mob_system.mobs[id].ai_state = MobState.Value.IDLE
+		world.mob_system.mobs[id].target_peer = 0
+	world.mob_system.mobs[ids[0]].position = pack.anchor
+	world.mob_system.tick_mob(world.mob_system.mobs[ids[0]],1.0/60,0)
+	for id: int in ids: assert(world.mob_system.mobs[id].ai_state == MobState.Value.IDLE and world.mob_system.mobs[id].target_peer == 0, "Passive dogs ignore nearby players")
+	world.mob_system.mobs[ids[0]].proximity_aggro = true
+	world.mob_system.tick_mob(world.mob_system.mobs[ids[0]],1.0/60,0)
+	for id: int in ids: assert(world.mob_system.mobs[id].target_peer == 1 and world.mob_system.mobs[id].ai_state == MobState.Value.CHASE)
+	var member := world.mob_system.mobs[ids[0]]
 	member.hp = 1
 	member.contributions[1] = 12
 	member.position = Vector3(11,0,0)
-	combat._tick_dog(member,1.0/60,1)
+	world.mob_system.tick_mob(member,1.0/60,1)
 	assert(member.ai_state == MobState.Value.RETURN and member.target_peer == 0)
-	assert(combat._horizontal_distance(member.return_target,pack.anchor) <= pack.wander_radius)
+	assert(world.mob_system.horizontal_distance(member.return_target,pack.anchor) <= pack.wander_radius)
 	var return_point: Vector3 = member.return_target
-	combat._tick_dog(member,1.0/60,2)
+	world.mob_system.tick_mob(member,1.0/60,2)
 	assert(member.return_target == return_point, "Return destination is chosen once, not rerolled every tick")
-	combat._begin_return(combat.dogs[ids[1]])
-	assert(combat.dogs[ids[1]].return_target != return_point, "Members have independent return destinations")
+	world.mob_system.begin_return(world.mob_system.mobs[ids[1]])
+	assert(world.mob_system.mobs[ids[1]].return_target != return_point, "Members have independent return destinations")
 	member.position = member.return_target
-	combat._tick_dog(member,1.0/60,2)
+	world.mob_system.tick_mob(member,1.0/60,2)
 	assert(member.hp == member.max_hp and member.ai_state == MobState.Value.IDLE and member.target_peer == 0 and member.contributions.is_empty())
 	member.ai_state = MobState.Value.CHASE
 	member.target_peer = 1
 	hero.position = Vector3(30,0,0)
 	member.position = Vector3(8,0,0)
-	combat._tick_dog(member,1.0/60,3)
+	world.mob_system.tick_mob(member,1.0/60,3)
 	assert(member.ai_state == MobState.Value.RETURN, "Target outside pack leash triggers return")
 	world.characters.clear()
-	for mob: SpikeWildDog3D in combat.dogs.values(): mob.ai_enabled = false
+	for mob: SpikeWildDog3D in world.mob_system.mobs.values(): mob.ai_enabled = false
 	var killed_id := member.mob_instance_id
 	member.hp = 0
-	combat._die(member,100)
+	var deaths: Array[MobDeathResult] = []
+	world.mob_system.mob_died.connect(deaths.append)
+	world.mob_system.die(member,100)
 	assert(pack.replacements.size() == 1)
-	combat._die(member,101)
+	world.mob_system.die(member,101)
+	assert(deaths.size() == 1 and deaths[0].mob_id == killed_id and deaths[0].definition_id == member.mob_key, "death fact freezes identity once")
+	var captured: Dictionary = deaths[0].contributions.duplicate()
+	member.contributions.clear()
+	assert(deaths[0].contributions == captured and deaths[0].timestamp_ms == 100 and deaths[0].experience_reward == member.definition.experience_reward, "death result survives actor contribution cleanup")
 	assert(pack.replacements.size() == 1, "Repeated death cannot schedule another replacement")
-	combat._tick_mobs(1.0/60,1099)
+	world.mob_system.tick(1.0/60,1099)
 	assert(pack.actor_ids.size() == 14)
-	combat._tick_mobs(1.0/60,1100)
+	world.mob_system.tick(1.0/60,1100)
 	var fresh_id: int = pack.actor_ids.back()
-	var fresh := combat.dogs[fresh_id]
+	var fresh := world.mob_system.mobs[fresh_id]
 	assert(not ids.has(fresh_id) and fresh.pack_instance_id == pack.pack_instance_id and fresh.hp == fresh.max_hp)
-	assert(fresh.definition == member.definition and combat._horizontal_distance(fresh.position,pack.anchor) <= pack.spawn_radius)
-	for id: int in ids.slice(1): assert(combat.dogs[id].hp > 0, "Other members survive replacement")
-	combat._tick_mobs(1.0/60,6100)
-	assert(not combat.dogs.has(killed_id) and pack.actor_ids.size() == 14)
+	assert(fresh.definition == member.definition and world.mob_system.horizontal_distance(fresh.position,pack.anchor) <= pack.spawn_radius)
+	for id: int in ids.slice(1): assert(world.mob_system.mobs[id].hp > 0, "Other members survive replacement")
+	world.mob_system.tick(1.0/60,6100)
+	assert(not world.mob_system.mobs.has(killed_id) and pack.actor_ids.size() == 14)
 	combat.selected_target = {"kind":&"mob","id":killed_id}
 	combat.autoattack = true
 	combat._clear_invalid_target()
 	assert(combat.selected_target.is_empty() and not combat.autoattack)
 	# A temporary Metin pack shares definitions but expires without replacement.
-	var wave := combat.create_pack([entry(wild,2),entry(feral,1)],Vector3(6,0,-6),2,3,10,0,"metin-test",10000)
+	var wave := world.mob_system.create_pack([entry(wild,2),entry(feral,1)],Vector3(6,0,-6),2,3,10,0,"metin-test",10000)
 	var wave_ids: Array[int] = wave.actor_ids.duplicate()
-	for id: int in wave_ids: assert(combat.dogs[id].source_metinstone_id == "metin-test" and not combat.dogs[id].respawn_enabled)
-	combat.dogs[wave_ids[0]].hp = 0
-	combat._die(combat.dogs[wave_ids[0]],7000)
+	for id: int in wave_ids: assert(world.mob_system.mobs[id].source_metinstone_id == "metin-test" and not world.mob_system.mobs[id].respawn_enabled)
+	world.mob_system.mobs[wave_ids[0]].hp = 0
+	world.mob_system.die(world.mob_system.mobs[wave_ids[0]],7000)
 	assert(wave.replacements.is_empty())
-	combat._tick_mobs(1.0/60,10000)
-	for id: int in wave_ids: assert(not combat.dogs.has(id))
-	assert(not combat.packs.has(wave.pack_instance_id))
+	world.mob_system.tick(1.0/60,10000)
+	for id: int in wave_ids: assert(not world.mob_system.mobs.has(id))
+	assert(not world.mob_system.packs.has(wave.pack_instance_id))
 	# 50 live actors, several packs, desynchronized wander, short server ticks.
-	combat.create_pack([entry(wild,18)],Vector3(-7,0,-7),1,2,8,1)
-	combat.create_pack([entry(feral,15)],Vector3(7,0,7),1,2,8,1)
-	assert(combat.dogs.size() == 50)
-	for mob: SpikeWildDog3D in combat.dogs.values():
+	world.mob_system.create_pack([entry(wild,18)],Vector3(-7,0,-7),1,2,8,1)
+	world.mob_system.create_pack([entry(feral,15)],Vector3(7,0,7),1,2,8,1)
+	assert(world.mob_system.mobs.size() == 50)
+	for mob: SpikeWildDog3D in world.mob_system.mobs.values():
 		mob.ai_enabled = true
 		mob.ai_state = MobState.Value.IDLE
 		mob.wander_at_ms = 0
 	for i: int in 20:
-		combat._tick_mobs(1.0/60,11000+i*17)
-		for mob: SpikeWildDog3D in combat.dogs.values():
+		world.mob_system.tick(1.0/60,11000+i*17)
+		for mob: SpikeWildDog3D in world.mob_system.mobs.values():
 			assert(mob.position.is_finite() and mob.hp > 0 and mob.ai_state in [MobState.Value.IDLE,MobState.Value.WANDER])
 		await get_tree().physics_frame
-	measure_snapshots(combat,50)
-	combat.create_pack([entry(wild,50)],Vector3.ZERO,1,2,8,1)
-	assert(combat.dogs.size() == 100)
-	measure_snapshots(combat,100)
+	measure_snapshots(world,50)
+	world.mob_system.create_pack([entry(wild,50)],Vector3.ZERO,1,2,8,1)
+	assert(world.mob_system.mobs.size() == 100)
+	measure_snapshots(world,100)
 	world.free()
 	WorldServer.curr = null
 	server.free()
 	print("MOB_PACKS_OK: composition, identity, aggro, anchor leash, per-member replacement, Metin expiry and 50 actors")
 	get_tree().quit()
 
-func measure_snapshots(combat: SpikeCombat3D, count: int) -> void:
+func measure_snapshots(world: SpikeWorld3D, count: int) -> void:
 	# Frozen pre-refactor wire shape; only the new side uses production encoding.
 	var legacy: Dictionary = {}
-	for mob: SpikeWildDog3D in combat.dogs.values():
+	for mob: SpikeWildDog3D in world.mob_system.mobs.values():
 		legacy[mob.mob_instance_id] = {"position":mob.position,"yaw":mob.rotation.y,
 			"hp":mob.hp,"state":mob.ai_state,"max_hp":mob.max_hp,"damage":mob.attack_damage,
 			"title":mob.title,"home":mob.home,"source_metinstone_id":mob.source_metinstone_id,
 			"mob_key":mob.mob_key,"visual_id":mob.visual_id,"move_speed":mob.move_speed,
 			"pack_instance_id":mob.pack_instance_id}
-	var records := combat._mob_snapshots()
+	var records := world.mob_system.snapshot()
 	assert(records.size() == count)
 	var decoded: Dictionary = bytes_to_var(var_to_bytes({"mobs":records}))
 	var seen: Dictionary[int,bool] = {}
@@ -170,13 +176,13 @@ func measure_snapshots(combat: SpikeCombat3D, count: int) -> void:
 		var id: int = record[MobSnapshot.Field.ID]
 		assert(not seen.has(id))
 		seen[id] = true
-		var mob: SpikeWildDog3D = combat.dogs[id]
+		var mob: SpikeWildDog3D = world.mob_system.mobs[id]
 		assert(MobDefinitions.resolve(record[MobSnapshot.Field.MOB_KEY]) == mob.definition)
 		assert(record[MobSnapshot.Field.POSITION] == mob.position and record[MobSnapshot.Field.YAW] == mob.rotation.y)
 		assert(record[MobSnapshot.Field.HP] == mob.hp and record[MobSnapshot.Field.SOURCE_METIN] == mob.source_metinstone_id)
 		assert(typeof(record[MobSnapshot.Field.STATE]) == TYPE_INT)
 		assert(record[MobSnapshot.Field.STATE] == mob.ai_state)
-	var probe: SpikeWildDog3D = combat.dogs.values()[0]
+	var probe: SpikeWildDog3D = world.mob_system.mobs.values()[0]
 	var original_state := probe.ai_state
 	for name: String in MobState.NAMES.values():
 		probe.ai_state = MobState.Value[name]

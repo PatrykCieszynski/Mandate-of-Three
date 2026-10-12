@@ -23,14 +23,14 @@ func run_server() -> void:
 	var combat := world.combat_endpoint
 	world.set_physics_process(false)
 	combat.set_physics_process(false)
-	for dog: SpikeWildDog3D in combat.dogs.values(): dog.ai_enabled = false
+	for dog: SpikeWildDog3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	var hero: int = world.characters.keys()[0]
 	var body: SpikeCharacter3D = world.characters[hero]
 	var stats: Dictionary = server.runtime_equipment[server.connected_players[hero].player_id].stats
 	stats.attack_speed = 100.0
 	body.position = Vector3(0,0,5)
 	body.rotation.y = 0
-	var target: SpikeWildDog3D = combat.dogs[1]
+	var target: SpikeWildDog3D = world.mob_system.mobs[1]
 	target.position = Vector3(0,0,3.6)
 	await get_tree().physics_frame
 	var now := Time.get_ticks_msec()
@@ -137,7 +137,7 @@ func physics_steps(body: SpikeCharacter3D, count: int, direction: Vector2 = Vect
 		body.simulate(1.0/60,direction)
 
 func check_body_contracts(combat: SpikeCombat3D, body: SpikeCharacter3D, target: SpikeWildDog3D, hero: int, stats: Dictionary) -> void:
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
 		dog.collision_layer = 0
 		dog.hit_reaction.clear()
 		dog.knockback_velocity = Vector3.ZERO
@@ -288,7 +288,7 @@ func check_body_edge_cases(combat: SpikeCombat3D, body: SpikeCharacter3D, target
 			var spread := lerpf(-.3,.3,float(index)/maxi(1,count-1))
 			dog.setup_dog(9000+index,origin+Vector3(spread,0,-.2-.04*(index%3)))
 			world.add_child(dog)
-			combat.dogs[dog.mob_id] = dog
+			world.mob_system.mobs[dog.mob_id] = dog
 			pack.append(dog)
 		body.cancel_attack_advance()
 		body.position = origin
@@ -335,7 +335,7 @@ func check_body_edge_cases(combat: SpikeCombat3D, body: SpikeCharacter3D, target
 		pack_results.append(result)
 		print("ACTION_PACK ",result)
 		for dog: SpikeWildDog3D in pack:
-			combat.dogs.erase(dog.mob_id)
+			world.mob_system.mobs.erase(dog.mob_id)
 			dog.free()
 	target.collision_layer = 4
 	for result: Dictionary in angle_results:

@@ -11,7 +11,7 @@ func _ready() -> void:
 	for point: MobSpawnPoint3D in points:
 		assert(point.valid())
 		for entry: MobSpawnEntry in point.members: expected += entry.count
-	assert(region != null and expected > 0 and world.combat_endpoint.dogs.size() == expected)
+	assert(region != null and expected > 0 and world.mob_system.mobs.size() == expected)
 	assert(world.player_spawn().distance_to(FirstRegionGraybox.HUB) < 5)
 	var map: RID = world.get_world_3d().navigation_map
 	for i: int in 30:

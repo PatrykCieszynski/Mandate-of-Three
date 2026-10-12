@@ -6,7 +6,7 @@ var running: bool = false
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
-	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values(): dog.ai_enabled = false
+	for dog: SpikeWildDog3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	for id: int in world.characters: phase.rpc_id(id, "GO", "")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
 	for id: int in world.characters:

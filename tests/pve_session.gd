@@ -45,7 +45,7 @@ func run() -> void:
 	while combat.state.is_empty() or combat.state.drops.is_empty() or (CmdlineUtils.get_parsed_args().has("xp-levelup") and int(combat.state.progression.level) < 2):
 		var nearest: float = INF
 		var point: Vector3 = Vector3.ZERO
-		for dog: SpikeWildDog3D in combat.dogs.values():
+		for dog: SpikeWildDog3D in world.mob_system.mobs.values():
 			if dog.ai_state in [MobState.Value.DEAD, MobState.Value.DISABLED]: continue
 			var distance: float = world.characters[world.local_peer].target_position.distance_to(dog.target_position)
 			if distance < nearest:

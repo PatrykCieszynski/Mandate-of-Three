@@ -194,7 +194,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 		if damage <= 0: continue
 		hit_set[dog.mob_id] = true
 		hit_ids.append(dog.mob_id)
-		_endpoint.apply_mob_hit(dog,peer_id,result,horizontal if horizontal.length_squared() > 0.001 else forward,now)
+		_world.mob_system.apply_hit(dog,peer_id,result,horizontal if horizontal.length_squared() > 0.001 else forward,now)
 		var event := result.presentation()
 		event["id"] = dog.mob_instance_id
 		event["target_kind"] = "mob"

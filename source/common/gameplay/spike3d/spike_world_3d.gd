@@ -1,6 +1,7 @@
 class_name SpikeWorld3D
 extends Node3D
 var services := MandateWorldServices.new()
+var mob_system := MobSystem.new()
 var ground_loot := GroundLootSystem.new()
 var kill_rewards := KillRewardResolver.new()
 ## Shared RPC endpoint under the authenticated TinyMMO instance path.
@@ -47,13 +48,14 @@ func _ready() -> void:
 	combat_endpoint = SpikeCombat3D.new()
 	combat_endpoint.name = "Combat"
 	combat_endpoint.services = services
+	mob_system.setup(self,combat_endpoint,services)
 	add_child(combat_endpoint)
 	currency_endpoint = SpikeCurrency3D.new()
 	currency_endpoint.name = "Currency"
 	currency_endpoint.services = services
 	add_child(currency_endpoint)
 	kill_rewards.setup(services,ground_loot,currency_endpoint)
-	combat_endpoint.mob_died.connect(kill_rewards.handle_mob_death)
+	mob_system.mob_died.connect(kill_rewards.handle_mob_death)
 	if _server and services.progression()!=null:
 		services.progression().experience_awarded.connect(combat_endpoint.publish_experience)
 	npc_endpoint = NpcInteraction3D.new()

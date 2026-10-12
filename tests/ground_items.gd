@@ -14,8 +14,8 @@ func rolled_item(owner: int, uid: String, bonus: int) -> ItemInstance:
 	return item
 
 func _ready() -> void:
-	check(KillRewardResolver.owner_for_contributions({2:10,1:10})==1 and KillRewardResolver.owner_for_contributions({1:10,2:10})==1,"reward ties use stable owner ID, not dictionary iteration order")
-	check(KillRewardResolver.owner_for_contributions({})==0,"no contributor means public reward")
+	check(MobDeathResult.owner_for_contributions({2:10,1:10})==1 and MobDeathResult.owner_for_contributions({1:10,2:10})==1,"reward ties use stable owner ID, not dictionary iteration order")
+	check(MobDeathResult.owner_for_contributions({})==0,"no contributor means public reward")
 	var db := SQLite.new()
 	db.path = "res://.godot/verification/ground-items-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode()
 	check(db.open_db(), "open")

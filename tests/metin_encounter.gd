@@ -31,7 +31,7 @@ func _check_target_identity() -> void:
 	var dog := SpikeWildDog3D.new()
 	dog.setup_dog(17,Vector3.ZERO)
 	world.add_child(dog)
-	combat.dogs[17] = dog
+	world.mob_system.mobs[17] = dog
 	var mob: Dictionary = {"kind":&"mob","id":17}
 	combat.select_target(mob)
 	mob.id = 18
@@ -39,12 +39,12 @@ func _check_target_identity() -> void:
 	dog.die(0)
 	combat.assist_direction(Vector2.ZERO)
 	assert(combat.selected_target.is_empty() and not combat.autoattack, "Death clears even without autoattack")
-	combat.dogs.erase(17)
+	world.mob_system.mobs.erase(17)
 	dog.free()
 	dog = SpikeWildDog3D.new()
 	dog.setup_dog(18,Vector3.ZERO)
 	world.add_child(dog)
-	combat.dogs[18] = dog
+	world.mob_system.mobs[18] = dog
 	assert(combat.selected_target.is_empty() and combat._resolve_target({"kind":&"mob","id":17}) == null, "Replacement identity never revives old selection")
 	combat.select_target({"kind":&"mob","id":18})
 	combat.autoattack = true
@@ -54,16 +54,16 @@ func _check_target_identity() -> void:
 	dog.ai_state = MobState.Value.IDLE
 	combat.select_target({"kind":&"mob","id":18})
 	combat.autoattack = true
-	combat.dogs.erase(18)
+	world.mob_system.mobs.erase(18)
 	combat._clear_invalid_target()
 	assert(combat.selected_target.is_empty() and not combat.autoattack, "Dynamic removal clears selection")
-	combat.dogs[18] = dog
+	world.mob_system.mobs[18] = dog
 	combat.select_target({"kind":&"mob","id":18})
 	combat.autoattack = true
 	dog.queue_free()
 	combat._clear_invalid_target()
 	assert(combat.selected_target.is_empty() and not combat.autoattack, "Queued deletion cannot remain a target")
-	combat.dogs.erase(18)
+	world.mob_system.mobs.erase(18)
 	var encounter := MetinEncounter.new()
 	world.add_child(encounter)
 	world.metin_encounter = encounter
