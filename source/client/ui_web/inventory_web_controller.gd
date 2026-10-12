@@ -282,38 +282,12 @@ func _process(_delta: float) -> void:
 	_npc_target_elapsed += _delta
 	if _npc_target_elapsed >= 0.1 and is_instance_valid(world) and is_instance_valid(dispatcher):
 		_npc_target_elapsed = 0.0
-		var viewport: Vector2 = world.get_viewport().get_visible_rect().size
-		var targets: Array = []
-		var camera: Camera3D = world.gameplay_camera()
-		if camera != null:
-			for actor: NeutralNpc3D in world.npc_endpoint.actors.values():
-				if targets.size() >= 64: break
-				if not actor.interactable or camera.is_position_behind(actor.global_position): continue
-				var rect := Rect2(camera.unproject_position(actor.global_position),Vector2.ZERO)
-				for x: float in [-0.4,0.4]:
-					for y: float in [0.0,1.8]:
-						for z: float in [-0.4,0.4]: rect = rect.expand(camera.unproject_position(actor.global_position + Vector3(x,y,z)))
-				if not rect.position.is_finite() or not rect.size.is_finite(): continue
-				rect = rect.intersection(Rect2(Vector2.ZERO,viewport))
-				if not rect.has_area(): continue
-				for target: Dictionary in _npc_upgrade_targets(actor,rect):
-					if targets.size() >= 64: break
-					targets.append(target)
-		var snapshot: Dictionary = {"width":viewport.x,"height":viewport.y,"targets":targets}
+		var snapshot: Dictionary = NpcDropTargetProjector.project(world.gameplay_camera(), world.get_viewport().get_visible_rect().size, world.npc_endpoint.actors.values())
 		if snapshot != _npc_targets_state:
 			_npc_targets_state = snapshot
 			dispatcher.set_domain("npc_targets",snapshot)
 	_set_tooltip_alt(_tooltip_focused and Input.is_key_pressed(KEY_ALT))
 
-static func _npc_upgrade_targets(actor: NeutralNpc3D, rect: Rect2) -> Array[Dictionary]:
-	var targets: Array[Dictionary] = []
-	if not actor.interactable or actor.definition == null: return targets
-	for service: NpcServiceDefinition in actor.definition.ordered_services():
-		if service.kind != NpcServiceDefinition.Kind.UPGRADE or not actor.service_enabled(service.service_id): continue
-		var recipe: UpgradeDefinition = UpgradeDefinitions.get_definition(service.content_ref)
-		if recipe == null or not recipe.validation_errors().is_empty(): continue
-		targets.append({"npcInstanceId":actor.instance_id,"serviceId":str(service.service_id),"itemDefinitionId":str(recipe.item_definition_id),"fromLevel":recipe.from_level,"x":rect.position.x,"y":rect.position.y,"w":rect.size.x,"h":rect.size.y})
-	return targets
 
 func _set_tooltip_alt(pressed: bool) -> void:
 	if pressed == _tooltip_alt: return

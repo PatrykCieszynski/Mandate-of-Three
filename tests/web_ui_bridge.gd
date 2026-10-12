@@ -27,7 +27,7 @@ func _run() -> void:
 	var another_service: NpcServiceDefinition = drop_actor.definition.get_service(&"upgrade").duplicate(true)
 	another_service.service_id = &"another_upgrade"
 	drop_actor.definition.services.append(another_service)
-	var content_targets: Array[Dictionary] = InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4))
+	var content_targets: Array[Dictionary] = NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4))
 	assert(content_targets.size() == 2)
 	assert(content_targets[0].npcInstanceId == drop_actor.instance_id and content_targets[0].serviceId != content_targets[1].serviceId)
 	assert(content_targets[0].itemDefinitionId == str(UpgradeDefinitions.BASIC.item_definition_id) and content_targets[0].fromLevel == UpgradeDefinitions.BASIC.from_level)
@@ -37,14 +37,14 @@ func _run() -> void:
 	var old_recipe_item_id: StringName = recipe_fixture.item_definition_id
 	item_fixture.definition_id = &"content_blade"
 	recipe_fixture.item_definition_id = &"content_blade"
-	content_targets = InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4))
+	content_targets = NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4))
 	item_fixture.definition_id = old_item_id
 	recipe_fixture.item_definition_id = old_recipe_item_id
 	assert(content_targets[0].itemDefinitionId == "content_blade", "Targets follow content references, not a hardcoded sword ID")
 	drop_actor.disabled_services.append(another_service.service_id)
-	assert(InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4)).size() == 1)
+	assert(NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4)).size() == 1)
 	drop_actor.definition.get_service(&"upgrade").content_ref = &"missing"
-	assert(InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4)).is_empty())
+	assert(NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4)).is_empty())
 	drop_actor.free()
 	var drop_controller := DropControllerFixture.new()
 	drop_controller.world = SpikeWorld3D.new()
