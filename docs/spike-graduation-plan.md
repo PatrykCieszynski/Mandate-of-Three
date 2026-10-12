@@ -90,6 +90,10 @@ disconnect/relog. Attack timeline, AI i fizyka pozostają poza refaktorem A.
 
 ## Package B — Combat i aktorzy
 
+Szczegółowy plan wykonawczy i zasady migracji istniejących testów:
+[Package B](spike-package-b-plan.md). Wykonanie na osobnym branchu z aktualnego
+spike-graduation; poniżej pozostaje zatwierdzony zakres nadrzędny.
+
 | Etap | Zakres | Właściciel |
 | --- | --- | --- |
 | B1 | Stan basic attack | PlayerCombatRuntime |
