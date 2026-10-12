@@ -1,0 +1,97 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://addons/sky_3d/src/Sky3D.gd" id="1"]
+[ext_resource type="Script" path="res://addons/sky_3d/src/SkyDome.gd" id="2"]
+[ext_resource type="Script" path="res://addons/sky_3d/src/TimeOfDay.gd" id="3"]
+[ext_resource type="Shader" path="res://addons/sky_3d/shaders/SkyMaterial.gdshader" id="4"]
+
+[sub_resource type="ShaderMaterial" id="SkyMaterial"]
+resource_local_to_scene = true
+shader = ExtResource("4")
+
+[sub_resource type="Sky" id="Sky"]
+resource_local_to_scene = true
+radiance_size = 3
+sky_material = SubResource("SkyMaterial")
+
+[sub_resource type="Environment" id="Environment"]
+resource_local_to_scene = true
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 3
+ambient_light_sky_contribution = 1.0
+reflected_light_source = 2
+tonemap_mode = 4
+tonemap_exposure = 1.05
+ssao_enabled = true
+ssao_radius = 0.85
+ssao_intensity = 0.7
+ssao_power = 1.3
+ssao_detail = 0.25
+ssil_enabled = true
+ssil_radius = 1.5
+ssil_intensity = 0.12
+fog_enabled = true
+fog_light_color = Color(0.745, 0.812, 0.843, 1)
+fog_light_energy = 0.8
+fog_sun_scatter = 0.08
+fog_density = 0.0018
+fog_aerial_perspective = 0.6
+fog_sky_affect = 0.25
+
+[sub_resource type="CameraAttributesPractical" id="Exposure"]
+resource_local_to_scene = true
+exposure_multiplier = 1.0
+auto_exposure_enabled = false
+
+[node name="WorldVisualEnvironment" type="WorldEnvironment"]
+environment = SubResource("Environment")
+camera_attributes = SubResource("Exposure")
+script = ExtResource("1")
+fog_enabled = false
+night_ambient_boost = false
+contribution_tween_time = 0.0
+
+[node name="SunLight" type="DirectionalLight3D" parent="."]
+shadow_enabled = true
+shadow_bias = 0.03
+shadow_normal_bias = 1.0
+shadow_opacity = 0.9
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 100.0
+
+[node name="MoonLight" type="DirectionalLight3D" parent="."]
+light_energy = 0.0
+
+[node name="SkyDome" type="Node" parent="."]
+script = ExtResource("2")
+sun_light_color = Color(1, 0.956, 0.87, 1)
+sun_horizon_light_color = Color(1, 0.78, 0.58, 1)
+sun_light_energy = 1.65
+moon_light_energy = 0.0
+ground_color = Color(0.36, 0.42, 0.46, 1)
+atm_day_tint = Color(0.73, 0.87, 1, 1)
+atm_horizon_light_tint = Color(1, 0.85, 0.7, 1)
+atm_thickness = 0.8
+atm_darkness = 0.45
+fog_visible = false
+cirrus_coverage = 0.25
+cumulus_coverage = 0.42
+cumulus_intensity = 0.75
+wind_speed = 0.4
+wind_direction = 0.7
+
+[node name="TimeOfDay" type="Node" parent="."]
+script = ExtResource("3")
+editor_time_enabled = false
+game_time_enabled = false
+dome_path = NodePath("../SkyDome")
+current_time = 15.5
+year = 2025
+month = 6
+day = 21
+latitude = 0.61086524
+longitude = 0.0
+utc = 0.0
+compute_moon_coords = false
+compute_deep_space_coords = false

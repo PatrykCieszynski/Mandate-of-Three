@@ -78,6 +78,15 @@ sphere collision, damped return and data-defined settings. Manual WASD follows t
 bounded intention protocol and server authority. Auto-align is off by default. Native
 feel/CEF interaction still require the documented manual acceptance pass.
 
+## Visual baseline
+
+[Visual V1](visual-upgrade-v1.md) adds a fixed 15:30 Sky3D environment on the
+native 3D client: procedural atmosphere/clouds, sun, sky ambient/reflections,
+AgX, directional shadows, SSAO, light SSIL and native horizon haze. Time remains
+stopped; no full day/night, weather or terrain conversion is part of this slice.
+The existing First Region graybox and assets remain the basis for visual tuning.
+Server/headless composition omits the visual environment nodes.
+
 ## Next gameplay milestones
 
 Yang wallet/autoloot/test spend, NPC Shop and the +0 → +1 Upgrade slice are

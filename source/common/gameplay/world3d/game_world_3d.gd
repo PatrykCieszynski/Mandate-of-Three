@@ -108,20 +108,8 @@ func _build_arena() -> void:
 		for axis: int in range(-14, 16, 2):
 			_decoration(Vector3(axis, 0.006, 0), Vector3(0.025, 0.01, 31), Color("4b616c"))
 			_decoration(Vector3(0, 0.007, axis), Vector3(31, 0.01, 0.025), Color("4b616c"))
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-55, -30, 0)
-	light.light_energy = 1.2
-	light.shadow_enabled = true
-	add_child(light)
-	var environment := WorldEnvironment.new()
-	var settings := Environment.new()
-	settings.background_mode = Environment.BG_COLOR
-	settings.background_color = Color("172531")
-	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	settings.ambient_light_color = Color("c2d6ea")
-	settings.ambient_light_energy = 0.65
-	environment.environment = settings
-	add_child(environment)
+	if not _server and DisplayServer.get_name() != "headless":
+		add_child(preload("res://source/client/world_visuals/world_visual_environment.tscn").instantiate())
 
 func _box(node_name: String, center: Vector3, dimensions: Vector3, color: Color) -> void:
 	var body := StaticBody3D.new()
