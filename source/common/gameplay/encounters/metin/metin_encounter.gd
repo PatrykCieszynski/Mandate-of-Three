@@ -20,8 +20,8 @@ func _spawn() -> void:
 	stone.position = FirstRegionGraybox.METIN_POINTS[runtime.site_index]
 	stone.present(definition.display_name,runtime.hp,definition.max_hp,true)
 func apply_damage(peer_id: int, amount: int, now: int) -> bool:
-	if not GameMode.is_world_server() or not _world.combat_endpoint._living(peer_id): return false
-	var result: Dictionary = runtime.damage(_world.combat_endpoint._owner(peer_id),amount,now)
+	if not GameMode.is_world_server() or not _world.combat_endpoint.is_player_alive(peer_id): return false
+	var result: Dictionary = runtime.damage(WorldServer.curr.connected_players[peer_id].player_id,amount,now)
 	if result.is_empty(): return false
 	for index: int in result.waves: _spawn_wave(definition.waves[index],now,peer_id)
 	if int(result.reward_owner) > 0:

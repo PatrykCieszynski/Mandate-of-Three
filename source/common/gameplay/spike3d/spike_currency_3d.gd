@@ -53,7 +53,7 @@ func spawn_currency(position: Vector3, owner_id: int, owner_name: String, now: i
 	return _next_drop_id
 
 func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP_REACH) -> Dictionary:
-	if not _world.combat_endpoint._living(peer_id) or _database() == null:
+	if not _world.combat_endpoint.is_player_alive(peer_id) or _database() == null:
 		return {"ok": false, "error": "player"}
 	if not ground.has(drop_id): return {"ok": false, "error": "gone"}
 	var drop: Dictionary = ground[drop_id]
@@ -64,7 +64,7 @@ func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP
 	if now < int(drop.protected_until) and owner_id != int(drop.owner):
 		return {"ok": false, "error": "reserved"}
 	var position: Vector3 = _world.characters[peer_id].position
-	if position.distance_to(drop.position) > reach or not _world.combat_endpoint._visible_between(position, drop.position):
+	if position.distance_to(drop.position) > reach or not _world.has_line_of_sight(position, drop.position):
 		return {"ok": false, "error": "distance"}
 	if not _database().add_yang(owner_id, int(drop.amount)):
 		return {"ok": false, "error": "wallet"}
@@ -73,7 +73,7 @@ func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_pickup(drop_id: int) -> void:
-	if not GameMode.is_world_server() or not _world.combat_endpoint._living(multiplayer.get_remote_sender_id()): return
+	if not GameMode.is_world_server() or not _world.combat_endpoint.is_player_alive(multiplayer.get_remote_sender_id()): return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	var now: int = Time.get_ticks_msec()
 	if now - _pickup_ms.get(peer_id, -1000) < 100: return
@@ -82,7 +82,7 @@ func request_pickup(drop_id: int) -> void:
 	_send_snapshot()
 
 func spend_for_peer(peer_id: int, sequence: int, now: int) -> Dictionary:
-	if not _world.combat_endpoint._living(peer_id) or _database() == null:
+	if not _world.combat_endpoint.is_player_alive(peer_id) or _database() == null:
 		return {"ok": false, "error": "player"}
 	if sequence < 0 or sequence > 2147483647 or sequence <= _spend_sequences.get(peer_id, -1):
 		return {"ok": false, "error": "replay"}
@@ -125,6 +125,9 @@ func _physics_process(delta: float) -> void:
 func _wallet_changed(owner_id: int) -> void:
 	for peer_id: int in _world.characters:
 		if _owner(peer_id) == owner_id: _send_snapshot(peer_id)
+
+func resynchronize(peer_id: int) -> void:
+	_send_snapshot(peer_id)
 
 func _send_snapshot(only_peer: int = -1) -> void:
 	if _database() == null: return

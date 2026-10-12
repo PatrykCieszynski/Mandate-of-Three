@@ -59,7 +59,7 @@ func snapshot_for_peer(peer_id: int) -> Dictionary:
 	var recipe: UpgradeDefinition = auth.recipe
 	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 	if player == null: return {"active":false}
-	var inventory: Dictionary = _world.inventory_endpoint._store().inventory(player.player_id)
+	var inventory: Dictionary = WorldServer.curr.database.item_store.inventory(player.player_id)
 	if not inventory.ok: return {"active":false}
 	var owned: int = 0
 	var candidate: Dictionary = {}
@@ -91,7 +91,7 @@ func request_upgrade(action: String, instance_id: String, service_id: String, ui
 	# Selection changes only the quote; a stale revision also repairs Inventory.
 	if action == "upgrade" and not result.ok:
 		_world.inventory_endpoint.resynchronize(peer_id)
-		_world.currency_endpoint._send_snapshot(peer_id)
+		_world.currency_endpoint.resynchronize(peer_id)
 	elif result.get("error","") == "stale":
 		_world.inventory_endpoint.resynchronize(peer_id)
 	publish(peer_id)

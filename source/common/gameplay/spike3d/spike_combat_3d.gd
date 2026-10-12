@@ -153,7 +153,7 @@ func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntim
 	return dog
 
 func aggro_pack(pack_id: int, peer_id: int) -> void:
-	if not GameMode.is_world_server() or not _living(peer_id) or not packs.has(pack_id): return
+	if not GameMode.is_world_server() or not is_player_alive(peer_id) or not packs.has(pack_id): return
 	var pack: MobPackRuntime = packs[pack_id]
 	if _horizontal_distance(_world.characters[peer_id].position,pack.anchor) > pack.leash_radius: return
 	for id: int in pack.actor_ids:
@@ -204,7 +204,7 @@ func _build_navigation() -> void:
 	_world.add_child(navigation_region)
 
 func _store() -> ItemStoreSqlite:
-	return _world.inventory_endpoint._store()
+	return null if WorldServer.curr == null or WorldServer.curr.database == null else WorldServer.curr.database.item_store
 
 func initialize_peer(peer_id: int) -> void:
 	health[peer_id] = 100
@@ -228,16 +228,12 @@ func _owner(peer_id: int) -> int:
 	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 	return 0 if resource == null else resource.player_id
 
-func _living(peer_id: int) -> bool:
+func is_player_alive(peer_id: int) -> bool:
 	return _world.characters.has(peer_id) and health.get(peer_id, 0) > 0
 
 func can_move(peer_id: int, now: int = Time.get_ticks_msec()) -> bool:
 	var body: SpikeCharacter3D = _world.characters.get(peer_id)
 	return health.get(peer_id,100) > 0 and now >= _movement_unlock_ms.get(peer_id,0) and (body == null or (not body.hit_reaction.locked(now) and not body.knockback_active()))
-
-func _visible_between(from: Vector3, to: Vector3) -> bool:
-	var query := PhysicsRayQueryParameters3D.create(from + Vector3.UP * 0.65, to + Vector3.UP * 0.65, 1)
-	return _world.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_attack(sequence: int) -> void:
@@ -245,7 +241,7 @@ func request_attack(sequence: int) -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
 	if sequence < 0 or sequence > 2147483647 or sequence <= _sequences.get(peer_id,-1): return
 	var now := Time.get_ticks_msec()
-	if not begin_attack(peer_id,sequence,now) and _living(peer_id) and not _queued_attacks.has(peer_id):
+	if not begin_attack(peer_id,sequence,now) and is_player_alive(peer_id) and not _queued_attacks.has(peer_id):
 		var body: SpikeCharacter3D = _world.characters[peer_id]
 		var retry_at: int = maxi(_next_attack_ms.get(peer_id,now),body.hit_reaction.get_up_until_ms)
 		var active: Dictionary = _active_attacks.get(peer_id,{})
@@ -263,19 +259,19 @@ func combo_state(peer_id: int) -> BasicAttackComboState:
 	return _combo_states[peer_id]
 
 func set_combo_skill_level(peer_id: int, level: int) -> bool:
-	if not GameMode.is_world_server() or not _living(peer_id): return false
+	if not GameMode.is_world_server() or not is_player_alive(peer_id): return false
 	var accepted := combo_state(peer_id).set_skill_level(level)
 	if accepted and combo_state(peer_id).current_combo_step == -1: _combo.erase(peer_id)
 	return accepted
 
 func set_combo_enabled(peer_id: int, enabled: bool) -> bool:
-	if not GameMode.is_world_server() or not _living(peer_id): return false
+	if not GameMode.is_world_server() or not is_player_alive(peer_id): return false
 	var accepted := combo_state(peer_id).set_enabled(enabled)
 	if accepted and combo_state(peer_id).current_combo_step == -1: _combo.erase(peer_id)
 	return accepted
 
 func set_combo_weapon_mode(peer_id: int, mode: StringName) -> bool:
-	if not GameMode.is_world_server() or not _living(peer_id): return false
+	if not GameMode.is_world_server() or not is_player_alive(peer_id): return false
 	var accepted := combo_state(peer_id).set_weapon_mode(mode)
 	if accepted and combo_state(peer_id).current_combo_step == -1: _combo.erase(peer_id)
 	return accepted
@@ -284,7 +280,7 @@ func set_combo_weapon_mode(peer_id: int, mode: StringName) -> bool:
 func request_combo_toggle() -> void:
 	if not GameMode.is_world_server(): return
 	var sender := multiplayer.get_remote_sender_id()
-	if not _living(sender): return
+	if not is_player_alive(sender): return
 	set_combo_enabled(sender,not combo_state(sender).combo_enabled)
 
 func remember_next_facing(peer_id: int, direction: Vector2) -> void:
@@ -292,7 +288,7 @@ func remember_next_facing(peer_id: int, direction: Vector2) -> void:
 		_desired_facing[peer_id] = {"yaw":atan2(-direction.x,-direction.y),"time":Time.get_ticks_msec()}
 
 func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
-	if not _living(peer_id) or sequence < 0 or sequence > 2147483647 or sequence <= _sequences.get(peer_id,-1): return false
+	if not is_player_alive(peer_id) or sequence < 0 or sequence > 2147483647 or sequence <= _sequences.get(peer_id,-1): return false
 	if _owner(peer_id) <= 0: return false
 	_sequences[peer_id] = sequence
 	var body: SpikeCharacter3D = _world.characters[peer_id]
@@ -346,7 +342,7 @@ func _advance_attack_queue(now: int) -> void:
 	for peer_id: int in _active_attacks.keys():
 		var active: Dictionary = _active_attacks[peer_id]
 		var body: SpikeCharacter3D = _world.characters.get(peer_id)
-		if not _living(peer_id) or body == null or body.hit_reaction.locked(now) or body.knockback_active():
+		if not is_player_alive(peer_id) or body == null or body.hit_reaction.locked(now) or body.knockback_active():
 			_clear_attack_intents(peer_id)
 			continue
 		if now < _next_attack_ms.get(peer_id,0): continue
@@ -371,7 +367,7 @@ func _clear_attack_intents(peer_id: int) -> void:
 
 func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	var hit_ids: Array[int] = []
-	if not _living(peer_id) or _world.characters[peer_id].hit_reaction.locked(now): return hit_ids
+	if not is_player_alive(peer_id) or _world.characters[peer_id].hit_reaction.locked(now): return hit_ids
 	var definition: BasicAttackStepDefinition = swing.step
 	if swing.get("resolved",false) or now < int(swing.get("impact",now)): return hit_ids
 	var traced := definition.combat_trace != null
@@ -395,7 +391,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 			var metin: MetinEncounter = _world.metin_encounter
 			if hit_set.has(-1): continue
 			trace_tests += 1
-			if metin.active() and _melee_hits(definition,actor,metin.stone,forward) and _visible_between(body.position,metin.stone.position):
+			if metin.active() and _melee_hits(definition,actor,metin.stone,forward) and _world.has_line_of_sight(body.position,metin.stone.position):
 				var previous_hp: int = metin.runtime.hp
 				if metin.apply_damage(peer_id,int(swing.attack*definition.damage_multiplier),now):
 					hit_set[-1] = true
@@ -408,7 +404,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 		var horizontal := Vector3(offset.x, 0, offset.z)
 		trace_tests += 1
 		if not _melee_hits(definition,actor,dog,forward): continue
-		if not _visible_between(body.position, dog.position): continue
+		if not _world.has_line_of_sight(body.position, dog.position): continue
 		var result := HitReactionResolver.resolve(definition,dog.reaction_profile,int(swing.attack),dog.hp,dog.hit_reaction.locked(now))
 		var damage: int = result.damage
 		if damage <= 0: continue
@@ -560,7 +556,7 @@ func request_pickup(uid: String) -> void:
 	if not GameMode.is_world_server() or _store() == null:
 		return
 	var peer_id: int = multiplayer.get_remote_sender_id()
-	if not _living(peer_id): return
+	if not is_player_alive(peer_id): return
 	var now: int = Time.get_ticks_msec()
 	if now - _pickup_ms.get(peer_id, -1000) < 100:
 		_reply(peer_id, {"ok": false, "error": "too_fast"})
@@ -585,7 +581,7 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 	if now < int(drop.protected_until) and owner_id != int(drop.owner):
 		return {"ok": false, "error": "reserved"}
 	var body: SpikeCharacter3D = _world.characters[peer_id]
-	if body.position.distance_to(drop.position) > PICKUP_REACH or not _visible_between(body.position, drop.position):
+	if body.position.distance_to(drop.position) > PICKUP_REACH or not _world.has_line_of_sight(body.position, drop.position):
 		return {"ok": false, "error": "distance"}
 	var result: Dictionary = _store().claim_ground_item(owner_id, uid, int(drop.bonus))
 	if result.ok:
@@ -639,7 +635,7 @@ func _physics_process(delta: float) -> void:
 		_send_snapshot()
 
 func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition = BasicAttackHits.MOB_MELEE, hit_direction: Vector3 = Vector3.ZERO) -> CombatHitResult:
-	if not _living(peer_id): return null
+	if not is_player_alive(peer_id): return null
 	if dev_god_mode: return CombatHitResult.new() # No damage, action lock or impulse.
 	var body: SpikeCharacter3D = _world.characters[peer_id]
 	var result := HitReactionResolver.resolve(hit,body.reaction_profile,damage,int(health[peer_id]),body.hit_reaction.locked(now))
@@ -692,18 +688,18 @@ func _tick_dog(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 		var target: int = 0
 		for peer_id: int in _world.characters:
 			var distance := _horizontal_distance(dog.position,_world.characters[peer_id].position)
-			if _living(peer_id) and distance < nearest and _horizontal_distance(_world.characters[peer_id].position,pack.anchor) <= pack.leash_radius:
+			if is_player_alive(peer_id) and distance < nearest and _horizontal_distance(_world.characters[peer_id].position,pack.anchor) <= pack.leash_radius:
 				target = peer_id
 				nearest = distance
 		if target != 0: aggro_pack(pack.pack_instance_id,target)
 	if dog.ai_state in ["CHASE","ATTACK"]:
-		if not _living(dog.target_peer) or _horizontal_distance(dog.position,pack.anchor) > pack.leash_radius or _horizontal_distance(_world.characters[dog.target_peer].position,pack.anchor) > pack.leash_radius:
+		if not is_player_alive(dog.target_peer) or _horizontal_distance(dog.position,pack.anchor) > pack.leash_radius or _horizontal_distance(_world.characters[dog.target_peer].position,pack.anchor) > pack.leash_radius:
 			_begin_return(dog)
 	var direction := Vector2.ZERO
 	if dog.ai_state in ["CHASE","ATTACK"]:
 		var body: SpikeCharacter3D = _world.characters[dog.target_peer]
 		var offset: Vector3 = body.position - dog.position
-		if _horizontal_distance(dog.position,body.position) > MOB_REACH or absf(offset.y) > 1.2 or not _visible_between(dog.position,body.position):
+		if _horizontal_distance(dog.position,body.position) > MOB_REACH or absf(offset.y) > 1.2 or not _world.has_line_of_sight(dog.position,body.position):
 			dog.ai_state = "CHASE"
 			direction = Vector2(offset.x,offset.z).normalized()
 		else:
@@ -890,7 +886,7 @@ func _clear_invalid_target() -> void:
 		select_target({})
 
 func select_target(target: Dictionary) -> void:
-	if not target.is_empty(): _world._npc_approach.cancel()
+	if not target.is_empty(): _world.cancel_npc_approach()
 	selected_target = target.duplicate()
 	if _resolve_target(selected_target) == null: selected_target = {}
 	for dog: SpikeWildDog3D in dogs.values():
@@ -902,7 +898,7 @@ func select_target(target: Dictionary) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not GameMode.is_client() or not _world.input_enabled or ClientState.menu_open: return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var camera: Camera3D = _world._camera
+		var camera: Camera3D = _world.gameplay_camera()
 		var origin: Vector3 = camera.project_ray_origin(event.position)
 		var ray := PhysicsRayQueryParameters3D.create(origin, origin + camera.project_ray_normal(event.position) * 100, 4)
 		var hit: Dictionary = _world.get_world_3d().direct_space_state.intersect_ray(ray)

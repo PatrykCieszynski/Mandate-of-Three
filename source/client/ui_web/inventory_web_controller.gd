@@ -296,7 +296,7 @@ func _process(_delta: float) -> void:
 		_npc_target_elapsed = 0.0
 		var viewport: Vector2 = world.get_viewport().get_visible_rect().size
 		var targets: Array = []
-		var camera: Camera3D = world._camera
+		var camera: Camera3D = world.gameplay_camera()
 		if camera != null:
 			for actor: NeutralNpc3D in world.npc_endpoint.actors.values():
 				if targets.size() >= 64: break

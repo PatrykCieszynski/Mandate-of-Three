@@ -182,6 +182,16 @@ func _build_camera_and_ui() -> void:
 		if not _options.visible: get_viewport().gui_release_focus())
 	options_button.pressed.connect(func() -> void: _options.show())
 
+func gameplay_camera() -> Camera3D:
+	return _camera
+
+func cancel_npc_approach() -> void:
+	_npc_approach.cancel()
+
+func has_line_of_sight(from: Vector3, to: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(from+Vector3.UP*.65,to+Vector3.UP*.65,1)
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
 func show_ui_failure(reason: String) -> void:
 	push_warning("Web inventory unavailable: " + reason)
 	if not is_instance_valid(_ui_failure_label): return
