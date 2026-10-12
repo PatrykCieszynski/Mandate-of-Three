@@ -1,5 +1,6 @@
 class_name SpikeWorld3D
 extends Node3D
+var services := MandateWorldServices.new()
 ## Shared RPC endpoint under the authenticated TinyMMO instance path.
 ## Position never comes from a client: only a bounded movement intention does.
 
@@ -38,21 +39,26 @@ func _ready() -> void:
 	_build_arena()
 	inventory_endpoint = SpikeInventory3D.new()
 	inventory_endpoint.name = "Inventory"
+	inventory_endpoint.services = services
 	add_child(inventory_endpoint)
 	combat_endpoint = SpikeCombat3D.new()
 	combat_endpoint.name = "Combat"
+	combat_endpoint.services = services
 	add_child(combat_endpoint)
 	currency_endpoint = SpikeCurrency3D.new()
 	currency_endpoint.name = "Currency"
+	currency_endpoint.services = services
 	add_child(currency_endpoint)
 	npc_endpoint = NpcInteraction3D.new()
 	npc_endpoint.name = "NpcInteraction"
 	add_child(npc_endpoint)
 	shop_endpoint = Shop3D.new()
 	shop_endpoint.name = "Shop"
+	shop_endpoint.services = services
 	add_child(shop_endpoint)
 	upgrade_endpoint = Upgrade3D.new()
 	upgrade_endpoint.name = "Upgrade"
+	upgrade_endpoint.services = services
 	add_child(upgrade_endpoint)
 	var blacksmith := preload("res://source/common/gameplay/npcs/blacksmith_fixture.tscn").instantiate() as NeutralNpc3D
 	if region != null: blacksmith.position = FirstRegionGraybox.BLACKSMITH
@@ -63,6 +69,7 @@ func _ready() -> void:
 	if region != null:
 		metin_encounter = MetinEncounter.new()
 		metin_encounter.name = "MetinEncounter"
+		metin_encounter.services = services
 		add_child(metin_encounter)
 	if not _server:
 		local_peer = multiplayer.get_unique_id()
@@ -265,7 +272,7 @@ func join_world() -> void:
 	var host: ServerInstance = get_parent() as ServerInstance
 	if host == null or not host.awaiting_peers.has(peer_id) or characters.has(peer_id):
 		return
-	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null:
 		return
 	host.awaiting_peers.erase(peer_id)
@@ -282,9 +289,9 @@ func join_world() -> void:
 
 func remove_peer(peer_id: int) -> void:
 	if _server:
-		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
-		if resource != null and WorldServer.curr.database != null:
-			WorldServer.curr.database.flush_character(resource.player_id)
+		var resource: PlayerResource = services.player_for_peer(peer_id)
+		if resource != null and services.economy() != null:
+			services.economy().flush_character(resource.player_id)
 	upgrade_endpoint.remove_peer(peer_id)
 	shop_endpoint.remove_peer(peer_id)
 	npc_endpoint.remove_peer(peer_id)
@@ -305,7 +312,7 @@ func remove_peer(peer_id: int) -> void:
 func _send_roster() -> void:
 	var roster: Dictionary = {}
 	for peer_id: int in characters:
-		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+		var resource: PlayerResource = services.player_for_peer(peer_id)
 		if resource != null:
 			roster[peer_id] = resource.display_name
 	for peer_id: int in characters:

@@ -1,5 +1,6 @@
 class_name SpikeCurrency3D
 extends Node
+var services: MandateWorldServices
 ## Ground currency is transient; only character wallet deltas reach SQLite.
 const DOG_YANG: int = 30
 const AUTO_REACH: float = 1.25
@@ -28,7 +29,7 @@ func _ready() -> void:
 	if GameMode.is_client(): _build_hud()
 
 func _database() -> WorldDatabase:
-	return null if WorldServer.curr == null else WorldServer.curr.database
+	return null if not services.available() else services.economy()
 
 func initialize_peer(peer_id: int) -> void:
 	if _database() == null: return # Physics-only fixture.
@@ -42,7 +43,7 @@ func remove_peer(peer_id: int) -> void:
 	_pickup_ms.erase(peer_id)
 
 func _owner(peer_id: int) -> int:
-	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var player: PlayerResource = services.player_for_peer(peer_id)
 	return 0 if player == null else player.player_id
 
 func spawn_currency(position: Vector3, owner_id: int, owner_name: String, now: int, amount: int = DOG_YANG) -> int:

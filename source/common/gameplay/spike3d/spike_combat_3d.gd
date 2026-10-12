@@ -1,5 +1,6 @@
 class_name SpikeCombat3D
 extends Node
+var services: MandateWorldServices
 ## Facing-based melee: no target ID or hit list is accepted from a client.
 
 const MOB_HP: int = 120
@@ -204,7 +205,7 @@ func _build_navigation() -> void:
 	_world.add_child(navigation_region)
 
 func _store() -> ItemStoreSqlite:
-	return null if WorldServer.curr == null or WorldServer.curr.database == null else WorldServer.curr.database.item_store
+	return null if not services.available() or services.economy() == null else services.economy().item_store
 
 func initialize_peer(peer_id: int) -> void:
 	health[peer_id] = 100
@@ -225,7 +226,7 @@ func remove_peer(peer_id: int) -> void:
 			if dog.ai_state not in ["DEAD", "DISABLED"]: _begin_return(dog)
 
 func _owner(peer_id: int) -> int:
-	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var resource: PlayerResource = services.player_for_peer(peer_id)
 	return 0 if resource == null else resource.player_id
 
 func is_player_alive(peer_id: int) -> bool:
@@ -312,8 +313,8 @@ func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	return _start_attack(peer_id,sequence,now,chained)
 
 func _start_attack(peer_id: int, sequence: int, now: int, chained: bool = false) -> bool:
-	var attack := WorldServer.curr.runtime_attack(_owner(peer_id))
-	var ratio := WorldServer.curr.runtime_attack_speed_ratio(_owner(peer_id))
+	var attack := services.runtime_attack(_owner(peer_id))
+	var ratio := services.runtime_attack_speed_ratio(_owner(peer_id))
 	if attack < 0 or ratio <= 0: return false
 	var resolved := combo_state(peer_id).take_step(now,chained)
 	if resolved.is_empty(): return false
@@ -414,7 +415,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 		dog.hp -= damage
 		var owner_id: int = _owner(peer_id)
 		dog.contributions[owner_id] = dog.contributions.get(owner_id, 0) + damage
-		dog.contribution_players[owner_id] = WorldServer.curr.connected_players[peer_id]
+		dog.contribution_players[owner_id] = services.player_for_peer(peer_id)
 		if dog.hp == 0:
 			_die(dog, now)
 		else:
@@ -466,7 +467,7 @@ func _die(dog: SpikeWildDog3D, now: int) -> void:
 func drop_reward(position: Vector3, owner_id: int, now: int, yang: int = SpikeCurrency3D.DOG_YANG) -> void:
 	var owner_name: String = ""
 	for peer_id: int in _world.characters:
-		if _owner(peer_id) == owner_id: owner_name = WorldServer.curr.connected_players[peer_id].display_name
+		if _owner(peer_id) == owner_id: owner_name = services.player_for_peer(peer_id).display_name
 	var uid: String = Crypto.new().generate_random_bytes(16).hex_encode()
 	ground[uid] = {"position":position,"definition_id":"iron_sword","bonus":randi_range(1,9),
 		"owner":owner_id,"owner_name":owner_name,"protected_until":now+PROTECTION_MS,"expires":now+LOOT_LIFETIME_MS}
@@ -476,15 +477,15 @@ func _award_experience(resource: PlayerResource) -> void:
 	if resource == null: return
 	# A contributor may have disconnected/relogged before the killing blow.
 	# Always use the current in-process resource rather than an old encounter ref.
-	resource = WorldServer.curr.database.dirty_progression.get(resource.player_id, resource)
-	for current: PlayerResource in WorldServer.curr.connected_players.values():
+	resource = services.economy().dirty_progression.get(resource.player_id, resource)
+	for current: PlayerResource in services.players():
 		if current.player_id == resource.player_id:
 			resource = current
 			break
 	var result: Dictionary = resource.add_experience(DOG_XP)
-	WorldServer.curr.database.mark_progression_dirty(resource)
-	for peer_id: int in WorldServer.curr.connected_players:
-		if WorldServer.curr.connected_players[peer_id] != resource: continue
+	services.economy().mark_progression_dirty(resource)
+	for peer_id: int in services.peers():
+		if services.player_for_peer(peer_id) != resource: continue
 		if _world.characters.has(peer_id):
 			receive_experience.rpc_id(peer_id, DOG_XP, int(result.levels_gained), int(result.level))
 
@@ -774,7 +775,7 @@ func _send_snapshot() -> void:
 	var levels: Dictionary = {}
 	var hit_locks: Dictionary = {}
 	for id: int in _world.characters:
-		levels[id] = WorldServer.curr.connected_players[id].level
+		levels[id] = services.player_for_peer(id).level
 		hit_locks[id] = _world.characters[id].hit_reaction.snapshot(now)
 	for id: int in _respawn_ms: respawns[id] = maxf(0, (_respawn_ms[id] - now) / 1000.0)
 	for peer_id: int in _world.characters:
@@ -786,7 +787,7 @@ func _send_snapshot() -> void:
 				"weapon_attack": int(ItemDefinitions.IRON_SWORD.base_stats[&"attack"]) + int(drop.bonus),
 				"reserved_for": drop.owner_name if now < int(drop.protected_until) else "",
 				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner)}
-		var player: PlayerResource = WorldServer.curr.connected_players[peer_id]
+		var player: PlayerResource = services.player_for_peer(peer_id)
 		receive_state.rpc_id(peer_id, {"mobs": mob_snapshots, "health": health.duplicate(), "drops": drops,
 			"combo_options":{"enabled":combo_state(peer_id).combo_enabled,"skill_level":combo_state(peer_id).combo_skill_level,"length":combo_state(peer_id).definition().steps.size()},
 			"combos": _combo.duplicate(), "respawns": respawns, "levels": levels, "hit_locks":hit_locks,

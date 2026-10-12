@@ -1,5 +1,6 @@
 class_name MetinEncounter
 extends Node
+var services: MandateWorldServices
 @export var definition: MetinDefinition = preload("res://source/common/gameplay/encounters/metin/first_metin.tres")
 var runtime := MetinRuntime.new()
 var stone: MetinStone3D
@@ -21,7 +22,7 @@ func _spawn() -> void:
 	stone.present(definition.display_name,runtime.hp,definition.max_hp,true)
 func apply_damage(peer_id: int, amount: int, now: int) -> bool:
 	if not GameMode.is_world_server() or not _world.combat_endpoint.is_player_alive(peer_id): return false
-	var result: Dictionary = runtime.damage(WorldServer.curr.connected_players[peer_id].player_id,amount,now)
+	var result: Dictionary = runtime.damage(services.player_for_peer(peer_id).player_id,amount,now)
 	if result.is_empty(): return false
 	for index: int in result.waves: _spawn_wave(definition.waves[index],now,peer_id)
 	if int(result.reward_owner) > 0:

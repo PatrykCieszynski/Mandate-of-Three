@@ -1,5 +1,6 @@
 class_name SpikeInventory3D
 extends Node
+var services: MandateWorldServices
 ## UID commands and private inventory snapshots share the authenticated map path.
 
 signal state_changed(state: Dictionary)
@@ -16,15 +17,15 @@ func _ready() -> void:
 	inventory_changed.connect(_inventory_changed)
 
 func _store() -> ItemStoreSqlite:
-	if WorldServer.curr == null or WorldServer.curr.database == null:
+	if not services.available() or services.economy() == null:
 		return null
-	return WorldServer.curr.database.item_store
+	return services.economy().item_store
 
 func initialize_peer(peer_id: int) -> void:
 	var store: ItemStoreSqlite = _store()
 	if store == null:
 		return # Physics-only fixture has no database or item domain.
-	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var resource: PlayerResource = services.player_for_peer(peer_id)
 	var result: Dictionary = store.initialize_character(resource.player_id)
 	if result.ok and OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-trace-sword"):
 		result = store.grant_dev_trace_sword(resource.player_id)
@@ -63,7 +64,7 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 	var result: Dictionary = {"ok":false,"error":"too_fast"}
 	if now - _last_action_ms.get(peer_id,-1000) >= 100:
 		_last_action_ms[peer_id] = now
-		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+		var resource: PlayerResource = services.player_for_peer(peer_id)
 		var columns: int = AccountStorageSqlite.COLUMNS if destination == "storage" else InventoryGrid.COLUMNS
 		var pages: int = AccountStorageSqlite.PAGES if destination == "storage" else InventoryGrid.PAGES
 		var position: int = page * columns * 9 + y * columns + x
@@ -72,16 +73,16 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 		else:
 			result = AccountStorageSqlite.new(_store().db).transfer(resource.player_id,uid,revision,source,destination,-1 if quick else position)
 	# Prepare every affected character before the first notification/publication.
-	var actor: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var actor: PlayerResource = services.player_for_peer(peer_id)
 	var affected: Array[int] = []
 	for other_peer: int in _world.characters:
-		var other: PlayerResource = WorldServer.curr.connected_players.get(other_peer)
+		var other: PlayerResource = services.player_for_peer(other_peer)
 		if other != null and other.account_name == actor.account_name:
 			refresh_authoritative_state(other_peer)
 			affected.append(other_peer)
 	for other_peer: int in affected:
 		if result.ok:
-			inventory_changed.emit(WorldServer.curr.connected_players[other_peer].player_id)
+			inventory_changed.emit(services.player_for_peer(other_peer).player_id)
 		else:
 			_send_state(other_peer) # Explicit repair; no committed-change fact.
 	if command_id != "": receive_operation.rpc_id(peer_id,command_id,result)
@@ -98,14 +99,14 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 		result = {"ok": false, "error": "too_fast"}
 	else:
 		_last_action_ms[peer_id] = now
-		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+		var resource: PlayerResource = services.player_for_peer(peer_id)
 		if action == "activate":
 			result = _store().activate_item(resource.player_id,uid,revision)
 		else:
 			result = _store().move_bag_item(resource.player_id, uid, revision, position) if action == "move" else _store().change_equipment(resource.player_id, uid, revision, action, position)
 	if result.ok:
 		refresh_authoritative_state(peer_id)
-		inventory_changed.emit(WorldServer.curr.connected_players[peer_id].player_id)
+		inventory_changed.emit(services.player_for_peer(peer_id).player_id)
 	else:
 		resynchronize(peer_id, str(result.error))
 	if command_id != "":
@@ -117,10 +118,10 @@ func receive_operation(command_id: String, result: Dictionary) -> void:
 
 func refresh_authoritative_state(peer_id: int) -> void:
 	# Application operations call this explicitly before emitting any facts.
-	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null or _store() == null: return
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
-	WorldServer.curr.update_runtime_equipment(resource.player_id, snapshot)
+	services.update_runtime_equipment(resource.player_id, snapshot)
 	snapshot["storage"] = AccountStorageSqlite.new(_store().db).snapshot(resource.player_id)
 	_authoritative_snapshots[peer_id] = snapshot
 	if not snapshot.ok: return
@@ -141,7 +142,7 @@ func resynchronize(peer_id: int, error: String = "") -> void:
 
 func _inventory_changed(owner_id: int) -> void:
 	for peer_id: int in _world.characters:
-		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+		var resource: PlayerResource = services.player_for_peer(peer_id)
 		if resource != null and resource.player_id == owner_id: _send_state(peer_id)
 
 func _send_state(peer_id: int, error: String = "") -> void:
