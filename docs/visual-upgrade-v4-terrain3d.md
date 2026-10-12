@@ -194,12 +194,46 @@ archives, binaries and inspection sources remain ignored.
 
 ## Adoption recommendation
 
+### Retest with the user-supplied development build (2026-10-12)
+
+The user replaced the ignored addon with a build whose plugin metadata reports
+**1.1.0-dev**, extension compatibility minimum 4.5. The pinned 1.0.2 installer
+was not rerun, and the supplied files were not overwritten. No exact upstream
+commit is recorded in the supplied metadata inspected here; identify this test
+by the following SHA256 fingerprints rather than assuming a remote branch HEAD:
+
+| Binary | SHA256 |
+| --- | --- |
+| Windows x86_64 debug (executed) | `bd60c53f756bf052146b93ff48385dd25036d24a11dadf3c1338a5e450fa7b14` |
+| Windows x86_64 release (inventory only) | `6e9c14ae66ba24e63199e1faee1ebdf4bd1db6955803b3566ccc7e837c49851a` |
+| Linux x86_64 debug (inventory only) | `734ef86df7d81d5a751f4e85ec1884d150e3ca002445303c23396b95a1d37435` |
+| Linux x86_64 release (inventory only) | `d69545e06e8f8c37b8f60d9706208dd6adf54336243e4a57c3d3ebe6101b678b` |
+
+On the same Godot 4.7.2 headless/world-server path and unchanged saved resources:
+
+- Minimal saved Terrain3D reproducer: **FAIL**, process exit
+  `3221225477 / 0xC0000005`, signal 11.
+- Full saved V4 prototype: **FAIL**, the same process exit and signal.
+- Both stacks contain the new library offsets `+5163b`, `+2bbc4e`, `+e1fbd`,
+  confirming a changed native build with the same observable failure.
+
+New ignored logs are `visual-v4-dev-minimal.log` and
+`visual-v4-dev-full-scene.log` under `.godot/verification`. Original 1.0.2 crash
+and Windows export logs were preserved under
+`.godot/verification/terrain3d-1.0.2-baseline` before rerunning the fixed-name
+probe. No export, GPU or Linux execution retest was attempted after these failed
+headless gates. No terrain resources, runtime code, plugin enablement or main
+branch were changed for this retest.
+
+### Decision
+
 Do not adopt this pinned Terrain3D release/configuration as the production map
 authoring solution while the required saved-scene headless path can terminate the
 World Server. The next decision requires a confirmed native fix or supported
 release that loads the same authored terrain/resources safely on Windows and
 Linux, followed by the deferred workflow/visual/performance checks. The evidence
 does not reject every Terrain3D version, but it rejects adoption on today's
-verified configuration. First Region and V0–V3 remain the integrated baseline.
+verified configurations, including the supplied 1.1.0-dev build above. First
+Region and V0–V3 remain the integrated baseline.
 
 DO NOT ADOPT
