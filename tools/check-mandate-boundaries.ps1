@@ -72,6 +72,26 @@ foreach ($taskScope in $taskScopes) {
             $taskCode -match 'var\s+\w+\s*:\s*(?:Node3D|SpikeActor3D|SpikeMob3D|MobDefinition)\b|result\s*\.\s*\w+\s*=\s*mob\b(?!\s*\.)') {
             $taskFailures.Add("$taskRelative : death result retains a live mob/definition")
         }
+        if ($taskRelative -eq 'source/client/ui_web/ui_command_session.gd' -and
+            $taskCode -match '\b(?:SpikeWorld3D|WebUiBridge|WebUiHost|UiCommandDispatcher|CefTexture|WorldDatabase|ItemStoreSqlite|SQLite|NpcUiAdapter|UpgradeUiAdapter|ShopUiAdapter|SpikeInventory3D|NpcInteraction3D|Upgrade3D|Shop3D)\b|\b(?:generation|transport_generation)\b|@rpc') {
+            $taskFailures.Add("$taskRelative : native request session depends on browser/domain/world")
+        }
+        if ($taskRelative -eq 'source/client/ui_web/npc_drop_target_projector.gd' -and
+            $taskCode -match '\b(?:SpikeWorld3D|WebUiHost|WebUiBridge|UiCommandSession|UiCommandDispatcher|CefTexture|begin_npc_approach)\b|\.\s*request_\w+\b|@rpc') {
+            $taskFailures.Add("$taskRelative : NPC projection owns commands/host/approach")
+        }
+        if ($taskRelative -in @('source/client/ui_web/item_ui_adapter.gd','source/client/ui_web/npc_ui_adapter.gd','source/client/ui_web/upgrade_ui_adapter.gd','source/client/ui_web/shop_ui_adapter.gd') -and
+            $taskCode -match '\b(?:SpikeWorld3D|WebUiHost|CefTexture|WorldDatabase|ItemStoreSqlite|SQLite|begin_npc_approach)\b') {
+            $taskFailures.Add("$taskRelative : UI adapter depends on whole-world/CEF/persistence")
+        }
+        if ($taskRelative -eq 'source/client/ui_web/npc_ui_adapter.gd' -and
+            $taskCode -match '\b(?:UpgradeUiAdapter|ShopUiAdapter|request_upgrade|request_shop)\b') {
+            $taskFailures.Add("$taskRelative : NPC adapter coordinates another domain")
+        }
+        if ($taskRelative -eq 'source/client/ui_web/core_ui_controller.gd' -and
+            $taskCode -match '\.\s*request_\w+\s*\.\s*rpc_id\s*\(|\b(?:ItemDefinition|ItemDefinitions|stats_per_upgrade|inventory_height)\b') {
+            $taskFailures.Add("$taskRelative : UI composition submits domain RPCs/models items")
+        }
         if ($taskRelative -eq 'source/common/gameplay/spike3d/spike_combat_3d.gd' -and
             $taskCode -match '\b(?:SQLite|ItemStoreSqlite|claim_ground_item|dirty_progression|add_experience|spawn_currency)\b|func\s+(?:drop_reward|_award_experience)\b|var\s+ground\b|ground_loot\s*\.\s*drops\b|services\s*\.\s*(?:item_store|economy|progression)\s*\(') {
             $taskFailures.Add("$taskRelative : combat owns persistence/rewards/ground state")

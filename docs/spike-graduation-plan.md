@@ -135,6 +135,9 @@ cancel przez death/knockdown, full-motion advance, overlapa, finishera i respawn
 
 ## Package C — Core UI
 
+Szczegółowy plan wykonawczy po integracji B: [Package C](spike-package-c-plan.md).
+Baza c6f5cbb; osobny branch codex/spike-package-c.
+
 1. UiCommandSession: IDs, pending, reply, timeout, reload/disconnect, late reply.
 2. NpcDropTargetProjector: projekcja i data-driven targety z jawnymi zależnościami.
 3. ItemUiAdapter: wspólne modelowanie Inventory, Equipment i Storage.
@@ -300,3 +303,17 @@ Weryfikacja: diff check, architecture guard/contracts, default smoke
 Dodano kontrakt RAM-only query oraz priorytetu current session / pending resource /
 fallback i bieżącej referencji persistence po podmianie. Bez zmian wire/schema,
 checkpoint policy, attack timeline i fizyki. B/C pozostają osobnymi milestone'ami.
+
+## Package C — implementacja 2026-10-12
+
+C1–C4 zaimplementowane na codex/spike-package-c; szczegóły właścicieli, etapów i
+weryfikacji: [Package C](spike-package-c-plan.md#realizacja--2026-10-12). Session
+koreluje native RPC; bridge posiada browser generation, a dispatcher chroni
+awaited reply przed reloadem. Composition koordynuje NPC → exact service →
+Upgrade select; adaptery nie orkiestrują innych domen. Projector nie posiada
+ticka, ItemUiAdapter obejmuje trzy item views. CoreUiController zachowuje
+window/input policy; guard utrwala usunięte zależności.
+
+Smoke, właściwe network i browser suites przeszły. Native Godot/CEF acceptance
+pozostaje otwarte; pakiet nadal na osobnym branchu do review/integracji. Nie dodano
+nowych klas per window policy ani zmian TypeScript UI, gameplay czy persistence.

@@ -1,6 +1,10 @@
 extends "res://tests/pve_network.gd"
 ## Optional headless two-client RPC/SQLite regression. No DOM/layout assertions.
-var web: InventoryWebController
+class HeadlessUiHost extends WebUiHost:
+	# Exercise the real bridge/controller without invoking an unavailable native browser.
+	func open() -> bool: return true
+
+var web: CoreUiController
 var web_results: Dictionary = {}
 var running: bool = false
 
@@ -42,7 +46,8 @@ func command(type: String, payload: Dictionary) -> Dictionary:
 	return web_results.get(id, {"ok": false})
 
 func run_client() -> void:
-	web = InventoryWebController.new()
+	web = CoreUiController.new()
+	web.host = HeadlessUiHost.new()
 	world.add_child(web)
 	web.setup(world)
 	web.bridge.outgoing.connect(func(json: String) -> void:

@@ -56,8 +56,15 @@ $taskRejected = $false
 try { & $taskGuard -RootDirectory (Join-Path $taskFixture 'missing') | Out-Null } catch { $taskRejected = $true }
 if (-not $taskRejected) { throw 'Boundary guard silently accepted a missing scope' }
 
-# Completed Package B boundaries: dependency checks, not private-field coverage.
+# Completed Package B/C boundaries: dependency checks, not private-field coverage.
 $taskBoundaryCases = @(
+    @{ Path='source/client/ui_web/ui_command_session.gd'; Good='func wait(id, tree: SceneTree): return {}'; Bad=@('var bridge: WebUiBridge','func wait(): return bridge.generation()') },
+    @{ Path='source/client/ui_web/npc_drop_target_projector.gd'; Good='func project(camera: Camera3D): return {}'; Bad=@('var world: SpikeWorld3D','func drop(): begin_npc_approach()') },
+    @{ Path='source/client/ui_web/item_ui_adapter.gd'; Good='var endpoint: SpikeInventory3D'; Bad=@('var world: SpikeWorld3D','var host: WebUiHost') },
+    @{ Path='source/client/ui_web/npc_ui_adapter.gd'; Good='var endpoint: NpcInteraction3D'; Bad=@('var upgrade: UpgradeUiAdapter','func flow(): endpoint.request_upgrade()') },
+    @{ Path='source/client/ui_web/upgrade_ui_adapter.gd'; Good='func valid(p): return ItemUiAdapter.valid_item_identity(p)'; Bad=@('var world: SpikeWorld3D','var db: WorldDatabase') },
+    @{ Path='source/client/ui_web/shop_ui_adapter.gd'; Good='var endpoint: Shop3D'; Bad=@('var host: WebUiHost','var store: ItemStoreSqlite') },
+    @{ Path='source/client/ui_web/core_ui_controller.gd'; Good='func setup(): var items = ItemUiAdapter.new()'; Bad=@('func move(): endpoint.request_move_item.rpc_id(1)','func model(): return ItemDefinitions.get_definition(id)') },
     @{ Path='source/common/gameplay/spike3d/player_combat_runtime.gd'; Good='var combo: BasicAttackComboState'; Bad=@('var world: SpikeWorld3D','@rpc("authority")') },
     @{ Path='source/common/gameplay/spike3d/basic_attack_service.gd'; Good='func hit(): return HitReactionResolver.resolve()'; Bad=@('func reward(): progression.award_experience()','func hit(): mob.hp -= 1') },
     @{ Path='source/common/gameplay/mobs/mob_system.gd'; Good='signal mob_died(result: MobDeathResult)'; Bad=@('func hit(): HitReactionResolver.resolve()','func reward(): currency.spawn_currency()') },

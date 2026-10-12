@@ -267,10 +267,11 @@ outside CEF. It is not an additional Web-to-Godot command.
 
 ## First gameplay screen
 
-`InventoryWebController` composes the shared host/bridge/dispatcher for Spike 3D.
-It maps private server UID/revision/placement/stat snapshots to the reusable
-[Inventory view](inventory-ui-prototype.md), following [UI Contract v1](ui-contract.md).
-Only `inventory.move_item` and `inventory.close` are exposed by this screen.
+`CoreUiController` composes the host/bridge/dispatcher and domain adapters for
+Spike 3D. `ItemUiAdapter` maps private UID/revision/placement/stat snapshots for
+Inventory, Equipment and Storage, following [UI Contract v1](ui-contract.md).
+Item intentions and close commands keep their existing wire format; NPC, Shop
+and Upgrade have their own adapters. See [native composition ownership](core-ui.md#native-ui-composition-package-c).
 Results await correlated World Server replies; results do not replace snapshots.
 The dispatcher supports synchronous or awaited registered handlers.
 
@@ -392,3 +393,16 @@ The dispatcher adds `upgrade` (authoritative recipe/candidate) and `npc_targets`
 accepted. The world drop is an opening intent; selection/upgrade revalidate through
 the same RPC path as the menu. `ui.ready` restores recipe/candidate state. See
 [NPC Upgrade](npc-upgrade-ui.md) for authority, transactions and scope.
+
+## Native command lifecycle
+
+`UiCommandSession` correlates native RPC request IDs, independently of browser
+command IDs. Timeout is 2500 ms and does not undo a server commit or retry it.
+Results never replace authoritative domain snapshots. Reload, disconnect, UI
+failure and teardown cancel unresolved waits; the first terminal result wins.
+
+`WebUiBridge` owns transport generation. Reset/navigation advances it; repeated
+`ui.ready` only publishes the current snapshot. `UiCommandDispatcher` captures the
+generation before awaiting a handler and suppresses its reply if navigation has
+replaced the page. Thus a new page can reuse a browser command ID without receiving
+an old page's result. The session has no browser generation dependency.

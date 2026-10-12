@@ -41,7 +41,7 @@ is a configured maximum, not a measured input-to-photon or native frame-rate cla
 
 ## Authority and persistence
 
-`InventoryWebController` maps private server state; the view has no CEF APIs.
+`CoreUiController` maps private server state; the view has no CEF APIs.
 It renders `ui.snapshot` and `inventory.updated`; `wallet.updated` and
 `hud.updated` refresh information/layout without replacing item state.
 `ui.ready` after reload/recreation receives the current full snapshot. Commands
@@ -114,7 +114,7 @@ The project defaults to a 1280×720 window with a 1920×1080 design baseline and
 headless runs create no browser; server exports exclude CEF entirely. Unsupported
 clients show a technical UI-unavailable message without a second inventory renderer. See [CEF addon integration](cef-addon-integration.md).
 
-Godot's `InventoryWebController.set_ui_scale()` accepts the contract's scale list.
+Godot's `CoreUiController.set_ui_scale()` accepts the contract's scale list.
 For development set project setting `mandate/ui_scale` or launch the root
 client with `--ui-scale=125`. Scale is selected once and stays independent of
 subsequent window resolution. No settings screen is included in this slice.

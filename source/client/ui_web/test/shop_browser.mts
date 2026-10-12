@@ -653,7 +653,13 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       },
     };
     await send(upgraded);
-    await frame();
+    // The authoritative snapshot may arrive during forging. Observe the displayed
+    // result instead of assuming the existing visual effect finishes in one frame.
+    await page.waitForFunction(
+      () =>
+        document.querySelector('#upgrade .upgrade-name')?.textContent ===
+        'Iron Sword +1',
+    );
     assert.equal(
       await upgradeWindow.locator('.upgrade-name').textContent(),
       'Iron Sword +1',
@@ -665,14 +671,12 @@ async function verify(browser: Browser, url: string, fallback: boolean) {
       true,
     );
     if (screenshotDirectory)
-      await upgradeWindow
-        .locator('.upgrade-window')
-        .screenshot({
-          path: path.join(
-            screenshotDirectory,
-            `upgrade-panel-${fallback ? 'fallback' : 'legacy'}.png`,
-          ),
-        });
+      await upgradeWindow.locator('.upgrade-window').screenshot({
+        path: path.join(
+          screenshotDirectory,
+          `upgrade-panel-${fallback ? 'fallback' : 'legacy'}.png`,
+        ),
+      });
     console.log(
       `Upgrade real browser: PASS (${fallback ? 'CSS fallback' : 'legacy skin'}, server recipe/candidate, explicit command and authoritative +1)`,
     );
