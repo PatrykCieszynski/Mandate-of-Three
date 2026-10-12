@@ -15,14 +15,14 @@ state when World resolves the scheduled impact. Interruption/death checks remain
 
 ## Link, motion lock and advance
 
-`_next_attack_ms` remains the combo transition deadline. The separate
-`_movement_unlock_ms` covers the full motion duration, scaled by the accepted
+`PlayerCombatRuntime.next_attack_ms` remains the combo transition deadline. The separate
+`movement_unlock_ms` covers the full motion duration, scaled by the accepted
 Attack Speed ratio. A successor accepted at DirectInputTime replaces that action
 and its lock. Without a successor, normal input movement remains blocked through
 the clip's tail. The new `motion_duration_ms` rounds up the canonical
 MotionDuration to milliseconds, not a replacement for existing recovery/direct values.
 
-World starts a small forward action on each accepted swing. SpikeCharacter3D
+BasicAttackService starts a small forward action on each accepted swing. SpikePlayer3D
 integrates a smoothstep travel curve through its existing `move_and_slide()`.
 The direction is the frozen attack yaw. The original version compressed travel
 into link/recovery time. [The follow-up BODY pass](warrior-body-collision.md)

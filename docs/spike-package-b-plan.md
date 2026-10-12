@@ -203,3 +203,57 @@ Nie uruchamiamy całego zestawu extended po każdym mechanicznym przeniesieniu.
 Guard rozszerzamy o zakończone granice attack/mob/client/actor w istniejącym
 skrypcie i jego kontraktach, bez testowania liczby klas lub prywatnych pól.
 Na końcu B wykonujemy właściwy zestaw regresji i osobny manualny playtest.
+
+## Implementacja B — 2026-10-12
+
+B1, B2a, B2b, B3/B6, B4 i B5 są zaimplementowane na codex/spike-package-b.
+Odbiór natywny pozostaje osobnym krokiem: headless PASS nie deklaruje sprawdzenia
+GPU/CEF/input ani subiektywnego feel. Branch pakietu zachowujemy do tego odbioru
+przed integracją całego B do spike-graduation.
+
+- B1: jedna kolekcja PlayerCombatRuntime. Active action i pending impact dzielą
+  przyjęty swing. Last displayed combo i porządek równoczesnych impactów pozostają
+  zgodne z wcześniejszym zachowaniem. Brak health/respawn/ticka/SQL w runtime.
+- B2a/B2b mają osobne commity. BasicAttackService używa istniejących resolverów.
+  Cancel/interrupt posiada attack cleanup; fasada nie odtwarza protokołu resetu
+  pól. Delegaty starych metod potrzebne wyłącznie fixtures usunięto; fixtures
+  korzystają z aktualnego właściciela.
+- B3: MobSystem posiada mobs/packs, AI, aggro, replacement/expiry oraz capture,
+  application i interpolation snapshotów. Metin korzysta z jego operacji.
+  MobDeathResult przekazuje identity, definition ID, pozycję, timestamp, kopię
+  contributions, resolved owner i zamrożone experience_reward. Nie ma aktora ani
+  mutable definition. PlayerResource recipient fallback należy do progression
+  i zachowuje offline reward bez czytania runtime moba przez KillRewardResolver.
+- B6: wspólny MobState zachowuje wire 0–6. MobDefinition posiada aggro_radius,
+  attack_reach, attack_interval, basic_attack i experience_reward z dotychczasowymi
+  wartościami. XP nadal przyznaje progression przez KillRewardResolver.
+- B4: ClientCombatController posiada target identity, autoattack, input/retry
+  i basic-attack presentation/trace-debug lifecycle. XP, HUD i ground loot visuals
+  zostały przy fasadzie. Nie powstał TargetManager ani target frame.
+- B5: SpikeActor3D zawiera wspólne body/reaction/knockback/interpolation plumbing.
+  SpikePlayer3D posiada movement/advance/BODY policy/equipment/Warrior, HP i player
+  respawn deadline; obecna polityka player lifecycle pozostaje w fasadzie.
+  SpikeMob3D dziedziczy po Actor, a MobSystem posiada replacement policy.
+  UID player/mob scripts zachowano podczas rename.
+- Guard obejmuje nowe granice, włącznie z zakazem live actor/definition reference
+  w death result. Nie sprawdza liczby klas ani pokrycia prywatnych pól.
+
+Nie dodano nowej GDScript unit suite. Istniejące fixtures zmieniły właściciela,
+typy i enum. Dodano tylko mały remove/new-session case w FEEL2 (odsłonięta luka)
+oraz freeze/once-only death-fact case w mob_packs (nowy kontrakt). Architecture
+guard rozszerzono w jego dotychczasowym runnerze.
+
+Weryfikacja etapów: editor import, diff check, guard/contracts, smoke
+(10 Godot + 74 Web UI), ACTION, FEEL2, combat, trace geometry/network, legacy
+melee, movement/spike3d, PvE, progression, XP/checkpoint/disconnect, Yang, Upgrade,
+Metin lifecycle/network i First Region navigation/content. Network suites
+sekwencyjnie na 18098. Bez zmian wire/RPC authority, timingów, balansu,
+transportu snapshotów, checkpoint policy ani Metin DEAD/VFX.
+
+### Pozostały odbiór natywny
+
+W normalnym kliencie/Godot/CEF: WASD i orbit camera, target mob/Metin i autoattack,
+4/5/6-hit combo i Attack Speed, buffered facing/cancel, crowd escape i finisher,
+death freeze/respawn, NPC approach i input ownership, Inventory equipment oraz
+loot/XP feedback. Po tym odbiorze pakiet integrujemy --no-ff; nie usuwamy
+niezmergowanego brancha ani nie publikujemy bez prośby użytkownika.
