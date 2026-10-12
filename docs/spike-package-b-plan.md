@@ -1,7 +1,8 @@
 # Package B — Combat i aktorzy
 
 Plan wykonawczy z 2026-10-12. Baza: codex/spike-graduation, HEAD 60bc7af,
-po Package A i zmianie polityki testów. To plan; implementacja B jeszcze nie ruszyła.
+po Package A i zmianie polityki testów. Korekty review zatwierdzone przed startem B.
+Implementacja przebiega na codex/spike-package-b.
 Obowiązują [kierunek projektu](project-direction.md),
 [persistence policy](persistence-policy.md), [plan nadrzędny](spike-graduation-plan.md)
 i [polityka testów](testing.md).
@@ -24,8 +25,8 @@ pozostają osobnymi zakresami.
 
 - Po rozpoczęciu implementacji tworzymy codex/spike-package-b z aktualnego
   codex/spike-graduation. Nie implementujemy na main.
-- Każde cięcie poniżej ma osobny, sprawdzony commit. B2 i B3 można rozbić na
-  kolejne commity, jeśli migracja zacznie mieszać niezależne odpowiedzialności.
+- Każde cięcie poniżej ma osobny, sprawdzony commit. B2a i B2b zawsze są
+  osobnymi commitami w BasicAttackService. B3 dzielimy według odpowiedzialności.
 - Nie robimy jednocześnie ekstrakcji attack state, AI i actor physics.
 - Cały ukończony B integrujemy --no-ff do spike-graduation i usuwamy tylko
   zmergowany branch. Publikacja wymaga prośby użytkownika.
@@ -61,9 +62,13 @@ Zero nowych testów tylko dlatego, że powstał PlayerCombatRuntime.
 
 ## B2 — BasicAttackService: jedna istniejąca mechanika
 
-Przenosimy intake/replay, preinput, queue/chaining, scheduling impact,
-cancel, facing i hit resolution wraz z dotychczasowym CombatTraceResolver,
-HitReactionResolver i legacy melee fallback. Serwis używa runtime'ów z B1.
+BasicAttackService używa istniejących CombatTraceResolver i HitReactionResolver;
+resolvery pozostają u swoich obecnych właścicieli. Serwis używa runtime'ów z B1.
+
+B2a (osobny commit): intent → accept/reject → queue → chain → timing → facing →
+cancel. B2b (osobny commit): impact becomes due → trace → resolve hit → apply
+ target consequence, z zachowaniem legacy melee fallback. Nie dodajemy drugiej
+klasy ani milestone'u dla tego rozdzielenia.
 
 SpikeCombat3D pozostawia uwierzytelniony RPC intake i niezbędne publiczne delegaty
 używane przez World/NPC/gameplay. Serwis zwraca wynik potrzebny do obecnych
@@ -100,8 +105,13 @@ World jest composition root. Metin korzysta z operacji MobSystem zamiast
 combat.dogs/packs; ewentualne delegaty pozostają tylko dla realnych callerów.
 
 MobSystem nie zna XP, wallet, ground loot, SQL, player attack queues ani formuły
-damage. Death event podpinamy w composition root do KillRewardResolver; zachowujemy
-once-only death/contribution/reward i reconnect identity z A.
+damage. Death fact podpinamy w composition root do KillRewardResolver. Przekazuje
+zamknięty wynik: mob identity, definition id, death position, kopię contributions,
+resolved reward owner i timestamp, bez referencji do żywego aktora. XP/reward
+parametry wynikają z definition lub są zamrożone w wyniku. Ewentualną referencję
+contributora rozwiązuje adapter po persistent owner ID, nie odbiorca przez moba.
+Wystarcza mały result/Dictionary; zachowujemy once-only death/reward i reconnect
+identity z A.
 
 Jeden MobState zastępuje stringi i dotychczasowy enum w MobSnapshot, z zachowaniem
 wire 0–6. Do MobDefinition przechodzą aggro_radius, attack_reach, attack_interval,
@@ -118,10 +128,14 @@ Nie kopiujemy starych dogs/packs map na fasadę dla fixtures.
 ## B4 — ClientCombatController
 
 Przenosimy selected_target, resolver/invalidation, autoattack, assist direction,
-input, retry/sequence gating oraz obsługę client presentation do konkretnego
-kontrolera klienta. HUD, drop visuals, swing/hit/reaction/XP feedback dostają
-jednego właściciela lifecycle/disposal; istniejące CombatFeedback3D i WarriorVisual3D
-pozostają używane, bez nowego frameworka presentation.
+attack input/retry i client sequence/request state do konkretnego kontrolera.
+Koordynacja basic-attack swing/hit/reaction presentation naturalnie należy do
+tego zakresu i używa istniejących CombatFeedback3D/WarriorVisual3D.
+
+Ground loot visuals i XP/progression feedback nie trafiają do kontrolera combatu.
+Mogą pozostać tymczasowo przy fasadzie/obecnych endpointach, aż pojawi się naturalny
+właściciel. Nie musimy opróżnić SpikeCombat3D w tym milestone. Kontroler posiada
+lifecycle/disposal wyłącznie własnego input i basic-attack presentation.
 
 Fasada odbiera obecne RPC/snapshoty i przekazuje je kontrolerowi oraz MobSystem.
 Core UI zachowuje dotychczasowe publiczne sygnały; nie robimy Package C przy okazji.
@@ -144,8 +158,10 @@ z B2/B3; nazwy robocze: SpikeActor3D, SpikePlayer3D, SpikeMob3D.
 - Player: player movement policy, attack advance/frozen facing, BODY overlap
   escape policy, equipment i Warrior presentation.
 - Mob: własna konfiguracja movement body/visual oraz AI-facing actor data.
-- Health/alive/dead/respawn są stanem życia aktora. Serwis ataku ich nie posiada;
-  dodatkową klasę life state tworzymy tylko przy realnej potrzebie.
+- Health/alive/death pozostają poza attack runtime i trafiają do właściwego
+  actor/life ownera. Player respawn pozostaje polityką player lifecycle,
+  a mob replacement/respawn należy do MobSystem. Baza nie dostaje generycznej
+  polityki respawnu; dodatkową klasę life state tworzymy tylko przy realnej potrzebie.
 
 Baza nie zna potomka moba i nie posiada Warrior/equipment/autoattack.
 Zachowujemy oddzielne BODY/defending colliders, layer/mask semantics, brak
