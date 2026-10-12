@@ -25,6 +25,17 @@ foreach ($taskScope in $taskScopes) {
         if ($taskRelative -ne $taskAdapter -and $taskCode -match '\bWorldServer\s*\.\s*curr\b') {
             $taskFailures.Add("$taskRelative : direct WorldServer.curr outside the adapter")
         }
+        if ($taskCode -match '\.\s*db\b|\bdirty_progression\b') {
+            $taskFailures.Add("$taskRelative : raw database/dirty progression internals")
+        }
+        if ($taskRelative -ne $taskAdapter -and $taskCode -match '\.\s*item_store\b(?!\s*\()') {
+            $taskFailures.Add("$taskRelative : item store field instead of the adapter query")
+        }
+        foreach ($taskMatch in [regex]::Matches($taskCode,'(?<receiver>\b[A-Za-z_][A-Za-z_0-9]*(?:\s*\.\s*[A-Za-z_][A-Za-z_0-9]*)*)\s*\.\s*(?:inventory_changed|wallet_changed)\s*\.\s*emit\s*\(')) {
+            if ($taskMatch.Groups['receiver'].Value.Trim() -ne 'self') {
+                $taskFailures.Add("$taskRelative : foreign endpoint change fact $($taskMatch.Value)")
+            }
+        }
         foreach ($taskMatch in [regex]::Matches($taskCode,'(?<receiver>\b[A-Za-z_][A-Za-z_0-9]*(?:\s*\.\s*[A-Za-z_][A-Za-z_0-9]*)*)\s*\.\s*_(?:store|send_state|send_snapshot|living|visible_between|owner|server)\s*\(')) {
             if ($taskMatch.Groups['receiver'].Value.Trim() -ne 'self') {
                 $taskFailures.Add("$taskRelative : private cross-call $($taskMatch.Value)")

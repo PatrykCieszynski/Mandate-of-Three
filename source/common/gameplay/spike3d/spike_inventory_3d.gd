@@ -17,9 +17,7 @@ func _ready() -> void:
 	inventory_changed.connect(_inventory_changed)
 
 func _store() -> ItemStoreSqlite:
-	if not services.available() or services.economy() == null:
-		return null
-	return services.economy().item_store
+	return services.item_store()
 
 func initialize_peer(peer_id: int) -> void:
 	var store: ItemStoreSqlite = _store()
@@ -71,7 +69,7 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 		if (source == "inventory" and destination == "inventory") or (not quick and (x < 0 or x >= columns or y < 0 or y >= 9 or page < 0 or page >= pages)):
 			result = {"ok":false,"error":"request"}
 		else:
-			result = AccountStorageSqlite.new(_store().db).transfer(resource.player_id,uid,revision,source,destination,-1 if quick else position)
+			result = services.economy().transfer_storage(resource.player_id,uid,revision,source,destination,-1 if quick else position)
 	# Prepare every affected character before the first notification/publication.
 	var actor: PlayerResource = services.player_for_peer(peer_id)
 	var affected: Array[int] = []
@@ -105,8 +103,7 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 		else:
 			result = _store().move_bag_item(resource.player_id, uid, revision, position) if action == "move" else _store().change_equipment(resource.player_id, uid, revision, action, position)
 	if result.ok:
-		refresh_authoritative_state(peer_id)
-		inventory_changed.emit(services.player_for_peer(peer_id).player_id)
+		accept_committed_change(peer_id)
 	else:
 		resynchronize(peer_id, str(result.error))
 	if command_id != "":
@@ -116,13 +113,19 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 func receive_operation(command_id: String, result: Dictionary) -> void:
 	if GameMode.is_client(): operation_finished.emit(command_id, result)
 
+func accept_committed_change(peer_id: int) -> void:
+	# The caller has committed the item mutation. This endpoint owns refresh/fact.
+	refresh_authoritative_state(peer_id)
+	var owner_id: int = services.owner_id_for_peer(peer_id)
+	if owner_id > 0: inventory_changed.emit(owner_id)
+
 func refresh_authoritative_state(peer_id: int) -> void:
-	# Application operations call this explicitly before emitting any facts.
+	# Also used to prepare every account peer before Storage fan-out.
 	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null or _store() == null: return
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
 	services.update_runtime_equipment(resource.player_id, snapshot)
-	snapshot["storage"] = AccountStorageSqlite.new(_store().db).snapshot(resource.player_id)
+	snapshot["storage"] = services.economy().storage_snapshot(resource.player_id)
 	_authoritative_snapshots[peer_id] = snapshot
 	if not snapshot.ok: return
 	var definition_id: String = ""

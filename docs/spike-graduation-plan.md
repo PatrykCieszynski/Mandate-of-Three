@@ -245,3 +245,37 @@ właściwych kolejnych milestone'ów; ten pakiet weryfikowano headless.
 Kolejne pakiety B i C mają osobne branche z aktualnego spike-graduation.
 World split i pełny extraction Wallet/Progression z WorldDatabase nadal są
 odłożone do ponownej oceny/P2, zgodnie z zatwierdzonym planem.
+
+## Package A boundary follow-up — 2026-10-12
+
+Krótki follow-up z review brancha eb042e0, na
+codex/package-a-boundary-followup, integrowany do spike-graduation.
+
+- Inventory accept_committed_change(peer_id) posiada refresh authoritative
+  snapshot/equipment/cache i własny inventory_changed. Shop, Upgrade i pickup
+  nie znają protokołu refresh + emit i nie emitują cudzych sygnałów.
+- Currency accept_committed_change(peer_id) emituje własny wallet_changed po
+  przyjęciu committed balance do RAM przez istniejącą operację ekonomii.
+  Shop/Upgrade nadal jawnie wykonują commit + wallet RAM → Inventory acceptance
+  → Currency acceptance. Sygnały pozostają fan-out, nie orkiestracją.
+- Storage nadal przygotowuje wszystkie dotknięte postacie przed pierwszym
+  powiadomieniem, wewnątrz właściciela Inventory. Rejection/stale/entry nadal
+  używają resynchronize bez faktu udanego commitu.
+- WorldDatabase udostępnia konkretne upgrade_candidate, storage_snapshot,
+  transfer_storage i RAM-only pending_progression_player. Gameplay nie tworzy
+  store'ów z surowego .db; adapter nie odczytuje dirty_progression. Konkretne
+  economy/progression i item_store() pozostają bez nowej warstwy DI.
+- Guard odrzuca surowe .db, dirty_progression (także w adapterze), cudze emisje
+  inventory_changed/wallet_changed i odczyt pola item_store poza dokładnym
+  adapterem. Kontrakty obejmują dozwolone API, własne emisje, multiline naruszenia
+  i zakazane wnętrzności w samym adapterze.
+- Pozostałość A4: GroundLootSystem nadal koduje weapon roll bonus 1..9,
+  weapon_attack i attack affix. Generic SQL claim nie oznacza generic live drop
+  payload. Cleanup dopiero przy pierwszym realnym non-weapon ground dropie.
+
+Weryfikacja: diff check, architecture guard/contracts, default smoke
+(10 Godot + 74 Web UI), Shop, Upgrade, PvE/ground pickup, Yang, web-inventory
+(Storage/equipment) i XP/checkpoint/disconnect; suite'y sieciowe sekwencyjnie.
+Dodano kontrakt RAM-only query oraz priorytetu current session / pending resource /
+fallback i bieżącej referencji persistence po podmianie. Bez zmian wire/schema,
+checkpoint policy, attack timeline i fizyki. B/C pozostają osobnymi milestone'ami.

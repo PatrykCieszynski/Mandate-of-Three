@@ -28,7 +28,7 @@ func select_for_peer(peer_id: int, instance_id: String, service_id: StringName, 
 	if not auth.ok: return auth
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
-	var candidate: Dictionary = UpgradeStoreSqlite.new(services.economy().db).candidate(player.player_id,uid,revision,auth.recipe)
+	var candidate: Dictionary = services.economy().upgrade_candidate(player.player_id,uid,revision,auth.recipe)
 	if not candidate.ok: return candidate
 	_selected[peer_id] = uid # Selection never mutates placement or consumes anything.
 	return {"ok":true}
@@ -43,9 +43,8 @@ func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName,
 	var result: Dictionary = services.economy().upgrade_item(player.player_id,auth.recipe,uid,revision)
 	if result.ok:
 		# Commit + wallet RAM are complete; cache refresh precedes fan-out.
-		_world.inventory_endpoint.refresh_authoritative_state(peer_id)
-		_world.inventory_endpoint.inventory_changed.emit(player.player_id)
-		_world.currency_endpoint.wallet_changed.emit(player.player_id)
+		_world.inventory_endpoint.accept_committed_change(peer_id)
+		_world.currency_endpoint.accept_committed_change(peer_id)
 	return result
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
@@ -60,7 +59,7 @@ func snapshot_for_peer(peer_id: int) -> Dictionary:
 	var recipe: UpgradeDefinition = auth.recipe
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"active":false}
-	var inventory: Dictionary = services.economy().item_store.inventory(player.player_id)
+	var inventory: Dictionary = services.item_store().inventory(player.player_id)
 	if not inventory.ok: return {"active":false}
 	var owned: int = 0
 	var candidate: Dictionary = {}

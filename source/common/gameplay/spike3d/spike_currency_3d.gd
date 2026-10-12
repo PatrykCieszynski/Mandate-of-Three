@@ -93,7 +93,7 @@ func spend_for_peer(peer_id: int, sequence: int, now: int) -> Dictionary:
 	var result: Dictionary = _database().spend_yang(_owner(peer_id), TEST_SPEND_COST)
 	if result.ok:
 		result["spent"] = TEST_SPEND_COST
-		wallet_changed.emit(_owner(peer_id))
+		accept_committed_change(peer_id)
 	return result
 
 @rpc("any_peer", "call_remote", "reliable", 1)
@@ -126,6 +126,12 @@ func _physics_process(delta: float) -> void:
 func _wallet_changed(owner_id: int) -> void:
 	for peer_id: int in _world.characters:
 		if _owner(peer_id) == owner_id: _send_snapshot(peer_id)
+
+func accept_committed_change(peer_id: int) -> void:
+	# Economy has already accepted the committed balance into authoritative RAM.
+	# Currency owns its fact; listeners only publish that prepared wallet.
+	var owner_id: int = _owner(peer_id)
+	if owner_id > 0: wallet_changed.emit(owner_id)
 
 func resynchronize(peer_id: int) -> void:
 	_send_snapshot(peer_id)

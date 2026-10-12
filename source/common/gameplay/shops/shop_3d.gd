@@ -40,9 +40,8 @@ func buy_for_peer(peer_id: int, instance_id: String, service_id: StringName, off
 	if result.ok:
 		# The database operation has committed and accepted wallet RAM.
 		# Prepare equipment/cache before either endpoint sees a change fact.
-		_world.inventory_endpoint.refresh_authoritative_state(peer_id)
-		_world.inventory_endpoint.inventory_changed.emit(player.player_id)
-		_world.currency_endpoint.wallet_changed.emit(player.player_id)
+		_world.inventory_endpoint.accept_committed_change(peer_id)
+		_world.currency_endpoint.accept_committed_change(peer_id)
 	return result
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:

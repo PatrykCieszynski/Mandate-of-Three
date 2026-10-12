@@ -1,6 +1,8 @@
 class_name GroundLootSystem
 extends RefCounted
 ## Live item drops and claim orchestration. Currency keeps its existing endpoint.
+## Current spike policy: weapon + attack roll (1..9), not a generic item payload.
+## Generalize at the first real non-weapon ground drop; SQL already accepts items.
 const PICKUP_REACH: float = 2.5
 const PROTECTION_MS: int = 15000
 const LOOT_LIFETIME_MS: int = 120000
@@ -63,6 +65,5 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 		result["item_name"] = definition.item_name
 		result["weapon_attack"] = int(definition.base_stats.get(&"attack",0))+bonus
 		# Commit and ground erase precede cache and notification/publication.
-		_world.inventory_endpoint.refresh_authoritative_state(peer_id)
-		_world.inventory_endpoint.inventory_changed.emit(owner_id)
+		_world.inventory_endpoint.accept_committed_change(peer_id)
 	return result

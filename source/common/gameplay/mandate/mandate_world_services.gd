@@ -16,8 +16,8 @@ func progression() -> WorldDatabase:
 	return economy()
 
 func item_store() -> ItemStoreSqlite:
-	var database := economy()
-	return null if database == null else database.item_store
+	var server := _server()
+	return null if server == null or server.database == null else server.database.item_store
 
 func item_domain_ready() -> bool:
 	return item_store() != null
@@ -38,7 +38,7 @@ func players() -> Array:
 func current_player(owner_id: int, fallback: PlayerResource = null) -> PlayerResource:
 	var player: PlayerResource = fallback
 	if progression() != null:
-		player = progression().dirty_progression.get(owner_id,player)
+		player = progression().pending_progression_player(owner_id,player)
 	for current: PlayerResource in players():
 		if current.player_id == owner_id: return current
 	return player
