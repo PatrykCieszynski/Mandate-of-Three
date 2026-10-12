@@ -77,7 +77,11 @@ The first [lighting baseline](visual-upgrade-v1.md) is now integrated: fixed
 [V2 calendar pass](visual-upgrade-v2.md) now animates dawn/day/sunset/night,
 moon phases, stars, ambient light, exposure and haze. Geometry, routes,
 collisions and gameplay authority are unchanged. This is environment tuning;
-the authored ground/props/water remain graybox surfaces.
+the authored ground/props remain graybox surfaces.
+
+[V3 water](visual-upgrade-v3.md) now replaces the water material/mesh and adds a
+minimal submerged visual slope for shallow/deep color. The original shore
+collision and route geometry remain; coastline/terrain art is a later V4 pass.
 
 Party, affix reroll and speculative region/event frameworks do not block this order.
 Regional pressure remains a design direction; this graybox adds no pressure system.

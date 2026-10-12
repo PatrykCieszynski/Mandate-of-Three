@@ -220,3 +220,11 @@ with other port-18098 fixtures. `run-visual-v0.ps1 -Scene visual_v2
 moon/stars and 91 native timelapse frames to the existing CEF/transaction pass.
 There are no pixel baselines. See [Visual V2](visual-upgrade-v2.md) for artifacts,
 optional GIF encoding and verification boundaries.
+
+`run-visual-v0.ps1 -Scene visual_v3 -RenderingMethod forward_plus` adds paired
+water review views, day/sunset/night/moon lighting, close/distant/production-camera
+motion captures and paired GPU samples to the existing CEF/transaction pass.
+Shader compilation errors fail the native runner. No pixel baselines are added:
+headless suites cannot establish screen/depth sampling or temporal appearance.
+The existing `run-first-region.ps1` protects shore blocking/navigation. See
+[Visual V3](visual-upgrade-v3.md) for configuration, artifacts and limits.

@@ -17,7 +17,11 @@ func _ready() -> void:
 	_box("SouthRidge", Vector3(-11,3,36), Vector3(74,6,1), Color("555d60"))
 	_box("WestRidge", Vector3(-48,3,-36), Vector3(1,6,144), Color("555d60"))
 	_box("ShoreBoundary", Vector3(26,0.5,-36), Vector3(0.5,1,144), Color("8d907c"))
-	_surface("Water", Vector3(37,-0.1,-36), Vector3(22,0.08,144), Color("467d91"))
+	if not GameMode.is_world_server() and DisplayServer.get_name() != "headless":
+		var water := RegionWater.new()
+		water.name = "Water"
+		water.position = Vector3(37,-0.1,-36)
+		add_child(water)
 	_surface("Beach", Vector3(23,0.012,-36), Vector3(5,0.02,143), Color("ac9c7a"))
 	_surface("HubSquare", Vector3(0,0.015,20), Vector3(20,0.03,20), Color("8d8980"))
 	var route: Array[Vector3] = [HUB, ZONE_CENTERS[0], ZONE_CENTERS[1], ZONE_CENTERS[2], Vector3(-32,0,-46), Vector3(-32,0,10), HUB]
