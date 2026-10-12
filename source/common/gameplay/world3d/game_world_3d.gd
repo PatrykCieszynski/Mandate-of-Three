@@ -89,7 +89,7 @@ func _ready() -> void:
 			add_child(web_inventory)
 			web_inventory.setup(self)
 		elif DisplayServer.get_name() != "headless":
-			show_ui_failure("CEF requires Vulkan Mobile and the installed addon")
+			show_ui_failure("CEF requires Vulkan and the installed addon")
 		join_world.rpc_id.call_deferred(1)
 
 func player_spawn(index: int = 0) -> Vector3:

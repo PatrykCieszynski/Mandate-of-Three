@@ -18,7 +18,11 @@ var _held: int = 0
 var _world_pointer_capture: bool = false
 
 static func supported_client() -> bool:
-	return DisplayServer.get_name() != "headless" and ClassDB.class_exists("CefTexture") and RenderingServer.get_current_rendering_method() == "mobile"
+	if DisplayServer.get_name() == "headless" or not ClassDB.class_exists("CefTexture"):
+		return false
+	if RenderingServer.get_current_rendering_driver_name() != "vulkan":
+		return false
+	return true
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -34,7 +34,8 @@ and immediately. Do not batch item pickup/equip/trade/upgrade with XP.
 
 ## Current UI and development workflow
 
-Windows CEF UI targets Vulkan Mobile. Compatibility/OpenGL is unsupported /
+Windows CEF UI targets Vulkan Forward+ after the [Visual V0 native pass](visual-upgrade-v0.md).
+Mobile remains a tested comparison option. Compatibility/OpenGL is unsupported /
 best-effort. Pinned CEF is installed under `addons/godot_cef`; the client runs
 the root project, with no copied gameplay tree. Exported servers omit CEF;
 local headless may load the extension but must not create a browser/subprocess.
