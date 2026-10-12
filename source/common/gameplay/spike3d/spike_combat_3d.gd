@@ -567,9 +567,10 @@ func request_pickup(uid: String) -> void:
 		return
 	_pickup_ms[peer_id] = now
 	var result: Dictionary = pickup_for_peer(peer_id, uid, now)
+	if result.ok: _world.inventory_endpoint.refresh_authoritative_state(peer_id)
 	_reply(peer_id, result)
 	if result.ok:
-		_world.inventory_endpoint._send_state(peer_id)
+		_world.inventory_endpoint.inventory_changed.emit(_owner(peer_id))
 		_send_snapshot()
 
 func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:

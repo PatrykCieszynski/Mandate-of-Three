@@ -18,11 +18,24 @@ build a generic stats/event framework or autosave the entire profile for each ch
 ## Current runtime and checkpoints
 
 `WorldServer.runtime_equipment` stores active characters' equipment UIDs and
-resulting stats by persistent ID. Entry loads inventory from SQLite;
-`SpikeInventory3D._send_state()` refreshes runtime from committed state.
+resulting stats by persistent ID. Application operations explicitly call
+`SpikeInventory3D.refresh_authoritative_state()` on entry/repair or after a
+committed item mutation. This prepares the private snapshot, equipment cache and
+server weapon state before any notification/publication. `_send_state()` consumes
+the prepared snapshot; publication never refreshes the authoritative combat cache.
+
+Shop and Upgrade retain their existing application operation owners: the database
+operation commits items/Yang and accepts wallet RAM, then the endpoint explicitly
+refreshes Inventory/cache, and only then emits `inventory_changed(owner_id)` and
+`wallet_changed(owner_id)`. Subscribers publish already-prepared state; their
+registration order is not part of transaction correctness. Account Storage
+prepares all affected on-map characters before the first notification.
+
 Combat reads `attack` from runtime without querying on a swing. Failed equipment
 changes affect neither placement nor attack; a missing valid snapshot invalidates
-the cache so combat cannot use stale stats after a read error.
+the cache so combat cannot use stale stats after a read error. Explicit
+`resynchronize()` repairs entry/rejected/stale requests without emitting a
+committed-change fact.
 
 Mob death is a runtime event. DEAD state prevents repeated processing within the
 current encounter. Contribution resolution and XP run in RAM; level-up and client

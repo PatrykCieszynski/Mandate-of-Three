@@ -1,6 +1,23 @@
 extends "res://tests/pve_network.gd"
 ## Production Shop RPC on an isolated two-client world, never actual accounts.
 var listening: bool = false
+var committed_inventory_changes: int = 0
+var committed_wallet_changes: int = 0
+
+class CountingItemStore extends ItemStoreSqlite:
+	var inventory_reads: int = 0
+	var fail_inventory_reads: bool = false
+	func inventory(owner_id: int) -> Dictionary:
+		inventory_reads += 1
+		if fail_inventory_reads: return {"ok":false,"error":"storage"}
+		return super.inventory(owner_id)
+
+func check_committed_state(owner_id: int) -> void:
+	var inventory: Dictionary = server.database.item_store.inventory(owner_id)
+	check(server.runtime_equipment[owner_id].stats == inventory.stats and server.runtime_equipment[owner_id].equipment == inventory.equipment,"all change subscribers see prepared authoritative equipment")
+	check(db.query_with_bindings("SELECT yang FROM wallets WHERE character_id=?;",[owner_id]),"committed wallet query")
+	check(server.database.wallet_balance(owner_id)==int(db.query_result[0].yang) and server.database.runtime_wallets[owner_id].pending_currency_delta==0 and not server.database.dirty_wallet.has(owner_id),"all subscribers see committed wallet RAM, independently of publication")
+
 
 @rpc("authority", "call_remote", "reliable", 0)
 func phase(command: String, uid: String) -> void:
@@ -25,6 +42,33 @@ func run_server() -> void:
 	var other: int = world.characters.keys()[1]
 	var npc: NeutralNpc3D = world.npc_endpoint.actors["spike-blacksmith-01"]
 	var owner: int = server.connected_players[hero].player_id
+	var inventory: SpikeInventory3D = world.inventory_endpoint
+	var currency: SpikeCurrency3D = world.currency_endpoint
+	var counting := CountingItemStore.new(db)
+	server.database.item_store = counting
+	# Publication must not heal a missing cache or read Inventory from SQL.
+	server.runtime_equipment.erase(owner)
+	inventory._send_state(hero)
+	check(not server.runtime_equipment.has(owner) and counting.inventory_reads==0,"publication has no authoritative cache/Inventory-read side effects")
+	inventory.refresh_authoritative_state(hero)
+	check(server.runtime_equipment.has(owner),"explicit refresh restores authoritative cache")
+	counting.fail_inventory_reads = true
+	inventory.refresh_authoritative_state(hero)
+	check(not server.runtime_equipment.has(owner) and server.runtime_attack(owner)==-1,"failed refresh invalidates combat cache rather than retaining stale stats")
+	counting.fail_inventory_reads = false
+	inventory.resynchronize(hero)
+	check(server.runtime_equipment.has(owner),"explicit resynchronization restores state after read failure")
+	# Observe before publishers to reject subscriber-order-dependent correctness.
+	inventory.inventory_changed.disconnect(inventory._inventory_changed)
+	inventory.inventory_changed.connect(func(changed_owner: int) -> void:
+		committed_inventory_changes += 1
+		check_committed_state(changed_owner))
+	inventory.inventory_changed.connect(inventory._inventory_changed)
+	currency.wallet_changed.disconnect(currency._wallet_changed)
+	currency.wallet_changed.connect(func(changed_owner: int) -> void:
+		committed_wallet_changes += 1
+		check_committed_state(changed_owner))
+	currency.wallet_changed.connect(currency._wallet_changed)
 	drop_uid = npc.instance_id
 	world.characters[hero].position=npc.position+Vector3(0,0,2)
 	world.characters[other].position=Vector3(12,0,12)
@@ -73,6 +117,7 @@ func run_server() -> void:
 	check(not replies[hero].ok and replies[hero].error in ["out_of_range","no_interaction"] and server.database.wallet_balance(owner)==500 and server.database.item_store.inventory(owner)==purchased, "stale range cannot spend/create")
 	set_phase("CLOSE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
+	check(committed_inventory_changes==2 and committed_wallet_changes==2,"only the two committed purchases emit change facts; rejection emits none")
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size()==2)
 	if not failed:

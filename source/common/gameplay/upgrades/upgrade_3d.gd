@@ -39,7 +39,13 @@ func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName,
 	if not auth.ok: return {"ok":false,"error":auth.error}
 	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
-	return WorldServer.curr.database.upgrade_item(player.player_id,auth.recipe,uid,revision)
+	var result: Dictionary = WorldServer.curr.database.upgrade_item(player.player_id,auth.recipe,uid,revision)
+	if result.ok:
+		# Commit + wallet RAM are complete; cache refresh precedes fan-out.
+		_world.inventory_endpoint.refresh_authoritative_state(peer_id)
+		_world.inventory_endpoint.inventory_changed.emit(player.player_id)
+		_world.currency_endpoint.wallet_changed.emit(player.player_id)
+	return result
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
 	var context: NpcInteractionContext = _world.npc_endpoint.contexts.get(peer_id)
@@ -83,11 +89,11 @@ func request_upgrade(action: String, instance_id: String, service_id: String, ui
 		"upgrade": result = upgrade_for_peer(peer_id,instance_id,StringName(service_id),uid,revision,Time.get_ticks_msec())
 		_: result = {"ok":false,"error":"request"}
 	# Selection changes only the quote; a stale revision also repairs Inventory.
-	if action == "upgrade":
-		_world.inventory_endpoint._send_state(peer_id)
+	if action == "upgrade" and not result.ok:
+		_world.inventory_endpoint.resynchronize(peer_id)
 		_world.currency_endpoint._send_snapshot(peer_id)
 	elif result.get("error","") == "stale":
-		_world.inventory_endpoint._send_state(peer_id)
+		_world.inventory_endpoint.resynchronize(peer_id)
 	publish(peer_id)
 	receive_operation.rpc_id(peer_id,command_id,{"ok":true} if result.ok else {"ok":false,"error":result.error})
 

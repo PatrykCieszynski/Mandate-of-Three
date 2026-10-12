@@ -7,6 +7,7 @@ const PICKUP_REACH: float = 2.5
 const TEST_SPEND_COST: int = 50
 signal feedback_received(result: Dictionary)
 signal state_changed(snapshot: Dictionary)
+signal wallet_changed(owner_id: int)
 var ground: Dictionary[int, Dictionary] = {}
 var state: Dictionary = {}
 var _next_drop_id: int = 0
@@ -23,6 +24,7 @@ var _notice: String = ""
 
 func _ready() -> void:
 	_world = get_parent()
+	wallet_changed.connect(_wallet_changed)
 	if GameMode.is_client(): _build_hud()
 
 func _database() -> WorldDatabase:
@@ -88,7 +90,9 @@ func spend_for_peer(peer_id: int, sequence: int, now: int) -> Dictionary:
 	if now - _spend_ms.get(peer_id, -1000) < 100: return {"ok": false, "error": "too_fast"}
 	_spend_ms[peer_id] = now
 	var result: Dictionary = _database().spend_yang(_owner(peer_id), TEST_SPEND_COST)
-	if result.ok: result["spent"] = TEST_SPEND_COST
+	if result.ok:
+		result["spent"] = TEST_SPEND_COST
+		wallet_changed.emit(_owner(peer_id))
 	return result
 
 @rpc("any_peer", "call_remote", "reliable", 1)
@@ -96,8 +100,9 @@ func request_test_spend(sequence: int) -> void:
 	if not GameMode.is_world_server(): return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id): return
-	receive_feedback.rpc_id(peer_id, spend_for_peer(peer_id, sequence, Time.get_ticks_msec()))
-	_send_snapshot()
+	var result: Dictionary = spend_for_peer(peer_id, sequence, Time.get_ticks_msec())
+	receive_feedback.rpc_id(peer_id, result)
+	if not result.ok: _send_snapshot() # Repair, not a committed-change notification.
 
 func _physics_process(delta: float) -> void:
 	if not GameMode.is_world_server() or _database() == null: return
@@ -116,6 +121,10 @@ func _physics_process(delta: float) -> void:
 				receive_feedback.rpc_id(peer_id, result)
 				break
 	_send_snapshot()
+
+func _wallet_changed(owner_id: int) -> void:
+	for peer_id: int in _world.characters:
+		if _owner(peer_id) == owner_id: _send_snapshot(peer_id)
 
 func _send_snapshot(only_peer: int = -1) -> void:
 	if _database() == null: return

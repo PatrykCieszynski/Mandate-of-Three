@@ -166,3 +166,32 @@ policy to osobny P2. Content registry, protocol manifest i upgrade-view split
 wchodzą wraz z konkretną potrzebą contentu/protokołu/upgrade, nie w tej migracji.
 
 Pierwszy zakres implementacji: A1. Pierwszy odbiór całego milestone: Package A.
+
+## Realizacja A1 — 2026-10-12
+
+A1 jest zaimplementowany na `codex/spike-package-a`. Właściciele operacji zostali
+dobrani zgodnie z obecnym kodem: Shop/Upgrade zachowują swoje operacje aplikacyjne,
+Inventory obsługuje własne komendy, a WorldDatabase nadal wykonuje atomowe
+operacje SQL i akceptuje wallet RAM. Nie dodano nowej warstwy ani klasy.
+
+- `refresh_authoritative_state(peer_id)` przygotowuje snapshot, runtime equipment
+  cache i server weapon state przed powiadomieniem.
+- `_send_state()` konsumuje przygotowany snapshot, nie odświeża cache combatu.
+- Sygnały `inventory_changed(owner_id)` i `wallet_changed(owner_id)` służą do
+  publikacji po zakończonej operacji; nie sterują commit ani cache.
+- Account Storage przygotowuje wszystkie dotknięte postacie przed pierwszym
+  powiadomieniem. Equip/move/pickup przygotowują cache po udanej operacji.
+- Entry i odrzucone/stale komendy korzystają z jawnej resynchronizacji, bez
+  fałszywego faktu commitu. Błąd odczytu unieważnia runtime cache.
+- Bez zmian pozostają wire/RPC paths, transakcje SQL, revision/ownership,
+  checkpointy oraz attack timeline/fizyka.
+
+Weryfikacja A1: git diff --check, domyślny smoke (10 Godot + 74 Web UI), Shop,
+Upgrade, progression, Yang i web-inventory network; suite'y sieciowe wykonane
+sekwencyjnie. Testy obserwują stan przed publisherami, sprawdzają brak cache
+side-effects podczas publikacji oraz brak committed-change facts przy
+rollback/rejection. Fixture Upgrade po bezpośrednim seedzie SQL używa jawnego
+resynchronize zamiast polegać na side-effect publikacji.
+
+A2–A5 pozostają do wykonania: kolejne prywatne cross-calls, adapter TinyMMO,
+rewards/ground loot i architecture guard. Package A nie jest jeszcze zamknięty.
