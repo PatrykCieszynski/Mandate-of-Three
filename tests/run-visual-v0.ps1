@@ -1,6 +1,6 @@
 param(
     [ValidateSet('mobile','forward_plus','both')][string]$RenderingMethod = 'both',
-    [ValidateSet('visual_v0','visual_v1')][string]$Scene = 'visual_v0'
+    [ValidateSet('visual_v0','visual_v1','visual_v2')][string]$Scene = 'visual_v0'
 )
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
@@ -37,6 +37,7 @@ try {
                 if ($taskEntry.Role -eq 'client') {
                     if ($taskOutput -notmatch 'accelerated_osr_supported=true' -or $taskOutput -notmatch 'Creating browser in accelerated rendering mode') { throw 'CEF did not confirm accelerated OSR' }
                     if ($Scene -eq 'visual_v1' -and $taskOutput -notmatch 'VISUAL_V1_ENVIRONMENT_OK') { throw 'V1 environment review did not complete' }
+                    if ($Scene -eq 'visual_v2' -and $taskOutput -notmatch 'VISUAL_V2_CYCLE_OK') { throw 'V2 full day/night review did not complete' }
                     $taskReport = Get-Content -LiteralPath (Join-Path $taskLogs "$taskCapturePrefix-$taskMethod.json") -Raw | ConvertFrom-Json
                     if ($taskReport.renderer -ne $taskMethod -or $taskReport.driver -ne 'vulkan') { throw 'Native probe used a different renderer/driver' }
                 }

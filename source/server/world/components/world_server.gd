@@ -25,6 +25,8 @@ var player_id_to_peer_id: Dictionary[int, int]
 ## Minimal combat view, keyed by persistent character ID. Refreshed only after
 ## loading inventory or a committed item operation, never by a combat action.
 var runtime_equipment: Dictionary[int, Dictionary] = {}
+## UTC epoch gives restart/process continuity without a database write per tick.
+var world_time := WorldTime.authority(preload("res://source/common/gameplay/world_time/world_time_settings.tres"))
 
 func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> void:
 	if not snapshot.get("ok", false):

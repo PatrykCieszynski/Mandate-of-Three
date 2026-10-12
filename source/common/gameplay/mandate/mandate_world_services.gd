@@ -15,6 +15,9 @@ func economy() -> WorldDatabase:
 func progression() -> WorldDatabase:
 	return economy()
 
+func world_time() -> WorldTime:
+	return null if _server() == null else _server().world_time
+
 func item_store() -> ItemStoreSqlite:
 	var server := _server()
 	return null if server == null or server.database == null else server.database.item_store

@@ -1,6 +1,6 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=17 format=3]
 
-[ext_resource type="Script" path="res://addons/sky_3d/src/Sky3D.gd" id="1"]
+[ext_resource type="Script" path="res://source/client/world_visuals/world_visual_environment.gd" id="1"]
 [ext_resource type="Script" path="res://addons/sky_3d/src/SkyDome.gd" id="2"]
 [ext_resource type="Script" path="res://addons/sky_3d/src/TimeOfDay.gd" id="3"]
 [ext_resource type="Shader" path="res://addons/sky_3d/shaders/SkyMaterial.gdshader" id="4"]
@@ -44,6 +44,42 @@ resource_local_to_scene = true
 exposure_multiplier = 1.0
 auto_exposure_enabled = false
 
+[sub_resource type="Curve" id="SunEnergy"]
+min_value = 0.0
+max_value = 2.0
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(0.5, 0.9), 0.0, 0.0, 0, 0, Vector2(1, 1.65), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="Curve" id="AmbientEnergy"]
+_data = [Vector2(0, 0.55), 0.0, 0.0, 0, 0, Vector2(0.5, 0.65), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="Curve" id="SkyContribution"]
+_data = [Vector2(0, 0.2), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="Curve" id="DayExposure"]
+min_value = 0.0
+max_value = 4.0
+_data = [Vector2(0, 2.2), 0.0, 0.0, 0, 0, Vector2(0.5, 1.15), 0.0, 0.0, 0, 0, Vector2(1, 1.05), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="Curve" id="FogDensity"]
+_data = [Vector2(0, 0.003), 0.0, 0.0, 0, 0, Vector2(0.5, 0.0025), 0.0, 0.0, 0, 0, Vector2(1, 0.0018), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="Curve" id="FogEnergy"]
+_data = [Vector2(0, 0.3), 0.0, 0.0, 0, 0, Vector2(1, 0.8), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="Gradient" id="AtmosphereTint"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(0.5, 0.58, 0.75, 1, 0.95, 0.75, 0.6, 1, 0.73, 0.87, 1, 1)
+
+[sub_resource type="Gradient" id="FogTint"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(0.075, 0.11, 0.2, 1, 0.65, 0.52, 0.47, 1, 0.745, 0.812, 0.843, 1)
+
 [node name="WorldVisualEnvironment" type="WorldEnvironment"]
 environment = SubResource("Environment")
 camera_attributes = SubResource("Exposure")
@@ -51,17 +87,29 @@ script = ExtResource("1")
 fog_enabled = false
 night_ambient_boost = false
 contribution_tween_time = 0.0
+sun_energy_curve = SubResource("SunEnergy")
+ambient_energy_curve = SubResource("AmbientEnergy")
+sky_contribution_curve = SubResource("SkyContribution")
+exposure_curve = SubResource("DayExposure")
+fog_density_curve = SubResource("FogDensity")
+fog_energy_curve = SubResource("FogEnergy")
+atmosphere_tint = SubResource("AtmosphereTint")
+fog_tint = SubResource("FogTint")
 
 [node name="SunLight" type="DirectionalLight3D" parent="."]
 shadow_enabled = true
-shadow_bias = 0.03
-shadow_normal_bias = 1.0
+shadow_bias = 0.1
+shadow_normal_bias = 1.5
 shadow_opacity = 0.9
 directional_shadow_blend_splits = true
 directional_shadow_max_distance = 100.0
 
 [node name="MoonLight" type="DirectionalLight3D" parent="."]
 light_energy = 0.0
+shadow_bias = 0.1
+shadow_normal_bias = 1.5
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 100.0
 
 [node name="SkyDome" type="Node" parent="."]
 script = ExtResource("2")
@@ -69,6 +117,8 @@ sun_light_color = Color(1, 0.956, 0.87, 1)
 sun_horizon_light_color = Color(1, 0.78, 0.58, 1)
 sun_light_energy = 1.65
 moon_light_energy = 0.0
+moon_light_color = Color(0.52, 0.65, 1, 1)
+moon_size = 0.018
 ground_color = Color(0.36, 0.42, 0.46, 1)
 atm_day_tint = Color(0.73, 0.87, 1, 1)
 atm_horizon_light_tint = Color(1, 0.85, 0.7, 1)
@@ -93,5 +143,5 @@ day = 21
 latitude = 0.61086524
 longitude = 0.0
 utc = 0.0
-compute_moon_coords = false
-compute_deep_space_coords = false
+compute_moon_coords = true
+compute_deep_space_coords = true

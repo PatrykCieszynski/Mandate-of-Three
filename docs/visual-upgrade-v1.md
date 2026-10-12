@@ -98,8 +98,11 @@ executable. Existing inherited ObjectDB/resource shutdown warnings remain.
 
 ## Next tuning
 
-Review this reference look at the normal gameplay camera before introducing a
-moving clock. First Region's colored ground planes, water strip, block buildings
-and map boundary remain graybox geometry; sky/lighting cannot replace their
-later art/material pass. Future day/night/weather must be a separately scoped
-milestone rather than enabling the vendor clock as part of this baseline.
+V2 is now integrated as a separate [world-time milestone](visual-upgrade-v2.md).
+Production lighting follows the server calendar; the V1 native review temporarily
+freezes its 15:30 reference and restores the live clock afterwards. The results
+above describe the original V1 milestone.
+
+First Region's colored ground planes, water strip, block buildings and map
+boundary remain graybox geometry; sky/lighting cannot replace their later
+art/material pass. Weather remains a separately scoped future milestone.

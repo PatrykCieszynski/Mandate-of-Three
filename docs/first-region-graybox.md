@@ -73,7 +73,9 @@ fixed; native movement on the region still needs comparison against the arena.
 3. Visual pass after scale/gameplay feedback; final models, terrain and materials.
 
 The first [lighting baseline](visual-upgrade-v1.md) is now integrated: fixed
-15:30, Sky3D procedural sky/clouds, sun, AgX and light fog. Geometry, routes,
+15:30, Sky3D procedural sky/clouds, sun, AgX and light fog. The separate
+[V2 calendar pass](visual-upgrade-v2.md) now animates dawn/day/sunset/night,
+moon phases, stars, ambient light, exposure and haze. Geometry, routes,
 collisions and gameplay authority are unchanged. This is environment tuning;
 the authored ground/props/water remain graybox surfaces.
 

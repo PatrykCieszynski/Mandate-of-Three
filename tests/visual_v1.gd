@@ -9,7 +9,11 @@ func review_world() -> void:
 	await compare_environment()
 
 func compare_environment() -> void:
-	var visual := world.get_node("WorldVisualEnvironment") as Sky3D
+	var visual := world.get_node("WorldVisualEnvironment") as WorldVisualEnvironment
+	# V1 remains a repeatable fixed reference review after V2 enables world time.
+	var live_clock: WorldTime = visual.world_time
+	visual.world_time = null
+	visual.apply_world_time(1750519800.0)
 	var clock_time: float = visual.current_time
 	check(visual.environment.background_mode == Environment.BG_SKY and visual.environment.tonemap_mode == Environment.TONE_MAPPER_AGX, "native Sky3D + AgX composition")
 	check(visual.sun.light_energy > 0 and visual.sun.shadow_enabled, "Sky3D owns a lit shadow-casting DirectionalLight3D")
@@ -70,6 +74,7 @@ func compare_environment() -> void:
 	old_sun.queue_free()
 	review.queue_free()
 	visual.sky.process_method = cloud_process
+	visual.world_time = live_clock
 	for overlay: MeshInstance3D in overlays: overlay.show()
 	await get_tree().process_frame
 	print("VISUAL_V1_ENVIRONMENT_OK: fixed 15:30, procedural sky/AgX/sun, four native before/after views")
