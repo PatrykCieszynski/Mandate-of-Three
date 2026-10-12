@@ -157,7 +157,18 @@ nie tworzymy szerokiej whitelisty istniejącego długu. CI ma osobny check
 Domyślnie git diff --check i mały smoke. Extended suites dobieramy do kontraktu,
 a network suites na wspólnym porcie uruchamiamy sekwencyjnie. Nie dokładamy pixel
 snapshots, geometry/animation snapshots ani nowych balance assertions do smoke.
-Testy prywatnych map/metod przenosimy z logiką, zachowując scenariusze zachowania.
+Testujemy kontrakt i zachowanie. Wnętrzności sprawdzamy tylko przy konkretnym bugu
+lub krytycznej inwariancie, której nie da się sensownie sprawdzić z zewnątrz.
+Priorytet: existing behavior tests > nowe integration tests > unit testy
+implementacji. Nowe przypadki wymagają nowego kontraktu, konkretnego bugu,
+krytycznej inwarianty albo ryzyka niepokrytego przez istniejące suite'y.
+Nowa klasa/extraction sama w sobie nie uzasadnia testów.
+
+W B PlayerCombatRuntime i ekstrakcje chronią przede wszystkim istniejące
+ACTION/FEEL2/combat/network. Nowe unit cases tylko dla niepokrytych ryzyk
+buffered intent, cancel, hitch-safe impact i cleanup po remove/death.
+Nie utrwalamy starego układu prywatnych map/metod podczas przenoszenia logiki;
+zachowujemy scenariusze zachowania. Szczegóły: [testing.md](testing.md).
 
 Po B ponownie oceniamy SpikeWorld3D. WorldMovement3D / ClientWorldController
 powstaną tylko jeśli pozostałe odpowiedzialności tego wymagają.

@@ -12,13 +12,6 @@ class CountingItemStore extends ItemStoreSqlite:
 		if fail_inventory_reads: return {"ok":false,"error":"storage"}
 		return super.inventory(owner_id)
 
-func check_committed_state(owner_id: int) -> void:
-	var inventory: Dictionary = server.database.item_store.inventory(owner_id)
-	check(server.runtime_equipment[owner_id].stats == inventory.stats and server.runtime_equipment[owner_id].equipment == inventory.equipment,"all change subscribers see prepared authoritative equipment")
-	check(db.query_with_bindings("SELECT yang FROM wallets WHERE character_id=?;",[owner_id]),"committed wallet query")
-	check(server.database.wallet_balance(owner_id)==int(db.query_result[0].yang) and server.database.runtime_wallets[owner_id].pending_currency_delta==0 and not server.database.dirty_wallet.has(owner_id),"all subscribers see committed wallet RAM, independently of publication")
-
-
 @rpc("authority", "call_remote", "reliable", 0)
 func phase(command: String, uid: String) -> void:
 	if GameMode.is_world_server(): return
@@ -46,29 +39,22 @@ func run_server() -> void:
 	var currency: SpikeCurrency3D = world.currency_endpoint
 	var counting := CountingItemStore.new(db)
 	server.database.item_store = counting
-	# Publication must not heal a missing cache or read Inventory from SQL.
+	# Narrow A1 regression probe: publication used to own authoritative cache
+	# refresh. A client snapshot alone cannot detect that coupling or SQL reads.
 	server.runtime_equipment.erase(owner)
 	inventory._send_state(hero)
 	check(not server.runtime_equipment.has(owner) and counting.inventory_reads==0,"publication has no authoritative cache/Inventory-read side effects")
-	inventory.refresh_authoritative_state(hero)
+	inventory.resynchronize(hero)
 	check(server.runtime_equipment.has(owner),"explicit refresh restores authoritative cache")
 	counting.fail_inventory_reads = true
-	inventory.refresh_authoritative_state(hero)
+	inventory.resynchronize(hero)
 	check(not server.runtime_equipment.has(owner) and server.runtime_attack(owner)==-1,"failed refresh invalidates combat cache rather than retaining stale stats")
 	counting.fail_inventory_reads = false
 	inventory.resynchronize(hero)
 	check(server.runtime_equipment.has(owner),"explicit resynchronization restores state after read failure")
-	# Observe before publishers to reject subscriber-order-dependent correctness.
-	inventory.inventory_changed.disconnect(inventory._inventory_changed)
-	inventory.inventory_changed.connect(func(changed_owner: int) -> void:
-		committed_inventory_changes += 1
-		check_committed_state(changed_owner))
-	inventory.inventory_changed.connect(inventory._inventory_changed)
-	currency.wallet_changed.disconnect(currency._wallet_changed)
-	currency.wallet_changed.connect(func(changed_owner: int) -> void:
-		committed_wallet_changes += 1
-		check_committed_state(changed_owner))
-	currency.wallet_changed.connect(currency._wallet_changed)
+	# Public fact semantics: commits emit changes; rejection/repair does not.
+	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
+	currency.wallet_changed.connect(func(_owner_id: int) -> void: committed_wallet_changes += 1)
 	drop_uid = npc.instance_id
 	world.characters[hero].position=npc.position+Vector3(0,0,2)
 	world.characters[other].position=Vector3(12,0,12)

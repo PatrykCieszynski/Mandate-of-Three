@@ -4,6 +4,43 @@ Accepted 2026-10-09: keep a small set of stable regression contracts during rapi
 prototyping. A tiny UI/style or balance change should not require repairing a
 browser screenshot, a specific DOM tree or a combat animation timeline.
 
+## Contracts before implementation
+
+Accepted 2026-10-12: test contracts and observable behavior. Inspect internals only
+for a concrete bug or a critical invariant that cannot reasonably be checked
+from outside.
+
+Prefer, in order:
+
+1. Existing behavior suites and their scenarios.
+2. New integration coverage when the affected contract is not already covered.
+3. Focused implementation unit tests when they are needed to isolate the risk.
+
+Add or extend a test only when there is a new contract, a concrete bug, a critical
+invariant, or a risk the current suites do not cover. Name that risk and explain
+the coverage gap in the test/comment or change description. A new class or an
+extraction alone does not justify new tests. Do not duplicate integration coverage
+with assertions that mirror method calls, private maps or class layout.
+
+For economy changes, prefer results: new item/stats and wallet balance after a
+commit, the private Inventory received by the client, subsequent damage using the
+equipped stats, and unchanged state after rollback. Do not encode the order of
+refresh_authoritative_state versus a signal subscriber as the acceptance test.
+A public change fact is a contract; its subscriber registration order is not.
+
+For Package B, protect PlayerCombatRuntime and the service/actor extractions
+primarily with existing ACTION, FEEL2, combat and network suites. Extend those
+scenarios if a risk is uncovered. New focused unit cases may be justified for
+buffered intent, cancel, hitch-safe impact, or cleanup after remove/death, but
+should not repeat coverage merely because ownership moved to another class.
+
+Test setup may seed SQLite or configure a controlled actor. That does not make
+private state or the setup mechanism the expected production behavior. Internal
+probes need a specific justification; for example, the known Inventory publication
+coupling regression checks that publication cannot refresh combat cache, and the
+RAM-only swing invariant checks that an attack does not read SQLite Inventory.
+Keep such exceptions narrow and separate from ordinary success/rejection checks.
+
 ## Default
 
 ```powershell

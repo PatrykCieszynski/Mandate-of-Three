@@ -20,6 +20,17 @@ dirty checkpoints; item/economy changes remain immediate atomic transactions.
 
 ## Prototype verification policy
 
+Test contracts and observable behavior. Inspect internals only for a concrete bug
+or a critical invariant that cannot reasonably be checked from outside. Prefer
+existing behavior suites, then new integration coverage, then implementation unit
+tests. Add coverage only for a new contract, a concrete bug, a critical invariant,
+or a risk the existing suites do not cover; creating/extracting a class is not a
+reason to add tests. State the protected risk and why existing coverage is
+insufficient. For Package B, reuse ACTION/FEEL/combat/network suites; add focused
+cases for uncovered buffered intent, cancellation, hitch-safe impact or
+remove/death cleanup, rather than a new suite per extraction.
+See docs/testing.md for the full policy.
+
 Keep the default checks small, headless and based on durable contracts:
 item ownership/revision/rollback, inventory footprints/migration, progression
 checkpoints, wallet delta/spend transactions and explicit Web bridge commands.
