@@ -1,7 +1,7 @@
 extends Node3D
 ## Opt-in native review: real movement bodies, approximate scheduled preview hits.
-var hero := SpikePlayer3D.new()
-var dog := SpikeMob3D.new()
+var hero := PlayerActor3D.new()
+var dog := MobActor3D.new()
 var age := 0.0
 var step_index := 0
 var impacted := false

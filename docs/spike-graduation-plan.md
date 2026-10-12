@@ -106,7 +106,7 @@ spike-graduation; poniżej pozostaje zatwierdzony zakres nadrzędny.
 PlayerCombatRuntime posiada sequence, active action, queued intent, combo state,
 desired facing i movement/action locks. Nie posiada health ani respawn.
 Health/alive/death należą do właściwego actor/life ownera; HitReactionState
-pozostaje na aktorze. Player life state należy do SpikePlayer3D; obecna player
+pozostaje na aktorze. Player life state należy do PlayerActor3D; obecna player
 damage/respawn orchestration pozostaje w combat facade. Mob replacement/respawn
 należy do MobSystem; wspólna baza nie unifikuje polityki respawnu.
 
@@ -183,7 +183,7 @@ buffered intent, cancel, hitch-safe impact i cleanup po remove/death.
 Nie utrwalamy starego układu prywatnych map/metod podczas przenoszenia logiki;
 zachowujemy scenariusze zachowania. Szczegóły: [testing.md](testing.md).
 
-Po B ponownie oceniamy SpikeWorld3D. WorldMovement3D / ClientWorldController
+Po B ponownie oceniamy GameWorld3D. WorldMovement3D / ClientWorldController
 powstaną tylko jeśli pozostałe odpowiedzialności tego wymagają.
 Pełny extraction Wallet/Progression z WorldDatabase, starter kit i dev sword
 policy to osobny P2. Content registry, protocol manifest i upgrade-view split
@@ -317,3 +317,9 @@ window/input policy; guard utrwala usunięte zależności.
 Smoke, właściwe network i browser suites przeszły. Native Godot/CEF acceptance
 pozostaje otwarte; pakiet nadal na osobnym branchu do review/integracji. Nie dodano
 nowych klas per window policy ani zmian TypeScript UI, gameplay czy persistence.
+
+## Końcowy graduation cleanup
+
+C zintegrowany lokalnie w 63aa38b. Zatwierdzony ostatni zakres, bez kolejnej
+przebudowy architektury: [production naming/layout i legacy UI removal](spike-graduation-cleanup.md).
+Trzy commity na codex/spike-graduation-cleanup; finalna integracja do main osobno.

@@ -30,7 +30,7 @@ func _ready() -> void:
 		runtime.set_skill_level(level)
 		assert(runtime.definition() == BasicAttackCombos.BASE, "OFF always uses four hits")
 	assert(not runtime.set_skill_level(3) and not runtime.set_weapon_mode(&"unknown"))
-	var character := SpikePlayer3D.new()
+	var character := PlayerActor3D.new()
 	character.setup("Headless combo contract",Color.WHITE)
 	assert(character.player_presentation == null and character.find_children("*","Label3D",true,false).is_empty(), "World does not load optional Warrior presentation")
 	character.free()
@@ -50,7 +50,7 @@ func _ready() -> void:
 	reduced.allow_knockback = false
 	var no_displacement := HitReactionResolver.resolve(finisher,reduced,1,100,false)
 	assert(no_displacement.reaction == HitReaction.Type.KNOCKDOWN and no_displacement.knockback_distance == 0, "Displacement resistance is separate from knockdown")
-	var displaced := SpikePlayer3D.new()
+	var displaced := PlayerActor3D.new()
 	var origin := displaced.position
 	displaced.apply_knockback(Vector3.RIGHT,down.knockback_distance)
 	assert(displaced.position == origin and displaced.knockback_active(), "Impulse never teleports")
@@ -79,7 +79,7 @@ func _ready() -> void:
 	assert(HitReactionResolver.resolve(knockback,normal,1,100,false).interrupts_attack)
 	var lethal := HitReactionResolver.resolve(finisher,normal,1000,100,false)
 	assert(lethal.damage == 100 and lethal.reaction == HitReaction.Type.NONE)
-	var mob := SpikeMob3D.new()
+	var mob := MobActor3D.new()
 	mob.mob_instance_id = 123
 	mob.hit_reaction.apply(down,100)
 	var snapshot := MobSnapshot.capture(mob,101)
@@ -108,7 +108,7 @@ func _ready() -> void:
 	floor_shape.shape = floor_box
 	floor_body.add_child(floor_shape)
 	physics_fixture.add_child(floor_body)
-	var blocked := SpikePlayer3D.new()
+	var blocked := PlayerActor3D.new()
 	blocked.setup("Impulse collision",Color.WHITE)
 	physics_fixture.add_child(blocked)
 	await get_tree().physics_frame

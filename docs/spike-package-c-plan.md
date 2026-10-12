@@ -3,7 +3,7 @@
 Plan wykonawczy z 2026-10-12. Baza: `codex/spike-graduation`, HEAD `c6f5cbb`,
 po integracji Package B i poprawkach review. Branch: `codex/spike-package-c`.
 C1–C4 zaimplementowane i sprawdzone headless/browser; natywny odbiór CEF pozostaje
-do wykonania. Branch pozostaje osobny do review/integracji.
+do wykonania. C zintegrowany lokalnie w 63aa38b na prośbę użytkownika.
 Obowiązują [plan nadrzędny](spike-graduation-plan.md),
 [kierunek projektu](project-direction.md), [Core UI](core-ui.md),
 [Web UI](web-ui.md) i [polityka testów](testing.md).
@@ -249,3 +249,7 @@ podczas forging; nie powstał animation timing test ani nowa suite.
 Natywny Godot/CEF pass nie został wykonany. Headless/browser nie potwierdza
 embedded CEF input routing ani Vulkan. Nie integrujemy do main ani nie publikujemy
 implementacji bez właściwego odbioru/prośby. Implementacja w tym odbiorze pozostaje lokalna.
+
+Package C zintegrowany lokalnie na prośbę użytkownika: merge 63aa38b.
+Natywny odbiór pozostaje odnotowany osobno; dalszy zakres to
+[graduation cleanup](spike-graduation-cleanup.md), przed finalnym merge do main.

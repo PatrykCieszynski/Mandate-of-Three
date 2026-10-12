@@ -30,13 +30,13 @@ func phase(command: String, uid: String) -> void:
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size()==2 and ready_peers.size()==2)
-	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled=false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled=false
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
 	var npc: NeutralNpc3D = world.npc_endpoint.actors["spike-blacksmith-01"]
 	var owner: int = server.connected_players[hero].player_id
-	var inventory: SpikeInventory3D = world.inventory_endpoint
-	var currency: SpikeCurrency3D = world.currency_endpoint
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
+	var currency: CurrencyEndpoint3D = world.currency_endpoint
 	var counting := CountingItemStore.new(db)
 	server.database.item_store = counting
 	# Narrow A1 regression probe: publication used to own authoritative cache

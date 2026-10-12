@@ -28,7 +28,7 @@ func _ready() -> void:
 	var player := PlayerResource.new()
 	player.player_id = 1
 	server.connected_players[1] = player
-	var world := preload("res://source/common/gameplay/maps/spike/spike_map_3d.tscn").instantiate() as SpikeWorld3D
+	var world := preload("res://tests/fixtures/world3d/test_arena.tscn").instantiate() as GameWorld3D
 	add_child(world)
 	world.set_physics_process(false)
 	world.combat_endpoint.set_physics_process(false)
@@ -55,7 +55,7 @@ func _ready() -> void:
 		if mob.mob_key == wild.mob_key: wild_count += 1
 		if mob.mob_key == feral.mob_key: feral_count += 1
 	assert(wild_count == 10 and feral_count == 4)
-	var hero := SpikePlayer3D.new()
+	var hero := PlayerActor3D.new()
 	hero.position = Vector3(0,0,5)
 	world.add_child(hero)
 	world.characters[1] = hero
@@ -98,7 +98,7 @@ func _ready() -> void:
 	world.mob_system.tick_mob(member,1.0/60,3)
 	assert(member.ai_state == MobState.Value.RETURN, "Target outside pack leash triggers return")
 	world.characters.clear()
-	for mob: SpikeMob3D in world.mob_system.mobs.values(): mob.ai_enabled = false
+	for mob: MobActor3D in world.mob_system.mobs.values(): mob.ai_enabled = false
 	var killed_id := member.mob_instance_id
 	member.hp = 0
 	var deaths: Array[MobDeathResult] = []
@@ -139,13 +139,13 @@ func _ready() -> void:
 	world.mob_system.create_pack([entry(wild,18)],Vector3(-7,0,-7),1,2,8,1)
 	world.mob_system.create_pack([entry(feral,15)],Vector3(7,0,7),1,2,8,1)
 	assert(world.mob_system.mobs.size() == 50)
-	for mob: SpikeMob3D in world.mob_system.mobs.values():
+	for mob: MobActor3D in world.mob_system.mobs.values():
 		mob.ai_enabled = true
 		mob.ai_state = MobState.Value.IDLE
 		mob.wander_at_ms = 0
 	for i: int in 20:
 		world.mob_system.tick(1.0/60,11000+i*17)
-		for mob: SpikeMob3D in world.mob_system.mobs.values():
+		for mob: MobActor3D in world.mob_system.mobs.values():
 			assert(mob.position.is_finite() and mob.hp > 0 and mob.ai_state in [MobState.Value.IDLE,MobState.Value.WANDER])
 		await get_tree().physics_frame
 	measure_snapshots(world,50)
@@ -158,10 +158,10 @@ func _ready() -> void:
 	print("MOB_PACKS_OK: composition, identity, aggro, anchor leash, per-member replacement, Metin expiry and 50 actors")
 	get_tree().quit()
 
-func measure_snapshots(world: SpikeWorld3D, count: int) -> void:
+func measure_snapshots(world: GameWorld3D, count: int) -> void:
 	# Frozen pre-refactor wire shape; only the new side uses production encoding.
 	var legacy: Dictionary = {}
-	for mob: SpikeMob3D in world.mob_system.mobs.values():
+	for mob: MobActor3D in world.mob_system.mobs.values():
 		legacy[mob.mob_instance_id] = {"position":mob.position,"yaw":mob.rotation.y,
 			"hp":mob.hp,"state":mob.ai_state,"max_hp":mob.max_hp,"damage":mob.attack_damage,
 			"title":mob.title,"home":mob.home,"source_metinstone_id":mob.source_metinstone_id,
@@ -176,13 +176,13 @@ func measure_snapshots(world: SpikeWorld3D, count: int) -> void:
 		var id: int = record[MobSnapshot.Field.ID]
 		assert(not seen.has(id))
 		seen[id] = true
-		var mob: SpikeMob3D = world.mob_system.mobs[id]
+		var mob: MobActor3D = world.mob_system.mobs[id]
 		assert(MobDefinitions.resolve(record[MobSnapshot.Field.MOB_KEY]) == mob.definition)
 		assert(record[MobSnapshot.Field.POSITION] == mob.position and record[MobSnapshot.Field.YAW] == mob.rotation.y)
 		assert(record[MobSnapshot.Field.HP] == mob.hp and record[MobSnapshot.Field.SOURCE_METIN] == mob.source_metinstone_id)
 		assert(typeof(record[MobSnapshot.Field.STATE]) == TYPE_INT)
 		assert(record[MobSnapshot.Field.STATE] == mob.ai_state)
-	var probe: SpikeMob3D = world.mob_system.mobs.values()[0]
+	var probe: MobActor3D = world.mob_system.mobs.values()[0]
 	var original_state := probe.ai_state
 	for name: String in MobState.NAMES.values():
 		probe.ai_state = MobState.Value[name]

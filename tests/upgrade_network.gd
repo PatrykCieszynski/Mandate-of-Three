@@ -23,7 +23,7 @@ func phase(command: String, uid: String) -> void:
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
-	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
 	var player: PlayerResource = server.connected_players[hero]
@@ -39,8 +39,8 @@ func run_server() -> void:
 	check(items.receive_item_in_transaction(ore).ok and db.query("COMMIT;"),"seed material")
 	check(server.database.add_yang(player.player_id,2100),"pending income")
 	world.inventory_endpoint.resynchronize(hero)
-	var inventory: SpikeInventory3D = world.inventory_endpoint
-	var currency: SpikeCurrency3D = world.currency_endpoint
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
+	var currency: CurrencyEndpoint3D = world.currency_endpoint
 	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
 	currency.wallet_changed.connect(func(_owner_id: int) -> void: committed_wallet_changes += 1)
 	set_phase("INTERACT",hero)

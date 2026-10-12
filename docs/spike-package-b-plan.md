@@ -9,7 +9,7 @@ i [polityka testów](testing.md).
 
 ## Cel i odbiór
 
-SpikeCombat3D przestaje posiadać równocześnie stan ataku gracza, AI/packs,
+CombatEndpoint3D przestaje posiadać równocześnie stan ataku gracza, AI/packs,
 lifecycle mobów, input/targeting klienta i presentation. Pozostaje cienką fasadą
 obecnych RPC, publikacji i jawnego wywoływania właścicieli operacji.
 Zachowujemy działanie obecnego basic attack, mobów i Metina.
@@ -70,7 +70,7 @@ cancel. B2b (osobny commit): impact becomes due → trace → resolve hit → ap
  target consequence, z zachowaniem legacy melee fallback. Nie dodajemy drugiej
 klasy ani milestone'u dla tego rozdzielenia.
 
-SpikeCombat3D pozostawia uwierzytelniony RPC intake i niezbędne publiczne delegaty
+CombatEndpoint3D pozostawia uwierzytelniony RPC intake i niezbędne publiczne delegaty
 używane przez World/NPC/gameplay. Serwis zwraca wynik potrzebny do obecnych
 swing/hits/wait RPC; nie tworzymy event busa ani pipeline grafu.
 Server attack advance uruchamia aktor gracza, a serwis ustala jego parametry.
@@ -134,7 +134,7 @@ tego zakresu i używa istniejących CombatFeedback3D/WarriorVisual3D.
 
 Ground loot visuals i XP/progression feedback nie trafiają do kontrolera combatu.
 Mogą pozostać tymczasowo przy fasadzie/obecnych endpointach, aż pojawi się naturalny
-właściciel. Nie musimy opróżnić SpikeCombat3D w tym milestone. Kontroler posiada
+właściciel. Nie musimy opróżnić CombatEndpoint3D w tym milestone. Kontroler posiada
 lifecycle/disposal wyłącznie własnego input i basic-attack presentation.
 
 Fasada odbiera obecne RPC/snapshoty i przekazuje je kontrolerowi oraz MobSystem.
@@ -151,7 +151,7 @@ Input ownership, mouse picking, camera i CEF sprawdzamy natywnie na odbiorze B.
 
 SpikeCharacter3D zawiera dziś Warrior/equipment/advance/player movement, a
 SpikeWildDog3D po niej dziedziczy. Rozdzielamy to dopiero po ustaleniu właścicieli
-z B2/B3; nazwy robocze: SpikeActor3D, SpikePlayer3D, SpikeMob3D.
+z B2/B3; nazwy robocze: Actor3D, PlayerActor3D, MobActor3D.
 
 - Actor: wspólne authoritative body plumbing, hit reaction/knockback,
   snapshot/interpolation i defending geometry.
@@ -230,11 +230,11 @@ przed integracją całego B do spike-graduation.
 - B4: ClientCombatController posiada target identity, autoattack, input/retry
   i basic-attack presentation/trace-debug lifecycle. XP, HUD i ground loot visuals
   zostały przy fasadzie. Nie powstał TargetManager ani target frame.
-- B5: SpikeActor3D zawiera wspólne body/reaction/knockback/interpolation plumbing.
-  SpikePlayer3D posiada movement/advance/BODY policy/equipment/Warrior, HP i player
+- B5: Actor3D zawiera wspólne body/reaction/knockback/interpolation plumbing.
+  PlayerActor3D posiada movement/advance/BODY policy/equipment/Warrior, HP i player
   respawn deadline. Player life state należy do aktora; obecna player damage/respawn
-  orchestration pozostaje w SpikeCombat3D (hurt_player i _tick_player_lifecycle).
-  SpikeMob3D dziedziczy po Actor, a MobSystem posiada replacement policy.
+  orchestration pozostaje w CombatEndpoint3D (hurt_player i _tick_player_lifecycle).
+  MobActor3D dziedziczy po Actor, a MobSystem posiada replacement policy.
   UID player/mob scripts zachowano podczas rename.
 - Guard obejmuje nowe granice, włącznie z zakazem live actor/definition reference
   w death result. Nie sprawdza liczby klas ani pokrycia prywatnych pól.
@@ -260,8 +260,8 @@ Nie wprowadzamy równoległego definition_id ani aliasu tego pola.
   Przy następnej potrzebie wspólnego parametru przenosimy go do neutralnej definicji
   lub małych shared combat constants; nie dokładamy kolejnych zależności klienta
   od serverowego orchestration.
-- present_reaction(SpikeActor3D) korzysta z play_hit/present_hit_lock implementowanych
-  przez realne SpikePlayer3D/SpikeMob3D. Doprecyzowanie kontraktu przy trzecim actor
+- present_reaction(Actor3D) korzysta z play_hit/present_hit_lock implementowanych
+  przez realne PlayerActor3D/MobActor3D. Doprecyzowanie kontraktu przy trzecim actor
   type; na tym etapie nie dodajemy nowego interfejsu ani pustych metod do bazy.
 
 ### Pozostały odbiór natywny

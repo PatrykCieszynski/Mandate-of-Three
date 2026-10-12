@@ -1,11 +1,11 @@
 extends Node
 ## Production RPC + physics + isolated real SQLite. Fixture-only commands below
-## coordinate assertions; gameplay commands go through SpikeCombat3D unchanged.
+## coordinate assertions; gameplay commands go through CombatEndpoint3D unchanged.
 
 const PORT: int = 18098
-var map_scene_path: String = "res://source/common/gameplay/maps/spike/spike_map_3d.tscn"
+var map_scene_path: String = "res://tests/fixtures/world3d/test_arena.tscn"
 var peer := WebSocketMultiplayerPeer.new()
-var world: SpikeWorld3D
+var world: GameWorld3D
 var server: WorldServer
 var db: SQLite
 var client_number: int = 0
@@ -55,15 +55,15 @@ func _ready() -> void:
 		server.database.db = db
 		server.database.item_store = ItemStoreSqlite.new(db)
 		server.database.store = WorldStoreSqlite.new(db)
-		var host: ServerInstance = preload("res://source/server/world/components/spike_instance_3d.gd").new()
+		var host: ServerInstance = preload("res://source/server/world/components/world_instance_3d.gd").new()
 		host.name = "Instance"
 		host.instance_resource = InstanceResource.new()
-		host.instance_resource.instance_name = &"Spike"
+		host.instance_resource.instance_name = &"FirstRegion"
 		host.load_map(map_scene_path)
 		add_child(host)
-		world = host.get_node("SpikeMap")
+		world = host.get_node("GameWorld")
 		# Opt in only in the fixture to retain natural-aggro/return coverage.
-		for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.proximity_aggro = true
+		for dog: MobActor3D in world.mob_system.mobs.values(): dog.proximity_aggro = true
 		api.peer_connected.connect(func(id: int) -> void:
 			var number: int = server.connected_players.size() + 1
 			var owner: int = server.database.store.create_player_character("pve%d" % number, {"name": "Pve%d" % number, "skin": 1})
@@ -75,7 +75,7 @@ func _ready() -> void:
 		check(peer.create_client("ws://127.0.0.1:%d" % PORT) == OK, "client socket")
 		api.multiplayer_peer = peer
 		api.connected_to_server.connect(func() -> void:
-			var instance: InstanceClient = preload("res://source/client/network/spike_instance_3d.gd").new()
+			var instance: InstanceClient = preload("res://source/client/network/world_instance_3d.gd").new()
 			instance.name = "Instance"
 			world = load(map_scene_path).instantiate()
 			world.input_enabled = false
@@ -134,39 +134,39 @@ func place_far() -> void:
 func place_near() -> void:
 	var index: int = 0
 	for id: int in world.characters:
-		world.characters[id].position = SpikeCombat3D.HOME + Vector3(-1 if index == 0 else 1, 0, 1)
+		world.characters[id].position = CombatEndpoint3D.HOME + Vector3(-1 if index == 0 else 1, 0, 1)
 		index += 1
 
 func run_server() -> void:
 	aim_fixture_fight = true
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	for id: int in world.mob_system.mobs:
 		if id != 1:
 			world.mob_system.mobs[id].ai_state = MobState.Value.DISABLED
 			world.mob_system.mobs[id].collision_layer = 0
 	place_far()
-	world.mob_system.mobs[1].position = SpikeCombat3D.HOME
+	world.mob_system.mobs[1].position = CombatEndpoint3D.HOME
 	world.mob_system.mobs[1].ai_state = MobState.Value.IDLE
 	world.mob_system.mobs[1].target_peer = 0
 	await get_tree().create_timer(0.3).timeout
 	check(world.mob_system.mobs[1].ai_state == MobState.Value.IDLE, "idle outside aggro")
-	for id: int in world.characters: world.characters[id].position = SpikeCombat3D.HOME + Vector3(0, 0, 5)
+	for id: int in world.characters: world.characters[id].position = CombatEndpoint3D.HOME + Vector3(0, 0, 5)
 	fixture_checkpoint = "CHASE"
 	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.CHASE)
 	fixture_checkpoint = "ATTACK"
 	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.ATTACK)
-	check(world.characters.values().map(func(body: SpikePlayer3D) -> int: return body.hp).min() < 100, "server mob attack")
+	check(world.characters.values().map(func(body: PlayerActor3D) -> int: return body.hp).min() < 100, "server mob attack")
 	world.mob_system.mobs[1].hp = 50
 	place_far()
 	fixture_checkpoint = "RETURN"
 	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.RETURN)
 	fixture_checkpoint = "IDLE"
 	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.IDLE)
-	check(world.mob_system.mobs[1].hp == SpikeCombat3D.MOB_HP and world.mob_system.mobs[1].contributions.is_empty(), "return heals and resets encounter")
+	check(world.mob_system.mobs[1].hp == CombatEndpoint3D.MOB_HP and world.mob_system.mobs[1].contributions.is_empty(), "return heals and resets encounter")
 	set_phase("RANGE")
 	await get_tree().create_timer(0.5).timeout
-	check(world.mob_system.mobs[1].hp == SpikeCombat3D.MOB_HP, "distant attack/replay flood cannot damage")
+	check(world.mob_system.mobs[1].hp == CombatEndpoint3D.MOB_HP, "distant attack/replay flood cannot damage")
 	# A fixture position inside the obstacle gives a short, obstructed ray.
 	# Freeze AI only here so RETURN cannot mask the line-of-sight assertion.
 	world.mob_system.mobs[1].ai_enabled = false
@@ -177,8 +177,8 @@ func run_server() -> void:
 	for id: int in world.characters: world.characters[id].position = Vector3(-1.5, 0, -1.6)
 	await get_tree().create_timer(0.4).timeout
 	check(combat.attacks.attack_runtime(world.characters.keys()[0]).pending_impact.is_empty(), "obstructed swing reached its impact")
-	check(world.mob_system.mobs[1].hp == SpikeCombat3D.MOB_HP, "attack through obstacle denied")
-	world.mob_system.mobs[1].position = SpikeCombat3D.HOME
+	check(world.mob_system.mobs[1].hp == CombatEndpoint3D.MOB_HP, "attack through obstacle denied")
+	world.mob_system.mobs[1].position = CombatEndpoint3D.HOME
 	world.mob_system.mobs[1].ai_state = MobState.Value.IDLE
 	world.mob_system.mobs[1].target_peer = 0
 	for id: int in world.characters: combat.attacks.attack_runtime(id).pending_impact = {}
@@ -259,11 +259,11 @@ func _physics_process(_delta: float) -> void:
 	# moves actors; keep subsequent intentions aimed at the moving dog, as target
 	# assistance does in gameplay. An accepted swing keeps its own frozen yaw.
 	if not aim_fixture_fight or not GameMode.is_world_server() or phase_name!="FIGHT" or world==null: return
-	var combat: SpikeCombat3D = world.combat_endpoint
-	var dog: SpikeMob3D = world.mob_system.mobs.get(1)
+	var combat: CombatEndpoint3D = world.combat_endpoint
+	var dog: MobActor3D = world.mob_system.mobs.get(1)
 	if dog==null or dog.ai_state==MobState.Value.DEAD: return
 	for id: int in world.characters:
-		var body: SpikePlayer3D = world.characters[id]
+		var body: PlayerActor3D = world.characters[id]
 		var offset: Vector3 = dog.position-body.position
 		body.rotation.y = atan2(-offset.x,-offset.z)
 		combat.remember_next_facing(id,Vector2(offset.x,offset.z))
@@ -271,14 +271,14 @@ func _physics_process(_delta: float) -> void:
 func _process(delta: float) -> void:
 	elapsed += delta
 	if elapsed > 40:
-		check(false, "timeout phase=" + phase_name + " checkpoint=" + fixture_checkpoint + " health=" + str(world.characters.values().map(func(body: SpikePlayer3D) -> int: return body.hp)) + " ready=" + str(ready_peers.size()) + " mobs=" + str(world.mob_system.snapshot()) if world != null else "timeout before world setup")
+		check(false, "timeout phase=" + phase_name + " checkpoint=" + fixture_checkpoint + " health=" + str(world.characters.values().map(func(body: PlayerActor3D) -> int: return body.hp)) + " ready=" + str(ready_peers.size()) + " mobs=" + str(world.mob_system.snapshot()) if world != null else "timeout before world setup")
 		return
 	if GameMode.is_world_server() or world == null or world.combat_endpoint.state.is_empty(): return
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
-	var combat: SpikeCombat3D = world.combat_endpoint
-	saw_damage = saw_damage or world.mob_system.mobs[1].hp < SpikeCombat3D.MOB_HP
+	var combat: CombatEndpoint3D = world.combat_endpoint
+	saw_damage = saw_damage or world.mob_system.mobs[1].hp < CombatEndpoint3D.MOB_HP
 	saw_death = saw_death or world.mob_system.mobs[1].ai_state == MobState.Value.DEAD
 	saw_loot = saw_loot or not combat.state.drops.is_empty()
 	accumulator += delta

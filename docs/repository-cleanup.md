@@ -19,7 +19,7 @@ Removed:
 
 Spike is the only instance definition. Every login/recall enters it. The initial
 technical 2D scene was replaced by
-`source/common/gameplay/maps/spike/spike_map_3d.tscn`: floor, walls, obstacles and
+`tests/fixtures/world3d/test_arena.tscn`: floor, walls, obstacles and
 server-physics player capsules. Status: [spike3d.md](spike3d.md).
 
 ## Stages 2-3: disconnected Ekonia gameplay systems

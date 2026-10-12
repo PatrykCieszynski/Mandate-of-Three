@@ -19,7 +19,7 @@ build a generic stats/event framework or autosave the entire profile for each ch
 
 `WorldServer.runtime_equipment` stores active characters' equipment UIDs and
 resulting stats by persistent ID. Application operations explicitly call
-`SpikeInventory3D.refresh_authoritative_state()` on entry/repair or after a
+`InventoryEndpoint3D.refresh_authoritative_state()` on entry/repair or after a
 committed item mutation. This prepares the private snapshot, equipment cache and
 server weapon state before any notification/publication. `_send_state()` consumes
 the prepared snapshot; publication never refreshes the authoritative combat cache.

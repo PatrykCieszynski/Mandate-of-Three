@@ -1,0 +1,35 @@
+[gd_scene format=3 uid="uid://bga8ndeih1lxt"]
+
+[ext_resource type="Script" uid="uid://s6ive88moh6q" path="res://source/client/ui/settings/components/setting_remap.gd" id="1_rc673"]
+[ext_resource type="ButtonGroup" uid="uid://dnri86skakd1g" path="res://source/client/ui/settings/components/remap_group.tres" id="2_q6ujg"]
+
+[node name="SettingRemap" type="PanelContainer" unique_id=1702750502 node_paths=PackedStringArray("setting_label", "controller")]
+custom_minimum_size = Vector2(0, 48)
+theme_type_variation = &"SettingRow"
+script = ExtResource("1_rc673")
+setting_label = NodePath("HBox/SettingName")
+controller = NodePath("HBox/Cell/InputRemapButton")
+
+[node name="HBox" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SettingName" type="Label" parent="HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+text = "ActionName"
+vertical_alignment = 1
+
+[node name="Cell" type="PanelContainer" parent="HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.85
+theme_type_variation = &"SettingCell"
+
+[node name="InputRemapButton" type="Button" parent="HBox/Cell"]
+layout_mode = 2
+theme_type_variation = &"FlatButton"
+toggle_mode = true
+button_group = ExtResource("2_q6ujg")
+clip_text = true

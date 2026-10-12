@@ -35,12 +35,12 @@ func run_server() -> void:
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
 	var owner_id: int = server.connected_players[hero].player_id
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	var store := CountingItemStore.new(db)
 	server.database.item_store = store
-	var inventory: SpikeInventory3D = world.inventory_endpoint
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
 	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
-	for dog: SpikeMob3D in world.mob_system.mobs.values():
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
 			dog.ai_state = MobState.Value.DISABLED
@@ -95,7 +95,7 @@ func run_server() -> void:
 	check(server.runtime_attack(owner_id) == 29, "committed swap updates runtime stats")
 	check(store.inventory(server.connected_players[other].player_id).items.size() == 2, "other player receives no inventory")
 	await get_tree().create_timer(1.2).timeout
-	var old_dog: SpikeMob3D = world.mob_system.mobs[1]
+	var old_dog: MobActor3D = world.mob_system.mobs[1]
 	var pack: MobPackRuntime = world.mob_system.packs[old_dog.pack_instance_id]
 	pack.replacements.clear()
 	world.mob_system.remove_mob(1)
@@ -124,7 +124,7 @@ func run_server() -> void:
 		get_tree().quit()
 
 func equip_and_report(item: Dictionary) -> void:
-	var inventory: SpikeInventory3D = world.inventory_endpoint
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
 	inventory.request_equipment.rpc_id(1, "equip", str(item.uid), int(item.revision))
 	await inventory.state_changed
 	report.rpc_id(1, {"ok": not inventory.state.has("error") and inventory.state.equipment.get("weapon", "") == item.uid})
@@ -138,8 +138,8 @@ func _process(delta: float) -> void:
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
-	var combat: SpikeCombat3D = world.combat_endpoint
-	var inventory: SpikeInventory3D = world.inventory_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
 	saw_damage = saw_damage or (world.mob_system.mobs.has(1) and world.mob_system.mobs[1].hp < 120)
 	saw_death = saw_death or (world.mob_system.mobs.has(1) and world.mob_system.mobs[1].ai_state == MobState.Value.DEAD)
 	saw_loot = saw_loot or not combat.state.drops.is_empty()

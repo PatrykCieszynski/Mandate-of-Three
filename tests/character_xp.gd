@@ -10,7 +10,7 @@ func phase(command: String, uid: String) -> void:
 	drop_uid = uid
 	attempted = false
 	if command == "DONE":
-		var combat: SpikeCombat3D = world.combat_endpoint
+		var combat: CombatEndpoint3D = world.combat_endpoint
 		check(combat.state.progression.level == (2 if won else 1), "private progression belongs to recipient")
 		check(combat.state.progression.experience == (10 if won else 0), "XP not duplicated or leaked to other player")
 		check(combat.state.levels.values().has(2), "public level replicated to both players")
@@ -28,10 +28,10 @@ func run_server() -> void:
 	var other: int = world.characters.keys()[1]
 	var owner_id: int = server.connected_players[hero].player_id
 	var other_id: int = server.connected_players[other].player_id
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	var store: WorldStoreSqlite = server.database.store
 	var starting_points: int = store.get_player(owner_id).available_attributes_points
-	for dog: SpikeMob3D in world.mob_system.mobs.values():
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
 			dog.ai_state = MobState.Value.DISABLED
@@ -66,7 +66,7 @@ func run_server() -> void:
 	world.characters[other].position = Vector3(-12, 0, 12)
 	for id: int in [2, 3, 4]:
 		await get_tree().create_timer(1.2).timeout
-		var dog: SpikeMob3D = world.mob_system.mobs[id]
+		var dog: MobActor3D = world.mob_system.mobs[id]
 		world.characters[hero].position = Vector3(0,0,3)
 		world.characters[hero].rotation.y = 0
 		dog.position = Vector3(0, 0, 1.4)
@@ -119,7 +119,7 @@ func _process(delta: float) -> void:
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	saw_level_up = saw_level_up or combat._xp_notice.contains("Awans")
 	accumulator += delta
 	if phase_name == "FINISH" and accumulator >= 0.05:

@@ -2,16 +2,16 @@ class_name MobSystem
 extends RefCounted
 ## Owns live mobs/packs and their lifecycle. Hit formulas and rewards are callers.
 signal mob_died(result: MobDeathResult)
-var mobs: Dictionary[int, SpikeMob3D] = {}
+var mobs: Dictionary[int, MobActor3D] = {}
 var packs: Dictionary[int, MobPackRuntime] = {}
 var _next_mob_id: int = 0
 var _next_pack_id: int = 0
 var _warned_unknown_mob_keys: Dictionary[StringName, bool] = {}
-var _world: SpikeWorld3D
+var _world: GameWorld3D
 var _endpoint: Node
 var services: MandateWorldServices
 
-func setup(world: SpikeWorld3D, endpoint: Node, adapter: MandateWorldServices) -> void:
+func setup(world: GameWorld3D, endpoint: Node, adapter: MandateWorldServices) -> void:
 	_world = world
 	_endpoint = endpoint
 	services = adapter
@@ -42,13 +42,13 @@ func create_pack(members: Array[MobSpawnEntry], anchor: Vector3, spawn_radius: f
 		for i: int in entry.count: spawn_mob(entry.mob,pack.random_point(spawn_radius),pack)
 	return pack
 
-func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntime) -> SpikeMob3D:
+func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntime) -> MobActor3D:
 	if not MobDefinitions.is_registered(definition) or not definition.valid():
 		push_warning("Rejected mob spawn: invalid or noncanonical definition")
 		return null
 	assert(GameMode.is_world_server() and packs.get(pack.pack_instance_id) == pack)
 	_next_mob_id += 1
-	var dog := SpikeMob3D.new()
+	var dog := MobActor3D.new()
 	dog.name = "Mob_%d" % _next_mob_id
 	dog.definition = definition
 	dog.reaction_profile = definition.reaction_profile
@@ -76,7 +76,7 @@ func aggro_pack(pack_id: int, peer_id: int) -> void:
 	var pack: MobPackRuntime = packs[pack_id]
 	if horizontal_distance(_world.characters[peer_id].position,pack.anchor) > pack.leash_radius: return
 	for id: int in pack.actor_ids:
-		var dog: SpikeMob3D = mobs.get(id)
+		var dog: MobActor3D = mobs.get(id)
 		if dog == null or dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: continue
 		dog.target_peer = peer_id
 		dog.ai_state = MobState.Value.CHASE
@@ -85,7 +85,7 @@ static func horizontal_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x-b.x,a.z-b.z).length()
 
 func remove_mob(id: int) -> void:
-	var dog: SpikeMob3D = mobs[id]
+	var dog: MobActor3D = mobs[id]
 	dog.collision_layer = 0
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if pack != null: pack.actor_ids.erase(id)
@@ -94,7 +94,7 @@ func remove_mob(id: int) -> void:
 
 func tick(delta: float, now: int) -> void:
 	for id: int in mobs.keys():
-		var dog: SpikeMob3D = mobs[id]
+		var dog: MobActor3D = mobs[id]
 		if (dog.expires_at > 0 and now >= dog.expires_at) or (dog.ai_state == MobState.Value.DEAD and now >= dog.dead_until_ms):
 			remove_mob(id)
 		else: tick_mob(dog,delta,now)
@@ -106,7 +106,7 @@ func tick(delta: float, now: int) -> void:
 			spawn_mob(ticket.definition,pack.random_point(pack.spawn_radius),pack)
 		if not pack.respawn_enabled and pack.actor_ids.is_empty(): packs.erase(pack_id)
 
-func die(dog: SpikeMob3D, now: int) -> void:
+func die(dog: MobActor3D, now: int) -> void:
 	if dog.ai_state == MobState.Value.DEAD: return
 	dog.die(now)
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
@@ -116,13 +116,13 @@ func die(dog: SpikeMob3D, now: int) -> void:
 	mob_died.emit(death)
 	dog.contribution_players.clear()
 
-func begin_return(dog: SpikeMob3D) -> void:
+func begin_return(dog: MobActor3D) -> void:
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	dog.return_target = pack.random_point(pack.wander_radius) if pack != null else dog.home
 	dog.ai_state = MobState.Value.RETURN
 	dog.target_peer = 0
 
-func tick_mob(dog: SpikeMob3D, delta: float, now: int) -> void:
+func tick_mob(dog: MobActor3D, delta: float, now: int) -> void:
 	if dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: return
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if pack == null: return
@@ -144,7 +144,7 @@ func tick_mob(dog: SpikeMob3D, delta: float, now: int) -> void:
 			begin_return(dog)
 	var direction := Vector2.ZERO
 	if dog.ai_state in [MobState.Value.CHASE,MobState.Value.ATTACK]:
-		var body: SpikePlayer3D = _world.characters[dog.target_peer]
+		var body: PlayerActor3D = _world.characters[dog.target_peer]
 		var offset: Vector3 = body.position - dog.position
 		if horizontal_distance(dog.position,body.position) > dog.definition.attack_reach or absf(offset.y) > 1.2 or not _world.has_line_of_sight(dog.position,body.position):
 			dog.ai_state = MobState.Value.CHASE
@@ -179,7 +179,7 @@ func tick_mob(dog: SpikeMob3D, delta: float, now: int) -> void:
 
 func snapshot(now: int = Time.get_ticks_msec()) -> Array:
 	var records: Array = []
-	for mob: SpikeMob3D in mobs.values(): records.append(MobSnapshot.capture(mob,now))
+	for mob: MobActor3D in mobs.values(): records.append(MobSnapshot.capture(mob,now))
 	return records
 
 func apply_snapshot(records: Array) -> void:
@@ -195,7 +195,7 @@ func apply_snapshot(records: Array) -> void:
 			continue
 		present[id] = true
 		if not mobs.has(id):
-			var mob := SpikeMob3D.new()
+			var mob := MobActor3D.new()
 			mob.name = "Mob_%d" % id
 			mob.definition = definition
 			mob.mob_key = definition.mob_key
@@ -213,7 +213,7 @@ func apply_snapshot(records: Array) -> void:
 			mobs[id].queue_free()
 			mobs.erase(id)
 
-func apply_hit(dog: SpikeMob3D, peer_id: int, result: CombatHitResult, direction: Vector3, now: int) -> void:
+func apply_hit(dog: MobActor3D, peer_id: int, result: CombatHitResult, direction: Vector3, now: int) -> void:
 	aggro_pack(dog.pack_instance_id,peer_id)
 	dog.hp -= result.damage
 	var owner_id: int = services.owner_id_for_peer(peer_id)
@@ -226,10 +226,10 @@ func apply_hit(dog: SpikeMob3D, peer_id: int, result: CombatHitResult, direction
 
 
 func remove_peer(peer_id: int) -> void:
-	for mob: SpikeMob3D in mobs.values():
+	for mob: MobActor3D in mobs.values():
 		if mob.target_peer == peer_id:
 			mob.target_peer = 0
 			if mob.ai_state not in [MobState.Value.DEAD,MobState.Value.DISABLED]: begin_return(mob)
 
 func interpolate(delta: float) -> void:
-	for mob: SpikeMob3D in mobs.values(): mob.interpolate(delta)
+	for mob: MobActor3D in mobs.values(): mob.interpolate(delta)

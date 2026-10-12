@@ -15,12 +15,12 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
 	check(world.find_children("*","AnimationPlayer",true,false).is_empty() and world.find_children("*","Skeleton3D",true,false).is_empty(),"World trace path has no animation or skeleton runtime")
 	var combat := world.combat_endpoint
-	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	var hero: int = world.characters.keys()[0]
 	world.characters[hero].position = Vector3(0,0,5)
 	world.characters[hero].rotation.y = 0
 	for id: int in range(1001,1101):
-		var dog := SpikeMob3D.new()
+		var dog := MobActor3D.new()
 		dog.setup_mob(id,Vector3((id%10-5)*.04,0,3.6))
 		dog.ai_enabled = false
 		world.add_child(dog)

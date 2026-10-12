@@ -24,12 +24,12 @@ func _ready() -> void:
 
 func _check_target_identity() -> void:
 	# Detached actors exercise identity/lifecycle without input, pixels or pacing.
-	var world := SpikeWorld3D.new()
-	var combat := SpikeCombat3D.new()
+	var world := GameWorld3D.new()
+	var combat := CombatEndpoint3D.new()
 	world.add_child(combat)
 	combat._world = world
 	combat.client_combat.setup(world,combat)
-	var dog := SpikeMob3D.new()
+	var dog := MobActor3D.new()
 	dog.setup_mob(17,Vector3.ZERO)
 	world.add_child(dog)
 	world.mob_system.mobs[17] = dog
@@ -42,7 +42,7 @@ func _check_target_identity() -> void:
 	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack, "Death clears even without autoattack")
 	world.mob_system.mobs.erase(17)
 	dog.free()
-	dog = SpikeMob3D.new()
+	dog = MobActor3D.new()
 	dog.setup_mob(18,Vector3.ZERO)
 	world.add_child(dog)
 	world.mob_system.mobs[18] = dog

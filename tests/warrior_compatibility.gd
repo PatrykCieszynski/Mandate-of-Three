@@ -13,7 +13,7 @@ var _legacy_trace := false
 var _review_ratio := 1.0
 var _review_skill := 0
 var _feel_feedback: CombatFeedback3D
-var _feel_targets: Array[SpikeMob3D] = []
+var _feel_targets: Array[MobActor3D] = []
 var _feel_actors: Array[Node3D] = []
 var _preview_advances: Array[Tween] = []
 var _review_single := false
@@ -119,7 +119,7 @@ func _ready() -> void:
 		check(view.weapon != null and view.alive,"armor swap keeps equipped sword")
 		print("WARRIOR_VARIANT_OK ",view.visual_id)
 		view.set_variant(view.position.x > 0)
-	var body := SpikePlayer3D.new()
+	var body := PlayerActor3D.new()
 	body.setup("Compatibility player",Color("c99f71"))
 	body.position = Vector3(3,0,2)
 	add_child(body)
@@ -424,7 +424,7 @@ func _setup_feel_pack() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--feel-pack="): count = clampi(arg.get_slice("=",1).to_int(),1,50)
 	for i: int in count:
-		var dog := SpikeMob3D.new()
+		var dog := MobActor3D.new()
 		dog.setup_mob(1000+i,Vector3(.9+(i%5-2)*.35,0,-1.2-(i/5)*.4))
 		dog.ai_enabled = false
 		add_child(dog)
@@ -433,7 +433,7 @@ func _setup_feel_pack() -> void:
 func _show_feel_hits(step: BasicAttackStepDefinition, action_id: int, finisher: bool) -> void:
 	var count := 0
 	var started := Time.get_ticks_usec()
-	for dog: SpikeMob3D in _feel_targets:
+	for dog: MobActor3D in _feel_targets:
 		if not CombatTraceResolver.hits_capsule(step.combat_trace,_feel_actors[1].transform,dog.position,dog.combat_radius(),dog.combat_height(),dog.combat_bottom_offset()): continue
 		var result := HitReactionResolver.resolve(step,HitReactionProfiles.NORMAL,13,120,false)
 		var event := result.presentation()
