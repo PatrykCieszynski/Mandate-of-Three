@@ -21,8 +21,7 @@ var _next_mob_id: int = 0
 var _next_pack_id: int = 0
 var health: Dictionary[int, int] = {}
 var _respawn_ms: Dictionary[int, int] = {}
-var _attack_runtimes: Dictionary[int, PlayerCombatRuntime] = {}
-var _attack_order: int = 0
+var attacks := BasicAttackService.new()
 var _pickup_ms: Dictionary[int, int] = {}
 var _snapshot_accum: float = 0
 var _world: SpikeWorld3D
@@ -49,6 +48,7 @@ var _xp_notice_until_ms: int = 0
 
 func _ready() -> void:
 	_world = get_parent()
+	attacks.setup(_world,self,services)
 	dev_god_mode = GameMode.is_world_server() and OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-god-mode")
 	trace_debug_enabled = OS.has_feature("editor") and (OS.get_cmdline_user_args().has("--combat-trace-debug") or (DisplayServer.get_name() != "headless" and FileAccess.file_exists("res://.godot/runtime/trace-debug.enabled")))
 	if dev_god_mode: print("DEV_GOD_MODE enabled for local World players")
@@ -205,8 +205,7 @@ func remove_peer(peer_id: int) -> void:
 	if _trace_debug.has(peer_id):
 		_trace_debug[peer_id].queue_free()
 		_trace_debug.erase(peer_id)
-	_clear_attack_intents(peer_id)
-	_attack_runtimes.erase(peer_id)
+	attacks.remove_peer(peer_id)
 	for collection: Dictionary in [health, _respawn_ms, _pickup_ms]:
 		collection.erase(peer_id)
 	for dog: SpikeWildDog3D in dogs.values():
@@ -223,21 +222,15 @@ func is_player_alive(peer_id: int) -> bool:
 
 func can_move(peer_id: int, now: int = Time.get_ticks_msec()) -> bool:
 	var body: SpikeCharacter3D = _world.characters.get(peer_id)
-	return health.get(peer_id,100) > 0 and now >= attack_runtime(peer_id).movement_unlock_ms and (body == null or (not body.hit_reaction.locked(now) and not body.knockback_active()))
+	return health.get(peer_id,100) > 0 and now >= attacks.movement_unlock(peer_id) and (body == null or (not body.hit_reaction.locked(now) and not body.knockback_active()))
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_attack(sequence: int) -> void:
 	if not GameMode.is_world_server() or not services.item_domain_ready(): return
 	var peer_id := multiplayer.get_remote_sender_id()
 	if not is_player_alive(peer_id): return
-	if sequence < 0 or sequence > 2147483647 or sequence <= attack_runtime(peer_id).sequence: return
-	var now := Time.get_ticks_msec()
-	if not begin_attack(peer_id,sequence,now) and is_player_alive(peer_id) and attack_runtime(peer_id).queued_sequence < 0:
-		var body: SpikeCharacter3D = _world.characters[peer_id]
-		var retry_at: int = maxi(attack_runtime(peer_id).next_attack_ms,body.hit_reaction.get_up_until_ms)
-		var active: Dictionary = attack_runtime(peer_id).active_action
-		if not active.is_empty() and now < int(active.started)+int(active.timing.preinput): retry_at = int(active.started)+int(active.timing.preinput)
-		receive_attack_wait.rpc_id(peer_id,maxi(100,retry_at-now+10))
+	var retry_ms: int = attacks.request_intent(peer_id,sequence,Time.get_ticks_msec())
+	if retry_ms > 0: receive_attack_wait.rpc_id(peer_id,retry_ms)
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_attack_wait(delay_ms: int) -> void:
@@ -246,37 +239,22 @@ func receive_attack_wait(delay_ms: int) -> void:
 	_client_request_at = Time.get_ticks_msec()+delay_ms
 
 func attack_runtime(peer_id: int) -> PlayerCombatRuntime:
-	if not _attack_runtimes.has(peer_id): _attack_runtimes[peer_id] = PlayerCombatRuntime.new()
-	return _attack_runtimes[peer_id]
+	return attacks.attack_runtime(peer_id)
 
 func _ordered_attack_peers(pending: bool) -> Array:
-	# Preserve original map insertion order when simultaneous hits/queues compete.
-	var peers: Array = _attack_runtimes.keys().filter(func(id: int) -> bool:
-		return not attack_runtime(id).pending_impact.is_empty() if pending else not attack_runtime(id).active_action.is_empty())
-	peers.sort_custom(func(a: int, b: int) -> bool:
-		return attack_runtime(a).pending_order < attack_runtime(b).pending_order if pending else attack_runtime(a).active_order < attack_runtime(b).active_order)
-	return peers
+	return attacks.ordered_peers(pending)
 
 func combo_state(peer_id: int) -> BasicAttackComboState:
-	return attack_runtime(peer_id).combo
+	return attacks.combo_state(peer_id)
 
 func set_combo_skill_level(peer_id: int, level: int) -> bool:
-	if not GameMode.is_world_server() or not is_player_alive(peer_id): return false
-	var accepted := combo_state(peer_id).set_skill_level(level)
-	if accepted and combo_state(peer_id).current_combo_step == -1: attack_runtime(peer_id).display_combo_step = 0
-	return accepted
+	return attacks.set_combo_skill_level(peer_id,level)
 
 func set_combo_enabled(peer_id: int, enabled: bool) -> bool:
-	if not GameMode.is_world_server() or not is_player_alive(peer_id): return false
-	var accepted := combo_state(peer_id).set_enabled(enabled)
-	if accepted and combo_state(peer_id).current_combo_step == -1: attack_runtime(peer_id).display_combo_step = 0
-	return accepted
+	return attacks.set_combo_enabled(peer_id,enabled)
 
 func set_combo_weapon_mode(peer_id: int, mode: StringName) -> bool:
-	if not GameMode.is_world_server() or not is_player_alive(peer_id): return false
-	var accepted := combo_state(peer_id).set_weapon_mode(mode)
-	if accepted and combo_state(peer_id).current_combo_step == -1: attack_runtime(peer_id).display_combo_step = 0
-	return accepted
+	return attacks.set_combo_weapon_mode(peer_id,mode)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_combo_toggle() -> void:
@@ -286,84 +264,18 @@ func request_combo_toggle() -> void:
 	set_combo_enabled(sender,not combo_state(sender).combo_enabled)
 
 func remember_next_facing(peer_id: int, direction: Vector2) -> void:
-	if direction.length_squared() > .001:
-		attack_runtime(peer_id).desired_facing = {"yaw":atan2(-direction.x,-direction.y),"time":Time.get_ticks_msec()}
+	attacks.remember_next_facing(peer_id,direction)
 
 func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
-	if not is_player_alive(peer_id) or sequence < 0 or sequence > 2147483647 or sequence <= attack_runtime(peer_id).sequence: return false
-	if _owner(peer_id) <= 0: return false
-	attack_runtime(peer_id).sequence = sequence
-	var body: SpikeCharacter3D = _world.characters[peer_id]
-	if body.hit_reaction.locked(now) or body.knockback_active(): return false
-	if attack_runtime(peer_id).queued_sequence >= 0: return false # At most one next intent.
-	var active: Dictionary = attack_runtime(peer_id).active_action
-	var chained := false
-	if not active.is_empty():
-		var elapsed := now-int(active.started)
-		var timing: Dictionary = active.timing
-		if elapsed < int(timing.preinput): return false
-		# Finishers start a new chain at their end; malformed native final input
-		# windows (04 Direct > Limit) are never treated as an early chain link.
-		var restart: bool = active.finisher or elapsed > int(timing.limit)
-		if now < attack_runtime(peer_id).next_attack_ms:
-			active["restart_queued"] = restart
-			attack_runtime(peer_id).queued_sequence = sequence
-			return true
-		if restart: combo_state(peer_id).reset()
-		chained = not restart
-	return _start_attack(peer_id,sequence,now,chained)
+	return attacks.begin_attack(peer_id,sequence,now)
 
-func _start_attack(peer_id: int, sequence: int, now: int, chained: bool = false) -> bool:
-	var attack := services.runtime_attack(_owner(peer_id))
-	var ratio := services.runtime_attack_speed_ratio(_owner(peer_id))
-	if attack < 0 or ratio <= 0: return false
-	var resolved := combo_state(peer_id).take_step(now,chained)
-	if resolved.is_empty(): return false
-	var hit: BasicAttackStepDefinition = resolved.step
-	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-legacy-melee"): hit.combat_trace = null
-	var body: SpikeCharacter3D = _world.characters[peer_id]
-	var facing: Dictionary = attack_runtime(peer_id).desired_facing
-	if not facing.is_empty() and (now-int(facing.time) <= 500 or (not attack_runtime(peer_id).active_action.is_empty() and int(facing.time) >= int(attack_runtime(peer_id).active_action.started))): body.rotation.y = facing.yaw
-	attack_runtime(peer_id).desired_facing = {}
-	var timing := hit.scaled_timing(ratio)
-	attack_runtime(peer_id).display_combo_step = int(resolved.step_index)+1
-	var next_delay: int = timing.end if resolved.finisher else timing.direct
-	attack_runtime(peer_id).next_attack_ms = now+next_delay
-	attack_runtime(peer_id).movement_unlock_ms = now+int(timing.motion)
-	body.start_attack_advance(body.rotation.y,hit.advance_distance,int(timing.motion)/1000.0)
-	resolved.merge({"yaw":body.rotation.y,"impact":now+int(timing.impact),"started":now,"hit_set":{},
-		"attack":attack,"ratio":ratio,"timing":timing,"action_id":sequence})
-	_attack_order += 1
-	if attack_runtime(peer_id).pending_impact.is_empty(): attack_runtime(peer_id).pending_order = _attack_order
-	if attack_runtime(peer_id).active_action.is_empty(): attack_runtime(peer_id).active_order = _attack_order
-	attack_runtime(peer_id).pending_impact = resolved
-	attack_runtime(peer_id).active_action = resolved
-	for observer: int in _world.characters:
-		receive_swing.rpc_id(observer,peer_id,resolved.animation_key,resolved.step_index,int(timing.motion),resolved.finisher,
-			ratio,sequence,body.rotation.y,int(timing.preinput))
-	return true
+
 
 func _advance_attack_queue(now: int) -> void:
-	for peer_id: int in _ordered_attack_peers(false):
-		var active: Dictionary = attack_runtime(peer_id).active_action
-		var body: SpikeCharacter3D = _world.characters.get(peer_id)
-		if not is_player_alive(peer_id) or body == null or body.hit_reaction.locked(now) or body.knockback_active():
-			_clear_attack_intents(peer_id)
-			continue
-		if now < attack_runtime(peer_id).next_attack_ms: continue
-		if attack_runtime(peer_id).queued_sequence >= 0:
-			var sequence: int = attack_runtime(peer_id).queued_sequence
-			attack_runtime(peer_id).queued_sequence = -1
-			if active.get("restart_queued",false): combo_state(peer_id).reset()
-			_start_attack(peer_id,sequence,now,not active.get("restart_queued",false))
-		elif now > int(active.started)+maxi(int(active.timing.motion),int(active.timing.limit)):
-			combo_state(peer_id).reset()
-			attack_runtime(peer_id).active_action = {}
+	attacks.advance_queue(now)
 
 func _clear_attack_intents(peer_id: int) -> void:
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
-	if body != null: body.cancel_attack_advance()
-	if _attack_runtimes.has(peer_id): _attack_runtimes[peer_id].clear_intents()
+	attacks.cancel(peer_id)
 
 
 func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
@@ -723,9 +635,7 @@ func _send_snapshot() -> void:
 	if not services.item_domain_ready(): return
 	var now: int = Time.get_ticks_msec()
 	var mob_snapshots: Array = _mob_snapshots(now)
-	var combos: Dictionary = {}
-	for id: int in _attack_runtimes:
-		if _attack_runtimes[id].display_combo_step > 0: combos[id] = _attack_runtimes[id].display_combo_step
+	var combos: Dictionary = attacks.combo_snapshot()
 	var respawns: Dictionary = {}
 	var levels: Dictionary = {}
 	var hit_locks: Dictionary = {}
@@ -926,3 +836,7 @@ func _process(delta: float) -> void:
 	if not active:
 		_client_intent_sent = false
 	_client_was_active = active
+
+func publish_swing(peer_id: int, resolved: Dictionary) -> void:
+	for observer: int in _world.characters:
+		receive_swing.rpc_id(observer,peer_id,resolved.animation_key,resolved.step_index,int(resolved.timing.motion),resolved.finisher,resolved.ratio,resolved.action_id,resolved.yaw,int(resolved.timing.preinput))
