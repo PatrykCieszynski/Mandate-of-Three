@@ -1,19 +1,14 @@
-class_name SpikeCharacter3D
-extends CharacterBody3D
+class_name SpikePlayer3D
+extends SpikeActor3D
 ## The server owns physics; clients interpolate its snapshots.
 
 const SPEED: float = 5.0
-const GRAVITY: float = 20.0
-const KNOCKBACK_DAMPING: float = 8.0
-var knockback_velocity: Vector3 = Vector3.ZERO
-var hit_reaction := HitReactionState.new()
-var reaction_profile: HitReactionProfile = HitReactionProfiles.PLAYER
-var target_position: Vector3
-var target_yaw: float = 0.0
-var has_snapshot: bool = false
+var hp: int = 100
+var max_hp: int = 100
+# Player lifecycle deadline; MobSystem owns pack replacements separately.
+var respawn_at_ms: int = 0
 var player_presentation: WarriorVisual3D
 var weapon_definition_id: String = ""
-var alive: bool = true
 var _name_label: Label3D
 var _display_name: String = ""
 var _swing_yaw := 0.0
@@ -22,7 +17,6 @@ var _advance_yaw := 0.0
 var _advance_distance := 0.0
 var _advance_duration := 0.0
 var _advance_elapsed := 0.0
-var combat_collider: CollisionShape3D
 
 func setup(display_name: String, tint: Color) -> void:
 	_display_name = display_name
@@ -108,7 +102,7 @@ func _overlapping_mob_bodies() -> Array[PhysicsBody3D]:
 	query.transform = combat_collider.global_transform
 	query.collision_mask = 4
 	for hit: Dictionary in get_world_3d().direct_space_state.intersect_shape(query,256):
-		var mob := hit.collider as SpikeWildDog3D
+		var mob := hit.collider as SpikeMob3D
 		if mob != null and not overlaps.has(mob): overlaps.append(mob)
 	return overlaps
 
@@ -136,33 +130,6 @@ func accept_swing_facing(yaw: float) -> void:
 	rotation.y = yaw
 	target_yaw = yaw
 	if player_presentation != null: player_presentation.blend_facing(wrapf(visible_yaw-yaw,-PI,PI))
-
-func apply_knockback(direction: Vector3, distance: float) -> void:
-	if not direction.is_finite() or not is_finite(distance) or distance <= 0: return
-	var planar := Vector3(direction.x,0,direction.z)
-	if planar.length_squared() < 0.0001: return
-	# Integral of v0 * exp(-damping*t) is distance. No position mutation here.
-	knockback_velocity = planar.normalized() * distance * KNOCKBACK_DAMPING
-
-func knockback_active() -> bool:
-	return knockback_velocity.length_squared() > 0.0025
-
-func damp_knockback(delta: float) -> Vector3:
-	if delta <= 0: return Vector3.ZERO
-	var decay := exp(-KNOCKBACK_DAMPING * delta)
-	# Average velocity keeps travel independent of physics tick duration.
-	var motion := knockback_velocity * (1.0-decay) / (KNOCKBACK_DAMPING*delta)
-	knockback_velocity *= decay
-	if not knockback_active(): knockback_velocity = Vector3.ZERO
-	return motion
-
-func apply_snapshot(next_position: Vector3, yaw: float) -> void:
-	if not has_snapshot or position.distance_to(next_position) > 5.0:
-		position = next_position
-		rotation.y = yaw
-	target_position = next_position
-	target_yaw = yaw
-	has_snapshot = true
 
 func interpolate(delta: float) -> void:
 	if not has_snapshot:
@@ -204,7 +171,3 @@ func get_display_name() -> String:
 func present_hit_lock(down_ms: int, get_up_ms: int) -> void:
 	if player_presentation != null and alive:
 		player_presentation.set_hit_lock(down_ms/1000.0,get_up_ms/1000.0)
-
-func combat_radius() -> float: return (combat_collider.shape as CapsuleShape3D).radius
-func combat_height() -> float: return (combat_collider.shape as CapsuleShape3D).height
-func combat_bottom_offset() -> float: return combat_collider.position.y-combat_height()/2.0

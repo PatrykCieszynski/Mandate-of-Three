@@ -18,97 +18,97 @@ func phase(command: String, _uid: String) -> void:
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
 	var combat := world.combat_endpoint
-	for dog: SpikeWildDog3D in combat.dogs.values(): dog.ai_enabled = false
+	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	var hero: int = world.characters.keys()[0]
 	var owner: int = WorldServer.curr.connected_players[hero].player_id
 	var runtime: Dictionary = WorldServer.curr.runtime_equipment[owner]
 	var sequence := 10000
 	for speed: float in [100.0,122.0]:
-		combat._clear_attack_intents(hero)
-		combat._next_attack_ms.erase(hero)
+		combat.attacks.cancel(hero)
+		combat.attacks.attack_runtime(hero).next_attack_ms = 0
 		combat.combo_state(hero).reset()
 		runtime.stats.attack_speed = speed
 		var now := Time.get_ticks_msec()
-		check(combat.begin_attack(hero,sequence,now),"start at requested authoritative speed")
+		check(combat.attacks.begin_attack(hero,sequence,now),"start at requested authoritative speed")
 		sequence += 1
-		var active: Dictionary = combat._active_attacks[hero]
+		var active: Dictionary = combat.attacks.attack_runtime(hero).active_action
 		var step: BasicAttackStepDefinition = active.step
 		var ratio := speed/100.0
 		check(is_equal_approx(active.ratio,ratio) and active.impact-now == int(ceil(step.impact_ms/ratio)),"impact and speed share one ratio")
-		check(combat._next_attack_ms[hero]-now == int(ceil(step.direct_input_ms/ratio)),"canonical direct input divided by speed")
+		check(combat.attacks.attack_runtime(hero).next_attack_ms-now == int(ceil(step.direct_input_ms/ratio)),"canonical direct input divided by speed")
 		check(active.timing.end == int(ceil(step.recovery_ms/ratio)) and active.timing.preinput == int(ceil(step.preinput_ms/ratio)) and active.timing.limit == int(ceil(step.input_limit_ms/ratio)),"all accepted deadlines share the ratio")
-		check(not combat.begin_attack(hero,sequence,now+int(active.timing.preinput)-1),"pre-input boundary enforced")
+		check(not combat.attacks.begin_attack(hero,sequence,now+int(active.timing.preinput)-1),"pre-input boundary enforced")
 		sequence += 1
-		check(combat.begin_attack(hero,sequence,now+int(active.timing.preinput)),"one intent queues at pre-input")
+		check(combat.attacks.begin_attack(hero,sequence,now+int(active.timing.preinput)),"one intent queues at pre-input")
 		var accepted_sequence := sequence
 		sequence += 1
-		check(not combat.begin_attack(hero,accepted_sequence,now+int(active.timing.preinput)),"replay rejected")
-		check(not combat.begin_attack(hero,sequence,now+int(active.timing.preinput)),"second queued intent rejected")
+		check(not combat.attacks.begin_attack(hero,accepted_sequence,now+int(active.timing.preinput)),"replay rejected")
+		check(not combat.attacks.begin_attack(hero,sequence,now+int(active.timing.preinput)),"second queued intent rejected")
 		sequence += 1
 		combat.remember_next_facing(hero,Vector2.RIGHT)
 		check(is_equal_approx(float(active.yaw),world.characters[hero].rotation.y),"current yaw committed")
 		# Equipment changes cannot mutate the accepted ratio; next swing sees new stats.
 		runtime.stats.attack_speed = 150.0
 		check(is_equal_approx(active.ratio,ratio),"accepted speed frozen across equipment mutation")
-		combat._advance_attack_queue(now+int(active.timing.direct)-1)
-		check(combat._active_attacks[hero] == active,"no early transition")
-		combat._advance_attack_queue(now+int(active.timing.direct))
-		var next: Dictionary = combat._active_attacks[hero]
+		combat.attacks.advance_queue(now+int(active.timing.direct)-1)
+		check(combat.attacks.attack_runtime(hero).active_action == active,"no early transition")
+		combat.attacks.advance_queue(now+int(active.timing.direct))
+		var next: Dictionary = combat.attacks.attack_runtime(hero).active_action
 		check(next.step_index == 1 and next.action_id == accepted_sequence and is_equal_approx(next.ratio,1.5),"queued step starts exactly at link without request polling")
 		check(is_equal_approx(next.yaw,-PI/2) and not is_equal_approx(next.yaw,active.yaw),"next step receives buffered facing")
-		combat._advance_attack_queue(now+int(active.timing.direct)+1)
-		check(combat._active_attacks[hero] == next and not combat._queued_attacks.has(hero),"intent consumed exactly once")
-		combat._clear_attack_intents(hero)
+		combat.attacks.advance_queue(now+int(active.timing.direct)+1)
+		check(combat.attacks.attack_runtime(hero).active_action == next and combat.attacks.attack_runtime(hero).queued_sequence < 0,"intent consumed exactly once")
+		combat.attacks.cancel(hero)
 		world.characters[hero].rotation.y = 0
 	# A late intent starts a new chain, never extends the expired input window.
-	combat._next_attack_ms.erase(hero)
+	combat.attacks.attack_runtime(hero).next_attack_ms = 0
 	combat.combo_state(hero).reset()
 	runtime.stats.attack_speed = 100.0
 	var late_now := Time.get_ticks_msec()
-	check(combat.begin_attack(hero,sequence,late_now),"start late-input fixture")
+	check(combat.attacks.begin_attack(hero,sequence,late_now),"start late-input fixture")
 	sequence += 1
-	var late: Dictionary = combat._active_attacks[hero]
-	check(combat.begin_attack(hero,sequence,late_now+int(late.timing.limit)+1),"late intent can start a fresh chain")
+	var late: Dictionary = combat.attacks.attack_runtime(hero).active_action
+	check(combat.attacks.begin_attack(hero,sequence,late_now+int(late.timing.limit)+1),"late intent can start a fresh chain")
 	sequence += 1
-	check(combat._active_attacks[hero].step_index == 0,"expired input limit cannot extend combo")
-	combat._clear_attack_intents(hero)
+	check(combat.attacks.attack_runtime(hero).active_action.step_index == 0,"expired input limit cannot extend combo")
+	combat.attacks.cancel(hero)
 	# The old inactivity timeout must not reset a correctly buffered slow swing.
-	combat._next_attack_ms.erase(hero)
+	combat.attacks.attack_runtime(hero).next_attack_ms = 0
 	combat.combo_state(hero).reset()
 	runtime.stats.attack_speed = 25.0
 	var slow_now := Time.get_ticks_msec()
-	check(combat.begin_attack(hero,sequence,slow_now),"start slow-speed fixture")
+	check(combat.attacks.begin_attack(hero,sequence,slow_now),"start slow-speed fixture")
 	sequence += 1
-	var slow: Dictionary = combat._active_attacks[hero]
-	check(combat.begin_attack(hero,sequence,slow_now+int(slow.timing.preinput)),"buffer slow attack")
+	var slow: Dictionary = combat.attacks.attack_runtime(hero).active_action
+	check(combat.attacks.begin_attack(hero,sequence,slow_now+int(slow.timing.preinput)),"buffer slow attack")
 	sequence += 1
-	combat._advance_attack_queue(slow_now+int(slow.timing.direct))
-	check(combat._active_attacks[hero].step_index == 1,"slow buffered chain survives inactivity timeout")
-	combat._clear_attack_intents(hero)
+	combat.attacks.advance_queue(slow_now+int(slow.timing.direct))
+	check(combat.attacks.attack_runtime(hero).active_action.step_index == 1,"slow buffered chain survives inactivity timeout")
+	combat.attacks.cancel(hero)
 	# Toggle leaves committed definition/timing intact; knockdown and death discard queue.
 	runtime.stats.attack_speed = 100.0
 	for lethal: bool in [false,true]:
-		combat._next_attack_ms.erase(hero)
-		combat.health[hero] = 100
+		combat.attacks.attack_runtime(hero).next_attack_ms = 0
+		world.characters[hero].hp = 100
 		world.characters[hero].hit_reaction.clear()
 		world.characters[hero].knockback_velocity = Vector3.ZERO
 		var now := Time.get_ticks_msec()
-		check(combat.begin_attack(hero,sequence,now),"start interruption fixture")
+		check(combat.attacks.begin_attack(hero,sequence,now),"start interruption fixture")
 		sequence += 1
-		var active: Dictionary = combat._active_attacks[hero]
-		check(combat.begin_attack(hero,sequence,now+int(active.timing.preinput)),"queue before interrupt")
+		var active: Dictionary = combat.attacks.attack_runtime(hero).active_action
+		check(combat.attacks.begin_attack(hero,sequence,now+int(active.timing.preinput)),"queue before interrupt")
 		sequence += 1
 		var frozen: BasicAttackStepDefinition = active.step
 		combat.set_combo_skill_level(hero,2)
 		combat.set_combo_enabled(hero,true)
 		check(active.step == frozen,"toggle cannot rewrite accepted step")
 		combat.hurt_player(hero,10000 if lethal else 1,now,BasicAttackCombos.BASE.steps.back(),Vector3.FORWARD)
-		check(not combat._queued_attacks.has(hero) and not combat._active_attacks.has(hero),"death/knockdown clear queued and current intent")
+		check(combat.attacks.attack_runtime(hero).queued_sequence < 0 and combat.attacks.attack_runtime(hero).active_action.is_empty(),"death/knockdown clear queued and current intent")
 	# Client presentation class receives confirmed semantic events, never HP deltas.
 	var feedback := CombatFeedback3D.new()
 	add_child(feedback)
 	feedback.set_process(false)
-	var target: SpikeWildDog3D = combat.dogs.values()[0]
+	var target: SpikeMob3D = world.mob_system.mobs.values()[0]
 	var hp := target.hp
 	for count: int in [20,50]:
 		var before := feedback.number_events
@@ -126,6 +126,21 @@ func run_server() -> void:
 	var before := feedback.number_events
 	check(feedback.confirm({"attacker":hero+1,"action_id":99,"target_id":1,"damage":5},target,false) and feedback.number_events == before,"remote hit has spark but no outgoing number")
 	feedback.free()
+	# Extraction gap: removing a peer must discard an overdue impact/buffer,
+	# and a new session may restart its request sequence. Check effects, not maps.
+	var other: int = world.characters.keys()[1]
+	var removal_now := Time.get_ticks_msec()
+	check(combat.attacks.begin_attack(other,20000,removal_now),"accept attack before peer removal")
+	check(combat.attacks.begin_attack(other,20001,removal_now+int(BasicAttackCombos.BASE.steps[0].preinput_ms)),"buffer before peer removal")
+	var removed_swing: Dictionary = combat.attacks.attack_runtime(other).pending_impact
+	combat.remove_peer(other)
+	check(combat.attacks.resolve_swing(other,removed_swing,removal_now+10000).is_empty(),"removed actor cannot receive a scheduled impact")
+	combat._physics_process(.1)
+	combat.attacks.advance_queue(Time.get_ticks_msec()+10000)
+	check(target.hp == hp and not combat.is_player_alive(other),"removed session cannot deliver scheduled damage or remain alive")
+	combat.initialize_peer(other)
+	check(combat.attacks.begin_attack(other,1,Time.get_ticks_msec()),"new session starts with fresh replay state")
+	combat.attacks.cancel(other)
 	if failed: return
 	print("FEEL2_SERVER_OK speed100/122, one-intent buffer, facing, interruption and bounded confirmed feedback")
 	set_phase("DONE")

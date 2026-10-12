@@ -53,8 +53,8 @@ func _ready() -> void:
 	disjoint.samples[2].base = Vector3(0,5,-.6)
 	disjoint.samples[2].tip = Vector3(0,5,-2)
 	assert(not CombatTraceResolver.hits_capsule(disjoint,Transform3D.IDENTITY,Vector3(0,0,-1.4),.4,.8))
-	var dog := SpikeWildDog3D.new()
-	dog.setup_dog(1,Vector3.ZERO)
+	var dog := SpikeMob3D.new()
+	dog.setup_mob(1,Vector3.ZERO)
 	var capsule_shape := dog.combat_collider.shape as CapsuleShape3D
 	assert(dog.combat_radius() == capsule_shape.radius and dog.combat_height() == capsule_shape.height)
 	dog.combat_collider.position.y += .25

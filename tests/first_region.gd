@@ -11,7 +11,7 @@ func _ready() -> void:
 	for point: MobSpawnPoint3D in points:
 		assert(point.valid())
 		for entry: MobSpawnEntry in point.members: expected += entry.count
-	assert(region != null and expected > 0 and world.combat_endpoint.dogs.size() == expected)
+	assert(region != null and expected > 0 and world.mob_system.mobs.size() == expected)
 	assert(world.player_spawn().distance_to(FirstRegionGraybox.HUB) < 5)
 	var map: RID = world.get_world_3d().navigation_map
 	for i: int in 30:
@@ -22,7 +22,7 @@ func _ready() -> void:
 	destinations.append_array(FirstRegionGraybox.METIN_POINTS)
 	for point: MobSpawnPoint3D in points:
 		destinations.append(point.position)
-		assert(point.position.distance_to(world.player_spawn()) > point.wander_radius + SpikeCombat3D.AGGRO + 5, "Hub is outside pack wander/aggro")
+		assert(point.position.distance_to(world.player_spawn()) > point.wander_radius + point.members.map(func(entry: MobSpawnEntry) -> float: return entry.mob.aggro_radius).max() + 5, "Hub is outside pack wander/aggro")
 	for destination: Vector3 in destinations:
 		var path := NavigationServer3D.map_get_path(map, world.player_spawn(), destination, true)
 		assert(path.size() > 1 and path[path.size()-1].distance_to(destination) < 1, "NPC, mobs and Metin sites are reachable from hub")

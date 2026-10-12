@@ -1,6 +1,7 @@
 class_name SpikeWorld3D
 extends Node3D
 var services := MandateWorldServices.new()
+var mob_system := MobSystem.new()
 var ground_loot := GroundLootSystem.new()
 var kill_rewards := KillRewardResolver.new()
 ## Shared RPC endpoint under the authenticated TinyMMO instance path.
@@ -9,7 +10,7 @@ var kill_rewards := KillRewardResolver.new()
 const INPUT_INTERVAL: float = 1.0 / 20.0
 const INPUT_TIMEOUT_MS: int = 250
 const SNAPSHOT_INTERVAL: float = 1.0 / 20.0
-var characters: Dictionary[int, SpikeCharacter3D] = {}
+var characters: Dictionary[int, SpikePlayer3D] = {}
 var intentions: Dictionary[int, Dictionary] = {}
 var local_peer: int = 0
 var input_enabled: bool = true
@@ -47,13 +48,14 @@ func _ready() -> void:
 	combat_endpoint = SpikeCombat3D.new()
 	combat_endpoint.name = "Combat"
 	combat_endpoint.services = services
+	mob_system.setup(self,combat_endpoint,services)
 	add_child(combat_endpoint)
 	currency_endpoint = SpikeCurrency3D.new()
 	currency_endpoint.name = "Currency"
 	currency_endpoint.services = services
 	add_child(currency_endpoint)
 	kill_rewards.setup(services,ground_loot,currency_endpoint)
-	combat_endpoint.mob_died.connect(kill_rewards.handle_mob_death)
+	mob_system.mob_died.connect(kill_rewards.handle_mob_death)
 	if _server and services.progression()!=null:
 		services.progression().experience_awarded.connect(combat_endpoint.publish_experience)
 	npc_endpoint = NpcInteraction3D.new()
@@ -249,13 +251,13 @@ func begin_npc_approach(instance_id: String, preselected_item: Dictionary = {}) 
 	_npc_preselected_item = preselected_item.duplicate(true)
 	_npc_repath_ms = 0
 	_npc_approach_until_ms = Time.get_ticks_msec() + 15000
-	combat_endpoint.autoattack = false
+	combat_endpoint.cancel_autoattack()
 	return true
 
 func _npc_direction(manual: Vector2) -> Vector2:
 	if _npc_approach.target_id.is_empty(): return combat_endpoint.assist_direction(manual)
 	var actor: NeutralNpc3D = npc_endpoint.actors.get(_npc_approach.target_id)
-	var body: SpikeCharacter3D = characters[local_peer]
+	var body: SpikePlayer3D = characters[local_peer]
 	var now: int = Time.get_ticks_msec()
 	if not is_instance_valid(actor) or not actor.interactable or actor.definition == null or not body.alive or now >= _npc_approach_until_ms:
 		_npc_approach.cancel()
@@ -285,7 +287,7 @@ func join_world() -> void:
 	host.awaiting_peers.erase(peer_id)
 	host.connected_peers.append(peer_id)
 	resource.current_instance = host.instance_resource.instance_name
-	var body: SpikeCharacter3D = _add_character(peer_id, resource.display_name)
+	var body: SpikePlayer3D = _add_character(peer_id, resource.display_name)
 	body.position = player_spawn(characters.size() - 1)
 	intentions[peer_id] = {"direction": Vector2.ZERO, "sequence": -1, "time": 0}
 	_send_roster()
@@ -339,8 +341,8 @@ func receive_roster(roster: Dictionary) -> void:
 			_add_character(peer_id, str(roster[peer_id]))
 	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nGracze: %d" % ["First Region" if region != null else "Spike 3D", characters.size()]
 
-func _add_character(peer_id: int, display_name: String) -> SpikeCharacter3D:
-	var body := SpikeCharacter3D.new()
+func _add_character(peer_id: int, display_name: String) -> SpikePlayer3D:
+	var body := SpikePlayer3D.new()
 	body.name = "Character_%d" % peer_id
 	body.setup(display_name, Color.from_hsv(float(peer_id % 360) / 360.0, 0.55, 0.9))
 	add_child(body)
@@ -393,7 +395,7 @@ func _physics_process(delta: float) -> void:
 func _broadcast_snapshot() -> void:
 	var snapshot: Dictionary = {}
 	for peer_id: int in characters:
-		var body: SpikeCharacter3D = characters[peer_id]
+		var body: SpikePlayer3D = characters[peer_id]
 		snapshot[peer_id] = [body.position, body.rotation.y]
 	for peer_id: int in characters:
 		receive_snapshot.rpc_id(peer_id, snapshot)
@@ -414,7 +416,7 @@ func _process(delta: float) -> void:
 	if _server:
 		return
 	if camera_controller.orbiting and not camera_controller.can_control.call(): camera_controller.cancel_orbit()
-	for body: SpikeCharacter3D in characters.values():
+	for body: SpikePlayer3D in characters.values():
 		body.interpolate(delta)
 	if characters.has(local_peer) and characters[local_peer].has_snapshot:
 		camera_controller.update_camera(delta, characters[local_peer].global_position, camera_controller.can_control.call())

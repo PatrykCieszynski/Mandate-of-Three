@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func authorization(peer_id: int, instance_id: String, service_id: StringName) -> Dictionary:
 	var body: Node3D = _world.characters.get(peer_id)
-	if body is SpikeCharacter3D and not body.alive: return {"ok":false,"error":"dead"}
+	if body is SpikePlayer3D and not body.alive: return {"ok":false,"error":"dead"}
 	var result: Dictionary = _world.npc_endpoint.resolve_npc_service(peer_id,instance_id,service_id,NpcServiceDefinition.Kind.UPGRADE)
 	if not result.ok: return result
 	if _world.npc_endpoint.contexts[peer_id].selected_service_id != service_id: return {"ok":false, "error":"no_interaction"}

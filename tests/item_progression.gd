@@ -40,15 +40,15 @@ func run_server() -> void:
 	server.database.item_store = store
 	var inventory: SpikeInventory3D = world.inventory_endpoint
 	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	for dog: SpikeMob3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
-			dog.ai_state = "DISABLED"
+			dog.ai_state = MobState.Value.DISABLED
 			dog.collision_layer = 0
 	world.characters[hero].position = Vector3(0, 0, 3)
 	world.characters[hero].rotation.y = 0
 	world.characters[other].position = Vector3(-12, 0, 12)
-	combat.dogs[1].position = Vector3(0, 0, 1.4)
+	world.mob_system.mobs[1].position = Vector3(0, 0, 1.4)
 	await get_tree().create_timer(0.2).timeout
 	set_phase("WEAK", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
@@ -56,16 +56,16 @@ func run_server() -> void:
 	check(server.runtime_attack(owner_id) == 23, "equip updates authoritative runtime attack")
 	store.inventory_reads = 0
 	set_phase("BASELINE", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
-	check(combat.dogs[1].hp == 97, "baseline first-stage damage is 23")
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp < 120)
+	check(world.mob_system.mobs[1].hp == 97, "baseline first-stage damage is 23")
 	# Critical hot-path invariant; damage alone cannot reveal per-swing SQL reads.
 	check(store.inventory_reads == 0, "swing never reads SQLite inventory")
 	set_phase("WAIT")
 	await get_tree().create_timer(0.5).timeout
 	set_phase("FIGHT", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
-	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
-	for ticket: Dictionary in combat.packs[combat.dogs[1].pack_instance_id].replacements: ticket.at = Time.get_ticks_msec() + 60000
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.DEAD)
+	world.mob_system.mobs[1].dead_until_ms = Time.get_ticks_msec() + 60000
+	for ticket: Dictionary in world.mob_system.packs[world.mob_system.mobs[1].pack_instance_id].replacements: ticket.at = Time.get_ticks_msec() + 60000
 	set_phase("WAIT")
 	check(world.ground_loot.drops.size() == 1 and store.inventory(owner_id).items.size() == 2, "mob creates ground loot, no automatic grant")
 	drop_uid = world.ground_loot.drops.keys()[0]
@@ -95,18 +95,18 @@ func run_server() -> void:
 	check(server.runtime_attack(owner_id) == 29, "committed swap updates runtime stats")
 	check(store.inventory(server.connected_players[other].player_id).items.size() == 2, "other player receives no inventory")
 	await get_tree().create_timer(1.2).timeout
-	var old_dog: SpikeWildDog3D = combat.dogs[1]
-	var pack: MobPackRuntime = combat.packs[old_dog.pack_instance_id]
+	var old_dog: SpikeMob3D = world.mob_system.mobs[1]
+	var pack: MobPackRuntime = world.mob_system.packs[old_dog.pack_instance_id]
 	pack.replacements.clear()
-	combat._remove_mob(1)
-	var replacement := combat.spawn_mob(old_dog.definition,Vector3(0,0,1.4),pack)
+	world.mob_system.remove_mob(1)
+	var replacement := world.mob_system.spawn_mob(old_dog.definition,Vector3(0,0,1.4),pack)
 	replacement.ai_enabled = false
 	replacement.position = Vector3(0, 0, 1.4)
 	await get_tree().create_timer(0.1).timeout
 	store.inventory_reads = 0
 	set_phase("IMPROVED", hero)
 	await wait_until(func() -> bool: return replacement.hp < 120)
-	check(combat._combo[hero] == 1 and replacement.hp == 91, "same first-stage attack now deals 29 instead of 23")
+	check(combat.attacks.attack_runtime(hero).display_combo_step == 1 and replacement.hp == 91, "same first-stage attack now deals 29 instead of 23")
 	check(store.inventory_reads == 0, "improved attack also uses RAM only")
 	set_phase("WAIT")
 	check(db.close_db() and db.open_db(), "reopen SQLite")
@@ -140,8 +140,8 @@ func _process(delta: float) -> void:
 		register_ready.rpc_id(1)
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var inventory: SpikeInventory3D = world.inventory_endpoint
-	saw_damage = saw_damage or (combat.dogs.has(1) and combat.dogs[1].hp < 120)
-	saw_death = saw_death or (combat.dogs.has(1) and combat.dogs[1].ai_state == "DEAD")
+	saw_damage = saw_damage or (world.mob_system.mobs.has(1) and world.mob_system.mobs[1].hp < 120)
+	saw_death = saw_death or (world.mob_system.mobs.has(1) and world.mob_system.mobs[1].ai_state == MobState.Value.DEAD)
 	saw_loot = saw_loot or not combat.state.drops.is_empty()
 	accumulator += delta
 	if phase_name == "FIGHT" and accumulator >= 0.05:

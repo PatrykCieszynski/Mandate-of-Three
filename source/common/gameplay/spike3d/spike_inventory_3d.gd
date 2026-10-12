@@ -134,7 +134,7 @@ func refresh_authoritative_state(peer_id: int) -> void:
 		if item.uid == uid:
 			definition_id = str(item.definition_id)
 	public_weapons[peer_id] = definition_id
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
+	var body: SpikePlayer3D = _world.characters.get(peer_id)
 	if body != null:
 		body.set_weapon(definition_id)
 
@@ -172,7 +172,7 @@ func receive_weapon(peer_id: int, definition_id: String) -> void:
 	if GameMode.is_world_server():
 		return
 	public_weapons[peer_id] = definition_id
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
+	var body: SpikePlayer3D = _world.characters.get(peer_id)
 	if body != null:
 		body.set_weapon(definition_id)
 

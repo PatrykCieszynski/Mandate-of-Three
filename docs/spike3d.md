@@ -48,7 +48,9 @@ broadcast player cap exists yet. This first stage targets a small local spike.
 | File | Responsibility |
 | --- | --- |
 | `source/common/gameplay/spike3d/spike_world_3d.gd` | Arena, shared RPCs, input validation, snapshots, camera and overlay. |
-| `source/common/gameplay/spike3d/spike_character_3d.gd` | Capsule body/collision, server physics, client interpolation. |
+| `source/common/gameplay/spike3d/spike_actor_3d.gd` | Shared body/reaction/knockback and interpolation plumbing. |
+| `source/common/gameplay/spike3d/spike_player_3d.gd` | Player movement/advance/BODY policy, equipment and Warrior presentation. |
+| `source/common/gameplay/spike3d/spike_mob_3d.gd` | Mob body/visual and AI-facing state; lifecycle belongs to MobSystem. |
 | `source/common/gameplay/maps/spike/spike_map_3d.tscn` | Default Spike map scene. |
 | `source/server/world/components/spike_instance_3d.gd` | Server instance adapter. |
 | `source/client/network/spike_instance_3d.gd` | Client instance adapter. |

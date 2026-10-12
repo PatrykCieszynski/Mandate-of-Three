@@ -1,7 +1,7 @@
 extends Node3D
 ## Opt-in native review: real movement bodies, approximate scheduled preview hits.
-var hero := SpikeCharacter3D.new()
-var dog := SpikeWildDog3D.new()
+var hero := SpikePlayer3D.new()
+var dog := SpikeMob3D.new()
 var age := 0.0
 var step_index := 0
 var impacted := false
@@ -16,7 +16,7 @@ func _ready() -> void:
 	add_child(hero)
 	hero.set_weapon("iron_sword")
 	dog.definition = MobDefinitions.resolve(&"wild_dog")
-	dog.setup_dog(1,Vector3(0,0,-1))
+	dog.setup_mob(1,Vector3(0,0,-1))
 	add_child(dog)
 	volume(dog,dog.combat_collider,Color(0,1,1,.22))
 	volume(dog,dog.movement_collider,Color(1,.65,0,.15))
@@ -87,7 +87,7 @@ func _physics_process(delta: float) -> void:
 		capture("warrior-body-volumes")
 	var step := BasicAttackCombos.BASE.steps[step_index]
 	hero.simulate(delta,Vector2.ZERO)
-	dog.move_dog(delta,Vector2.ZERO,Time.get_ticks_msec())
+	dog.simulate_mob(delta,Vector2.ZERO,Time.get_ticks_msec())
 	if not impacted and age >= step.impact_ms/1000.0:
 		impacted = true
 		if CombatTraceResolver.hits_capsule(step.combat_trace,hero.transform,dog.position,dog.combat_radius(),dog.combat_height(),dog.combat_bottom_offset()):

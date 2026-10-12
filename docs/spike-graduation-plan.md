@@ -105,10 +105,16 @@ spike-graduation; poniżej pozostaje zatwierdzony zakres nadrzędny.
 
 PlayerCombatRuntime posiada sequence, active action, queued intent, combo state,
 desired facing i movement/action locks. Nie posiada health ani respawn.
-Health, alive/dead i respawn należą do życia aktora; istniejący HitReactionState
-pozostaje na aktorze.
+Health/alive/death należą do właściwego actor/life ownera; HitReactionState
+pozostaje na aktorze. Player life state należy do SpikePlayer3D; obecna player
+damage/respawn orchestration pozostaje w combat facade. Mob replacement/respawn
+należy do MobSystem; wspólna baza nie unifikuje polityki respawnu.
 
-BasicAttackService implementuje obecny basic attack. Wspólną abstrakcję akcji
+BasicAttackService implementuje obecny basic attack. B2a (intake/queue/timing/cancel)
+i B2b (impact/hit path) mają osobne commity i używają istniejących resolverów.
+Death fact MobSystem przekazuje zamknięty result bez actor reference. Kontroler
+klienta obejmuje input/targeting/basic-attack presentation; ground loot visuals
+i XP/progression feedback mogą zostać przy fasadzie do naturalnej ekstrakcji. Wspólną abstrakcję akcji
 rozważamy dopiero po realnym drugim zachowaniu, np. skillu/channelingu.
 MobSystem nie posiada loot, XP, damage calculation ani player attacks.
 Korzystamy z istniejących CombatTrace i HitReaction resolverów.

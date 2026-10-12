@@ -20,7 +20,7 @@ func phase(command: String, uid: String) -> void:
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
-	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values(): dog.ai_enabled = false
+	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
 	var npc: NeutralNpc3D = world.npc_endpoint.actors["spike-blacksmith-01"]

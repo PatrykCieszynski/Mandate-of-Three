@@ -55,4 +55,28 @@ if (-not $taskRejected) { throw 'Boundary guard missed combat ground-state owner
 $taskRejected = $false
 try { & $taskGuard -RootDirectory (Join-Path $taskFixture 'missing') | Out-Null } catch { $taskRejected = $true }
 if (-not $taskRejected) { throw 'Boundary guard silently accepted a missing scope' }
+
+# Completed Package B boundaries: dependency checks, not private-field coverage.
+$taskBoundaryCases = @(
+    @{ Path='source/common/gameplay/spike3d/player_combat_runtime.gd'; Good='var combo: BasicAttackComboState'; Bad=@('var world: SpikeWorld3D','@rpc("authority")') },
+    @{ Path='source/common/gameplay/spike3d/basic_attack_service.gd'; Good='func hit(): return HitReactionResolver.resolve()'; Bad=@('func reward(): progression.award_experience()','func hit(): mob.hp -= 1') },
+    @{ Path='source/common/gameplay/mobs/mob_system.gd'; Good='signal mob_died(result: MobDeathResult)'; Bad=@('func hit(): HitReactionResolver.resolve()','func reward(): currency.spawn_currency()') },
+    @{ Path='source/common/gameplay/spike3d/client_combat_controller.gd'; Good='var feedback: CombatFeedback3D'; Bad=@('var loot: GroundLootSystem','var bar: ProgressBar') },
+    @{ Path='source/common/gameplay/spike3d/spike_actor_3d.gd'; Good='var reaction: HitReactionState'; Bad=@('var visual: WarriorVisual3D','var respawn_at: int') },
+    @{ Path='source/common/gameplay/mobs/mob_death_result.gd'; Good='var position: Vector3'; Bad=@('var actor: SpikeMob3D','func capture(): result.actor = mob') }
+)
+foreach ($taskBoundaryCase in $taskBoundaryCases) {
+    $taskPath = Join-Path $taskFixture $taskBoundaryCase.Path
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $taskPath)) | Out-Null
+    [IO.File]::WriteAllText($taskPath,$taskBoundaryCase.Good)
+    & $taskGuard -RootDirectory $taskFixture | Out-Null
+    foreach ($taskSource in $taskBoundaryCase.Bad) {
+        [IO.File]::WriteAllText($taskPath,$taskSource)
+        $taskRejected = $false
+        try { & $taskGuard -RootDirectory $taskFixture | Out-Null } catch { $taskRejected = $true }
+        if (-not $taskRejected) { throw "Boundary guard missed $($taskBoundaryCase.Path) : $taskSource" }
+    }
+    [IO.File]::WriteAllText($taskPath,$taskBoundaryCase.Good)
+}
+
 Write-Output 'Architecture guard contracts: PASS (adapter/local calls allowed; dependency regressions rejected)'
