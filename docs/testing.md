@@ -34,6 +34,17 @@ scenarios if a risk is uncovered. New focused unit cases may be justified for
 buffered intent, cancel, hitch-safe impact, or cleanup after remove/death, but
 should not repeat coverage merely because ownership moved to another class.
 
+During extraction, use existing suites first. Add a test only when the extraction
+exposes a concrete behavioral contract not actually covered today. Full line/path
+coverage for PlayerCombatRuntime or each extracted class is not a goal.
+
+Existing tests are regression evidence, not immutable API. During extraction,
+preserve behavioral contracts, but freely rewrite or remove tests that assert
+obsolete private state, implementation order, or ownership. Do not preserve old
+internals solely to keep a test green. Controlled fixture setup may change with
+the owner; a removed assertion still needs a reason grounded in the contract,
+rather than removing a genuine behavior regression to make the suite pass.
+
 Test setup may seed SQLite or configure a controlled actor. That does not make
 private state or the setup mechanism the expected production behavior. Internal
 probes need a specific justification; for example, the known Inventory publication
