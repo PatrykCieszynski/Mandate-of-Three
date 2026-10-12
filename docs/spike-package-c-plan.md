@@ -27,15 +27,16 @@ transakcji, contentu ani persistence.
 
 | Właściciel | Odpowiedzialność |
 | --- | --- |
-| CoreUiController | Composition, host lifecycle, widoczność okien, skróty, skala/viewport, keyboard/pointer ownership, Alt/focus, UI failure |
+| CoreUiController | Composition, NPC → exact service → Upgrade select, host lifecycle, widoczność okien, skróty, skala/viewport, keyboard/pointer ownership, Alt/focus, UI failure |
 | UiCommandSession | Native request IDs i oczekiwanie na wynik endpointu; timeout, cancel i odrzucanie późnych odpowiedzi |
 | NpcDropTargetProjector | Ekranowe prostokąty oraz metadata konkretnych usług Upgrade z contentu |
 | ItemUiAdapter | Inventory/Equipment/Storage: wspólny model itemów, walidatory komend, RPC i publikacja domen |
-| NpcUiAdapter | Komendy/context NPC oraz istniejący flow interact → exact service → preselection |
+| NpcUiAdapter | Wyłącznie komendy i context NPC: interact, select_service, close/clear |
 | UpgradeUiAdapter | Walidacja select/execute, istniejące Upgrade RPC i snapshot |
 | ShopUiAdapter | Walidacja open/buy, istniejące Shop RPC i snapshot |
-| UiCommandDispatcher | Jawny rejestr handlerów, stan domen i publikacja bridge messages |
-| WebUiBridge / WebUiHost | Istniejący protokół/transport oraz CEF/input routing |
+| UiCommandDispatcher | Jawny rejestr handlerów, stan domen i publikacja; capture/check browser generation przy await |
+| WebUiBridge | Protokół/transport oraz właściciel browser transport generation |
+| WebUiHost | CEF/input routing i zdarzenia navigation/reset |
 
 Wallet pozostaje prostym `dispatcher.set_domain()`. Nie powstają osobne klasy
 Equipment/Storage/Wallet ani bazowy adapter/registry/DI framework. Adaptery dostają
@@ -63,9 +64,19 @@ Chronione zachowanie:
 - Wynik komendy i snapshot domeny są niezależne. Późniejszy autorytatywny snapshot
   może poprawnie odzwierciedlić commit, nawet gdy UI wcześniej dostało timeout.
 
-Oddzielamy native request ID od browser command ID. Dispatcher/bridge pilnuje
-transport generation: handler uruchomiony przez starą stronę nie wysyła
-`command.result` do nowej strony po reloadzie, nawet jeśli JS ponownie użyje ID.
+Oddzielamy native request ID od browser command ID. Obecny dispatcher po await
+wysyła wynik bez sprawdzenia, czy browser nadal należy do tej samej generacji.
+To konkretny bug: stary handler może dostarczyć wynik nowej stronie używającej
+ponownie tego samego browser command ID.
+
+- `WebUiBridge` posiada transport generation. Generation zwiększa się przy
+  `reset_transport()`/navigation, nigdy przy `ui.ready`. Duplicate/repeated ready
+  nie unieważnia prawidłowego handlera.
+- `UiCommandDispatcher` przechwytuje bieżącą generation przy przyjęciu browser
+  command. Po await wysyła `command.result` tylko gdy generation nadal jest aktualna.
+- `UiCommandSession` nie zna browser generation. Koreluje jedynie native request
+  IDs z odpowiedziami endpointów.
+
 To wąski kontrakt lifecycle, nie drugi rejestr pending ani reset snapshotów.
 Gating nie blokuje bieżących domain updates i pełnego snapshotu po `ui.ready`.
 Weryfikujemy też, że anulowany wieloetapowy NPC flow nie wysyła kolejnego RPC.
@@ -73,9 +84,12 @@ Weryfikujemy też, że anulowany wieloetapowy NPC flow nie wysyła kolejnego RPC
 Istniejące scenariusze `tests/web_ui_bridge.gd` i `web_bridge.test.mts` są pierwszą
 regresją. Przepisujemy odwołania do prywatnych metod/maps na wynik oczekiwania.
 Test wyłącznie sprawdzający pustą `_pending_commands` można zastąpić scenariuszem
-late reply → nowy request. Jedyny kandydat do rozszerzenia to native coroutine
-przechodząca przez reload/teardown: TS testuje swój bridge, ale nie dowodzi
-izolacji native handlera między generacjami strony.
+late reply → nowy request. Dodajemy dokładnie jeden nowy przypadek w istniejącym
+`tests/web_ui_bridge.gd` dla wykazanego bugu: old command → handler blocks →
+reset transport → new ui.ready → new command reuses same browser ID → old handler
+completes → old result NOT delivered → new result delivered exactly once.
+TS testuje swój bridge, ale nie dowodzi izolacji native handlera między generacjami
+strony. Pozostałe scenariusze lifecycle najpierw przenosimy z obecnej suite'y.
 
 ## C2 — NpcDropTargetProjector
 
@@ -116,17 +130,20 @@ move/equip/unequip, exact receiving i deposit/withdrawal. Bez nowej suite per kl
 
 ### C3b — NpcUiAdapter + UpgradeUiAdapter
 
-Przenosimy rejestracje/walidatory i snapshot binding NPC/Upgrade. Flow po dojściu
-do NPC nadal robi interact, wybór dokładnego `service_id` i select tego itemu.
-`NpcUiAdapter` używa jawnego Callable do Upgrade select; nie tworzymy cyklu
-adapterów ani generycznego workflow engine. RPC failures kończą sekwencję;
-unavailable service nie wybiera pierwszej innej usługi. Upgrade bez NPC-service
-identity pozostaje odrzucany. World-drop to intention dla istniejącego
-`begin_npc_approach`, przekazanego jako konkretna zależność.
+Przenosimy rejestracje/walidatory i snapshot binding NPC/Upgrade. Cross-domain
+workflow należy do `CoreUiController.interact_npc()`: composition wywołuje
+`NpcUiAdapter.interact()`, następnie `NpcUiAdapter.select_service()` dla dokładnego
+`service_id`, a na końcu `UpgradeUiAdapter.select_item()` dla wskazanego itemu.
+`NpcUiAdapter` zna tylko NPC, `UpgradeUiAdapter` tylko Upgrade; nie przekazujemy
+callbacku NpcAdapter → UpgradeAdapter i nie tworzymy generycznego workflow engine.
 
-`CoreUiController.interact_npc()` może pozostać krótkim publicznym wejściem
-używanym przez world arrival. To realny caller, a nie alias dawnych prywatnych
-metod dla fixtures. NPC context z wybranym Upgrade prosi composition o pokazanie
+RPC failures/cancel kończą sekwencję; unavailable service nie wybiera pierwszej
+innej usługi. Upgrade bez NPC-service identity pozostaje odrzucany. World-drop
+to intention dla istniejącego `begin_npc_approach`, podłączona w composition.
+
+`CoreUiController.interact_npc()` jest rzeczywistym publicznym wejściem world
+arrival i właścicielem tej krótkiej orchestration, nie aliasem dawnych prywatnych
+metod dla fixtures. Composition obserwuje NPC context z wybranym Upgrade i pokazuje
 Inventory; adapter nie ustawia opened ani nie wykonuje layoutu. Zachowujemy
 reakcje na disabled service, range loss i close/clear. Snapshot Upgrade i jego
 obecna Attack presentation nie są rozszerzane.
@@ -138,9 +155,9 @@ przepisana na jawne zależności nowego flow, z zachowaniem exact-service assert
 ### C3c — ShopUiAdapter
 
 Przenosimy open/buy validators, exact receiving position, submit i snapshot
-binding. Active Shop prosi composition o pokazanie Inventory, a zamknięcie Shop
-pozostawia Inventory dostępne. Wciąż korzystamy z tego samego session lifecycle;
-nie powstaje osobny pending queue Shop. Bez zmian offer/content/pricing/transaction.
+binding. Shop udostępnia/sygnalizuje active state; composition decyduje o pokazaniu
+Inventory. Zamknięcie Shop pozostawia Inventory dostępne. Wciąż korzystamy z tego
+samego session lifecycle; nie powstaje osobny pending queue Shop. Bez zmian offer/content/pricing/transaction.
 
 Weryfikacja: smoke i `run-shop.ps1`. C3b i C3c pozostają osobnymi commitami,
 żeby review nie mieszało service flow z purchase path.
