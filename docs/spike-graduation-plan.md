@@ -317,3 +317,9 @@ window/input policy; guard utrwala usunięte zależności.
 Smoke, właściwe network i browser suites przeszły. Native Godot/CEF acceptance
 pozostaje otwarte; pakiet nadal na osobnym branchu do review/integracji. Nie dodano
 nowych klas per window policy ani zmian TypeScript UI, gameplay czy persistence.
+
+## Końcowy graduation cleanup
+
+C zintegrowany lokalnie w 63aa38b. Zatwierdzony ostatni zakres, bez kolejnej
+przebudowy architektury: [production naming/layout i legacy UI removal](spike-graduation-cleanup.md).
+Trzy commity na codex/spike-graduation-cleanup; finalna integracja do main osobno.

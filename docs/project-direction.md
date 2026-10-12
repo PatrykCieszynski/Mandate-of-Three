@@ -124,8 +124,11 @@ slice in three packages. Package A is complete: explicit commit/cache/fan-out,
 a narrow injected TinyMMO adapter, kill/ground-loot extraction and architecture
 regression checks. Combat retains the existing RPC path and attack/AI behavior.
 Package B is locally integrated: combat runtime/services and actor/mob cleanup.
-Package C implements Core UI command/projector/adapters and composition cleanup
-on its topic branch; native CEF acceptance and package integration remain pending. They use separate topic branches from the shared
+Package C is locally integrated: Core UI command/projector/adapters and composition.
+[Graduation cleanup](spike-graduation-cleanup.md) finishes production names/layout
+and removes the replaced native UI; [inherited gameplay](inherited-runtime.md)
+remains deferred. Native CEF acceptance and final main integration remain pending.
+The packages use separate topic branches from the shared
 codex/spike-graduation integration branch. Main receives the final reviewed
 integration, not each unfinished extraction. World/persistence P2 decisions remain
 deferred as recorded in the plan.

@@ -5,7 +5,6 @@ extends Node
 signal instance_changed(instance: InstanceClient)
 
 
-var current_ui: UI
 var current_instance: InstanceClient
 
 
@@ -13,18 +12,13 @@ func _ready() -> void:
 	pass
 
 
-## Free the live world (map) + HUD and clear the InstanceClient statics so the client
-## can cleanly return to the gateway. These live under PERSISTENT parents — this
-## manager under the Client autoload, the UI added under root — so a scene reload
-## alone does NOT free them, which left the old world rendering under the rebuilt
-## login menu after a disconnect. Transition._back_to_login calls this first.
+## Free the live world and clear InstanceClient statics before returning to the
+## gateway. The instance lives under persistent Client; GameWorld owns its UI.
+## Scene reload alone does not free the world. Transition calls this first.
 func teardown() -> void:
 	if current_instance and is_instance_valid(current_instance):
 		current_instance.queue_free()
 	current_instance = null
-	if current_ui and is_instance_valid(current_ui):
-		current_ui.queue_free()
-	current_ui = null
 	InstanceClient.current = null
 	InstanceClient.local_player = null
 	ClientState.local_player = null
@@ -79,22 +73,11 @@ func charge_new_instance(map_path: String, instance_id: String) -> void:
 	new_instance.add_child(map, true)
 	add_child(new_instance, true)
 	
-	# Charge different type of UI/HUD and clear old one,
-	# for mini game / special instances that would require unique HUD ? 
-	
-	#if current_ui:
-		#current_ui.queue_free()
-	if not current_ui:
-		current_ui = preload("res://source/client/ui/ui.tscn").instantiate()
-		get_parent().add_sibling(current_ui)
 
 
 func _charge_3d_instance(map: Node3D, instance_id: String) -> void:
 	if current_instance != null:
 		current_instance.queue_free()
-	if current_ui != null:
-		current_ui.queue_free()
-		current_ui = null
 	InstanceClient.local_player = null
 	ClientState.local_player = null
 	ClientState.menu_open = false

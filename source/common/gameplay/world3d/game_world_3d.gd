@@ -185,7 +185,7 @@ func _build_camera_and_ui() -> void:
 	var options_layer := CanvasLayer.new()
 	options_layer.layer = 20
 	add_child(options_layer)
-	_options = load("res://source/client/ui/menus/settings/settings_menu.tscn").instantiate() as Navigator
+	_options = load("res://source/client/ui/settings/settings_menu.tscn").instantiate() as Navigator
 	_options.hide()
 	options_layer.add_child(_options)
 	_options.visibility_changed.connect(func() -> void:

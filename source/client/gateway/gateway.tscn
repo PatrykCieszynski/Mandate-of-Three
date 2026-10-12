@@ -6,7 +6,7 @@
 [ext_resource type="SpriteFrames" uid="uid://bqcsne8jhbmi8" path="res://source/common/gameplay/characters/sprite_frames/knight.tres" id="6_g2eid"]
 [ext_resource type="FontFile" uid="uid://cr1d4ugttxggp" path="res://assets/fonts/Atkinson_Hyperlegible/AtkinsonHyperlegible-Bold.ttf" id="6_tnybn"]
 [ext_resource type="Texture2D" uid="uid://cp0ddo3nvmx2u" path="res://assets/sprites/ui/gateway/icon_more.png" id="7_4oa66"]
-[ext_resource type="PackedScene" uid="uid://dgpsxb4qq1hex" path="res://source/client/ui/menus/settings/settings_menu.tscn" id="7_g2eid"]
+[ext_resource type="PackedScene" uid="uid://dgpsxb4qq1hex" path="res://source/client/ui/settings/settings_menu.tscn" id="7_g2eid"]
 [ext_resource type="Script" uid="uid://q5rsjtg6nsto" path="res://source/client/gateway/popup_panel.gd" id="9_4rdug"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_q35d6"]

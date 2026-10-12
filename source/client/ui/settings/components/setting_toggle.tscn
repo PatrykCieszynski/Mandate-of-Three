@@ -1,0 +1,31 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://source/client/ui/settings/components/settings_widget.gd" id="1_swidget"]
+
+[node name="SettingToggle" type="PanelContainer" node_paths=PackedStringArray("setting_label", "controller")]
+custom_minimum_size = Vector2(0, 48)
+theme_type_variation = &"SettingRow"
+script = ExtResource("1_swidget")
+setting_label = NodePath("HBox/SettingName")
+controller = NodePath("HBox/Cell/Switch")
+
+[node name="HBox" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SettingName" type="Label" parent="HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+text = "SettingName"
+vertical_alignment = 1
+
+[node name="Cell" type="PanelContainer" parent="HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.85
+theme_type_variation = &"SettingCell"
+
+[node name="Switch" type="CheckButton" parent="HBox/Cell"]
+layout_mode = 2
+alignment = 2
