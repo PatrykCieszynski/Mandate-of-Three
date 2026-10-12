@@ -9,20 +9,16 @@ const AGGRO: float = 6.0
 const MOB_REACH: float = 1.65
 const ATTACK_REACH: float = 2.4
 const HALF_ANGLE: float = 65.0
-const PICKUP_REACH: float = 2.5
-const PROTECTION_MS: int = 15000
-const LOOT_LIFETIME_MS: int = 120000
-const DOG_XP: int = 20
 
 signal swing_received(peer_id: int, animation_key: StringName, step_index: int)
 signal feedback_received(result: Dictionary)
 signal state_changed(snapshot: Dictionary)
+signal mob_died(mob: SpikeWildDog3D, now: int)
 var dogs: Dictionary[int, SpikeWildDog3D] = {}
 var _warned_unknown_mob_keys: Dictionary[StringName, bool] = {}
 var packs: Dictionary[int, MobPackRuntime] = {}
 var _next_mob_id: int = 0
 var _next_pack_id: int = 0
-var ground: Dictionary[String, Dictionary] = {}
 var health: Dictionary[int, int] = {}
 var _respawn_ms: Dictionary[int, int] = {}
 var _next_attack_ms: Dictionary[int, int] = {}
@@ -204,9 +200,6 @@ func _build_navigation() -> void:
 	navigation_region.navigation_mesh = mesh
 	_world.add_child(navigation_region)
 
-func _store() -> ItemStoreSqlite:
-	return null if not services.available() or services.economy() == null else services.economy().item_store
-
 func initialize_peer(peer_id: int) -> void:
 	health[peer_id] = 100
 	if OS.has_feature("editor"):
@@ -238,7 +231,7 @@ func can_move(peer_id: int, now: int = Time.get_ticks_msec()) -> bool:
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_attack(sequence: int) -> void:
-	if not GameMode.is_world_server() or _store() == null: return
+	if not GameMode.is_world_server() or not services.item_domain_ready(): return
 	var peer_id := multiplayer.get_remote_sender_id()
 	if sequence < 0 or sequence > 2147483647 or sequence <= _sequences.get(peer_id,-1): return
 	var now := Time.get_ticks_msec()
@@ -454,40 +447,13 @@ func _die(dog: SpikeWildDog3D, now: int) -> void:
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if dog.respawn_enabled and pack != null:
 		pack.replacements.append({"definition":dog.definition,"at":now+int(pack.respawn_seconds*1000)})
-	var owner_id: int = 0
-	var highest: int = -1
-	for contributor: int in dog.contributions:
-		if dog.contributions[contributor] > highest or (dog.contributions[contributor] == highest and contributor < owner_id):
-			owner_id = contributor
-			highest = dog.contributions[contributor]
-	drop_reward(dog.position,owner_id,now)
-	if owner_id > 0: _award_experience(dog.contribution_players.get(owner_id))
+	mob_died.emit(dog,now)
 	dog.contribution_players.clear()
 
-func drop_reward(position: Vector3, owner_id: int, now: int, yang: int = SpikeCurrency3D.DOG_YANG) -> void:
-	var owner_name: String = ""
+func publish_experience(owner_id: int, amount: int, levels_gained: int, level: int) -> void:
 	for peer_id: int in _world.characters:
-		if _owner(peer_id) == owner_id: owner_name = services.player_for_peer(peer_id).display_name
-	var uid: String = Crypto.new().generate_random_bytes(16).hex_encode()
-	ground[uid] = {"position":position,"definition_id":"iron_sword","bonus":randi_range(1,9),
-		"owner":owner_id,"owner_name":owner_name,"protected_until":now+PROTECTION_MS,"expires":now+LOOT_LIFETIME_MS}
-	_world.currency_endpoint.spawn_currency(position,owner_id,owner_name,now,yang)
-
-func _award_experience(resource: PlayerResource) -> void:
-	if resource == null: return
-	# A contributor may have disconnected/relogged before the killing blow.
-	# Always use the current in-process resource rather than an old encounter ref.
-	resource = services.economy().dirty_progression.get(resource.player_id, resource)
-	for current: PlayerResource in services.players():
-		if current.player_id == resource.player_id:
-			resource = current
-			break
-	var result: Dictionary = resource.add_experience(DOG_XP)
-	services.economy().mark_progression_dirty(resource)
-	for peer_id: int in services.peers():
-		if services.player_for_peer(peer_id) != resource: continue
-		if _world.characters.has(peer_id):
-			receive_experience.rpc_id(peer_id, DOG_XP, int(result.levels_gained), int(result.level))
+		if services.owner_id_for_peer(peer_id)==owner_id:
+			receive_experience.rpc_id(peer_id,amount,levels_gained,level)
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_experience(amount: int, levels_gained: int, level: int) -> void:
@@ -554,7 +520,7 @@ func _present_reaction(body: SpikeCharacter3D, result: Dictionary) -> void:
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_pickup(uid: String) -> void:
-	if not GameMode.is_world_server() or _store() == null:
+	if not GameMode.is_world_server() or not services.item_domain_ready():
 		return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not is_player_alive(peer_id): return
@@ -564,32 +530,12 @@ func request_pickup(uid: String) -> void:
 		return
 	_pickup_ms[peer_id] = now
 	var result: Dictionary = pickup_for_peer(peer_id, uid, now)
-	if result.ok: _world.inventory_endpoint.refresh_authoritative_state(peer_id)
 	_reply(peer_id, result)
 	if result.ok:
-		_world.inventory_endpoint.inventory_changed.emit(_owner(peer_id))
 		_send_snapshot()
 
 func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
-	# Synchronous: another RPC cannot interleave between commit and ground erase.
-	if not ItemInstance.valid_uid(uid) or not ground.has(uid):
-		return {"ok": false, "error": "gone"}
-	var drop: Dictionary = ground[uid]
-	if now >= int(drop.expires):
-		ground.erase(uid)
-		return {"ok": false, "error": "gone"}
-	var owner_id: int = _owner(peer_id)
-	if now < int(drop.protected_until) and owner_id != int(drop.owner):
-		return {"ok": false, "error": "reserved"}
-	var body: SpikeCharacter3D = _world.characters[peer_id]
-	if body.position.distance_to(drop.position) > PICKUP_REACH or not _world.has_line_of_sight(body.position, drop.position):
-		return {"ok": false, "error": "distance"}
-	var result: Dictionary = _store().claim_ground_item(owner_id, uid, int(drop.bonus))
-	if result.ok:
-		result["item_name"] = ItemDefinitions.IRON_SWORD.item_name
-		result["weapon_attack"] = int(ItemDefinitions.IRON_SWORD.base_stats[&"attack"]) + int(drop.bonus)
-	if result.ok or result.get("error", "") == "claimed": ground.erase(uid)
-	return result
+	return _world.ground_loot.pickup_for_peer(peer_id,uid,now)
 
 func _reply(peer_id: int, result: Dictionary) -> void:
 	receive_feedback.rpc_id(peer_id, result)
@@ -609,10 +555,9 @@ func receive_feedback(result: Dictionary) -> void:
 	feedback_received.emit(result)
 
 func _physics_process(delta: float) -> void:
-	if not GameMode.is_world_server() or _store() == null: return
+	if not GameMode.is_world_server() or not services.item_domain_ready(): return
 	var now: int = Time.get_ticks_msec()
-	for uid: String in ground.keys():
-		if now >= int(ground[uid].expires): ground.erase(uid)
+	_world.ground_loot.expire(now)
 	for peer_id: int in _respawn_ms.keys():
 		if now >= _respawn_ms[peer_id] and _world.characters.has(peer_id):
 			health[peer_id] = 100
@@ -768,7 +713,7 @@ func _receive_mob_snapshots(records: Array) -> void:
 			dogs.erase(id)
 
 func _send_snapshot() -> void:
-	if _store() == null: return
+	if not services.item_domain_ready(): return
 	var now: int = Time.get_ticks_msec()
 	var mob_snapshots: Array = _mob_snapshots(now)
 	var respawns: Dictionary = {}
@@ -779,14 +724,7 @@ func _send_snapshot() -> void:
 		hit_locks[id] = _world.characters[id].hit_reaction.snapshot(now)
 	for id: int in _respawn_ms: respawns[id] = maxf(0, (_respawn_ms[id] - now) / 1000.0)
 	for peer_id: int in _world.characters:
-		var drops: Dictionary = {}
-		for uid: String in ground:
-			var drop: Dictionary = ground[uid]
-			drops[uid] = {"position": drop.position, "definition_id": drop.definition_id,
-				"item_name": ItemDefinitions.IRON_SWORD.item_name,
-				"weapon_attack": int(ItemDefinitions.IRON_SWORD.base_stats[&"attack"]) + int(drop.bonus),
-				"reserved_for": drop.owner_name if now < int(drop.protected_until) else "",
-				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner)}
+		var drops: Dictionary = _world.ground_loot.snapshot_for_peer(peer_id,now)
 		var player: PlayerResource = services.player_for_peer(peer_id)
 		receive_state.rpc_id(peer_id, {"mobs": mob_snapshots, "health": health.duplicate(), "drops": drops,
 			"combo_options":{"enabled":combo_state(peer_id).combo_enabled,"skill_level":combo_state(peer_id).combo_skill_level,"length":combo_state(peer_id).definition().steps.size()},

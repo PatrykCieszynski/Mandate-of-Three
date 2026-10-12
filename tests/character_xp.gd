@@ -45,7 +45,7 @@ func run_server() -> void:
 	set_phase("HIT", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp == 25)
 	set_phase("WAIT")
-	await get_tree().create_timer(0.5).timeout
+	await wait_until(func() -> bool: return combat.can_move(hero))
 	set_phase("HIT", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp == 15)
 	set_phase("WAIT")
@@ -57,9 +57,9 @@ func run_server() -> void:
 	check(combat.dogs[1].contributions[owner_id] == 20 and combat.dogs[1].contributions[other_id] == 15, "actual damage contribution, including clamped final hit")
 	check(server.connected_players[hero].experience == 20 and server.connected_players[other].experience == 0, "highest contributor gets runtime XP, not final hitter")
 	check(store.get_player(owner_id).experience == 0, "kill does not write XP to SQLite")
-	drop_uid = combat.ground.keys()[0]
+	drop_uid = world.ground_loot.drops.keys()[0]
 	combat._die(combat.dogs[1], Time.get_ticks_msec())
-	check(combat.ground.size() == 1 and server.connected_players[hero].experience == 20, "repeated runtime death callback cannot grant twice")
+	check(world.ground_loot.drops.size() == 1 and server.connected_players[hero].experience == 20, "repeated runtime death callback cannot grant twice")
 	set_phase("RECIPIENT", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	set_phase("WAIT")
@@ -67,6 +67,8 @@ func run_server() -> void:
 	for id: int in [2, 3, 4]:
 		await get_tree().create_timer(1.2).timeout
 		var dog: SpikeWildDog3D = combat.dogs[id]
+		world.characters[hero].position = Vector3(0,0,3)
+		world.characters[hero].rotation.y = 0
 		dog.position = Vector3(0, 0, 1.4)
 		dog.ai_state = "IDLE"
 		dog.collision_layer = 4

@@ -19,6 +19,9 @@ func item_store() -> ItemStoreSqlite:
 	var database := economy()
 	return null if database == null else database.item_store
 
+func item_domain_ready() -> bool:
+	return item_store() != null
+
 func player_for_peer(peer_id: int) -> PlayerResource:
 	return null if _server() == null else _server().connected_players.get(peer_id)
 

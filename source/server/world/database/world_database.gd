@@ -2,6 +2,14 @@ class_name WorldDatabase
 extends Node
 
 
+signal experience_awarded(owner_id: int, amount: int, levels_gained: int, level: int)
+
+func award_experience(player: PlayerResource, amount: int) -> void:
+	if player == null or amount <= 0: return
+	var result: Dictionary = player.add_experience(amount)
+	mark_progression_dirty(player)
+	experience_awarded.emit(player.player_id,amount,int(result.levels_gained),int(result.level))
+
 var database_path: String
 var db: SQLite
 var store: WorldStoreSqlite

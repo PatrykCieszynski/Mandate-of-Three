@@ -71,11 +71,11 @@ func run_server() -> void:
 	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
 	for ticket: Dictionary in combat.packs[combat.dogs[1].pack_instance_id].replacements: ticket.at = Time.get_ticks_msec() + 60000
 	set_phase("WAIT")
-	check(combat.ground.size() == 1 and store.inventory(owner_id).items.size() == 2, "mob creates ground loot, no automatic grant")
-	drop_uid = combat.ground.keys()[0]
+	check(world.ground_loot.drops.size() == 1 and store.inventory(owner_id).items.size() == 2, "mob creates ground loot, no automatic grant")
+	drop_uid = world.ground_loot.drops.keys()[0]
 	# Fix only the fixture's roll to guarantee the better-weapon branch. The
 	# production random range, receipt, pickup and equip code remain unchanged.
-	combat.ground[drop_uid].bonus = 9
+	world.ground_loot.drops[drop_uid].bonus = 9
 	await get_tree().create_timer(0.2).timeout
 	set_phase("PICKUP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))

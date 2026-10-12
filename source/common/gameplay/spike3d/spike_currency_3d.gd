@@ -50,7 +50,7 @@ func spawn_currency(position: Vector3, owner_id: int, owner_name: String, now: i
 	_next_drop_id += 1 # Local entity ID, never persisted and never an ItemInstance UID.
 	ground[_next_drop_id] = {"amount": amount, "position": position,
 		"owner": owner_id, "owner_name": owner_name,
-		"protected_until": now + SpikeCombat3D.PROTECTION_MS, "expires": now + SpikeCombat3D.LOOT_LIFETIME_MS}
+		"protected_until": now + GroundLootSystem.PROTECTION_MS, "expires": now + GroundLootSystem.LOOT_LIFETIME_MS}
 	return _next_drop_id
 
 func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP_REACH) -> Dictionary:
