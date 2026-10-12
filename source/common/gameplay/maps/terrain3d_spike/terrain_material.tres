@@ -1,4 +1,4 @@
-[gd_resource type="Terrain3DMaterial" format=3]
+[gd_resource type="Terrain3DMaterial" format=3 uid="uid://ce1n10j480eag"]
 
 [sub_resource type="Gradient" id="Gradient_x1356"]
 offsets = PackedFloat32Array(0.2, 1)
@@ -23,9 +23,9 @@ seamless = true
 
 [resource]
 _shader_parameters = {
-&"auto_base_texture": 0,
+&"auto_base_texture": 3,
 &"auto_height_reduction": null,
-&"auto_overlay_texture": 3,
+&"auto_overlay_texture": 0,
 &"auto_slope": 4.0,
 &"bias_distance": null,
 &"blend_sharpness": 0.75,

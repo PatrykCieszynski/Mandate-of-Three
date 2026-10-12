@@ -8,5 +8,4 @@
 [node name="Terrain" type="Terrain3D" parent="."]
 material = ExtResource("1")
 assets = ExtResource("2")
-region_size = 256
 data_directory = "res://source/common/gameplay/maps/terrain3d_spike/data"

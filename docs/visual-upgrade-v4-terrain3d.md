@@ -1,239 +1,230 @@
-# V4 — Terrain3D workflow spike: compatibility gate failed
+# V4 — corrected Terrain3D persistence and adoption gate
 
-The spike stops at the required server/headless compatibility gate. A saved
-Terrain3D scene crashes on Windows world-server/headless with an access violation
-in native Terrain3D code. This report does not claim the full V4 acceptance list
-passed. No First Region migration, server collision substitute, vendor patch,
-Godot upgrade or client/server terrain split has been implemented.
+Terrain3D **1.0.2 stable on Godot 4.7.2** passes the corrected Mandate persistence,
+headless, Forward+/Vulkan, collision/movement and navigation gates. Our manually
+serialized editor-only region-size migration property triggered the earlier
+native crashes. They do not establish Terrain3D/Godot incompatibility.
 
-## Baseline and branch
+The editor opens the prepared scene with the stable plugin without script/parse
+errors. The user reports that the requested sculpt/paint/undo/redo/save/reopen
+operations appear to work. Workflow comfort remains unassessed: the user has
+not worked with other map editors. This is not a compatibility failure.
+No First Region migration, vegetation/scatter or terrain abstraction is added.
 
-- Starting local `main`: `495d8f3f9ebcc020806cc1cca693565c0387d18b` (V3 merge).
-- Topic: `codex/visual-v4-terrain3d-spike`.
-- Tracked working tree was clean. The pre-existing untracked
-  `docs/item-drag-runtime-system.pdf` was preserved.
-- Global plugin enablement and initial CI provisioning changes were rolled back
-  after the failure. Existing rendering, gameplay and First Region sources are
-  unchanged. The failed spike remains on its topic branch, not merged into main.
+## Branch and baseline
 
-## Version
+- Original local main: 495d8f3f9ebcc020806cc1cca693565c0387d18b (V0–V3 baseline).
+- Continuing topic: codex/visual-v4-terrain3d-spike; investigation HEAD was b8439ca.
+  Earlier results and historical DLL fingerprints remain in Git history.
+- The pre-existing untracked docs/item-drag-runtime-system.pdf is preserved.
+- **No merge to main and no push** during this recheck, as explicitly requested.
+- First Region geometry/gameplay and V3 shader remain unchanged.
 
-Godot remains **4.7.2-stable**, official Windows x86_64 console executable,
-`ed1daf0bf001b61586d9930840f2f1394092c079`. Project renderer/backend remain
-Forward+/Vulkan. **Terrain3D 1.0.2-stable** is the official stable release,
-[release page](https://github.com/TokisanGames/Terrain3D/releases/tag/v1.0.2-stable).
-Upstream declares Godot 4.4–4.6+ support; this declaration is not proof of our
-4.7.2/headless resource-loading path.
+## Previous false lead
 
-## Integration
+The failed checked-in scene had material, assets, then region_size = 256 on
+Terrain3D. The new instructions describe the same issue with 64; the historical
+scene in this branch used 256. Both are the same misuse.
 
-`tools/terrain3d/setup.py` installs the official `Terrain3D_v1.0.2-stable.zip`
-under ignored `addons/terrain_3d`, retaining the original editor scripts,
-extension descriptor, notices and Windows/Linux x86_64 debug/release binaries.
-It verifies SHA256
-`a071850250ec5e596aa54da61c01d75768774eb379ee997584d426a45f4884a2`, matching
-the release asset's published GitHub digest. No native binaries or upstream demo
-are committed. The addon license is MIT, copyright 2023–2026 Cory Petkovsek,
-Roope Palmroos and contributors; the installed `LICENSE.txt` must accompany
-distribution. See [official installation](https://terrain3d.readthedocs.io/en/stable/docs/installation.html).
+Upstream registers that property with PROPERTY_USAGE_EDITOR and setter
+change_region_size(). This is a data migration operation, not persistent scene
+storage. Calling it during deserialization of incompletely initialized data
+triggered the access violation. The earlier small reproducer repeated that setup.
+[Pinned upstream implementation](https://github.com/TokisanGames/Terrain3D/blob/v1.0.2-stable/src/terrain_3d.cpp).
 
-Required native libraries are `libterrain.windows.{debug,release}.x86_64.dll`
-and `libterrain.linux.{debug,release}.x86_64.so`. Other platform binaries are not
-installed by this repository's helper. The GDExtension registers when installed;
-the editor plugin is deliberately **not enabled globally** after the failed gate.
+Removing that single serialized property lets both previously crashing scenes
+exit zero on stable 1.0.2. There is no property-order workaround: the corrected
+scene contains no Terrain3D region_size, and normal PackedScene saving omits it.
+The loader derives size from the first persisted Terrain3DRegion. No runtime
+height reconstruction or delayed material/assets assignment is used for loading.
 
-## Prototype
+The earlier rejection is withdrawn. The 1.1.0-dev retest also used the invalid
+scene and therefore did not establish development-build incompatibility either.
+Archived crash logs under .godot/verification/terrain3d-1.0.2-baseline and the
+visual-v4-dev-* logs remain diagnostic history, not current adoption evidence.
 
-The isolated candidate is
-`source/common/gameplay/maps/terrain3d_spike/terrain_spike.tscn`. It is not
-registered as a startup map. Its committed resources and generator are diagnostic
-inputs for resolving the compatibility problem, not an accepted production map.
+## Version, provenance and installation
 
-The deterministic generator `tools/terrain3d/generate_spike.gd` produces one
-256×256-sample native region at 1 m spacing (approximately 256×256 m), with a
-flat combat area, 12 m gentle Gaussian hill, 28 m steep ridge, 3.5 m shallow
-depression, winding painted road and a graded eastern shore. It uses source
-formulas, not a manual sculpt session. Native data are saved to
-`data/terrain3d_00_00.res`; regeneration explicitly overwrites the baseline and
-must not be run over manual editor edits that should be retained.
+- Godot: official **4.7.2-stable**, commit
+  ed1daf0bf001b61586d9930840f2f1394092c079; no upgrade.
+- Terrain3D: **1.0.2-stable**, official
+  [release](https://github.com/TokisanGames/Terrain3D/releases/tag/v1.0.2-stable).
+- Renderer/backend: **Forward+ / Vulkan**, Windows x86_64.
+- License: MIT, copyright Cory Petkovsek, Roope Palmroos and contributors.
+  Notice retained in tools/terrain3d/LICENSE-Terrain3D.txt and installed addon.
+- Installer: tools/terrain3d/setup.py, official release archive SHA256
+  a071850250ec5e596aa54da61c01d75768774eb379ee997584d426a45f4884a2.
+- Executed Windows debug DLL SHA256:
+  bf72686a7e1d8d8370ba9ba5eaa70c59375ee2cb5638d63b8942f1ad7d448cda.
 
-Four 256×256 temporary seamless PBR layers are prepared: grass, dirt, path and
-rock. Each has RGB albedo / alpha height and RGB normal / alpha roughness packed
-into saved ImageTexture resources. The fixed analytic grain is generated locally;
-there is no third-party texture pack or legacy dependency. Terrain assets use
-UV scale 0.22, normal depth 0.35, detiling rotation 0.12 and shift 0.15. Manual
-grass/dirt blend and road controls coexist with autoshader areas using grass/rock;
-the autoshader slope parameter is 4.0 and blend sharpness 0.75. A low-amplitude
-0.88–1.0 color map supplies macro variation. These settings are prepared, not
-visually accepted. [Texture packing reference](https://terrain3d.readthedocs.io/en/stable/api/class_terrain3dtextureasset.html),
-[control map reference](https://terrain3d.readthedocs.io/en/stable/docs/controlmap_format.html).
+The user restored stable before this recheck. No nightly is required. Installation
+keeps Windows/Linux x86_64 debug/release binaries and editor source under ignored
+addons/terrain_3d. Project settings enable its editor plugin on this topic branch.
+CI provisions the pinned dependency before cold import; smoke itself performs no
+plugin download. [Official installation](https://terrain3d.readthedocs.io/en/stable/docs/installation.html).
 
-The scene keeps the production `PlayerActor3D.simulate`, `MobActor3D.simulate_mob`
-and `MandateCamera3D` rig for its local workflow preview. The small dog path driver
-is confined to the prototype; current production pack AI is not redesigned.
-The prepared eastern water plane reuses the unmodified V3 ShaderMaterial at
-y=-0.5 and lets the terrain supply submerged depth. It adds no artificial bed.
-Runtime movement, water appearance and slope handling have **not** been accepted.
+## Confirmed upstream compatibility
 
-## Collision and navigation
+The user reports nine package/engine combinations passing upstream tests,
+including stable, main nightly and 4.8-updates on Godot 4.7.2. Those are supplied
+results; this task did not independently rerun all nine combinations or Godot 4.8.
 
-Collision is configured as native **Full / Game**, layer 17 (scenery 1 + mob
-floor 16), rather than camera-centered dynamic collision. In programmatic setup,
-collision aliases set before native subsystem creation can be ignored; configure
-the collision object after the node enters the tree. This explains an initial
-failed flat collision probe that was rerun with the documented full mode.
-[Collision reference](https://terrain3d.readthedocs.io/en/stable/docs/collision.html).
+Local verification copies the supplied .godot/terrain3d_demo into an ignored,
+separate project with the stable addon. Original Demo.tscn, saved regions,
+material/assets and character are unmodified. Both local gates pass:
 
-A minimal in-memory headless terrain passes a raycast at y=5. Separately, native
-saved data loaded programmatically after initialization pass a raycast at
-`(52, 0.145971, 55)`, agreeing with the source height. This confirms a working
-collision/data path, not safe loading of the serialized map scene. The latter
-fails before gameplay acceptance can run.
+- Headless: three saved regions load, raycast succeeds, original character stands
+  on terrain; UPSTREAM_DEMO_OK, exit zero.
+- Native Windows Forward+/Vulkan: the same checks pass, the demo renders and a
+  screenshot is captured; no native crash or shader/script errors.
 
-The generator bakes **2928 navigation polygons** through the existing Godot
-NavigationServer3D pipeline, adding native
-`generate_nav_mesh_source_geometry` faces. Static collider parsing alone does
-not supply Terrain3D faces. Settings match the current gameplay bake: radius 0.5,
-height 1.2, climb 0.2, cells 0.125×0.1, slope limit 45 degrees. Navigable control
-bits exclude the submerged shore and outer border; the bake AABB covers 236×236 m.
-The result is saved as `navigation.res`. Flat/hill/steep/water path endpoints and
-runtime mob following remain unverified because the scene compatibility gate
-failed. [Upstream navigation workflow](https://terrain3d.readthedocs.io/en/stable/docs/navigation.html).
+Logs: .godot/verification/visual-v4-upstream-headless.log and
+visual-v4-upstream-native.out.log / .err.log. The copied demo is a reference only,
+excluded from runtime, Git and exports.
 
-## Runtime failure and reproduction
+## Correctly persisted 64×64 prototype
 
-The full saved prototype crashes under `--headless --mode=world-server`.
-Removing serialized collision settings does not prevent the crash. The smaller
-`tools/terrain3d/repro_scene.tscn` removes all project gameplay/preview scripts and
-still crashes when loading a Terrain3D node with the saved material, assets and
-data directory. The bounded diagnostic reports exit **3221225477 / 0xC0000005**,
-and the engine logs **signal 11** with native frames at
-`libterrain.windows.debug.x86_64.dll+41cb9`, `+2744ae`, `+afda1`.
+Open source/common/gameplay/maps/terrain3d_spike/terrain_spike.tscn.
+It contains NavigationRegion3D, native Terrain3D, external Terrain3DMaterial,
+external Terrain3DAssets and a dedicated native data directory. It is not a startup
+map. Its region is **64×64 samples at 1 m spacing**, about 64×64 m.
 
-```powershell
-python ./tools/terrain3d/setup.py
-& ./.godot/Godot_v4.7.2-stable_win64_console.exe --headless --path . --mode=world-server --script tools/terrain3d/generate_spike.gd
-python ./tools/terrain3d/probe_saved_scene.py
-```
+The source generator tools/terrain3d/generate_spike.gd creates a Terrain3DRegion
+resource, assigns its own region_size = 64, height/control/color maps, spacing and
+location, then saves data/terrain3d_00_00.res through the native region API.
+Formulas produce a flat area, 3 m gentle hill, 7 m steep ridge, shallow depression,
+authored winding path and graded eastern shore. Regeneration is an explicit reset;
+do not run it over manual edits that should be retained.
 
-The probe intentionally returns failure for the crash and stops its own process
-after a bounded timeout. It is an opt-in reproducer, not a new default test suite.
-Ignored logs are `.godot/verification/visual-v4-saved-scene-repro.log`,
-`visual-v4-scene-headless.log`, `visual-v4-order-repro.log`, `visual-v4-gate.log`
-and `visual-v4-saved-gate.log`. The precise native root cause is unresolved;
-the stack does not establish which library/engine defect is responsible.
+Four small seamless PBR ImageTexture pairs are grass/dirt/path/rock, with
+albedo/height and normal/roughness, fixed analytic grain, mipmaps, UV scale 0.22,
+normal depth 0.35, detiling rotation 0.12 and shift 0.15. These are temporary
+workflow assets. Painted grass/dirt blends and the path override the autoshader.
+Auto base is rock (3), overlay grass (0), slope parameter 4.0: flat areas select
+grass and steep areas rock. The colormap gives modest macro variation. No external
+texture pack or legacy source assets are required.
 
-The successful programmatic path also logs missing active camera (it stops
-render snapping) and null material parameter diagnostics from the dummy renderer.
-No fake server camera, stripped server material scene or alternate collider
-has been added to hide those differences.
+The normal free_editor_textures option is false for this tiny authoring spike,
+retaining the four texture asset references for inspection and another save.
+The default true option frees runtime editor texture references after uploading
+GPU arrays; saving that runtime copy as editor assets would lose the references.
+No material/asset is dynamically reassigned after initialization.
+[Region API](https://terrain3d.readthedocs.io/en/stable/api/class_terrain3dregion.html).
 
-Windows native Forward+ rendering and a saved-scene server export boot are not
-claimed as passing. The existing Windows resource-pack export also crashes while
-processing the saved terrain scene, with the same native offsets. Its log is
-`.godot/verification/Windows.export.log`; the runner stops before ServerWindows
-and ServerUbuntu. This is a second affected headless path, not a successful
-packaging check. Linux x86_64 binaries are included in the pinned distribution,
-but actual Ubuntu execution is unavailable: installed WSL Ubuntu fails with
-`HCS_E_HYPERV_NOT_INSTALLED` because local virtualization is disabled. No system
-configuration changes were made. A ServerUbuntu resource-pack check does not
-prove Linux extension execution.
+## Persistence, headless and production movement
 
-## Editor workflow
+The required sequence is verified with separate Godot processes:
 
-The prepared candidate has the native Terrain node under `Navigation`, a dedicated
-data directory and separate material/assets resources. After the compatibility
-failure is resolved, enable Terrain3D in Project Settings → Plugins, open the
-candidate, select `Navigation/Terrain`, and use Raise/Lower, Smooth, Paint Texture
-or Spray Texture. Choose grass/dirt/path/rock in the asset dock; painting an
-authored path disables the autoshader locally. Save both scene and native region
-data. Select the Terrain3D menu's Bake NavMesh after editing, not the ordinary
-NavigationRegion3D bake button. Change layers through the asset dock and preserve
-the required packed channels/equal texture dimensions. See
-[painting](https://terrain3d.readthedocs.io/en/stable/docs/texture_painting.html)
-and [navigation](https://terrain3d.readthedocs.io/en/stable/docs/navigation.html).
+1. Create/save region, external material and assets, then close the generator.
+2. Cold-load the normal saved scene. Verify get_region_size()==64, one region,
+   its own persisted size, saved height, external paths and four material layers.
+3. Raycast native collision against saved height. Production PlayerActor3D stands
+   and walks on flat ground, uphill and downhill, with feet tracking authored
+   height. Its movement implementation is unchanged.
+4. Save region, material/assets and normal PackedScene again. SceneState contains
+   no editor-only region_size migration property. Close that process.
+5. Cold-start again and repeat the same checks.
 
-This is a prospective checklist, **not** an assertion that subjective editing,
-undo/redo or runtime preview passed. Initial headless editor enablement in a
-restricted AppData environment additionally raised an upstream DoubleSlider
-Nil-to-int EditorSettings error. Global plugin enablement was reverted; no vendor
-UI patch was made. Manual editor testing and optional instancing were stopped.
+Both emit TERRAIN_PERSIST_OK and exit zero. Native runtime adds rendered surface,
+materials and production movement evidence with TERRAIN_RUNTIME_OK on actual
+Forward+/Vulkan. No Terrain3D native, shader compilation or script errors appear
+in the corrected runtime gates. Generic Windows certificate and inherited
+ObjectDB/resource shutdown diagnostics remain separate from these markers.
 
-## Performance and acceptance
+Collision is Full/Game on layers 1+16, used by production player/mob bodies.
+Headless disables only the camera/clipmap snapping process after full collision
+initialization. The same persisted native data and collider remain active and
+are checked by raycasts/movement. No fake server camera, separate collider or
+server bake representation is introduced. Local preview reuses production actors
+and orbit rig; it is a standalone authoring preview, not a new network slice.
 
-GPU median/p95 are **not measured**: visual/performance work was stopped after
-the mandatory server gate failed. Mesh settings prepared for later evaluation
-are mesh size 32 and six LODs; no instancing was added. V3 timing is not presented
-as Terrain3D timing.
+## Navigation and V3 shore
 
-Only deterministic data/PBR preparation, native collision probes and navigation
-generation are demonstrated. Safe saved-map loading, actual terrain movement,
-runtime pathing, shoreline visuals, native Forward+ acceptance, manual authoring
-and GPU cost remain unproven. V4 is **stopped**, not a completed accepted workflow.
+After persistence/collision passed, bake_spike_navigation.gd used the existing
+Godot source/bake pipeline plus native Terrain3D navigable faces. Saved
+navigation.res has **484 polygons** from **5260 source triangles**. Radius 0.5,
+height 1.2, climb 0.2, slope 45 degrees, cells 0.125×0.1 match the existing bake.
+This prototype's navigation map uses matching precision before region attachment.
 
-## Regression verification
+validate_navigation.gd waits for actual path availability, then verifies flat
+terrain → gentle hill, exclusion of a steep slope, a path stopping before the
+submerged shore, and MobActor3D physically following the route. It emits
+TERRAIN_NAV_OK, exit zero. Production AI/pathing ownership is unchanged. After
+sculpting, rebake through Terrain3D's menu or the narrow helper, rather than the
+ordinary NavigationRegion bake alone.
+[Upstream navigation](https://terrain3d.readthedocs.io/en/stable/docs/navigation.html).
 
-After reverting global plugin enablement:
+V3 water is reused unchanged on an eastern plane at y=-0.5. Terrain supplies
+submerged depth; the native shore capture shows the graded edge, depth color and
+intersection foam. This is compatibility review, not final shoreline art or
+swimming. The original First Region water remains unchanged.
 
-- Editor import/parse with writable verification AppData: PASS, no script/parse
-  or failed-resource errors. This import does not instantiate the failed scene.
-- `git diff --check`: PASS.
+## Editor workflow — user-reported functional acceptance
+
+Stable plugin is enabled. Editor open/reopen of the persisted scene passes with
+writable local editor settings and no script/parse errors. External material/assets
+and CPU texture references remain editable. The requested manual test was:
+
+1. Open the scene and select Navigation/Terrain. Regions → Region Size should be
+   **64**; leave that migration control unchanged for this test.
+2. Raise a small patch, Lower part, then Smooth its edge. Inspect several angles.
+3. Select Grass, Dirt, Path and Rock in the asset dock. Paint a patch/path; use
+   Spray Texture to blend an edge. Switching materials should update the brush.
+4. Undo/Redo both height and paint changes. Check actual state/viewport changes,
+   not only the visual brush decal.
+5. Save scene and terrain data (Ctrl+S), close the editor, reopen the same scene,
+   confirm height and painting survived, then continue editing and save again.
+6. Run F6. WASD uses production movement; RMB orbits; wheel zooms. Check standing
+   and walking on edited ground. Rebake navigation after terrain changes.
+7. Report any broken operation and whether the workflow is comfortable for maps.
+
+User feedback: "Wszystko wygląda że działa, czy jest wygodne to nie wiem,
+nie pracowałem w edytorach mmapy". Record this as user-reported functional
+acceptance of the requested editor operations, not independent observation of
+each interaction. Comfort will be assessed while authoring a first small map
+section. The user's saved terrain edits are preserved; do not regenerate them.
+No mouse-coordinate sculpting automation was used.
+[Painting reference](https://terrain3d.readthedocs.io/en/stable/docs/texture_painting.html).
+
+## Performance and regression evidence
+
+Initial corrected native overview: 1280×720, RTX 4070, stable addon, six LODs,
+mesh size 32, four 256×256 PBR layers, V2 reference 15:30, V3 water, no foliage.
+GPU median **1.320 ms**, p95 **1.450 ms**, 120 frames. These are short viewport
+observations, not a target-device/soak benchmark or 64-vs-256 comparison.
+Final read-only verification after the user's editor save, corrected automatic
+grass/rock selection and navigation precision also passes persistence/movement,
+navigation and native rendering. Latest capture: GPU median **1.530 ms**,
+p95 **1.910 ms**, 120 frames. Logs: visual-v4-manual-persist.log,
+visual-v4-manual-nav.log, visual-v4-manual-native.out.log / .err.log.
+These checks do not resave or regenerate terrain. Temporary procedural textures
+remain visibly repetitive; this spike establishes workflow, not finished art.
+Captures and GPU JSON remain ignored under .godot/verification/visual-v4-64-*.
+
 - Default smoke and 74 Web UI contracts: PASS.
-- Existing First Region navigation/spawns/shore-blocking fixture: PASS.
-- Existing three-process movement/authority/collision/disconnect suite
-  `run-spike3d.ps1`: server and both clients PASS.
-- Existing camera collision/picking fixture `run-camera.ps1`: PASS.
-- Saved Terrain3D world-server/headless scene: FAIL (native access violation).
-- Windows resource-pack export with the spike present: FAIL (same native crash);
-  subsequent server export checks did not run.
+- Existing First Region navigation/spawn/shore contract: PASS.
+- Windows, ServerWindows and ServerUbuntu resource-pack checks: PASS; applicable
+  Windows/headless pack boots PASS. The previous export crash is gone.
+- Corrected terrain and local upstream demo: PASS on Forward+/Vulkan.
+- Two cold reloads, normal second save, native collision/movement: PASS.
+- Terrain navigation bake, slope/shore and production mob traversal: PASS.
+- Editor scene loading with stable plugin: PASS. Manual editor operations:
+  user-reported PASS; workflow comfort remains unassessed.
 
-No accounts, runtime databases or user servers were changed. Crash probes are
-bounded and terminate only their own processes. Existing user-owned gateway,
-master and world processes were identified and left running. Logs, downloaded
-archives, binaries and inspection sources remain ignored.
+The user reports external Linux/headless compatibility. Local WSL still cannot
+start (HCS_E_HYPERV_NOT_INSTALLED); resource-pack validation is not a local Linux
+execution claim. Accounts/runtime stores and existing user servers are untouched.
+Native addon payload and reference demo remain ignored.
+The manual editor session also resaved unrelated gameplay/water resources and
+project settings. Those changes are preserved outside this corrective commit;
+only the Terrain3D plugin enablement is staged from the mixed project settings.
 
-## Adoption recommendation
+## Adoption result
 
-### Retest with the user-supplied development build (2026-10-12)
+Technical recommendation: **Godot 4.7.2 + Terrain3D 1.0.2 stable**, pinned by
+installer checksum. The previous incompatibility rejection is withdrawn.
+Technical gates and the user's functional editor test support adoption. Assess
+comfort during the first small authoring exercise. Keep the work on the V4 branch;
+do not merge or migrate First Region during this recheck.
 
-The user replaced the ignored addon with a build whose plugin metadata reports
-**1.1.0-dev**, extension compatibility minimum 4.5. The pinned 1.0.2 installer
-was not rerun, and the supplied files were not overwritten. No exact upstream
-commit is recorded in the supplied metadata inspected here; identify this test
-by the following SHA256 fingerprints rather than assuming a remote branch HEAD:
-
-| Binary | SHA256 |
-| --- | --- |
-| Windows x86_64 debug (executed) | `bd60c53f756bf052146b93ff48385dd25036d24a11dadf3c1338a5e450fa7b14` |
-| Windows x86_64 release (inventory only) | `6e9c14ae66ba24e63199e1faee1ebdf4bd1db6955803b3566ccc7e837c49851a` |
-| Linux x86_64 debug (inventory only) | `734ef86df7d81d5a751f4e85ec1884d150e3ca002445303c23396b95a1d37435` |
-| Linux x86_64 release (inventory only) | `d69545e06e8f8c37b8f60d9706208dd6adf54336243e4a57c3d3ebe6101b678b` |
-
-On the same Godot 4.7.2 headless/world-server path and unchanged saved resources:
-
-- Minimal saved Terrain3D reproducer: **FAIL**, process exit
-  `3221225477 / 0xC0000005`, signal 11.
-- Full saved V4 prototype: **FAIL**, the same process exit and signal.
-- Both stacks contain the new library offsets `+5163b`, `+2bbc4e`, `+e1fbd`,
-  confirming a changed native build with the same observable failure.
-
-New ignored logs are `visual-v4-dev-minimal.log` and
-`visual-v4-dev-full-scene.log` under `.godot/verification`. Original 1.0.2 crash
-and Windows export logs were preserved under
-`.godot/verification/terrain3d-1.0.2-baseline` before rerunning the fixed-name
-probe. No export, GPU or Linux execution retest was attempted after these failed
-headless gates. No terrain resources, runtime code, plugin enablement or main
-branch were changed for this retest.
-
-### Decision
-
-Do not adopt this pinned Terrain3D release/configuration as the production map
-authoring solution while the required saved-scene headless path can terminate the
-World Server. The next decision requires a confirmed native fix or supported
-release that loads the same authored terrain/resources safely on Windows and
-Linux, followed by the deferred workflow/visual/performance checks. The evidence
-does not reject every Terrain3D version, but it rejects adoption on today's
-verified configurations, including the supplied 1.1.0-dev build above. First
-Region and V0–V3 remain the integrated baseline.
-
-DO NOT ADOPT
+ADOPT TERRAIN3D WITH PINNED VERSION

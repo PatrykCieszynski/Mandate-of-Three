@@ -1,4 +1,4 @@
-[gd_resource type="Terrain3DAssets" format=3]
+[gd_resource type="Terrain3DAssets" format=3 uid="uid://d37dp6oyad86y"]
 
 [ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/grass_albedo_height.res" id="1_hxt5w"]
 [ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/grass_normal_roughness.res" id="2_102kr"]

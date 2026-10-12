@@ -1,23 +1,25 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=3 uid="uid://id446hll467n"]
 
-[ext_resource type="Script" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_spike.gd" id="1"]
-[ext_resource type="NavigationMesh" path="res://source/common/gameplay/maps/terrain3d_spike/navigation.res" id="2"]
-[ext_resource type="Terrain3DMaterial" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_material.tres" id="3"]
-[ext_resource type="Terrain3DAssets" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_assets.tres" id="4"]
+[ext_resource type="Script" uid="uid://coue6o4v3pkne" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_spike.gd" id="1"]
+[ext_resource type="NavigationMesh" path="res://source/common/gameplay/maps/terrain3d_spike/navigation.res" id="2_53kil"]
+[ext_resource type="Terrain3DMaterial" uid="uid://ce1n10j480eag" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_material.tres" id="3"]
+[ext_resource type="Terrain3DAssets" uid="uid://d37dp6oyad86y" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_assets.tres" id="4"]
 
-[node name="Terrain3DSpike" type="Node3D"]
+[node name="Terrain3DSpike" type="Node3D" unique_id=1850536343]
 script = ExtResource("1")
 
-[node name="Navigation" type="NavigationRegion3D" parent="."]
-navigation_mesh = ExtResource("2")
+[node name="Navigation" type="NavigationRegion3D" parent="." unique_id=1943611459]
+navigation_mesh = ExtResource("2_53kil")
 
-[node name="Terrain" type="Terrain3D" parent="Navigation"]
+[node name="Terrain" type="Terrain3D" parent="Navigation" unique_id=65211237]
+data_directory = "res://source/common/gameplay/maps/terrain3d_spike/data"
 material = ExtResource("3")
 assets = ExtResource("4")
-region_size = 256
-data_directory = "res://source/common/gameplay/maps/terrain3d_spike/data"
-mesh_size = 32
-mesh_lods = 6
-collision_mode = 4
+collision_mode = 3
 collision_layer = 17
 collision_mask = 0
+mesh_lods = 6
+mesh_size = 32
+free_editor_textures = false
+top_level = true
+metadata/_edit_lock_ = true

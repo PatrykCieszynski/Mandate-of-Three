@@ -1,3 +1,4 @@
+@tool
 class_name Terrain3DSpike
 extends Node3D
 ## Isolated local workflow preview; uses production actors/rig, no new controller.
@@ -13,21 +14,31 @@ var _path_index: int = 0
 var _time: float = 0.0
 var _local_clock: WorldTime
 
+func _enter_tree() -> void:
+	# Match this map's bake precision before its NavigationRegion enters the world.
+	var map: RID = get_viewport().get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(map,0.125)
+	NavigationServer3D.map_set_cell_height(map,0.1)
+
 func _ready() -> void:
+	if Engine.is_editor_hint(): return
 	terrain = get_node("Navigation/Terrain")
 	# Configure after native subsystem initialization; early aliases can be ignored.
 	terrain.collision.mode = 3
 	terrain.collision.layer = 17
 	terrain.collision.mask = 0
+	if DisplayServer.get_name() == "headless":
+		# Full static collision is already built; server needs no camera/clipmap snapping.
+		terrain.set_physics_process(false)
 	player = PlayerActor3D.new()
 	player.name = "WorkflowPlayer"
 	player.setup("Terrain3D preview",Color("b8cda0"))
-	player.position = Vector3(52,terrain.data.get_height(Vector3(52,0,55))+0.1,55)
+	player.position = Vector3(13,terrain.data.get_height(Vector3(13,0,14))+0.1,14)
 	add_child(player)
 	mob = MobActor3D.new()
 	mob.name = "NavigationDog"
 	mob.definition = preload("res://source/common/gameplay/mobs/wild_dog.tres")
-	mob.setup_mob(1,Vector3(72,terrain.data.get_height(Vector3(72,0,72))+0.1,72))
+	mob.setup_mob(1,Vector3(18,terrain.data.get_height(Vector3(18,0,18))+0.1,18))
 	add_child(mob)
 	if DisplayServer.get_name() != "headless" and not GameMode.is_world_server():
 		_build_preview()
@@ -44,11 +55,11 @@ func _build_preview() -> void:
 	water = MeshInstance3D.new()
 	water.name = "V3Water"
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(58,240)
-	plane.subdivide_width = 115
-	plane.subdivide_depth = 479
+	plane.size = Vector2(14,60)
+	plane.subdivide_width = 27
+	plane.subdivide_depth = 119
 	water.mesh = plane
-	water.position = Vector3(227,-0.5,128)
+	water.position = Vector3(57,-0.5,32)
 	water.material_override = preload("res://source/client/world_visuals/water/region_water_material.tres").duplicate()
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	water.extra_cull_margin = 0.15
@@ -61,13 +72,14 @@ func _build_preview() -> void:
 	canvas.add_child(label)
 
 func _physics_process(delta: float) -> void:
+	if Engine.is_editor_hint(): return
 	if not animate_preview: return
 	var direction := Vector2.ZERO
 	if rig != null:
 		direction = rig.movement_direction(Input.get_vector("player_move_left","player_move_right","player_move_up","player_move_down"))
 	player.simulate(delta,direction)
 	if mob_path.is_empty() and NavigationServer3D.map_get_iteration_id(get_world_3d().navigation_map)>0:
-		mob_path = NavigationServer3D.map_get_path(get_world_3d().navigation_map,mob.position,Vector3(74,terrain.data.get_height(Vector3(74,0,110)),110),true)
+		mob_path = NavigationServer3D.map_get_path(get_world_3d().navigation_map,mob.position,Vector3(18.5,terrain.data.get_height(Vector3(18.5,0,27.5)),27.5),true)
 	var toward := Vector2.ZERO
 	if _path_index<mob_path.size():
 		var offset: Vector3 = mob_path[_path_index]-mob.position
@@ -76,6 +88,7 @@ func _physics_process(delta: float) -> void:
 	mob.simulate_mob(delta,toward,Time.get_ticks_msec())
 
 func _process(delta: float) -> void:
+	if Engine.is_editor_hint(): return
 	if rig != null:
 		rig.update_camera(delta,player.position,true)
 	if water != null:
