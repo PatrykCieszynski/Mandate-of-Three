@@ -204,3 +204,9 @@ Logs, captures and a short timing sample remain ignored under `.godot/verificati
 No pixel snapshots or balance/timing assertions are added to smoke. Physical
 mouse/keyboard, DPI/alt-tab, feel and release executable packaging remain separate.
 See [Visual V0](visual-upgrade-v0.md) for commands and current evidence.
+
+The same runner's `-Scene visual_v1 -RenderingMethod forward_plus` reuses that
+native pass and adds four before/after world views in a separate SubViewport.
+It checks the new fixed-time contract across real rendered frames and confirms
+that the actual server omits the Sky3D environment. There are no image assertions:
+captures support manual review of the lighting milestone. See [Visual V1](visual-upgrade-v1.md).

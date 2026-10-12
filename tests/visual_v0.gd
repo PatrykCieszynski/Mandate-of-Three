@@ -97,7 +97,10 @@ func capture(label: String) -> void:
 	await get_tree().create_timer(0.4).timeout
 	await RenderingServer.frame_post_draw
 	var method: String = CmdlineUtils.get_parsed_args().get("v0-renderer", "unknown")
-	check(get_viewport().get_texture().get_image().save_png("res://.godot/verification/visual-v0-%s-%s.png" % [method,label]) == OK, "native capture")
+	check(get_viewport().get_texture().get_image().save_png("res://.godot/verification/%s-%s-%s.png" % [capture_prefix(),method,label]) == OK, "native capture")
+
+func capture_prefix() -> String:
+	return CmdlineUtils.get_parsed_args().get("visual-prefix", "visual-v0")
 
 func run_native() -> void:
 	await wait_until(func() -> bool: return phase_name == "GO")
@@ -178,6 +181,7 @@ func run_native() -> void:
 	await wait_until(func() -> bool: return phase_name == "ATTACK")
 	world.combat_endpoint.request_attack.rpc_id(1,1)
 	await wait_until(func() -> bool: return phase_name == "HIT")
+	await review_world()
 	fixture_checkpoint = "measurement"
 	sampling = true
 	await get_tree().create_timer(3).timeout
@@ -185,7 +189,7 @@ func run_native() -> void:
 	frame_samples.sort()
 	gpu_samples.sort()
 	var report_data: Dictionary = {"renderer":RenderingServer.get_current_rendering_method(),"driver":RenderingServer.get_current_rendering_driver_name(),"gpu":RenderingServer.get_video_adapter_name(),"frames":frame_samples.size(),"frame_median_ms":frame_samples[frame_samples.size()/2],"frame_p95_ms":frame_samples[int(frame_samples.size()*0.95)],"viewport_gpu_median_ms":gpu_samples[gpu_samples.size()/2],"viewport_gpu_p95_ms":gpu_samples[int(gpu_samples.size()*0.95)],"static_memory_bytes":OS.get_static_memory_usage(),"physical_input_verified":false}
-	var file := FileAccess.open("res://.godot/verification/visual-v0-%s.json" % CmdlineUtils.get_parsed_args().get("v0-renderer","unknown"),FileAccess.WRITE)
+	var file := FileAccess.open("res://.godot/verification/%s-%s.json" % [capture_prefix(),CmdlineUtils.get_parsed_args().get("v0-renderer","unknown")],FileAccess.WRITE)
 	file.store_string(JSON.stringify(report_data,"\t"))
 	print("VISUAL_V0_CLIENT_OK: ",JSON.stringify(report_data))
 	finished.rpc_id(1)
@@ -202,6 +206,9 @@ func move_mouse(point: Vector2, pressed: bool = true) -> void:
 	motion.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
 	Input.parse_input_event(motion)
 	await get_tree().create_timer(0.2).timeout
+
+func review_world() -> void:
+	pass
 
 func mouse(point: Vector2, pressed: bool, button: MouseButton = MOUSE_BUTTON_LEFT) -> void:
 	var event := InputEventMouseButton.new()
