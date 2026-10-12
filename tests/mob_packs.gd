@@ -106,7 +106,7 @@ func _ready() -> void:
 	world.mob_system.die(member,100)
 	assert(pack.replacements.size() == 1)
 	world.mob_system.die(member,101)
-	assert(deaths.size() == 1 and deaths[0].mob_id == killed_id and deaths[0].definition_id == member.mob_key, "death fact freezes identity once")
+	assert(deaths.size() == 1 and deaths[0].mob_id == killed_id and deaths[0].mob_key == member.mob_key, "death fact freezes identity once")
 	var captured: Dictionary = deaths[0].contributions.duplicate()
 	member.contributions.clear()
 	assert(deaths[0].contributions == captured and deaths[0].timestamp_ms == 100 and deaths[0].experience_reward == member.definition.experience_reward, "death result survives actor contribution cleanup")

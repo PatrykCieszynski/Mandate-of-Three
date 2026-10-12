@@ -106,7 +106,7 @@ combat.dogs/packs; ewentualne delegaty pozostają tylko dla realnych callerów.
 
 MobSystem nie zna XP, wallet, ground loot, SQL, player attack queues ani formuły
 damage. Death fact podpinamy w composition root do KillRewardResolver. Przekazuje
-zamknięty wynik: mob identity, definition id, death position, kopię contributions,
+zamknięty wynik: mob identity, mob_key, death position, kopię contributions,
 resolved reward owner i timestamp, bez referencji do żywego aktora. XP/reward
 parametry wynikają z definition lub są zamrożone w wyniku. Ewentualną referencję
 contributora rozwiązuje adapter po persistent owner ID, nie odbiorca przez moba.
@@ -220,7 +220,7 @@ przed integracją całego B do spike-graduation.
   korzystają z aktualnego właściciela.
 - B3: MobSystem posiada mobs/packs, AI, aggro, replacement/expiry oraz capture,
   application i interpolation snapshotów. Metin korzysta z jego operacji.
-  MobDeathResult przekazuje identity, definition ID, pozycję, timestamp, kopię
+  MobDeathResult przekazuje identity, mob_key, pozycję, timestamp, kopię
   contributions, resolved owner i zamrożone experience_reward. Nie ma aktora ani
   mutable definition. PlayerResource recipient fallback należy do progression
   i zachowuje offline reward bez czytania runtime moba przez KillRewardResolver.
@@ -232,7 +232,8 @@ przed integracją całego B do spike-graduation.
   zostały przy fasadzie. Nie powstał TargetManager ani target frame.
 - B5: SpikeActor3D zawiera wspólne body/reaction/knockback/interpolation plumbing.
   SpikePlayer3D posiada movement/advance/BODY policy/equipment/Warrior, HP i player
-  respawn deadline; obecna polityka player lifecycle pozostaje w fasadzie.
+  respawn deadline. Player life state należy do aktora; obecna player damage/respawn
+  orchestration pozostaje w SpikeCombat3D (hurt_player i _tick_player_lifecycle).
   SpikeMob3D dziedziczy po Actor, a MobSystem posiada replacement policy.
   UID player/mob scripts zachowano podczas rename.
 - Guard obejmuje nowe granice, włącznie z zakazem live actor/definition reference
@@ -249,6 +250,19 @@ melee, movement/spike3d, PvE, progression, XP/checkpoint/disconnect, Yang, Upgra
 Metin lifecycle/network i First Region navigation/content. Network suites
 sekwencyjnie na 18098. Bez zmian wire/RPC authority, timingów, balansu,
 transportu snapshotów, checkpoint policy ani Metin DEAD/VFX.
+
+### Drobny dług po review B
+
+MobDeathResult używa tej samej nazwy identity contentu co MobDefinition: mob_key.
+Nie wprowadzamy równoległego definition_id ani aliasu tego pola.
+
+- ClientCombatController nadal czyta ATTACK_REACH z serverowego BasicAttackService.
+  Przy następnej potrzebie wspólnego parametru przenosimy go do neutralnej definicji
+  lub małych shared combat constants; nie dokładamy kolejnych zależności klienta
+  od serverowego orchestration.
+- present_reaction(SpikeActor3D) korzysta z play_hit/present_hit_lock implementowanych
+  przez realne SpikePlayer3D/SpikeMob3D. Doprecyzowanie kontraktu przy trzecim actor
+  type; na tym etapie nie dodajemy nowego interfejsu ani pustych metod do bazy.
 
 ### Pozostały odbiór natywny
 
