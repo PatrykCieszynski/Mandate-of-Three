@@ -80,10 +80,12 @@ feel/CEF interaction still require the documented manual acceptance pass.
 
 ## Visual baseline
 
-[Visual V1](visual-upgrade-v1.md) adds a fixed 15:30 Sky3D environment on the
-native 3D client: procedural atmosphere/clouds, sun, sky ambient/reflections,
-AgX, directional shadows, SSAO, light SSIL and native horizon haze. Time remains
-stopped; no full day/night, weather or terrain conversion is part of this slice.
+[Visual V1](visual-upgrade-v1.md) establishes the fixed 15:30 Sky3D reference:
+procedural atmosphere/clouds, sun, sky ambient/reflections, AgX, directional
+shadows, SSAO, light SSIL and native horizon haze. [Visual V2](visual-upgrade-v2.md)
+now drives continuous day/night, moon phases and stars from the shared World Server
+calendar (96 real minutes per game day), including lighting, exposure and fog.
+Weather and terrain conversion remain deferred.
 The existing First Region graybox and assets remain the basis for visual tuning.
 Server/headless composition omits the visual environment nodes.
 

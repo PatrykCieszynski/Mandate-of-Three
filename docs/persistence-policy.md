@@ -153,3 +153,11 @@ weapon_attack presentation and an attack affix on pickup. It is not a generic it
 payload yet; the first real non-weapon ground drop will drive that cleanup. The
 prepared SQL claim can already accept non-weapons. No schema, checkpoint intervals
 or per-kill durability were added.
+
+## Visual world calendar
+
+[Visual V2](visual-upgrade-v2.md) derives the shared presentation calendar from a
+fixed UTC/game epoch and advances it from monotonic server ticks. Restart recovers
+the ongoing calendar without SQL or dirty checkpoints. Client synchronization
+does not change combat/respawn/loot timers, progression checkpoint policy, or
+immediate atomic item/economy transactions.

@@ -35,10 +35,15 @@ var npc_endpoint: NpcInteraction3D
 var metin_encounter: MetinEncounter
 var region: FirstRegionGraybox
 var currency_endpoint: CurrencyEndpoint3D
+var world_time: WorldTimeSync3D
 
 func _ready() -> void:
 	_server = GameMode.is_world_server()
 	region = get_node_or_null("Region") as FirstRegionGraybox
+	world_time = WorldTimeSync3D.new()
+	world_time.name = "WorldTime"
+	world_time.services = services
+	add_child(world_time)
 	_build_arena()
 	ground_loot.setup(self,services)
 	inventory_endpoint = InventoryEndpoint3D.new()
@@ -109,7 +114,9 @@ func _build_arena() -> void:
 			_decoration(Vector3(axis, 0.006, 0), Vector3(0.025, 0.01, 31), Color("4b616c"))
 			_decoration(Vector3(0, 0.007, axis), Vector3(31, 0.01, 0.025), Color("4b616c"))
 	if not _server and DisplayServer.get_name() != "headless":
-		add_child(preload("res://source/client/world_visuals/world_visual_environment.tscn").instantiate())
+		var visual := preload("res://source/client/world_visuals/world_visual_environment.tscn").instantiate() as WorldVisualEnvironment
+		visual.world_time = world_time.clock
+		add_child(visual)
 
 func _box(node_name: String, center: Vector3, dimensions: Vector3, color: Color) -> void:
 	var body := StaticBody3D.new()
@@ -282,6 +289,7 @@ func join_world() -> void:
 	inventory_endpoint.initialize_peer(peer_id)
 	currency_endpoint.initialize_peer(peer_id)
 	combat_endpoint.initialize_peer(peer_id)
+	world_time.publish_to(peer_id)
 	print("SPIKE3D_JOIN: ", peer_id)
 
 func remove_peer(peer_id: int) -> void:

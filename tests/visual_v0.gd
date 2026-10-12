@@ -115,8 +115,13 @@ func run_native() -> void:
 	var item: Dictionary = world.inventory_endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.definition_id == "iron_sword")[0].duplicate(true)
 	# Synthetic Godot mouse input crosses CEF into the actual production drag code.
 	var rect: Array = await js("const r=document.querySelector('#inventory [data-id=%s]').getBoundingClientRect();const g=document.querySelector('#inventory .inventory-grid').getBoundingClientRect();return [r.x+12,r.y+12,g.x+12,g.y+132]" % JSON.stringify(item.uid))
+	# Rendered DOM may precede interactive-region delivery; wait for native routing.
+	await wait_until(func() -> bool: return web.host.owns_pointer(Vector2(rect[0],rect[1])))
 	await move_mouse(Vector2(rect[0],rect[1]), false)
 	await mouse(Vector2(rect[0],rect[1]), true)
+	var drag_press: Dictionary = await js("return {carrying:!document.querySelector('.carried-item').hidden,focus:document.hasFocus()}")
+	print("V0_DRAG_PRESS ",drag_press)
+	check(drag_press.carrying,"CEF acknowledges native item press before drag motion")
 	await move_mouse(Vector2(rect[2],rect[3]))
 	await mouse(Vector2(rect[2],rect[3]), false)
 	print("V0_DRAG_DOM ",await js("return {status:document.querySelector('.inventory-status').textContent,carrying:!document.querySelector('.carried-item').hidden}"))

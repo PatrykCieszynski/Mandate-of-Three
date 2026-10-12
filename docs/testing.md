@@ -210,3 +210,13 @@ native pass and adds four before/after world views in a separate SubViewport.
 It checks the new fixed-time contract across real rendered frames and confirms
 that the actual server omits the Sky3D environment. There are no image assertions:
 captures support manual review of the lighting milestone. See [Visual V1](visual-upgrade-v1.md).
+
+`run-combat.ps1 -Scene world_time_network -MarkerPrefix WORLD_TIME` reuses the
+two-client fixture for shared authoritative calendar, late entry, epoch recovery,
+extrapolation/resync, midnight and malformed/stale/delayed sample contracts.
+Existing gameplay suites do not cover calendar synchronization. Run sequentially
+with other port-18098 fixtures. `run-visual-v0.ps1 -Scene visual_v2
+-RenderingMethod forward_plus` adds a full-day continuity review, nine hour views,
+moon/stars and 91 native timelapse frames to the existing CEF/transaction pass.
+There are no pixel baselines. See [Visual V2](visual-upgrade-v2.md) for artifacts,
+optional GIF encoding and verification boundaries.
