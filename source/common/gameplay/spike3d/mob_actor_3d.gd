@@ -1,5 +1,5 @@
-class_name SpikeMob3D
-extends SpikeActor3D
+class_name MobActor3D
+extends Actor3D
 ## Visuals resolve independently. AI, hit stun and knockback run only
 ## on the server; clients interpolate position and play presentation effects.
 

@@ -1,4 +1,4 @@
-class_name SpikeActor3D
+class_name Actor3D
 extends CharacterBody3D
 ## Shared movement body/reaction/interpolation plumbing, without player policy.
 const GRAVITY: float = 20.0

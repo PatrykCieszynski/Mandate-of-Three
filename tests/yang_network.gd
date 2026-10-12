@@ -11,7 +11,7 @@ func phase(command: String, uid: String) -> void:
 	attempted = false
 	if command == "DONE":
 		expected_balance = int(uid)
-		var currency: SpikeCurrency3D = world.currency_endpoint
+		var currency: CurrencyEndpoint3D = world.currency_endpoint
 		check(int(currency.state.balance) == expected_balance, "private wallet snapshot")
 		check(currency.state.keys().size() == 2 and currency.state.has("drops"), "wallet snapshot excludes other balances and pending deltas")
 		check(currency._balance_label.text == "%d Yang" % expected_balance, "HUD shows authoritative Yang")
@@ -32,15 +32,15 @@ func run_server() -> void:
 	var other: int = world.characters.keys()[1]
 	var owner: int = server.connected_players[hero].player_id
 	var other_owner: int = server.connected_players[other].player_id
-	var currency: SpikeCurrency3D = world.currency_endpoint
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var currency: CurrencyEndpoint3D = world.currency_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	currency.set_physics_process(false) # Explicit phases control the live autoloot tick.
-	for dog: SpikeMob3D in world.mob_system.mobs.values():
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		dog.ai_state = MobState.Value.DISABLED
 		dog.collision_layer = 0
 	place_far()
-	var dog: SpikeMob3D = world.mob_system.mobs[1]
+	var dog: MobActor3D = world.mob_system.mobs[1]
 	dog.hp = 0
 	dog.ai_state = MobState.Value.IDLE
 	dog.contributions = {owner:20, other_owner:15}
@@ -143,7 +143,7 @@ func _process(delta: float) -> void:
 		check(false,"Yang timeout phase="+phase_name)
 		return
 	if GameMode.is_world_server() or world == null or world.currency_endpoint.state.is_empty(): return
-	var currency: SpikeCurrency3D = world.currency_endpoint
+	var currency: CurrencyEndpoint3D = world.currency_endpoint
 	if not currency_connected:
 		currency_connected = true
 		currency.feedback_received.connect(func(result: Dictionary) -> void: report.rpc_id(1,result))

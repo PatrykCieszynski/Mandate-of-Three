@@ -42,7 +42,7 @@ func phase(command: String, uid: String) -> void:
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
 	var before_god_mode: int = world.characters[hero].hp
@@ -50,7 +50,7 @@ func run_server() -> void:
 	var ignored := combat.hurt_player(hero,100000,Time.get_ticks_msec(),BasicAttackCombos.BASE.steps.back(),Vector3.RIGHT)
 	check(ignored.damage == 0 and world.characters[hero].hp == before_god_mode and not world.characters[hero].hit_reaction.locked(Time.get_ticks_msec()) and not world.characters[hero].knockback_active(),"dev god mode blocks damage, death, action locks and knockback")
 	combat.dev_god_mode = false
-	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	world.characters[hero].position = Vector3(0, 0, 5)
 	world.characters[hero].rotation.y = 0
 	world.characters[other].position = Vector3(-12, 0, 12)
@@ -72,7 +72,7 @@ func run_server() -> void:
 	set_phase("THREE", hero)
 	await wait_until(func() -> bool: return combat.attacks.attack_runtime(hero).display_combo_step == 3 and combat.attacks.attack_runtime(hero).pending_impact.is_empty())
 	check(not world.mob_system.mobs[1].hit_reaction.locked(Time.get_ticks_msec()), "third hit is a non-locking flinch")
-	var attacking_dog: SpikeMob3D = world.mob_system.mobs[1]
+	var attacking_dog: MobActor3D = world.mob_system.mobs[1]
 	attacking_dog.position = world.characters[hero].position + Vector3(0,0,-1.2)
 	attacking_dog.ai_enabled = true
 	attacking_dog.last_attack_ms = -10000
@@ -86,15 +86,15 @@ func run_server() -> void:
 	check(combat.attacks.attack_runtime(hero).display_combo_step == 4 and world.mob_system.mobs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets: dog2 hp=%d pos=%s" % [world.mob_system.mobs[2].hp,world.mob_system.mobs[2].position])
 	set_phase("CHECK_BASE")
 	var hit_position: Vector3 = world.mob_system.mobs[1].position
-	for dog: SpikeMob3D in world.mob_system.mobs.values():
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		if dog.mob_id <= 2: dog.ai_enabled = true
 	var hp_before: int = world.characters[hero].hp
 	await get_tree().create_timer(0.3).timeout
 	check(world.characters[hero].hp == hp_before and world.mob_system.mobs[1].position.z < hit_position.z-0.3 and world.mob_system.mobs[1].position.distance_to(hit_position) < BasicAttackCombos.BASE.steps.back().knockback_distance * 1.2, "down mob is displaced away without AI attacks or chase")
 	await wait_until(func() -> bool: return not world.mob_system.mobs[1].hit_reaction.locked(Time.get_ticks_msec()))
-	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	check(combat.set_combo_skill_level(hero,2) and combat.set_combo_enabled(hero,true),"server selects six-hit combo")
-	for dog: SpikeMob3D in world.mob_system.mobs.values():
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.hp = 120
 		dog.hit_reaction.clear()
 	world.mob_system.mobs[1].position = Vector3(-0.25,0,3.8)
@@ -153,9 +153,9 @@ func run_server() -> void:
 	for result: Dictionary in replies.values(): check(result.ok, "optional target assist cancels on manual movement")
 	set_phase("WAIT")
 	# Mob chase ignores scenery but remains on the authoritative floor.
-	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.position = Vector3(-14, 0, -12)
-	var dog: SpikeMob3D = world.mob_system.mobs[1]
-	dog.position = SpikeCombat3D.HOME
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.position = Vector3(-14, 0, -12)
+	var dog: MobActor3D = world.mob_system.mobs[1]
+	dog.position = CombatEndpoint3D.HOME
 	dog.hp = 120
 	dog.knockback_velocity = Vector3.ZERO
 	dog.stunned_until_ms = 0
@@ -218,7 +218,7 @@ func _process(delta: float) -> void:
 		return
 	if GameMode.is_world_server():
 		if world != null:
-			for body: SpikePlayer3D in world.characters.values(): body.cancel_attack_advance()
+			for body: PlayerActor3D in world.characters.values(): body.cancel_attack_advance()
 		return
 	if world == null or world.combat_endpoint.state.is_empty(): return
 	if not observer_connected:
@@ -231,8 +231,8 @@ func _process(delta: float) -> void:
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
-	var combat: SpikeCombat3D = world.combat_endpoint
-	for dog: SpikeMob3D in world.mob_system.mobs.values():
+	var combat: CombatEndpoint3D = world.combat_endpoint
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		saw_down = saw_down or dog.presentation.animation_state == &"knockdown"
 		saw_get_up = saw_get_up or dog.presentation.animation_state == &"get_up"
 	saw_multi = saw_multi or (world.mob_system.mobs[1].hp < 120 and world.mob_system.mobs[2].hp < 120)

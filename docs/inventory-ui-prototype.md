@@ -224,6 +224,6 @@ per-controller epoch. Replies may arrive out of order. Each request has its own
 Server rate limits, revisions and transactional validation still apply; removing
 single-flight transport does not authorize conflicting economic operations.
 
-`SpikeInventory3D` retains networking, snapshots, public weapon replication and
+`InventoryEndpoint3D` retains networking, snapshots, public weapon replication and
 the existing sword comparison helper. Its native panel/buttons are removed.
 A general item presenter is deferred until the first additional item type.

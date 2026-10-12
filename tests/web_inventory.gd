@@ -10,7 +10,7 @@ var running: bool = false
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
-	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	for id: int in world.characters: phase.rpc_id(id, "GO", "")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
 	for id: int in world.characters:
@@ -56,7 +56,7 @@ func run_client() -> void:
 	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	register_ready.rpc_id(1)
 	await wait_until(func() -> bool: return phase_name == "GO")
-	var endpoint: SpikeInventory3D = world.inventory_endpoint
+	var endpoint: InventoryEndpoint3D = world.inventory_endpoint
 	var item: Dictionary = endpoint.state.items[0].duplicate(true)
 	var result: Dictionary = await command("inventory.move_item", {"id":item.uid,"revision":item.revision,"x":0,"y":3,"page":0})
 	check(result.ok, "web command waits for committed move RPC")

@@ -3,7 +3,7 @@ extends "res://tests/pve_network.gd"
 @rpc("authority", "call_remote", "reliable", 0)
 func phase(command: String, _uid: String) -> void:
 	if command != "DONE": return
-	var body: SpikePlayer3D = world.characters[world.local_peer]
+	var body: PlayerActor3D = world.characters[world.local_peer]
 	var visible_yaw := body.rotation.y+body.player_presentation.rotation.y
 	body.accept_swing_facing(PI/2)
 	body.play_swing(BasicAttackCombos.BASE.steps[0].animation_key,1000)
@@ -23,14 +23,14 @@ func run_server() -> void:
 	var combat := world.combat_endpoint
 	world.set_physics_process(false)
 	combat.set_physics_process(false)
-	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	var hero: int = world.characters.keys()[0]
-	var body: SpikePlayer3D = world.characters[hero]
+	var body: PlayerActor3D = world.characters[hero]
 	var stats: Dictionary = server.runtime_equipment[server.connected_players[hero].player_id].stats
 	stats.attack_speed = 100.0
 	body.position = Vector3(0,0,5)
 	body.rotation.y = 0
-	var target: SpikeMob3D = world.mob_system.mobs[1]
+	var target: MobActor3D = world.mob_system.mobs[1]
 	target.position = Vector3(0,0,3.6)
 	await get_tree().physics_frame
 	var now := Time.get_ticks_msec()
@@ -131,13 +131,13 @@ func run_server() -> void:
 	db.close_db()
 	get_tree().quit()
 
-func physics_steps(body: SpikePlayer3D, count: int, direction: Vector2 = Vector2.ZERO) -> void:
+func physics_steps(body: PlayerActor3D, count: int, direction: Vector2 = Vector2.ZERO) -> void:
 	for frame: int in count:
 		await get_tree().physics_frame
 		body.simulate(1.0/60,direction)
 
-func check_body_contracts(combat: SpikeCombat3D, body: SpikePlayer3D, target: SpikeMob3D, hero: int, stats: Dictionary) -> void:
-	for dog: SpikeMob3D in world.mob_system.mobs.values():
+func check_body_contracts(combat: CombatEndpoint3D, body: PlayerActor3D, target: MobActor3D, hero: int, stats: Dictionary) -> void:
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.collision_layer = 0
 		dog.hit_reaction.clear()
 		dog.knockback_velocity = Vector3.ZERO
@@ -248,7 +248,7 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikePlayer3D, target: Sp
 	await physics_steps(body,2,Vector2.RIGHT)
 	check(body.position.x>spawn_position.x,"normal movement resumes after respawn")
 
-func check_body_edge_cases(combat: SpikeCombat3D, body: SpikePlayer3D, target: SpikeMob3D, hero: int) -> void:
+func check_body_edge_cases(combat: CombatEndpoint3D, body: PlayerActor3D, target: MobActor3D, hero: int) -> void:
 	combat.attacks.cancel(hero)
 	body.hit_reaction.clear()
 	body.knockback_velocity = Vector3.ZERO
@@ -278,10 +278,10 @@ func check_body_edge_cases(combat: SpikeCombat3D, body: SpikePlayer3D, target: S
 	target.collision_layer = 0
 	var pack_results: Array[Dictionary] = []
 	for count: int in [5,10,20]:
-		var pack: Array[SpikeMob3D] = []
+		var pack: Array[MobActor3D] = []
 		var origin := Vector3(15,0,10)
 		for index: int in count:
-			var dog := SpikeMob3D.new()
+			var dog := MobActor3D.new()
 			dog.definition = target.definition
 			dog.ai_enabled = false
 			# Several penetration normals, with an outward route toward +Z.
@@ -324,17 +324,17 @@ func check_body_edge_cases(combat: SpikeCombat3D, body: SpikePlayer3D, target: S
 		var hits := combat.attacks.resolve_swing(hero,swing,impact)
 		var displaced := 0
 		var starts: Array[Vector3] = []
-		for dog: SpikeMob3D in pack: starts.append(dog.position)
+		for dog: MobActor3D in pack: starts.append(dog.position)
 		for frame: int in 40:
 			await get_tree().physics_frame
-			for dog: SpikeMob3D in pack: dog.simulate_mob(1.0/60,Vector2.ZERO,Time.get_ticks_msec())
+			for dog: MobActor3D in pack: dog.simulate_mob(1.0/60,Vector2.ZERO,Time.get_ticks_msec())
 			body.simulate(1.0/60,Vector2.ZERO)
 		for index: int in count:
 			if pack[index].position.distance_to(starts[index]) > 1: displaced += 1
 		var result := {"count":count,"idle_shift":idle_shift,"max_escape_tick":max_tick,"escape":escape,"hits":hits.size(),"displaced":displaced}
 		pack_results.append(result)
 		print("ACTION_PACK ",result)
-		for dog: SpikeMob3D in pack:
+		for dog: MobActor3D in pack:
 			world.mob_system.mobs.erase(dog.mob_id)
 			dog.free()
 	target.collision_layer = 4
@@ -343,7 +343,7 @@ func check_body_edge_cases(combat: SpikeCombat3D, body: SpikePlayer3D, target: S
 		check(result.lateral < .02 and absf(result.forward-expected_contact)<.02,"angled attack stops at BODY without tangential slide: %s" % result)
 	for result: Dictionary in pack_results:
 		check(result.escape > 1,"pack overlap permits outward movement: %s" % result)
-		check(result.idle_shift < .01 and result.max_escape_tick < SpikePlayer3D.SPEED/60+.01,"pack overlap has no significant spontaneous recovery or movement jump: %s" % result)
+		check(result.idle_shift < .01 and result.max_escape_tick < PlayerActor3D.SPEED/60+.01,"pack overlap has no significant spontaneous recovery or movement jump: %s" % result)
 		check(result.hits == result.count and result.displaced == result.count,"finisher displaces the overlapping pack through authoritative trace/knockback: %s" % result)
 
 func _process(delta: float) -> void:

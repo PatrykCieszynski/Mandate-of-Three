@@ -2,12 +2,12 @@ extends ServerInstance
 ## Session adapter: preserves the authenticated instance lifecycle, bypassing
 ## legacy Player/Map/weapon/status systems until their domains are rebuilt.
 
-var map_3d: SpikeWorld3D
+var map_3d: GameWorld3D
 
 func load_map(map_path: String) -> void:
 	own_world_3d = true
 	var scene: PackedScene = load(map_path)
-	map_3d = scene.instantiate() as SpikeWorld3D
+	map_3d = scene.instantiate() as GameWorld3D
 	add_child(map_3d)
 
 func _ready() -> void:

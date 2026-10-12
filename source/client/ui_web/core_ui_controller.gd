@@ -4,7 +4,7 @@ extends Node
 var host: WebUiHost
 var bridge: WebUiBridge
 var dispatcher: UiCommandDispatcher
-var world: SpikeWorld3D
+var world: GameWorld3D
 var opened: bool = false
 var equipment_opened: bool = false
 var storage_opened: bool = false
@@ -24,7 +24,7 @@ var _stopped: bool = false
 var _flow_revision: int = 0
 var _flow_error: String = ""
 
-func setup(game_world: SpikeWorld3D) -> void:
+func setup(game_world: GameWorld3D) -> void:
 	world = game_world
 	var layer := CanvasLayer.new()
 	layer.layer = 10

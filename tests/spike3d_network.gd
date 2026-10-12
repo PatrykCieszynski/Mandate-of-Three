@@ -3,7 +3,7 @@ extends Node
 ## It supplies authenticated session resources instead of touching accounts/DB.
 
 const PORT: int = 18097
-var world: SpikeWorld3D
+var world: GameWorld3D
 var server: WorldServer
 var peer := WebSocketMultiplayerPeer.new()
 var client_number: int = 0
@@ -33,7 +33,7 @@ func _ready() -> void:
 		server.multiplayer_api = api
 		add_child(server)
 		ServerInstance.world_server = server
-		var host: ServerInstance = preload("res://source/server/world/components/spike_instance_3d.gd").new()
+		var host: ServerInstance = preload("res://source/server/world/components/world_instance_3d.gd").new()
 		host.name = "Instance"
 		host.instance_resource = InstanceResource.new()
 		host.instance_resource.instance_name = &"Spike"
@@ -49,7 +49,7 @@ func _ready() -> void:
 		_check(peer.create_client("ws://127.0.0.1:%d" % PORT) == OK, "client socket")
 		api.multiplayer_peer = peer
 		api.connected_to_server.connect(func() -> void:
-			var instance: InstanceClient = preload("res://source/client/network/spike_instance_3d.gd").new()
+			var instance: InstanceClient = preload("res://source/client/network/world_instance_3d.gd").new()
 			instance.name = "Instance"
 			world = load("res://source/common/gameplay/maps/spike/spike_map_3d.tscn").instantiate()
 			world.input_enabled = false
@@ -83,7 +83,7 @@ func _server_checks(delta: float) -> void:
 		_check(pos.is_finite() and absf(pos.x) < 15.6 and absf(pos.z) < 15.6 and pos.y > -0.1, "finite position inside arena")
 		if last_positions.has(id):
 			var change: Vector3 = pos - last_positions[id]
-			_check(Vector2(change.x, change.z).length() <= SpikePlayer3D.SPEED * delta + 0.025, "packet flood/large direction cannot increase speed")
+			_check(Vector2(change.x, change.z).length() <= PlayerActor3D.SPEED * delta + 0.025, "packet flood/large direction cannot increase speed")
 		last_positions[id] = pos
 		hit_boundary = hit_boundary or pos.x > 15.2
 		hit_obstacle = hit_obstacle or (absf(pos.x) < 2.2 and pos.z < -2.5 and pos.z > -2.8)
@@ -102,7 +102,7 @@ func _client_checks(delta: float) -> void:
 	play_elapsed += delta
 	saw_two = saw_two or world.characters.size() == 2
 	for id: int in world.characters:
-		var body: SpikePlayer3D = world.characters[id]
+		var body: PlayerActor3D = world.characters[id]
 		if not body.has_snapshot:
 			continue
 		if not initial_positions.has(id):

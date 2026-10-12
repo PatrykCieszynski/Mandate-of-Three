@@ -3,7 +3,7 @@ extends Node
 ## Requires the three normal server roles to be running. No tokens are printed here.
 
 var request: HTTPRequest
-var world: SpikeWorld3D
+var world: GameWorld3D
 var updates: int = 0
 var elapsed: float = 0
 

@@ -1,13 +1,13 @@
 class_name ItemUiAdapter
 extends RefCounted
 ## One item-domain adapter for Inventory, Equipment and Storage.
-var _endpoint: SpikeInventory3D
+var _endpoint: InventoryEndpoint3D
 var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
 var _tree: SceneTree
 var _storage_open: Callable
 
-func attach(endpoint: SpikeInventory3D, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree, storage_open: Callable) -> void:
+func attach(endpoint: InventoryEndpoint3D, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree, storage_open: Callable) -> void:
 	_endpoint = endpoint
 	_dispatcher = dispatcher
 	_session = session

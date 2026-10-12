@@ -1,4 +1,4 @@
-class_name SpikeCurrency3D
+class_name CurrencyEndpoint3D
 extends Node
 var services: MandateWorldServices
 ## Ground currency is transient; only character wallet deltas reach SQLite.
@@ -16,7 +16,7 @@ var _tick_elapsed: float = 0.0
 var _spend_sequences: Dictionary[int, int] = {}
 var _spend_ms: Dictionary[int, int] = {}
 var _pickup_ms: Dictionary[int, int] = {}
-var _world: SpikeWorld3D
+var _world: GameWorld3D
 var _visuals: Dictionary[int, Node3D] = {}
 var _balance_label: Label
 var _notice_label: Label

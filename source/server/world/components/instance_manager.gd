@@ -185,7 +185,7 @@ func prepare_instance(instance_resource: InstanceResource) -> ServerInstance:
 	var instance: ServerInstance = ServerInstance.new()
 	if instance_resource.use_3d:
 		instance.free()
-		instance = preload("res://source/server/world/components/spike_instance_3d.gd").new()
+		instance = preload("res://source/server/world/components/world_instance_3d.gd").new()
 	loading_instances[instance_resource] = instance
 	instance.name = str(instance.get_instance_id())
 	instance.instance_resource = instance_resource

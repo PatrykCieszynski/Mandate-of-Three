@@ -1,5 +1,5 @@
-class_name SpikePlayer3D
-extends SpikeActor3D
+class_name PlayerActor3D
+extends Actor3D
 ## The server owns physics; clients interpolate its snapshots.
 
 const SPEED: float = 5.0
@@ -102,7 +102,7 @@ func _overlapping_mob_bodies() -> Array[PhysicsBody3D]:
 	query.transform = combat_collider.global_transform
 	query.collision_mask = 4
 	for hit: Dictionary in get_world_3d().direct_space_state.intersect_shape(query,256):
-		var mob := hit.collider as SpikeMob3D
+		var mob := hit.collider as MobActor3D
 		if mob != null and not overlaps.has(mob): overlaps.append(mob)
 	return overlaps
 

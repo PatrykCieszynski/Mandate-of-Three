@@ -11,7 +11,7 @@ The Metin lifecycle, reward/contribution rules and persistence policy stay intac
 hold the former Wild Dog, Feral Dog, Hollow Hound and Metin Elite profiles.
 `mob_key` is content identity; `display_name` is presentation text. All four
 currently use the optional `stray_dog` visual. HP/damage/speed/visual are copied
-through one `SpikeCombat3D.spawn_mob` entry point. `MobSpawnEntry.valid()` requires
+through one `CombatEndpoint3D.spawn_mob` entry point. `MobSpawnEntry.valid()` requires
 the exact canonical resource registered in `MobDefinitions`, not merely a valid
 resource with a matching key. Unregistered keys and duplicate resources using an
 existing key are rejected before any pack member is spawned, including in release

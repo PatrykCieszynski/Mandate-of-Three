@@ -1,5 +1,5 @@
 [gd_scene load_steps=19 format=3]
-[ext_resource type="Script" path="res://source/common/gameplay/spike3d/spike_world_3d.gd" id="1"]
+[ext_resource type="Script" path="res://source/common/gameplay/spike3d/game_world_3d.gd" id="1"]
 [ext_resource type="Script" path="res://source/common/gameplay/maps/graybox/first_region.gd" id="2"]
 [ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_spawn_point_3d.gd" id="point"]
 [ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_spawn_entry.gd" id="entry"]

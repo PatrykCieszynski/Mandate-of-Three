@@ -4,7 +4,7 @@ var services: MandateWorldServices
 @export var definition: MetinDefinition = preload("res://source/common/gameplay/encounters/metin/first_metin.tres")
 var runtime := MetinRuntime.new()
 var stone: MetinStone3D
-var _world: SpikeWorld3D
+var _world: GameWorld3D
 func _ready() -> void:
 	_world = get_parent()
 	assert(definition.valid())

@@ -41,7 +41,7 @@ func charge_new_instance(map_path: String, instance_id: String) -> void:
 		push_error("Could not load instance map: " + map_path)
 		return
 	var loaded_map: Node = scene.instantiate()
-	if loaded_map is SpikeWorld3D:
+	if loaded_map is GameWorld3D:
 		_charge_3d_instance(loaded_map, instance_id)
 		return
 	var new_instance: InstanceClient = InstanceClient.new()
@@ -98,7 +98,7 @@ func _charge_3d_instance(map: Node3D, instance_id: String) -> void:
 	InstanceClient.local_player = null
 	ClientState.local_player = null
 	ClientState.menu_open = false
-	var instance: InstanceClient = preload("res://source/client/network/spike_instance_3d.gd").new()
+	var instance: InstanceClient = preload("res://source/client/network/world_instance_3d.gd").new()
 	instance.name = instance_id
 	current_instance = instance
 	instance.add_child(map)

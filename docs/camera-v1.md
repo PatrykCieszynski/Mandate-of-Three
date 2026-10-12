@@ -1,6 +1,6 @@
 # Camera v1
 
-The client now has a small independent MMO/ARPG camera rig. `SpikeWorld3D` supplies
+The client now has a small independent MMO/ARPG camera rig. `GameWorld3D` supplies
 the already interpolated local character position after its usual presentation
 update. The rig never writes character position/rotation or sends RPCs. Manual WASD is
 projected onto the rendered camera right/forward axes on the ground plane before
