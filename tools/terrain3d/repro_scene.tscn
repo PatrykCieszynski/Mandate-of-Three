@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Terrain3DMaterial" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_material.tres" id="1"]
+[ext_resource type="Terrain3DAssets" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_assets.tres" id="2"]
+
+[node name="SavedTerrainRepro" type="Node3D"]
+
+[node name="Terrain" type="Terrain3D" parent="."]
+material = ExtResource("1")
+assets = ExtResource("2")
+region_size = 256
+data_directory = "res://source/common/gameplay/maps/terrain3d_spike/data"

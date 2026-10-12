@@ -1,0 +1,124 @@
+extends SceneTree
+## Recreates the authored V4 baseline; never runs automatically over editor edits.
+const DIR := "res://source/common/gameplay/maps/terrain3d_spike"
+
+func _initialize() -> void:
+	call_deferred("generate")
+
+static func height_at(x: float, z: float) -> float:
+	var hill: float = 12.0*exp(-((x-80.0)*(x-80.0)+(z-128.0)*(z-128.0))/1250.0)
+	var ridge: float = 28.0*exp(-(x-148.0)*(x-148.0)/72.0-(z-120.0)*(z-120.0)/2450.0)
+	var hollow: float = -3.5*exp(-((x-85.0)*(x-85.0)+(z-195.0)*(z-195.0))/648.0)
+	var shore: float = -5.0*smoothstep(196.0,222.0,x)
+	return hill+ridge+hollow+shore+0.12*sin(x*0.07)*sin(z*0.09)
+
+static func path_x(z: float) -> float:
+	return 52.0+22.0*sin((z-25.0)*0.018)
+
+func generate() -> void:
+	if not ClassDB.class_exists("Terrain3D"):
+		push_error("Install tools/terrain3d/setup.py before generating V4")
+		quit(1)
+		return
+	DirAccess.make_dir_recursive_absolute(DIR+"/data")
+	DirAccess.make_dir_recursive_absolute(DIR+"/materials")
+	var terrain = ClassDB.instantiate("Terrain3D")
+	root.add_child(terrain)
+	terrain.region_size = 256
+	terrain.collision.mode = 3
+	terrain.collision.layer = 17
+	terrain.material.world_background = 0
+	terrain.material.auto_shader = true
+	terrain.material.set_shader_param("auto_base_texture",0)
+	terrain.material.set_shader_param("auto_overlay_texture",3)
+	terrain.material.set_shader_param("auto_slope",4.0)
+	terrain.material.set_shader_param("blend_sharpness",0.75)
+	var assets = ClassDB.instantiate("Terrain3DAssets")
+	for id: int in 4:
+		assets.set_texture(id,make_texture(id))
+	terrain.assets = assets
+	var heights := Image.create(256,256,false,Image.FORMAT_RF)
+	var bytes := PackedByteArray()
+	bytes.resize(256*256*4)
+	var colors := Image.create(256,256,false,Image.FORMAT_RGBA8)
+	for z: int in 256:
+		for x: int in 256:
+			var h: float = height_at(x,z)
+			heights.set_pixel(x,z,Color(h,0,0))
+			var road: float = 1.0-smoothstep(2.2,4.5,absf(x-path_x(z)))
+			var dirt: float = clampf(0.35+0.3*sin(x*0.055)*sin(z*0.065),0,1)
+			var base: int = 0
+			var overlay: int = 3
+			var blend: float = 0.0
+			var automatic: int = 1
+			if x<105 and z<105:
+				overlay = 1
+				blend = dirt
+				automatic = 0
+			if road > 0.0:
+				overlay = 2
+				blend = road
+				automatic = 0
+			var navigable: int = 2 if h > -0.35 and x>8 and x<244 and z>8 and z<244 else 0
+			var control: int = (base<<27)|(overlay<<22)|(int(blend*255.0)<<14)|navigable|automatic
+			bytes.encode_u32((z*256+x)*4,control)
+			var macro: float = 0.94+0.06*sin(x*0.035)*cos(z*0.04)
+			colors.set_pixel(x,z,Color(macro,macro,macro,0.5))
+	var control := Image.create_from_data(256,256,false,Image.FORMAT_RF,bytes)
+	terrain.data.import_images([heights,control,colors],Vector3.ZERO,0.0,1.0)
+	terrain.data.save_directory(DIR+"/data")
+	assert(ResourceSaver.save(assets,DIR+"/terrain_assets.tres") == OK)
+	assert(ResourceSaver.save(terrain.material,DIR+"/terrain_material.tres") == OK)
+	var nav := NavigationMesh.new()
+	nav.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nav.geometry_collision_mask = 1
+	nav.agent_radius = 0.5
+	nav.agent_height = 1.2
+	nav.agent_max_climb = 0.2
+	nav.agent_max_slope = 45.0
+	nav.cell_size = 0.125
+	nav.cell_height = 0.1
+	nav.filter_baking_aabb = AABB(Vector3(8,-12,8),Vector3(236,52,236))
+	var source := NavigationMeshSourceGeometryData3D.new()
+	# Same Godot bake pipeline; native Terrain3D faces supplement unparsed heightfields.
+	source.add_faces(terrain.generate_nav_mesh_source_geometry(nav.filter_baking_aabb,true),Transform3D.IDENTITY)
+	NavigationServer3D.bake_from_source_geometry_data(nav,source)
+	assert(nav.get_polygon_count()>0,"Terrain3D produced navigable faces")
+	assert(ResourceSaver.save(nav,DIR+"/navigation.res") == OK)
+	print("TERRAIN3D_SPIKE_GENERATED: 256m, 1m samples, four packed PBR layers, painted controls, native data and nav polygons=",nav.get_polygon_count())
+	quit()
+
+func make_texture(id: int) -> Resource:
+	var names: Array[String] = ["grass","dirt","path","rock"]
+	var bases: Array[Color] = [Color("53663d"),Color("77604a"),Color("ab956f"),Color("727b7d")]
+	var albedo := Image.create(256,256,false,Image.FORMAT_RGBA8)
+	var normal := Image.create(256,256,false,Image.FORMAT_RGBA8)
+	# Periodic analytic grain keeps these modest temporary textures seamless.
+	for z: int in 256:
+		for x: int in 256:
+			var u: float = TAU*x/256.0
+			var v: float = TAU*z/256.0
+			var grain: float = 0.5+0.18*sin(u*5+id)*cos(v*7)+0.12*sin(u*19+v*13)
+			var c: Color = bases[id]*(0.78+0.4*grain)
+			c.a = grain
+			albedo.set_pixel(x,z,c)
+			var dx: float = 0.18*5*cos(u*5+id)*cos(v*7)+0.12*19*cos(u*19+v*13)
+			var dz: float = -0.18*7*sin(u*5+id)*sin(v*7)+0.12*13*cos(u*19+v*13)
+			var n: Vector3 = Vector3(-dx*0.08,-dz*0.08,1).normalized()
+			normal.set_pixel(x,z,Color(n.x*0.5+0.5,n.y*0.5+0.5,n.z*0.5+0.5,0.82 if id!=3 else 0.9))
+	albedo.generate_mipmaps()
+	normal.generate_mipmaps()
+	var a := ImageTexture.create_from_image(albedo)
+	var n := ImageTexture.create_from_image(normal)
+	assert(ResourceSaver.save(a,DIR+"/materials/"+names[id]+"_albedo_height.res") == OK)
+	assert(ResourceSaver.save(n,DIR+"/materials/"+names[id]+"_normal_roughness.res") == OK)
+	var texture = ClassDB.instantiate("Terrain3DTextureAsset")
+	texture.name = names[id].capitalize()
+	texture.id = id
+	texture.albedo_texture = load(DIR+"/materials/"+names[id]+"_albedo_height.res")
+	texture.normal_texture = load(DIR+"/materials/"+names[id]+"_normal_roughness.res")
+	texture.uv_scale = 0.22
+	texture.detiling_rotation = 0.12
+	texture.detiling_shift = 0.15
+	texture.normal_depth = 0.35
+	return texture
