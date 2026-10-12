@@ -2,7 +2,7 @@ class_name MobDeathResult
 extends RefCounted
 ## Closed death fact; no live mob or mutable MobDefinition reference.
 var mob_id: int
-var definition_id: StringName
+var mob_key: StringName
 var position: Vector3
 var timestamp_ms: int
 var contributions: Dictionary
@@ -23,7 +23,7 @@ static func owner_for_contributions(contributions: Dictionary) -> int:
 static func capture(mob: SpikeMob3D, now: int, services: MandateWorldServices) -> MobDeathResult:
 	var result := MobDeathResult.new()
 	result.mob_id = mob.mob_instance_id
-	result.definition_id = mob.mob_key
+	result.mob_key = mob.mob_key
 	result.position = mob.position
 	result.timestamp_ms = now
 	result.contributions = mob.contributions.duplicate()
