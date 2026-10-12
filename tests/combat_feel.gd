@@ -42,125 +42,125 @@ func phase(command: String, uid: String) -> void:
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
-	var before_god_mode: int = combat.health[hero]
+	var before_god_mode: int = world.characters[hero].hp
 	combat.dev_god_mode = true
 	var ignored := combat.hurt_player(hero,100000,Time.get_ticks_msec(),BasicAttackCombos.BASE.steps.back(),Vector3.RIGHT)
-	check(ignored.damage == 0 and combat.health[hero] == before_god_mode and not world.characters[hero].hit_reaction.locked(Time.get_ticks_msec()) and not world.characters[hero].knockback_active(),"dev god mode blocks damage, death, action locks and knockback")
+	check(ignored.damage == 0 and world.characters[hero].hp == before_god_mode and not world.characters[hero].hit_reaction.locked(Time.get_ticks_msec()) and not world.characters[hero].knockback_active(),"dev god mode blocks damage, death, action locks and knockback")
 	combat.dev_god_mode = false
-	for dog: SpikeWildDog3D in combat.dogs.values(): dog.ai_enabled = false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	world.characters[hero].position = Vector3(0, 0, 5)
 	world.characters[hero].rotation.y = 0
 	world.characters[other].position = Vector3(-12, 0, 12)
-	combat.dogs[1].position = Vector3(-0.7, 0, 3.4)
-	combat.dogs[2].position = Vector3(0.7, 0, 3.4)
-	combat.dogs[3].position = Vector3(0, 0, 6.5)
-	combat.dogs[4].position = Vector3(4, 0, 5)
+	world.mob_system.mobs[1].position = Vector3(-0.7, 0, 3.4)
+	world.mob_system.mobs[2].position = Vector3(0.7, 0, 3.4)
+	world.mob_system.mobs[3].position = Vector3(0, 0, 6.5)
+	world.mob_system.mobs[4].position = Vector3(4, 0, 5)
 	await get_tree().create_timer(0.2).timeout
 	set_phase("ONE", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
-	check(combat.dogs[1].hp == 110 and combat.dogs[2].hp == 110, "one swing hits both front dogs exactly once")
-	check(combat.dogs[3].hp == 120 and combat.dogs[4].hp == 120, "behind and side excluded")
-	check(combat._combo[hero] == 1 and combat._pending.is_empty(), "fresh sequence flood cannot bypass recovery")
-	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp < 120)
+	check(world.mob_system.mobs[1].hp == 110 and world.mob_system.mobs[2].hp == 110, "one swing hits both front dogs exactly once")
+	check(world.mob_system.mobs[3].hp == 120 and world.mob_system.mobs[4].hp == 120, "behind and side excluded")
+	check(combat.attacks.attack_runtime(hero).display_combo_step == 1 and world.characters.keys().all(func(id: int) -> bool: return combat.attacks.attack_runtime(id).pending_impact.is_empty()), "fresh sequence flood cannot bypass recovery")
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat.attacks.attack_runtime(hero).next_attack_ms)
 	set_phase("TWO", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp == 100)
-	check(combat._combo[hero] == 2 and combat.dogs[2].hp == 100, "second combo hit: dog2=%d" % combat.dogs[2].hp)
-	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp == 100)
+	check(combat.attacks.attack_runtime(hero).display_combo_step == 2 and world.mob_system.mobs[2].hp == 100, "second combo hit: dog2=%d" % world.mob_system.mobs[2].hp)
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat.attacks.attack_runtime(hero).next_attack_ms)
 	set_phase("THREE", hero)
-	await wait_until(func() -> bool: return combat._combo.get(hero,0) == 3 and not combat._pending.has(hero))
-	check(not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()), "third hit is a non-locking flinch")
-	var attacking_dog: SpikeWildDog3D = combat.dogs[1]
+	await wait_until(func() -> bool: return combat.attacks.attack_runtime(hero).display_combo_step == 3 and combat.attacks.attack_runtime(hero).pending_impact.is_empty())
+	check(not world.mob_system.mobs[1].hit_reaction.locked(Time.get_ticks_msec()), "third hit is a non-locking flinch")
+	var attacking_dog: MobActor3D = world.mob_system.mobs[1]
 	attacking_dog.position = world.characters[hero].position + Vector3(0,0,-1.2)
 	attacking_dog.ai_enabled = true
 	attacking_dog.last_attack_ms = -10000
-	var before_flinch_attack: int = combat.health[hero]
-	combat._tick_dog(attacking_dog,1.0/60,Time.get_ticks_msec())
-	check(combat.health[hero] < before_flinch_attack, "flinching mob can continue its range attack")
+	var before_flinch_attack: int = world.characters[hero].hp
+	world.mob_system.tick_mob(attacking_dog,1.0/60,Time.get_ticks_msec())
+	check(world.characters[hero].hp < before_flinch_attack, "flinching mob can continue its range attack")
 	attacking_dog.ai_enabled = false
-	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat.attacks.attack_runtime(hero).next_attack_ms)
 	set_phase("FOUR",hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
-	check(combat._combo[hero] == 4 and combat.dogs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets: dog2 hp=%d pos=%s" % [combat.dogs[2].hp,combat.dogs[2].position])
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hit_reaction.locked(Time.get_ticks_msec()))
+	check(combat.attacks.attack_runtime(hero).display_combo_step == 4 and world.mob_system.mobs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets: dog2 hp=%d pos=%s" % [world.mob_system.mobs[2].hp,world.mob_system.mobs[2].position])
 	set_phase("CHECK_BASE")
-	var hit_position: Vector3 = combat.dogs[1].position
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	var hit_position: Vector3 = world.mob_system.mobs[1].position
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		if dog.mob_id <= 2: dog.ai_enabled = true
-	var hp_before: int = combat.health[hero]
+	var hp_before: int = world.characters[hero].hp
 	await get_tree().create_timer(0.3).timeout
-	check(combat.health[hero] == hp_before and combat.dogs[1].position.z < hit_position.z-0.3 and combat.dogs[1].position.distance_to(hit_position) < BasicAttackCombos.BASE.steps.back().knockback_distance * 1.2, "down mob is displaced away without AI attacks or chase")
-	await wait_until(func() -> bool: return not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
-	for dog: SpikeWildDog3D in combat.dogs.values(): dog.ai_enabled = false
+	check(world.characters[hero].hp == hp_before and world.mob_system.mobs[1].position.z < hit_position.z-0.3 and world.mob_system.mobs[1].position.distance_to(hit_position) < BasicAttackCombos.BASE.steps.back().knockback_distance * 1.2, "down mob is displaced away without AI attacks or chase")
+	await wait_until(func() -> bool: return not world.mob_system.mobs[1].hit_reaction.locked(Time.get_ticks_msec()))
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	check(combat.set_combo_skill_level(hero,2) and combat.set_combo_enabled(hero,true),"server selects six-hit combo")
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.hp = 120
 		dog.hit_reaction.clear()
-	combat.dogs[1].position = Vector3(-0.25,0,3.8)
-	combat.dogs[2].position = Vector3(0.25,0,3.8)
+	world.mob_system.mobs[1].position = Vector3(-0.25,0,3.8)
+	world.mob_system.mobs[2].position = Vector3(0.25,0,3.8)
 	for step_index: int in BasicAttackCombos.COMBO_6.steps.size():
-		await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
+		await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat.attacks.attack_runtime(hero).next_attack_ms)
 		set_phase("EXT%d" % step_index,hero)
-		await wait_until(func() -> bool: return combat._pending.has(hero))
-		var pending: Dictionary = combat._pending[hero]
+		await wait_until(func() -> bool: return not combat.attacks.attack_runtime(hero).pending_impact.is_empty())
+		var pending: Dictionary = combat.attacks.attack_runtime(hero).pending_impact
 		check(pending.step_index == step_index and pending.animation_key == BasicAttackCombos.COMBO_6.steps[step_index].animation_key,"server resolves extended step identity")
-		check(not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()),"no knockdown before accepted impact")
-		await wait_until(func() -> bool: return not combat._pending.has(hero))
-		check(combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()) == (step_index == 5),"only final impact knocks down")
+		check(not world.mob_system.mobs[1].hit_reaction.locked(Time.get_ticks_msec()),"no knockdown before accepted impact")
+		await wait_until(func() -> bool: return combat.attacks.attack_runtime(hero).pending_impact.is_empty())
+		check(world.mob_system.mobs[1].hit_reaction.locked(Time.get_ticks_msec()) == (step_index == 5),"only final impact knocks down")
 	set_phase("CHECK_EXTENDED")
 	combat.set_combo_enabled(hero,false)
 	await wait_until(func() -> bool: return combat.can_move(hero))
-	await wait_until(func() -> bool: return not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
+	await wait_until(func() -> bool: return not world.mob_system.mobs[1].hit_reaction.locked(Time.get_ticks_msec()))
 	# Toggle while a server-accepted swing is pending cannot rewrite its step.
 	check(combat.set_combo_skill_level(other,1) and combat.set_combo_enabled(other,true),"server selects five-hit combo")
 	check(combat.combo_state(other).definition() == BasicAttackCombos.COMBO_5,"level one resolves five-hit definition")
 	var toggle_now := Time.get_ticks_msec()
-	check(combat.begin_attack(other,1,toggle_now),"accept swing before toggle")
-	var frozen_step: BasicAttackStepDefinition = combat._pending[other].step
+	check(combat.attacks.begin_attack(other,1,toggle_now),"accept swing before toggle")
+	var frozen_step: BasicAttackStepDefinition = combat.attacks.attack_runtime(other).pending_impact.step
 	combat.set_combo_enabled(other,false)
-	check(combat._pending[other].step == frozen_step and combat._pending[other].combo_key == &"warrior_combo_5","toggle preserves accepted pending definition")
+	check(combat.attacks.attack_runtime(other).pending_impact.step == frozen_step and combat.attacks.attack_runtime(other).pending_impact.combo_key == &"warrior_combo_5","toggle preserves accepted pending definition")
 	await wait_until(func() -> bool: return combat.can_move(other))
-	check(not combat._pending.has(other),"accepted swing resolves after toggle")
+	check(combat.attacks.attack_runtime(other).pending_impact.is_empty(),"accepted swing resolves after toggle")
 	# Player-target path, also used for a future authorized PvP hit. No friendly-fire policy here.
 	var now := Time.get_ticks_msec()
-	check(combat.begin_attack(other,2,now), "player can begin a swing")
+	check(combat.attacks.begin_attack(other,2,now), "player can begin a swing")
 	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[0])
-	check(combat._pending.has(other) and not world.characters[other].hit_reaction.locked(now), "flinch preserves player pending attack")
-	var canceled_swing: Dictionary = combat._pending[other].duplicate()
+	check(not combat.attacks.attack_runtime(other).pending_impact.is_empty() and not world.characters[other].hit_reaction.locked(now), "flinch preserves player pending attack")
+	var canceled_swing: Dictionary = combat.attacks.attack_runtime(other).pending_impact.duplicate()
 	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[3],Vector3.RIGHT)
-	check(combat.resolve_swing(other,canceled_swing,now+1).is_empty(), "canceled delayed hit cannot resolve during knockdown")
+	check(combat.attacks.resolve_swing(other,canceled_swing,now+1).is_empty(), "canceled delayed hit cannot resolve during knockdown")
 	var deadline: int = world.characters[other].hit_reaction.get_up_until_ms
 	var player_hit_position: Vector3 = world.characters[other].position
 	check(world.characters[other].knockback_active(),"accepted player knockdown has physical impulse")
-	check(not combat._pending.has(other) and not combat.can_move(other,now) and not combat.begin_attack(other,3,now), "knockdown cancels pending player damage and blocks actions")
+	check(combat.attacks.attack_runtime(other).pending_impact.is_empty() and not combat.can_move(other,now) and not combat.attacks.begin_attack(other,3,now), "knockdown cancels pending player damage and blocks actions")
 	combat.hurt_player(other,1,now+1,BasicAttackCombos.BASE.steps[3])
 	check(world.characters[other].hit_reaction.get_up_until_ms == deadline, "re-hit does not extend player lock")
 	await wait_until(func() -> bool: return not world.characters[other].hit_reaction.locked(Time.get_ticks_msec()))
 	check(world.characters[other].position.x > player_hit_position.x+0.3,"player displacement is simulated on World")
 	world.characters[other].reaction_profile = HitReactionProfiles.BOSS
 	now = Time.get_ticks_msec()
-	check(combat.begin_attack(other,4,now), "actions resume after get-up")
+	check(combat.attacks.begin_attack(other,4,now), "actions resume after get-up")
 	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[3])
-	check(combat._pending.has(other) and not world.characters[other].hit_reaction.locked(now), "immune target keeps its pending attack")
+	check(not combat.attacks.attack_runtime(other).pending_impact.is_empty() and not world.characters[other].hit_reaction.locked(now), "immune target keeps its pending attack")
 	world.characters[other].reaction_profile = HitReactionProfiles.PLAYER
 	await get_tree().create_timer(0.3).timeout
 	set_phase("RESET", hero)
-	await wait_until(func() -> bool: return combat._combo.get(hero,0) == 1)
+	await wait_until(func() -> bool: return combat.attacks.attack_runtime(hero).display_combo_step == 1)
 	await get_tree().create_timer(0.2).timeout
 	set_phase("ASSIST")
 	await wait_until(func() -> bool: return replies.size() == 2)
 	for result: Dictionary in replies.values(): check(result.ok, "optional target assist cancels on manual movement")
 	set_phase("WAIT")
 	# Mob chase ignores scenery but remains on the authoritative floor.
-	for dog: SpikeWildDog3D in combat.dogs.values(): dog.position = Vector3(-14, 0, -12)
-	var dog: SpikeWildDog3D = combat.dogs[1]
-	dog.position = SpikeCombat3D.HOME
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.position = Vector3(-14, 0, -12)
+	var dog: MobActor3D = world.mob_system.mobs[1]
+	dog.position = CombatEndpoint3D.HOME
 	dog.hp = 120
 	dog.knockback_velocity = Vector3.ZERO
 	dog.stunned_until_ms = 0
 	dog.ai_enabled = true
-	dog.ai_state = "CHASE"
+	dog.ai_state = MobState.Value.CHASE
 	dog.target_peer = hero
 	world.characters[hero].position = Vector3(0, 0, -7)
 	var crossed_scenery: bool = false
@@ -171,37 +171,37 @@ func run_server() -> void:
 	check(crossed_scenery, "direct chase passes through scenery")
 	dog.hp = 50
 	world.characters[hero].position = Vector3(-12, 0, 12)
-	await wait_until(func() -> bool: return dog.ai_state == "RETURN")
-	await wait_until(func() -> bool: return dog.ai_state == "IDLE")
+	await wait_until(func() -> bool: return dog.ai_state == MobState.Value.RETURN)
+	await wait_until(func() -> bool: return dog.ai_state == MobState.Value.IDLE)
 	check(dog.hp == 120 and dog.position.distance_to(dog.home) < 0.5, "straight-line return heals at anchor")
 	world.characters[hero].position = dog.home + Vector3(0, 0, 1)
-	combat.health[hero] = 6
+	world.characters[hero].hp = 6
 	dog.ai_enabled = false
 	set_phase("DYING", hero)
-	await wait_until(func() -> bool: return combat._pending.has(hero))
+	await wait_until(func() -> bool: return not combat.attacks.attack_runtime(hero).pending_impact.is_empty())
 	dog.last_attack_ms = -10000
 	dog.target_peer = hero
-	dog.ai_state = "ATTACK"
+	dog.ai_state = MobState.Value.ATTACK
 	dog.ai_enabled = true
-	await wait_until(func() -> bool: return combat.health[hero] == 0)
-	check(not combat.can_move(hero) and not combat._pending.has(hero) and not combat._combo.has(hero), "death interrupts attack and movement")
+	await wait_until(func() -> bool: return world.characters[hero].hp == 0)
+	check(not combat.can_move(hero) and combat.attacks.attack_runtime(hero).pending_impact.is_empty() and combat.attacks.attack_runtime(hero).display_combo_step == 0, "death interrupts attack and movement")
 	var dead_position: Vector3 = world.characters[hero].position
 	var before: Dictionary = server.database.item_store.inventory(server.connected_players[hero].player_id)
 	drop_uid = Crypto.new().generate_random_bytes(16).hex_encode()
-	combat.ground[drop_uid] = {"position": dead_position, "definition_id": "iron_sword", "bonus": 3,
+	world.ground_loot.drops[drop_uid] = {"position": dead_position, "definition_id": "iron_sword", "bonus": 3,
 		"owner": server.connected_players[hero].player_id, "owner_name": "Test", "protected_until": 0, "expires": Time.get_ticks_msec() + 120000}
 	set_phase("DEAD", hero)
 	await get_tree().create_timer(0.6).timeout
 	check(world.characters[hero].position.distance_to(dead_position) < 0.03 and dog.hp == 120, "dead input and attack denied")
-	check(combat.ground.has(drop_uid) and server.database.item_store.inventory(server.connected_players[hero].player_id) == before, "dead pickup denied")
+	check(world.ground_loot.drops.has(drop_uid) and server.database.item_store.inventory(server.connected_players[hero].player_id) == before, "dead pickup denied")
 	set_phase("WAIT")
-	await wait_until(func() -> bool: return combat.health[hero] == 100)
-	check(world.characters[hero].position.distance_to(Vector3(-3, 0, 3)) < 0.2 and not combat._respawn_ms.has(hero), "authoritative respawn")
+	await wait_until(func() -> bool: return world.characters[hero].hp == 100)
+	check(world.characters[hero].position.distance_to(Vector3(-3, 0, 3)) < 0.2 and world.characters[hero].respawn_at_ms == 0, "authoritative respawn")
 	check(server.database.item_store.inventory(server.connected_players[hero].player_id) == before, "death/respawn preserves inventory")
 	set_phase("RESTART", hero)
-	await wait_until(func() -> bool: return combat._combo.get(hero, 0) == 1)
-	await wait_until(func() -> bool: return not combat._pending.has(hero))
-	check(combat.health[hero] > 0, "attack resumes with first combo stage after respawn")
+	await wait_until(func() -> bool: return combat.attacks.attack_runtime(hero).display_combo_step == 1)
+	await wait_until(func() -> bool: return combat.attacks.attack_runtime(hero).pending_impact.is_empty())
+	check(world.characters[hero].hp > 0, "attack resumes with first combo stage after respawn")
 	await get_tree().create_timer(0.2).timeout
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
@@ -218,7 +218,7 @@ func _process(delta: float) -> void:
 		return
 	if GameMode.is_world_server():
 		if world != null:
-			for body: SpikeCharacter3D in world.characters.values(): body.cancel_attack_advance()
+			for body: PlayerActor3D in world.characters.values(): body.cancel_attack_advance()
 		return
 	if world == null or world.combat_endpoint.state.is_empty(): return
 	if not observer_connected:
@@ -231,11 +231,11 @@ func _process(delta: float) -> void:
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
-	var combat: SpikeCombat3D = world.combat_endpoint
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	var combat: CombatEndpoint3D = world.combat_endpoint
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		saw_down = saw_down or dog.presentation.animation_state == &"knockdown"
 		saw_get_up = saw_get_up or dog.presentation.animation_state == &"get_up"
-	saw_multi = saw_multi or (combat.dogs[1].hp < 120 and combat.dogs[2].hp < 120)
+	saw_multi = saw_multi or (world.mob_system.mobs[1].hp < 120 and world.mob_system.mobs[2].hp < 120)
 	for stage: int in combat.state.combos.values(): saw_combo = saw_combo or stage == 4
 	for id: int in combat.state.health:
 		var hp: int = int(combat.state.health[id])
@@ -247,7 +247,7 @@ func _process(delta: float) -> void:
 	if attempted: return
 	if phase_name.begins_with("EXT") or phase_name in ["ONE", "TWO", "THREE", "FOUR", "RESET", "DYING", "RESTART"]:
 		attempted = true
-		combat.select_target({"kind":&"mob","id":3}) # selected dog behind the player cannot redirect manual damage
+		combat.client_combat.select_target({"kind":&"mob","id":3}) # selected dog behind the player cannot redirect manual damage
 		for i: int in 40:
 			sequence += 1
 			combat.request_attack.rpc_id(1, sequence)
@@ -255,11 +255,11 @@ func _process(delta: float) -> void:
 		combat.request_attack.rpc_id(1, -1)
 	elif phase_name == "ASSIST":
 		attempted = true
-		combat.select_target({"kind":&"mob","id":1})
-		combat.autoattack = true
+		combat.client_combat.select_target({"kind":&"mob","id":1})
+		combat.client_combat.autoattack = true
 		var direction: Vector2 = combat.assist_direction(Vector2.ZERO)
 		var manual: Vector2 = combat.assist_direction(Vector2.RIGHT)
-		report.rpc_id(1, {"ok": direction.is_finite() and manual == Vector2.RIGHT and not combat.autoattack})
+		report.rpc_id(1, {"ok": direction.is_finite() and manual == Vector2.RIGHT and not combat.client_combat.autoattack})
 	elif phase_name == "DEAD":
 		attempted = true
 		sequence += 1

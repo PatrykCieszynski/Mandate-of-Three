@@ -18,11 +18,25 @@ build a generic stats/event framework or autosave the entire profile for each ch
 ## Current runtime and checkpoints
 
 `WorldServer.runtime_equipment` stores active characters' equipment UIDs and
-resulting stats by persistent ID. Entry loads inventory from SQLite;
-`SpikeInventory3D._send_state()` refreshes runtime from committed state.
+resulting stats by persistent ID. Application operations explicitly call
+`InventoryEndpoint3D.refresh_authoritative_state()` on entry/repair or after a
+committed item mutation. This prepares the private snapshot, equipment cache and
+server weapon state before any notification/publication. `_send_state()` consumes
+the prepared snapshot; publication never refreshes the authoritative combat cache.
+
+Shop and Upgrade retain their existing application operation owners: the database
+operation commits items/Yang and accepts wallet RAM, then the caller invokes
+Inventory `accept_committed_change(peer_id)` (refresh/cache → its own fact), then
+Currency `accept_committed_change(peer_id)` (its own fact after the already-accepted
+wallet RAM). External callers never emit endpoint signals. Subscribers publish
+already-prepared state; their registration order is not part of transaction correctness. Account Storage
+prepares all affected on-map characters before the first notification.
+
 Combat reads `attack` from runtime without querying on a swing. Failed equipment
 changes affect neither placement nor attack; a missing valid snapshot invalidates
-the cache so combat cannot use stale stats after a read error.
+the cache so combat cannot use stale stats after a read error. Explicit
+`resynchronize()` repairs entry/rejected/stale requests without emitting a
+committed-change fact.
 
 Mob death is a runtime event. DEAD state prevents repeated processing within the
 current encounter. Contribution resolution and XP run in RAM; level-up and client
@@ -119,3 +133,23 @@ still tests logout/relog, level-up and the exact weapon UID.
 rollback, private HUD, rights/autoloot/pickup races, expiry, obstacles, RPC replay
 and real disconnect. Full `pve_session` verifies combat/autoloot income and exact
 balance after logout/relog.
+
+## Package A reward boundary (2026-10-12)
+
+Combat's death guard emits mob_died once. KillRewardResolver selects the existing
+contribution winner and reward policy. It resolves the current PlayerResource via
+MandateWorldServices before WorldDatabase.award_experience updates RAM/dirty
+progression and emits the XP fact. The adapter uses pending_progression_player()
+rather than accessing the dirty set; the combat endpoint only publishes its existing
+XP RPC. Full progression runtime extraction remains P2.
+
+GroundLootSystem owns live item drops, rights, expiry and pickup. Its application
+operation prepares an ItemInstance from the authoritative drop and passes it to
+ItemStoreSqlite.claim_ground_item(owner_id, drop_uid, item). SQL validates identity
+and owner and commits receipt/item/placement together. It no longer generates a
+sword or attack roll. Cache refresh and notification follow commit and ground
+erase. The current live drop model still encodes a weapon attack roll (1..9),
+weapon_attack presentation and an attack affix on pickup. It is not a generic item
+payload yet; the first real non-weapon ground drop will drive that cleanup. The
+prepared SQL claim can already accept non-weapons. No schema, checkpoint intervals
+or per-kill durability were added.

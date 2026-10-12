@@ -94,8 +94,10 @@ func _run() -> void:
 	endpoint._publish(7)
 	endpoint._publish(7)
 	assert(context_notifications.size() == 2, "Selecting a service emits one change")
+	var upgrade_services := MandateWorldServices.new()
 	var upgrade_endpoint := Upgrade3D.new()
 	map.set("npc_endpoint",endpoint)
+	upgrade_endpoint.services = upgrade_services
 	map.add_child(upgrade_endpoint)
 	assert(upgrade_endpoint.authorization(7,actor.instance_id,&"weapon_shop").error == "wrong_service_kind")
 	assert(upgrade_endpoint.authorization(7,actor.instance_id,&"upgrade").error == "no_interaction")
@@ -108,6 +110,7 @@ func _run() -> void:
 	upgrade_endpoint.free()
 	var shop_endpoint := Shop3D.new()
 	map.set("npc_endpoint", endpoint)
+	shop_endpoint.services = upgrade_services
 	map.add_child(shop_endpoint)
 	assert(shop_endpoint.open_for_peer(7,actor.instance_id,&"weapon_shop").ok)
 	assert(shop_endpoint.snapshot_for_peer(7).offers[0].price==1000)

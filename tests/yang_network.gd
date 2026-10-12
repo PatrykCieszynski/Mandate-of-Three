@@ -11,7 +11,7 @@ func phase(command: String, uid: String) -> void:
 	attempted = false
 	if command == "DONE":
 		expected_balance = int(uid)
-		var currency: SpikeCurrency3D = world.currency_endpoint
+		var currency: CurrencyEndpoint3D = world.currency_endpoint
 		check(int(currency.state.balance) == expected_balance, "private wallet snapshot")
 		check(currency.state.keys().size() == 2 and currency.state.has("drops"), "wallet snapshot excludes other balances and pending deltas")
 		check(currency._balance_label.text == "%d Yang" % expected_balance, "HUD shows authoritative Yang")
@@ -32,23 +32,23 @@ func run_server() -> void:
 	var other: int = world.characters.keys()[1]
 	var owner: int = server.connected_players[hero].player_id
 	var other_owner: int = server.connected_players[other].player_id
-	var currency: SpikeCurrency3D = world.currency_endpoint
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var currency: CurrencyEndpoint3D = world.currency_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	currency.set_physics_process(false) # Explicit phases control the live autoloot tick.
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
-		dog.ai_state = "DISABLED"
+		dog.ai_state = MobState.Value.DISABLED
 		dog.collision_layer = 0
 	place_far()
-	var dog: SpikeWildDog3D = combat.dogs[1]
+	var dog: MobActor3D = world.mob_system.mobs[1]
 	dog.hp = 0
-	dog.ai_state = "IDLE"
+	dog.ai_state = MobState.Value.IDLE
 	dog.contributions = {owner:20, other_owner:15}
 	dog.contribution_players[owner] = server.connected_players[hero]
-	combat._die(dog,Time.get_ticks_msec())
+	world.mob_system.die(dog,Time.get_ticks_msec())
 	check(currency.ground.size() == 1 and server.database.wallet_balance(owner) == 0, "death creates currency on ground, not directly in wallet")
 	currency_id = currency.ground.keys()[0]
-	combat._die(dog,Time.get_ticks_msec())
+	world.mob_system.die(dog,Time.get_ticks_msec())
 	check(currency.ground.size() == 1, "repeated death cannot duplicate currency")
 	var point: Vector3 = currency.ground[currency_id].position
 	world.characters[other].position = point + Vector3(0,0,0.5)
@@ -94,9 +94,9 @@ func run_server() -> void:
 	currency.ground[currency_id].expires = 0
 	check(currency.pickup_for_peer(hero,currency_id,Time.get_ticks_msec()).error == "gone", "expired currency")
 	currency_id = currency.spawn_currency(point,owner,"",Time.get_ticks_msec())
-	combat.health[hero] = 0
+	world.characters[hero].hp = 0
 	check(currency.pickup_for_peer(hero,currency_id,Time.get_ticks_msec()).error == "player", "dead player cannot loot")
-	combat.health[hero] = 100
+	world.characters[hero].hp = 100
 	currency.ground[currency_id].position = Vector3(-1.5,0,-3.5)
 	world.characters[hero].position = Vector3(-1.5,0,-1.6)
 	check(currency.pickup_for_peer(hero,currency_id,Time.get_ticks_msec()).error == "distance", "obstruction denies pickup")
@@ -143,7 +143,7 @@ func _process(delta: float) -> void:
 		check(false,"Yang timeout phase="+phase_name)
 		return
 	if GameMode.is_world_server() or world == null or world.currency_endpoint.state.is_empty(): return
-	var currency: SpikeCurrency3D = world.currency_endpoint
+	var currency: CurrencyEndpoint3D = world.currency_endpoint
 	if not currency_connected:
 		currency_connected = true
 		currency.feedback_received.connect(func(result: Dictionary) -> void: report.rpc_id(1,result))

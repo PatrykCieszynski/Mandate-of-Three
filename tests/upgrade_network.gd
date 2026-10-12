@@ -1,5 +1,7 @@
 extends "res://tests/pve_network.gd"
 var listening: bool = false
+var committed_inventory_changes: int = 0
+var committed_wallet_changes: int = 0
 var inventory_notifications: int = 0
 var wallet_notifications: int = 0
 var selection_counts: Vector2i
@@ -21,7 +23,7 @@ func phase(command: String, uid: String) -> void:
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
-	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values(): dog.ai_enabled = false
+	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
 	var player: PlayerResource = server.connected_players[hero]
@@ -36,7 +38,11 @@ func run_server() -> void:
 	check(db.query("BEGIN IMMEDIATE;"),"begin material fixture")
 	check(items.receive_item_in_transaction(ore).ok and db.query("COMMIT;"),"seed material")
 	check(server.database.add_yang(player.player_id,2100),"pending income")
-	world.inventory_endpoint._send_state(hero)
+	world.inventory_endpoint.resynchronize(hero)
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
+	var currency: CurrencyEndpoint3D = world.currency_endpoint
+	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
+	currency.wallet_changed.connect(func(_owner_id: int) -> void: committed_wallet_changes += 1)
 	set_phase("INTERACT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok,"open NPC context")
@@ -55,20 +61,24 @@ func run_server() -> void:
 	set_phase("UPGRADE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok and replies[hero].level==1 and replies[hero].balance==1100,"successful RPC refreshes item and wallet")
-	check(server.runtime_equipment.has(player.player_id),"committed Inventory refreshes runtime equipment cache")
 	before = items.inventory(player.player_id)
+	var upgraded: Dictionary = {}
+	for item: Dictionary in before.items:
+		if item.uid == drop_uid: upgraded = item
+	check(not upgraded.is_empty() and replies[hero].inventoryItem == upgraded,"client receives the committed upgraded item, revision and stats in Inventory")
 	await get_tree().create_timer(0.15).timeout
 	set_phase("STALE_SELECT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error == "stale" and replies[hero].inventoryUpdates == 1 and replies[hero].walletUpdates == 0,"stale selection repairs Inventory without wallet refresh")
 	set_phase("REPLAY",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(not replies[hero].ok and replies[hero].error=="stale" and items.inventory(player.player_id)==before,"stale replay is atomic")
+	check(not replies[hero].ok and replies[hero].error=="stale" and items.inventory(player.player_id)==before and replies[hero].inventoryItem==upgraded and replies[hero].balance==1100,"stale replay leaves item, client Inventory and wallet unchanged")
 	world.characters[hero].position = Vector3(12,0,12)
 	await get_tree().create_timer(0.15).timeout
 	set_phase("RANGE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error in ["out_of_range","no_interaction"] and items.inventory(player.player_id)==before,"execution reauthorizes range")
+	check(committed_inventory_changes==1 and committed_wallet_changes==1,"selection, stale/replay and range repair never emit committed-change facts")
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
 	if not failed:
@@ -95,6 +105,9 @@ func _process(delta: float) -> void:
 		world.upgrade_endpoint.operation_finished.connect(func(_id: String,result: Dictionary) -> void:
 			var reply: Dictionary = result.duplicate(true)
 			var quote: Dictionary = world.upgrade_endpoint.state
+			reply["inventoryItem"] = {}
+			for item: Dictionary in world.inventory_endpoint.state.get("items",[]):
+				if item.uid == drop_uid: reply["inventoryItem"] = item.duplicate(true)
 			reply.merge({"itemName":quote.get("itemName",""),"inventoryUpdates":inventory_notifications - selection_counts.x,"walletUpdates":wallet_notifications - selection_counts.y,"active":quote.active,"candidate":quote.get("candidate",{}).get("id",""),"level":quote.get("candidate",{}).get("level",-1),"balance":world.currency_endpoint.state.get("balance",-1)})
 			report.rpc_id(1,reply))
 		register_ready.rpc_id(1)

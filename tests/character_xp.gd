@@ -10,7 +10,7 @@ func phase(command: String, uid: String) -> void:
 	drop_uid = uid
 	attempted = false
 	if command == "DONE":
-		var combat: SpikeCombat3D = world.combat_endpoint
+		var combat: CombatEndpoint3D = world.combat_endpoint
 		check(combat.state.progression.level == (2 if won else 1), "private progression belongs to recipient")
 		check(combat.state.progression.experience == (10 if won else 0), "XP not duplicated or leaked to other player")
 		check(combat.state.levels.values().has(2), "public level replicated to both players")
@@ -28,51 +28,53 @@ func run_server() -> void:
 	var other: int = world.characters.keys()[1]
 	var owner_id: int = server.connected_players[hero].player_id
 	var other_id: int = server.connected_players[other].player_id
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	var store: WorldStoreSqlite = server.database.store
 	var starting_points: int = store.get_player(owner_id).available_attributes_points
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
-			dog.ai_state = "DISABLED"
+			dog.ai_state = MobState.Value.DISABLED
 			dog.collision_layer = 0
 	for id: int in world.characters:
 		world.characters[id].position = Vector3(-0.3 if id == hero else 0.3, 0, 3)
 		world.characters[id].rotation.y = 0
-	combat.dogs[1].position = Vector3(0, 0, 1.4)
-	combat.dogs[1].hp = 35
+	world.mob_system.mobs[1].position = Vector3(0, 0, 1.4)
+	world.mob_system.mobs[1].hp = 35
 	await get_tree().create_timer(0.2).timeout
 	set_phase("HIT", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp == 25)
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp == 25)
 	set_phase("WAIT")
-	await get_tree().create_timer(0.5).timeout
+	await wait_until(func() -> bool: return combat.can_move(hero))
 	set_phase("HIT", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp == 15)
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp == 15)
 	set_phase("WAIT")
 	check(store.get_player(owner_id).experience == 0, "hitting a living dog gives no XP")
 	set_phase("FINISH", other)
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.DEAD)
 	set_phase("WAIT")
-	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
-	check(combat.dogs[1].contributions[owner_id] == 20 and combat.dogs[1].contributions[other_id] == 15, "actual damage contribution, including clamped final hit")
+	world.mob_system.mobs[1].dead_until_ms = Time.get_ticks_msec() + 60000
+	check(world.mob_system.mobs[1].contributions[owner_id] == 20 and world.mob_system.mobs[1].contributions[other_id] == 15, "actual damage contribution, including clamped final hit")
 	check(server.connected_players[hero].experience == 20 and server.connected_players[other].experience == 0, "highest contributor gets runtime XP, not final hitter")
 	check(store.get_player(owner_id).experience == 0, "kill does not write XP to SQLite")
-	drop_uid = combat.ground.keys()[0]
-	combat._die(combat.dogs[1], Time.get_ticks_msec())
-	check(combat.ground.size() == 1 and server.connected_players[hero].experience == 20, "repeated runtime death callback cannot grant twice")
+	drop_uid = world.ground_loot.drops.keys()[0]
+	world.mob_system.die(world.mob_system.mobs[1], Time.get_ticks_msec())
+	check(world.ground_loot.drops.size() == 1 and server.connected_players[hero].experience == 20, "repeated runtime death callback cannot grant twice")
 	set_phase("RECIPIENT", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	set_phase("WAIT")
 	world.characters[other].position = Vector3(-12, 0, 12)
 	for id: int in [2, 3, 4]:
 		await get_tree().create_timer(1.2).timeout
-		var dog: SpikeWildDog3D = combat.dogs[id]
+		var dog: MobActor3D = world.mob_system.mobs[id]
+		world.characters[hero].position = Vector3(0,0,3)
+		world.characters[hero].rotation.y = 0
 		dog.position = Vector3(0, 0, 1.4)
-		dog.ai_state = "IDLE"
+		dog.ai_state = MobState.Value.IDLE
 		dog.collision_layer = 4
 		dog.hp = 10
 		set_phase("HIT", hero)
-		await wait_until(func() -> bool: return dog.ai_state == "DEAD")
+		await wait_until(func() -> bool: return dog.ai_state == MobState.Value.DEAD)
 		dog.dead_until_ms = Time.get_ticks_msec() + 60000
 		set_phase("WAIT")
 	var player: PlayerResource = server.connected_players[hero]
@@ -117,7 +119,7 @@ func _process(delta: float) -> void:
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	saw_level_up = saw_level_up or combat._xp_notice.contains("Awans")
 	accumulator += delta
 	if phase_name == "FINISH" and accumulator >= 0.05:

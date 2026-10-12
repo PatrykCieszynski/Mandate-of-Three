@@ -2,6 +2,14 @@ class_name WorldDatabase
 extends Node
 
 
+signal experience_awarded(owner_id: int, amount: int, levels_gained: int, level: int)
+
+func award_experience(player: PlayerResource, amount: int) -> void:
+	if player == null or amount <= 0: return
+	var result: Dictionary = player.add_experience(amount)
+	mark_progression_dirty(player)
+	experience_awarded.emit(player.player_id,amount,int(result.levels_gained),int(result.level))
+
 var database_path: String
 var db: SQLite
 var store: WorldStoreSqlite
@@ -15,6 +23,10 @@ var _wallet_elapsed: float = 0.0
 const PROGRESSION_SAVE_SECONDS: float = 60.0
 var dirty_progression: Dictionary[int, PlayerResource] = {}
 var _progression_elapsed: float = 0.0
+
+func pending_progression_player(owner_id: int, fallback: PlayerResource = null) -> PlayerResource:
+	# RAM-only query for offline rewards/reentry. Never loads stale SQL state.
+	return dirty_progression.get(owner_id,fallback)
 
 func mark_progression_dirty(player: PlayerResource) -> void:
 	dirty_progression[player.player_id] = player
@@ -85,6 +97,18 @@ func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringNa
 	var result: Dictionary = ShopStoreSqlite.new(db).purchase(owner_id, int(runtime_wallets[owner_id].pending_currency_delta), shop, offer_id, requested_position)
 	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
 	return result
+
+func upgrade_candidate(owner_id: int, uid: String, revision: int, recipe: UpgradeDefinition) -> Dictionary:
+	if db == null: return {"ok":false,"error":"storage"}
+	return UpgradeStoreSqlite.new(db).candidate(owner_id,uid,revision,recipe)
+
+func storage_snapshot(owner_id: int) -> Dictionary:
+	if db == null: return {"ok":false,"error":"storage"}
+	return AccountStorageSqlite.new(db).snapshot(owner_id)
+
+func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> Dictionary:
+	if db == null: return {"ok":false,"error":"storage"}
+	return AccountStorageSqlite.new(db).transfer(owner_id,uid,revision,source,destination,position)
 
 func upgrade_item(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> Dictionary:
 	if db == null or not runtime_wallets.has(owner_id): return {"ok":false, "error":"storage"}

@@ -116,3 +116,19 @@ no further CombatTrace geometry pass is part of this milestone.
 [Warrior basic action polish](warrior-action-polish.md) adds hitch-safe scheduled
 resolution, full-motion input locks, data-authored forward advance, presentation
 turn blending and local confirmed-finisher camera feedback.
+
+## Selective spike graduation
+
+[Approved graduation plan](spike-graduation-plan.md) separates the old production
+slice in three packages. Package A is complete: explicit commit/cache/fan-out,
+a narrow injected TinyMMO adapter, kill/ground-loot extraction and architecture
+regression checks. Combat retains the existing RPC path and attack/AI behavior.
+Package B is locally integrated: combat runtime/services and actor/mob cleanup.
+Package C is locally integrated: Core UI command/projector/adapters and composition.
+[Graduation cleanup](spike-graduation-cleanup.md) finishes production names/layout
+and removes the replaced native UI; [inherited gameplay](inherited-runtime.md)
+remains deferred. Native CEF acceptance remains pending.
+Packages A/B/C and graduation cleanup are integrated into main on 2026-10-12.
+Their topic branches and --no-ff merges preserve each reviewed milestone.
+World/persistence P2 decisions remain
+deferred as recorded in the plan.

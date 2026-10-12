@@ -17,7 +17,7 @@ func phase(command: String, uid: String) -> void:
 	attempted = false
 	if command == "DONE":
 		check(saw_stone and saw_waves and saw_stone_death and saw_respawn,"stone, waves, death and respawn replicated")
-		for id: int in wave_ids: check(not world.combat_endpoint.dogs.has(id),"expired wave removed on client")
+		for id: int in wave_ids: check(not world.mob_system.mobs.has(id),"expired wave removed on client")
 		if not failed:
 			print("METIN_CLIENT_OK: ",client_number," dynamic waves, stone lifecycle and pickup")
 			finished.rpc_id(1)
@@ -30,8 +30,8 @@ func run_server() -> void:
 	encounter.definition = encounter.definition.duplicate()
 	encounter.definition.respawn_seconds = 5
 	encounter.runtime.definition = encounter.definition
-	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():
-		dog.ai_state = "DISABLED"
+	for dog: MobActor3D in world.mob_system.mobs.values():
+		dog.ai_state = MobState.Value.DISABLED
 		dog.ai_enabled = false
 		dog.collision_layer = 0
 	# A real melee RPC hits one mixed-pack member and recruits its siblings.
@@ -41,11 +41,11 @@ func run_server() -> void:
 	var feral_entry := MobSpawnEntry.new()
 	feral_entry.mob = preload("res://source/common/gameplay/mobs/feral_dog.tres")
 	var combat := world.combat_endpoint
-	var pack := combat.create_pack([wild_entry,feral_entry],Vector3(-30,0,0),0,0,12,15)
-	var other_pack := combat.create_pack([feral_entry],Vector3(-30,0,-10),0,0,12,15)
-	for id: int in pack.actor_ids + other_pack.actor_ids: combat.dogs[id].ai_enabled = false
-	var victim := combat.dogs[pack.actor_ids[0]]
-	for id: int in pack.actor_ids.slice(1): combat.dogs[id].position += Vector3(4,0,0)
+	var pack := world.mob_system.create_pack([wild_entry,feral_entry],Vector3(-30,0,0),0,0,12,15)
+	var other_pack := world.mob_system.create_pack([feral_entry],Vector3(-30,0,-10),0,0,12,15)
+	for id: int in pack.actor_ids + other_pack.actor_ids: world.mob_system.mobs[id].ai_enabled = false
+	var victim := world.mob_system.mobs[pack.actor_ids[0]]
+	for id: int in pack.actor_ids.slice(1): world.mob_system.mobs[id].position += Vector3(4,0,0)
 	var attacker: int = world.characters.keys()[0]
 	world.characters[attacker].position = victim.position + Vector3(0,0,1.7)
 	world.characters[attacker].rotation.y = 0
@@ -53,12 +53,12 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return victim.hp < victim.max_hp)
 	set_phase("WAIT")
 	await _settle_attacks()
-	for id: int in pack.actor_ids: check(combat.dogs[id].target_peer == attacker and combat.dogs[id].ai_state == "CHASE","melee recruits entire mixed pack")
-	check(combat.dogs[other_pack.actor_ids[0]].target_peer == 0,"unrelated pack stays idle")
-	for id: int in pack.actor_ids.duplicate() + other_pack.actor_ids.duplicate(): combat._remove_mob(id)
-	combat.packs.erase(pack.pack_instance_id)
-	combat.packs.erase(other_pack.pack_instance_id)
-	combat._pending.clear()
+	for id: int in pack.actor_ids: check(world.mob_system.mobs[id].target_peer == attacker and world.mob_system.mobs[id].ai_state == MobState.Value.CHASE,"melee recruits entire mixed pack")
+	check(world.mob_system.mobs[other_pack.actor_ids[0]].target_peer == 0,"unrelated pack stays idle")
+	for id: int in pack.actor_ids.duplicate() + other_pack.actor_ids.duplicate(): world.mob_system.remove_mob(id)
+	world.mob_system.packs.erase(pack.pack_instance_id)
+	world.mob_system.packs.erase(other_pack.pack_instance_id)
+	for id: int in world.characters: combat.attacks.attack_runtime(id).pending_impact = {}
 	await get_tree().create_timer(0.7).timeout
 	var index: int = 0
 	for id: int in world.characters:
@@ -82,38 +82,42 @@ func run_server() -> void:
 	set_phase("FIGHT",int(contributors[0]))
 	await wait_until(func() -> bool: return encounter.runtime.participants.has(combat._owner(int(contributors[0]))))
 	set_phase("WAIT")
-	await get_tree().create_timer(0.3).timeout
+	await _settle_attacks()
+	# Observe newly created rewards before the independent autoloot loop claims
+	# Yang. Yang network tests cover autoloot; this assertion covers stone spawn.
+	world.currency_endpoint.set_physics_process(false)
 	set_phase("FIGHT",int(contributors[1]))
 	await wait_until(func() -> bool: return encounter.runtime.reward_claimed)
 	set_phase("WAIT")
-	check(world.combat_endpoint.ground.size()==1 and world.currency_endpoint.ground.size()==1,"one ground item and Yang reward")
+	check(world.ground_loot.drops.size()==1 and world.currency_endpoint.ground.size()==1,"one ground item and Yang reward: items=%d currency=%d" % [world.ground_loot.drops.size(),world.currency_endpoint.ground.size()])
 	check(encounter.runtime.spawned_mobs.size()==11,"all threshold waves issued once")
 	for id: int in encounter.runtime.spawned_mobs:
-		var dog: SpikeWildDog3D = world.combat_endpoint.dogs[id]
+		var dog: MobActor3D = world.mob_system.mobs[id]
 		check(dog.source_metinstone_id==initial_stone_id and not dog.respawn_enabled,"wave provenance and no respawn")
 		check(dog.definition.valid() and dog.pack_instance_id > 0,"wave uses shared data-defined pack runtime")
 		check(dog.target_peer != 0,"passive wave dogs still attack stone contributors")
 		dog.ai_enabled = false
-	drop_uid = str(world.combat_endpoint.ground.keys()[0])
-	var reward_owner: int = int(world.combat_endpoint.ground[drop_uid].owner)
+	drop_uid = str(world.ground_loot.drops.keys()[0])
+	var reward_owner: int = int(world.ground_loot.drops[drop_uid].owner)
 	check(encounter.runtime.participants.size()==2,"both players contributed")
 	var applied: int = 0
 	for value: int in encounter.runtime.participants.values(): applied += value
 	check(applied==encounter.definition.max_hp,"overkill never inflates contribution")
 	for id: int in world.characters:
 		check(not encounter.apply_damage(id,10000,Time.get_ticks_msec()),"dead stone rejects further damage")
-	check(world.combat_endpoint.ground.size()==1,"dead stone cannot reward again")
+	check(world.ground_loot.drops.size()==1,"dead stone cannot reward again")
+	world.currency_endpoint.set_physics_process(true)
 	await get_tree().create_timer(0.5).timeout
 	set_phase("RACE")
 	await wait_until(func() -> bool: return replies.size()==2)
 	var wins: int = 0
 	for result: Dictionary in replies.values():
 		if result.get("ok",false): wins += 1
-	check(wins==1 and world.combat_endpoint.ground.is_empty(),"one authorized pickup wins")
+	check(wins==1 and world.ground_loot.drops.is_empty(),"one authorized pickup wins")
 	var found: bool = false
 	for item: Dictionary in server.database.item_store.inventory(reward_owner).items: found = found or item.uid==drop_uid
 	check(found,"reward pickup persists exact UID")
-	for id: int in encounter.runtime.spawned_mobs: world.combat_endpoint.dogs[id].expires_at = Time.get_ticks_msec()+500
+	for id: int in encounter.runtime.spawned_mobs: world.mob_system.mobs[id].expires_at = Time.get_ticks_msec()+500
 	await wait_until(func() -> bool: return encounter.runtime.stone_instance_id != initial_stone_id)
 	check(encounter.active() and not encounter.runtime.reward_claimed and encounter.runtime.participants.is_empty(),"fresh random-site lifecycle after cooldown")
 	await get_tree().create_timer(0.5).timeout
@@ -129,7 +133,7 @@ func _settle_attacks() -> void:
 	# Releasing input does not cancel an already accepted current/queued swing.
 	# Keep fixture yaw/position stable until both finish before the next scenario.
 	await get_tree().create_timer(.15).timeout
-	await wait_until(func() -> bool: return world.combat_endpoint._pending.is_empty() and world.combat_endpoint._queued_attacks.is_empty())
+	await wait_until(func() -> bool: return world.characters.keys().all(func(id: int) -> bool: return world.combat_endpoint.attacks.attack_runtime(id).pending_impact.is_empty() and world.combat_endpoint.attacks.attack_runtime(id).queued_sequence < 0))
 
 func _process(delta: float) -> void:
 	elapsed += delta
@@ -137,7 +141,7 @@ func _process(delta: float) -> void:
 	if GameMode.is_world_server():
 		# Isolate stone reward assertions from ordinary wave kills in the same swing.
 		if world != null:
-			for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():
+			for dog: MobActor3D in world.mob_system.mobs.values():
 				if not dog.source_metinstone_id.is_empty():
 					dog.ai_enabled = false
 					dog.collision_layer = 0
@@ -151,16 +155,16 @@ func _process(delta: float) -> void:
 		saw_stone = true
 		if initial_stone_id.is_empty():
 			initial_stone_id = encounter.runtime.stone_instance_id
-			world.combat_endpoint.select_target({"kind":&"metin","id":initial_stone_id})
-			check(not world.combat_endpoint.selected_target.is_empty(),"living Metin is selectable")
+			world.combat_endpoint.client_combat.select_target({"kind":&"metin","id":initial_stone_id})
+			check(not world.combat_endpoint.client_combat.selected_target.is_empty(),"living Metin is selectable")
 		elif encounter.runtime.stone_instance_id != initial_stone_id:
 			saw_respawn = true
-			check(world.combat_endpoint.selected_target.is_empty(),"respawn does not revive selection")
+			check(world.combat_endpoint.client_combat.selected_target.is_empty(),"respawn does not revive selection")
 	else:
 		saw_stone_death = saw_stone_death or saw_stone
 		if saw_stone:
-			check(world.combat_endpoint.selected_target.is_empty() and not world.combat_endpoint.autoattack,"death snapshot clears selection even without autoattack")
-	for dog: SpikeWildDog3D in world.combat_endpoint.dogs.values():
+			check(world.combat_endpoint.client_combat.selected_target.is_empty() and not world.combat_endpoint.client_combat.autoattack,"death snapshot clears selection even without autoattack")
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		check(dog.mob_instance_id > 0 and dog.definition == MobDefinitions.resolve(dog.mob_key),"compact snapshot reconstructs identity and local definition")
 		check(dog.max_hp == dog.definition.max_hp and dog.title == dog.definition.display_name and dog.visual_id == dog.definition.visual_id,"presentation metadata comes from local definition")
 		if not dog.source_metinstone_id.is_empty():

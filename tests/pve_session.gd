@@ -4,7 +4,7 @@ extends "res://tests/items_session.gd"
 var movement_sequence: int = 0
 
 func face_or_approach(point: Vector3, stop_distance: float = 1.7) -> void:
-	var body: SpikeCharacter3D = world.characters[world.local_peer]
+	var body: PlayerActor3D = world.characters[world.local_peer]
 	var offset: Vector3 = point - body.target_position
 	var direction := Vector2(offset.x, offset.z).normalized()
 	if Vector2(offset.x, offset.z).length() <= stop_distance: direction *= 0.05
@@ -40,13 +40,13 @@ func run() -> void:
 	await wait_inventory()
 	var strong: Dictionary = world.inventory_endpoint.state.items[1]
 	await action("equip", strong)
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	var attack_sequence: int = 0
 	while combat.state.is_empty() or combat.state.drops.is_empty() or (CmdlineUtils.get_parsed_args().has("xp-levelup") and int(combat.state.progression.level) < 2):
 		var nearest: float = INF
 		var point: Vector3 = Vector3.ZERO
-		for dog: SpikeWildDog3D in combat.dogs.values():
-			if dog.ai_state in ["DEAD", "DISABLED"]: continue
+		for dog: MobActor3D in world.mob_system.mobs.values():
+			if dog.ai_state in [MobState.Value.DEAD, MobState.Value.DISABLED]: continue
 			var distance: float = world.characters[world.local_peer].target_position.distance_to(dog.target_position)
 			if distance < nearest:
 				nearest = distance
@@ -88,7 +88,7 @@ func run() -> void:
 	if not found:
 		fail("ground UID not persisted")
 		return
-	var inventory: SpikeInventory3D = world.inventory_endpoint
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
 	var comparison: Dictionary = inventory.weapon_comparison(picked)
 	if comparison.attack != 10 + int(picked.stats.attack) or comparison.delta != comparison.attack - 27:
 		fail("picked item comparison")
@@ -101,7 +101,7 @@ func run() -> void:
 	while int(combat.state.progression.experience) == 0 and int(combat.state.progression.level) == 1:
 		await get_tree().process_frame
 	var earned_progression: Dictionary = combat.state.progression.duplicate(true)
-	var currency: SpikeCurrency3D = world.currency_endpoint
+	var currency: CurrencyEndpoint3D = world.currency_endpoint
 	# Walk into the drop to exercise production auto-pickup through movement RPCs.
 	while currency.state.is_empty() or int(currency.state.balance) == 0:
 		if not currency.state.is_empty() and not currency.state.drops.is_empty():

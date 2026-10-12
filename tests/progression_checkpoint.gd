@@ -3,6 +3,10 @@ extends Node
 ## accepted crash window. No persistent kill events or economy batching.
 var failed: bool = false
 
+class FixtureServices extends MandateWorldServices:
+	var server: WorldServer
+	func _server() -> WorldServer: return server
+
 class CountingWorldStore extends WorldStoreSqlite:
 	var batches: int = 0
 	var rows: int = 0
@@ -50,6 +54,22 @@ func _ready() -> void:
 	persistence.mark_progression_dirty(b)
 	check(store.batches == 0 and store.get_player(first).experience == 0, "RAM progress does not write SQL")
 	check(persistence.get_player_resource(first) == a, "dirty resource remains authoritative during reentry")
+	check(persistence.pending_progression_player(first,c) == a, "pending query returns authoritative RAM rather than fallback")
+	check(persistence.pending_progression_player(clean,c) == c and persistence.pending_progression_player(-1) == null, "pending query preserves clean fallback and does not load from SQL")
+	var adapter_server := WorldServer.new()
+	adapter_server.database = persistence
+	var services := FixtureServices.new()
+	services.server = adapter_server
+	var stale: PlayerResource = store.get_player(first)
+	check(services.current_player(first,stale) == a, "offline reward resolves pending RAM before stale contribution reference")
+	var online: PlayerResource = store.get_player(first)
+	adapter_server.connected_players[17] = online
+	check(services.current_player(first,a) == online, "current session wins over offline pending/contribution references")
+	adapter_server.connected_players.clear()
+	adapter_server.database = WorldDatabase.new()
+	check(services.current_player(first,stale) == stale, "adapter queries current persistence owner after replacement")
+	adapter_server.database.free()
+	adapter_server.free()
 	persistence._process(59.0)
 	check(store.batches == 0, "no early checkpoint")
 	check(db.query("CREATE TEMP TRIGGER fail_second BEFORE UPDATE OF experience ON players WHEN NEW.player_id=%d BEGIN SELECT RAISE(ABORT,'intentional checkpoint failure'); END;" % second), "fail second row")

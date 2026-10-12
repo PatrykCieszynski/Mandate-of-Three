@@ -41,7 +41,7 @@ behaviour is unchanged. New 3+3 examples are development fixtures only.
 
 ## Input and preview
 
-Pointer-only CEF keeps keyboard ownership in gameplay. InventoryWebController
+Pointer-only CEF keeps keyboard ownership in gameplay. CoreUiController
 samples Alt and emits only transitions as `ui.tooltip_details {alt: boolean}`;
 ready synchronizes the current state and application focus loss releases it.
 WebBridge validates this presentation message (no request ID, exactly one boolean),

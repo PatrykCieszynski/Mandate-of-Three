@@ -269,3 +269,39 @@ constants in screens/storage/storage-model.ts. `storage_open => inventory_open`
 is enforced by the native composition and fixture host; invalid HUD snapshots
 are rejected at the presentation boundary. Closing Inventory closes Storage.
 See [the runtime contract](item-drag-runtime.md) for receiving semantics and future purchase invariants.
+
+## Native UI composition (Package C)
+
+Package C extracts Godot client responsibilities under `source/client/ui_web/`.
+The TypeScript screens/Core UI and production DOM/gestures retain their owners.
+
+- `CoreUiController` owns composition, open/close policy, I/B/Escape, scale/viewport,
+  keyboard/pointer ownership, Alt/focus, camera capture and UI failure fallback.
+  Its `interact_npc()` coordinates NPC interact → exact service → Upgrade select;
+  reload/disconnect/failure/teardown prevents subsequent steps of a cancelled flow.
+- `UiCommandSession` owns native IDs, pending endpoint replies, timeout/cancellation.
+  It is RefCounted, receives SceneTree explicitly for a wait, and has no CEF/domain
+  or browser generation knowledge. Closing it rejects further native requests.
+- `NpcDropTargetProjector` projects explicit camera/viewport/NPC inputs and resolves
+  Upgrade recipe metadata. The composition keeps the 100 ms cadence/cache and the
+  server revalidates every intention. The projector has no tick or command state.
+- `ItemUiAdapter` shares item/tooltip mapping and commands across Inventory,
+  Equipment and Storage. `NpcUiAdapter`, `UpgradeUiAdapter`, `ShopUiAdapter` bind
+  only their domains. They receive concrete endpoint/dispatcher/session/tree
+  dependencies; they hold no second snapshot cache and no whole-world reference.
+  Pure identity/service validators may be reused. No adapter calls another
+  domain's command; Shop/NPC state is observed by composition for window policy.
+- Wallet stays a direct domain publication. No adapter base/registry or per-window
+  focus/shortcut/lifecycle manager was introduced.
+
+Failure/teardown stops dispatch, closes pending requests, disconnects bindings to
+endpoints/Client/settings/camera, releases input and destroys the browser.
+The controller's Script UID and the existing `WebInventory` node path are retained;
+RPC endpoint paths, authority/channels and browser messages are unchanged.
+
+Verification: existing smoke (10 Godot + 74 Web UI), bridge generation regression,
+architecture guard/contracts, two-client Web Inventory/NPC/Upgrade/Shop, real Edge
+Core UI/preview and Shop/Upgrade browser suites with legacy skin and CSS fallback.
+The existing Upgrade browser fixture now waits for the observable +1 presentation
+instead of assuming forging ends in a single frame; production UI is unchanged.
+Native Godot/CEF routing and Vulkan/manual interaction acceptance remain pending.

@@ -2,30 +2,39 @@ extends Node
 ## Small contract test: no browser, mock inventory, layout or gameplay fixture.
 var messages: Array[Dictionary] = []
 var handled: int = 0
-class DropControllerFixture extends InventoryWebController:
-	var commands: Array[Dictionary] = []
-	func _npc_submit(action: String, instance_id: String = "", service_id: String = "") -> Dictionary:
-		commands.append({"action":action,"npc":instance_id,"service":service_id})
+signal release_old_handler
+signal release_new_handler
+class NpcAdapterFixture extends NpcUiAdapter:
+	var calls: Array[Dictionary] = []
+	var context: Dictionary = {}
+	func interact(instance_id: String) -> Dictionary:
+		calls.append({"action":"interact","npc":instance_id,"service":""})
 		return {"ok":true}
-	func _upgrade_submit(action: String, p: Dictionary) -> Dictionary:
-		commands.append({"action":action,"payload":p.duplicate(true)})
+	func select_service(instance_id: String, service_id: String) -> Dictionary:
+		calls.append({"action":"select","npc":instance_id,"service":service_id})
+		return {"ok":true}
+	func state() -> Dictionary: return context
+class UpgradeAdapterFixture extends UpgradeUiAdapter:
+	var calls: Array[Dictionary] = []
+	func select_item(p: Dictionary) -> Dictionary:
+		calls.append({"action":"select","payload":p.duplicate(true)})
 		return {"ok":true}
 func _ready() -> void:
 	_run.call_deferred()
 func _run() -> void:
 	var upgrade: Dictionary = {"npc_instance_id":"spike-blacksmith-01","service_id":"upgrade","id":"a".repeat(32),"revision":0}
-	assert(InventoryWebController._valid_upgrade(upgrade))
-	assert(InventoryWebController._valid_upgrade_drop(upgrade))
+	assert(UpgradeUiAdapter.valid_item(upgrade))
+	assert(UpgradeUiAdapter.valid_item(upgrade))
 	var missing_service: Dictionary = upgrade.duplicate()
 	missing_service.erase("service_id")
-	assert(not InventoryWebController._valid_upgrade_drop(missing_service), "World drop requires the exact service")
+	assert(not UpgradeUiAdapter.valid_item(missing_service), "World drop requires the exact service")
 	var drop_actor := NeutralNpc3D.new()
 	drop_actor.instance_id = "content-smith"
 	drop_actor.definition = NpcDefinitions.get_definition(&"blacksmith").duplicate(true)
 	var another_service: NpcServiceDefinition = drop_actor.definition.get_service(&"upgrade").duplicate(true)
 	another_service.service_id = &"another_upgrade"
 	drop_actor.definition.services.append(another_service)
-	var content_targets: Array[Dictionary] = InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4))
+	var content_targets: Array[Dictionary] = NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4))
 	assert(content_targets.size() == 2)
 	assert(content_targets[0].npcInstanceId == drop_actor.instance_id and content_targets[0].serviceId != content_targets[1].serviceId)
 	assert(content_targets[0].itemDefinitionId == str(UpgradeDefinitions.BASIC.item_definition_id) and content_targets[0].fromLevel == UpgradeDefinitions.BASIC.from_level)
@@ -35,34 +44,37 @@ func _run() -> void:
 	var old_recipe_item_id: StringName = recipe_fixture.item_definition_id
 	item_fixture.definition_id = &"content_blade"
 	recipe_fixture.item_definition_id = &"content_blade"
-	content_targets = InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4))
+	content_targets = NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4))
 	item_fixture.definition_id = old_item_id
 	recipe_fixture.item_definition_id = old_recipe_item_id
 	assert(content_targets[0].itemDefinitionId == "content_blade", "Targets follow content references, not a hardcoded sword ID")
 	drop_actor.disabled_services.append(another_service.service_id)
-	assert(InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4)).size() == 1)
+	assert(NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4)).size() == 1)
 	drop_actor.definition.get_service(&"upgrade").content_ref = &"missing"
-	assert(InventoryWebController._npc_upgrade_targets(drop_actor,Rect2(1,2,3,4)).is_empty())
+	assert(NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4)).is_empty())
 	drop_actor.free()
-	var drop_controller := DropControllerFixture.new()
-	drop_controller.world = SpikeWorld3D.new()
-	drop_controller.world.npc_endpoint = NpcInteraction3D.new()
-	drop_controller.world.npc_endpoint.state = {"services":[{"id":"first_upgrade","kind":1,"enabled":true},{"id":"exact_upgrade","kind":1,"enabled":true}]}
+	var drop_controller := CoreUiController.new()
+	var npc_fixture := NpcAdapterFixture.new()
+	var upgrade_fixture := UpgradeAdapterFixture.new()
+	var drop_commands: Array[Dictionary] = []
+	npc_fixture.calls = drop_commands
+	upgrade_fixture.calls = drop_commands
+	drop_controller.npcs = npc_fixture
+	drop_controller.upgrades = upgrade_fixture
+	npc_fixture.context = {"services":[{"id":"first_upgrade","kind":1,"enabled":true},{"id":"exact_upgrade","kind":1,"enabled":true}]}
 	var preselection: Dictionary = {"id":upgrade.id,"revision":0,"service_id":"exact_upgrade"}
 	assert((await drop_controller.interact_npc(upgrade.npc_instance_id,preselection)).ok)
-	assert(drop_controller.commands[1].service == "exact_upgrade" and drop_controller.commands[2].payload.service_id == "exact_upgrade", "Arrival selects the requested service rather than the first Upgrade")
-	drop_controller.commands.clear()
+	assert(drop_commands[1].service == "exact_upgrade" and drop_commands[2].payload.service_id == "exact_upgrade", "Arrival selects the requested service rather than the first Upgrade")
+	drop_commands.clear()
 	preselection.service_id = "missing_upgrade"
 	assert((await drop_controller.interact_npc(upgrade.npc_instance_id,preselection)).error == "unknown_service")
-	assert(drop_controller.commands.size() == 1, "Unavailable service never falls back to another upgrade")
-	drop_controller.world.npc_endpoint.free()
-	drop_controller.world.free()
+	assert(drop_commands.size() == 1, "Unavailable service never falls back to another upgrade")
 	drop_controller.free()
 	upgrade["yang_cost"] = 1
-	assert(not InventoryWebController._valid_upgrade(upgrade))
+	assert(not UpgradeUiAdapter.valid_item(upgrade))
 	upgrade.erase("yang_cost")
 	upgrade.revision = NAN
-	assert(not InventoryWebController._valid_upgrade(upgrade))
+	assert(not UpgradeUiAdapter.valid_item(upgrade))
 	assert(not WebUiHost.supported_client(), "Headless must never compose a browser")
 	if OS.has_feature("dedicated_server"):
 		assert(not ClassDB.class_exists("CefTexture"), "Server export must exclude native CEF")
@@ -98,40 +110,40 @@ func _run() -> void:
 		assert(not ClassDB.class_exists("SQLite"), "Exported client validation must work without SQLite")
 	# Run the real client validator; this also runs in an exported client without SQLite.
 	var item_uid := "0123456789abcdef0123456789abcdef"
-	assert(InventoryWebController._valid_identity({"id":item_uid,"revision":0}))
+	assert(ItemUiAdapter.valid_item_identity({"id":item_uid,"revision":0}))
 	for invalid: Variant in ["", item_uid.left(31), item_uid.to_upper(), "g".repeat(32), 42]:
-		assert(not InventoryWebController._valid_identity({"id":invalid,"revision":0}))
-	assert(not InventoryWebController._valid_identity({"id":item_uid,"revision":-1}))
-	assert(InventoryWebController._valid_equipment({"id":item_uid,"revision":2}))
-	assert(not InventoryWebController._valid_equipment({"id":item_uid,"revision":2,"action":"quit"}))
-	assert(not InventoryWebController._valid_equipment({"id":"bad","revision":2}))
-	assert(InventoryWebController._valid_unequip({"id":item_uid,"revision":2}))
+		assert(not ItemUiAdapter.valid_item_identity({"id":invalid,"revision":0}))
+	assert(not ItemUiAdapter.valid_item_identity({"id":item_uid,"revision":-1}))
+	assert(ItemUiAdapter.valid_equipment({"id":item_uid,"revision":2}))
+	assert(not ItemUiAdapter.valid_equipment({"id":item_uid,"revision":2,"action":"quit"}))
+	assert(not ItemUiAdapter.valid_equipment({"id":"bad","revision":2}))
+	assert(ItemUiAdapter.valid_unequip({"id":item_uid,"revision":2}))
 	var exact_unequip: Dictionary = {"id":item_uid,"revision":2,"x":2,"y":3,"page":1}
-	assert(InventoryWebController._valid_unequip(exact_unequip))
+	assert(ItemUiAdapter.valid_unequip(exact_unequip))
 	for coordinate: String in ["x","y","page"]:
 		for bad: Variant in [NAN,INF,-1,1.5,1000000,"1"]:
 			var malformed: Dictionary = exact_unequip.duplicate()
 			malformed[coordinate] = bad
-			assert(not InventoryWebController._valid_unequip(malformed))
+			assert(not ItemUiAdapter.valid_unequip(malformed))
 		var partial: Dictionary = exact_unequip.duplicate()
 		partial.erase(coordinate)
-		assert(not InventoryWebController._valid_unequip(partial))
+		assert(not ItemUiAdapter.valid_unequip(partial))
 	for percent: int in [80,90,100,110,125,140,150]:
-		assert(InventoryWebController._valid_scale({"percent":percent}))
+		assert(CoreUiController._valid_scale({"percent":percent}))
 	for invalid: Variant in [0,79,81,151,100.5,"125",null]:
-		assert(not InventoryWebController._valid_scale({"percent":invalid}))
-	assert(not InventoryWebController._valid_scale({"percent":100,"extra":true}))
+		assert(not CoreUiController._valid_scale({"percent":invalid}))
+	assert(not CoreUiController._valid_scale({"percent":100,"extra":true}))
 	var storage_command: Dictionary = {"id":item_uid,"revision":0,"from":"inventory","to":"storage","x":14,"y":8,"page":1,"quick":false}
-	assert(InventoryWebController._valid_storage(storage_command))
+	assert(ItemUiAdapter.valid_storage(storage_command))
 	for bad: Variant in [INF,NAN,-1,15,1.5]:
 		var invalid: Dictionary = storage_command.duplicate()
 		invalid.x=bad
-		assert(not InventoryWebController._valid_storage(invalid))
+		assert(not ItemUiAdapter.valid_storage(invalid))
 	var inventory_route: Dictionary = storage_command.duplicate()
 	inventory_route.merge({"from":"inventory","to":"inventory","x":0,"page":0},true)
-	assert(not InventoryWebController._valid_storage(inventory_route),"Inventory has one authoritative move path")
+	assert(not ItemUiAdapter.valid_storage(inventory_route),"Inventory has one authoritative move path")
 	# Independent requests accept out-of-order replies and ignore expired IDs.
-	var controller := InventoryWebController.new()
+	var controller := CoreUiController.new()
 	add_child(controller)
 	controller.host=WebUiHost.new()
 	controller.add_child(controller.host)
@@ -153,41 +165,44 @@ func _run() -> void:
 	assert(controller.opened, "Shop opening ensures Inventory is visible")
 	controller._shop_state({"active":false})
 	assert(controller.opened, "Shop closing leaves Inventory available in v1")
-	var first := controller._begin_command()
-	var second := controller._begin_command()
-	controller._operation_finished(second, {"ok":true, "request":"second"})
-	controller._operation_finished(first, {"ok":false, "error":"first"})
-	assert((await controller._wait_command(first)).error == "first")
-	assert((await controller._wait_command(second)).request == "second")
-	var expired := controller._begin_command()
-	assert((await controller._wait_command(expired, 0)).error == "timeout")
-	controller._operation_finished(expired, {"ok":true})
-	assert(controller._pending_commands.is_empty())
-	var cancelled := controller._begin_command()
-	controller._cancel_pending("disconnected")
-	assert((await controller._wait_command(cancelled)).error == "disconnected")
+	var first := controller.session.begin()
+	var second := controller.session.begin()
+	controller.session.finish(second, {"ok":true, "request":"second"})
+	controller.session.finish(first, {"ok":false, "error":"first"})
+	assert((await controller.session.wait(first, get_tree())).error == "first")
+	assert((await controller.session.wait(second, get_tree())).request == "second")
+	var expired := controller.session.begin()
+	assert((await controller.session.wait(expired, get_tree(), 0)).error == "timeout")
+	controller.session.finish(expired, {"ok":true})
+	var after_expiry := controller.session.begin()
+	controller.session.finish(expired, {"ok":true})
+	controller.session.finish(after_expiry, {"ok":true,"request":"fresh"})
+	assert((await controller.session.wait(after_expiry, get_tree())).request == "fresh")
+	var cancelled := controller.session.begin()
+	controller.session.cancel("disconnected")
+	assert((await controller.session.wait(cancelled, get_tree())).error == "disconnected")
 	controller.free()
-	assert(InventoryWebController._valid_npc({"npc_instance_id":"spike-blacksmith-01"}))
-	assert(not InventoryWebController._valid_npc({"npc_instance_id":"../NPC"}))
-	assert(InventoryWebController._valid_npc_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop"}))
-	assert(not InventoryWebController._valid_npc_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop", "kind":1}))
+	assert(NpcUiAdapter.valid_npc({"npc_instance_id":"spike-blacksmith-01"}))
+	assert(not NpcUiAdapter.valid_npc({"npc_instance_id":"../NPC"}))
+	assert(NpcUiAdapter.valid_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop"}))
+	assert(not NpcUiAdapter.valid_service({"npc_instance_id":"spike-blacksmith-01", "service_id":"weapon_shop", "kind":1}))
 	var buy: Dictionary = {"npc_instance_id":"spike-blacksmith-01","service_id":"weapon_shop","offer_id":"iron_sword"}
-	assert(InventoryWebController._valid_shop_buy(buy))
+	assert(ShopUiAdapter.valid_buy(buy))
 	var exact_buy: Dictionary = buy.duplicate()
 	exact_buy.merge({"x":2,"y":3,"page":1})
-	assert(InventoryWebController._valid_shop_buy(exact_buy))
+	assert(ShopUiAdapter.valid_buy(exact_buy))
 	for field: String in ["x","y","page"]:
 		var partial: Dictionary = exact_buy.duplicate()
 		partial.erase(field)
-		assert(not InventoryWebController._valid_shop_buy(partial))
+		assert(not ShopUiAdapter.valid_buy(partial))
 		for bad: Variant in [-1,1.5,NAN,INF,"1",1000]:
 			var invalid: Dictionary = exact_buy.duplicate()
 			invalid[field]=bad
-			assert(not InventoryWebController._valid_shop_buy(invalid))
+			assert(not ShopUiAdapter.valid_buy(invalid))
 	for field: String in ["price","quantity","item_definition_id"]:
 		var invalid: Dictionary = buy.duplicate()
 		invalid[field]=1
-		assert(not InventoryWebController._valid_shop_buy(invalid))
+		assert(not ShopUiAdapter.valid_buy(invalid))
 	var configured_url: Variant = ProjectSettings.get_setting("network/api/base_url")
 	ProjectSettings.set_setting("network/api/base_url", "")
 	assert(GatewayAPI.base_url() == "http://127.0.0.1:8088")
@@ -232,6 +247,19 @@ func _run() -> void:
 	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	assert(messages.back().payload.wallet.balance == 30, "Reload gets current full state")
 	assert(messages.back().payload.shop == shop_snapshot, "Reload restores published Shop without new purchase")
+	# Concrete bug: a native awaited handler must not reply into a replacement page.
+	dispatcher.register_command("fixture.blocked", func(p: Dictionary) -> bool: return p.has("old"), _blocked_command)
+	bridge.receive(JSON.stringify({"v":1,"type":"fixture.blocked","id":"42","payload":{"old":true}}))
+	bridge.reset_transport()
+	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+	bridge.receive(JSON.stringify({"v":1,"type":"fixture.blocked","id":"42","payload":{"old":false}}))
+	# Repeated ready is not a navigation and must leave the new handler valid.
+	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+	release_old_handler.emit()
+	assert(messages.filter(func(m: Dictionary) -> bool: return m.get("id", "") == "42").is_empty(), "Old generation result is suppressed")
+	release_new_handler.emit()
+	var delivered: Array = messages.filter(func(m: Dictionary) -> bool: return m.get("id", "") == "42")
+	assert(delivered.size() == 1 and delivered[0].payload == {"ok":true,"new":true}, "New generation result is delivered exactly once")
 	var count: int = messages.size()
 	bridge.send("storage.updated",{"items":"x".repeat(WebUiBridge.MAX_BYTES+1)})
 	assert(messages.size()==count+1,"Bounded large state reaches CEF")
@@ -240,14 +268,14 @@ func _run() -> void:
 	bridge.send("storage.updated",{"items":"x".repeat(WebUiBridge.MAX_STATE_BYTES)})
 	assert(messages.size()==count+1,"State boundary remains finite")
 	var original_item: Dictionary = {"stats":{"attack":13},"affixes":[{"stat":"attack","value":3}]}
-	var tooltip_model: Dictionary = InventoryWebController._item_tooltip_details(original_item)
+	var tooltip_model: Dictionary = ItemUiAdapter.tooltip_details(original_item)
 	assert(tooltip_model.properties == ["Attack: 13"] and tooltip_model.affixes == [{"lines":["+3 Attack"]}], "Existing rolls are displayed without inventing prefix/suffix kind")
 	assert(original_item.stats.attack == 13 and original_item.affixes[0].value == 3)
 	var fractional_item: Dictionary = {"affixes":[{"stat":"attack","value":1.5},{"stat":"attack","value":-0.25},{"stat":"attack","value":0}]}
-	var fractional_tooltip: Dictionary = InventoryWebController._item_tooltip_details(fractional_item)
+	var fractional_tooltip: Dictionary = ItemUiAdapter.tooltip_details(fractional_item)
 	assert(fractional_tooltip.affixes == [{"lines":["+1.5 Attack"]},{"lines":["-0.25 Attack"]},{"lines":["+0 Attack"]}], "Affix display preserves fractional values and explicit signs")
 	assert(fractional_item.affixes[0].value == 1.5 and fractional_item.affixes[1].value == -0.25)
-	var tooltip_controller := InventoryWebController.new()
+	var tooltip_controller := CoreUiController.new()
 	tooltip_controller.bridge = bridge
 	var tooltip_count: int = messages.size()
 	tooltip_controller._set_tooltip_alt(true)
@@ -264,3 +292,10 @@ func _run() -> void:
 func _command(_payload: Dictionary) -> Dictionary:
 	handled += 1
 	return {"ok":true}
+
+func _blocked_command(payload: Dictionary) -> Dictionary:
+	if payload.old:
+		await release_old_handler
+	else:
+		await release_new_handler
+	return {"ok":true,"new":not payload.old}

@@ -3,6 +3,7 @@ extends "res://tests/pve_network.gd"
 ## roll in the server fixture. SQLite is isolated; no live accounts are changed.
 
 var improved: bool = false
+var committed_inventory_changes: int = 0
 
 class CountingItemStore extends ItemStoreSqlite:
 	var inventory_reads: int = 0
@@ -34,18 +35,20 @@ func run_server() -> void:
 	var hero: int = world.characters.keys()[0]
 	var other: int = world.characters.keys()[1]
 	var owner_id: int = server.connected_players[hero].player_id
-	var combat: SpikeCombat3D = world.combat_endpoint
+	var combat: CombatEndpoint3D = world.combat_endpoint
 	var store := CountingItemStore.new(db)
 	server.database.item_store = store
-	for dog: SpikeWildDog3D in combat.dogs.values():
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
+	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
+	for dog: MobActor3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
-			dog.ai_state = "DISABLED"
+			dog.ai_state = MobState.Value.DISABLED
 			dog.collision_layer = 0
 	world.characters[hero].position = Vector3(0, 0, 3)
 	world.characters[hero].rotation.y = 0
 	world.characters[other].position = Vector3(-12, 0, 12)
-	combat.dogs[1].position = Vector3(0, 0, 1.4)
+	world.mob_system.mobs[1].position = Vector3(0, 0, 1.4)
 	await get_tree().create_timer(0.2).timeout
 	set_phase("WEAK", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
@@ -53,21 +56,22 @@ func run_server() -> void:
 	check(server.runtime_attack(owner_id) == 23, "equip updates authoritative runtime attack")
 	store.inventory_reads = 0
 	set_phase("BASELINE", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
-	check(combat.dogs[1].hp == 97, "baseline first-stage damage is 23")
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp < 120)
+	check(world.mob_system.mobs[1].hp == 97, "baseline first-stage damage is 23")
+	# Critical hot-path invariant; damage alone cannot reveal per-swing SQL reads.
 	check(store.inventory_reads == 0, "swing never reads SQLite inventory")
 	set_phase("WAIT")
 	await get_tree().create_timer(0.5).timeout
 	set_phase("FIGHT", hero)
-	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
-	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
-	for ticket: Dictionary in combat.packs[combat.dogs[1].pack_instance_id].replacements: ticket.at = Time.get_ticks_msec() + 60000
+	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.DEAD)
+	world.mob_system.mobs[1].dead_until_ms = Time.get_ticks_msec() + 60000
+	for ticket: Dictionary in world.mob_system.packs[world.mob_system.mobs[1].pack_instance_id].replacements: ticket.at = Time.get_ticks_msec() + 60000
 	set_phase("WAIT")
-	check(combat.ground.size() == 1 and store.inventory(owner_id).items.size() == 2, "mob creates ground loot, no automatic grant")
-	drop_uid = combat.ground.keys()[0]
+	check(world.ground_loot.drops.size() == 1 and store.inventory(owner_id).items.size() == 2, "mob creates ground loot, no automatic grant")
+	drop_uid = world.ground_loot.drops.keys()[0]
 	# Fix only the fixture's roll to guarantee the better-weapon branch. The
 	# production random range, receipt, pickup and equip code remain unchanged.
-	combat.ground[drop_uid].bonus = 9
+	world.ground_loot.drops[drop_uid].bonus = 9
 	await get_tree().create_timer(0.2).timeout
 	set_phase("PICKUP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
@@ -77,9 +81,11 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok, "weapon comparison, picked item and immutable snapshot")
 	check(db.query("CREATE TEMP TRIGGER fail_runtime_equip BEFORE INSERT ON item_placements BEGIN SELECT RAISE(ABORT,'intentional runtime equip failure'); END;"), "failed equip fixture")
+	var before_failed_notifications := committed_inventory_changes
 	set_phase("FAIL_EQUIP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and server.runtime_attack(owner_id) == 23, "rollback leaves runtime attack unchanged")
+	check(committed_inventory_changes==before_failed_notifications,"rolled-back equip only resynchronizes; it emits no committed-change fact")
 	check(db.query("DROP TRIGGER fail_runtime_equip;"), "remove equip fault")
 	await get_tree().create_timer(0.15).timeout
 	set_phase("BETTER", hero)
@@ -89,18 +95,18 @@ func run_server() -> void:
 	check(server.runtime_attack(owner_id) == 29, "committed swap updates runtime stats")
 	check(store.inventory(server.connected_players[other].player_id).items.size() == 2, "other player receives no inventory")
 	await get_tree().create_timer(1.2).timeout
-	var old_dog: SpikeWildDog3D = combat.dogs[1]
-	var pack: MobPackRuntime = combat.packs[old_dog.pack_instance_id]
+	var old_dog: MobActor3D = world.mob_system.mobs[1]
+	var pack: MobPackRuntime = world.mob_system.packs[old_dog.pack_instance_id]
 	pack.replacements.clear()
-	combat._remove_mob(1)
-	var replacement := combat.spawn_mob(old_dog.definition,Vector3(0,0,1.4),pack)
+	world.mob_system.remove_mob(1)
+	var replacement := world.mob_system.spawn_mob(old_dog.definition,Vector3(0,0,1.4),pack)
 	replacement.ai_enabled = false
 	replacement.position = Vector3(0, 0, 1.4)
 	await get_tree().create_timer(0.1).timeout
 	store.inventory_reads = 0
 	set_phase("IMPROVED", hero)
 	await wait_until(func() -> bool: return replacement.hp < 120)
-	check(combat._combo[hero] == 1 and replacement.hp == 91, "same first-stage attack now deals 29 instead of 23")
+	check(combat.attacks.attack_runtime(hero).display_combo_step == 1 and replacement.hp == 91, "same first-stage attack now deals 29 instead of 23")
 	check(store.inventory_reads == 0, "improved attack also uses RAM only")
 	set_phase("WAIT")
 	check(db.close_db() and db.open_db(), "reopen SQLite")
@@ -118,7 +124,7 @@ func run_server() -> void:
 		get_tree().quit()
 
 func equip_and_report(item: Dictionary) -> void:
-	var inventory: SpikeInventory3D = world.inventory_endpoint
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
 	inventory.request_equipment.rpc_id(1, "equip", str(item.uid), int(item.revision))
 	await inventory.state_changed
 	report.rpc_id(1, {"ok": not inventory.state.has("error") and inventory.state.equipment.get("weapon", "") == item.uid})
@@ -132,10 +138,10 @@ func _process(delta: float) -> void:
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
-	var combat: SpikeCombat3D = world.combat_endpoint
-	var inventory: SpikeInventory3D = world.inventory_endpoint
-	saw_damage = saw_damage or (combat.dogs.has(1) and combat.dogs[1].hp < 120)
-	saw_death = saw_death or (combat.dogs.has(1) and combat.dogs[1].ai_state == "DEAD")
+	var combat: CombatEndpoint3D = world.combat_endpoint
+	var inventory: InventoryEndpoint3D = world.inventory_endpoint
+	saw_damage = saw_damage or (world.mob_system.mobs.has(1) and world.mob_system.mobs[1].hp < 120)
+	saw_death = saw_death or (world.mob_system.mobs.has(1) and world.mob_system.mobs[1].ai_state == MobState.Value.DEAD)
 	saw_loot = saw_loot or not combat.state.drops.is_empty()
 	accumulator += delta
 	if phase_name == "FIGHT" and accumulator >= 0.05:

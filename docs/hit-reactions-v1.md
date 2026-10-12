@@ -37,7 +37,7 @@ and accepted KNOCKDOWN can independently carry the same scaled distance. Profile
 can permit knockdown while disabling displacement. Rejected/repeated knockdowns
 have zero displacement; the default elite/boss profiles therefore do not move.
 
-`SpikeCharacter3D` owns runtime `knockback_velocity`. Applying a hit sets a planar
+`Actor3D` owns shared runtime `knockback_velocity`. Applying a hit sets a planar
 impulse, never position. `move_and_slide()` advances the server actor using the
 exponentially decaying velocity (damping 8/s); the impulse integral matches the
 authored distance in free space. Scenery can shorten travel. Mob displacement

@@ -28,7 +28,7 @@ Clients supply neither their position nor the controlled character ID.
 
 Client/server `spike_instance_3d.gd` scripts adapt the existing instance lifecycle.
 They inherit the session managers' expected types without running old Player/
-LocalPlayer/Map2D or Vector2 StateSynchronizer behavior. Shared SpikeWorld3D uses
+LocalPlayer/Map2D or Vector2 StateSynchronizer behavior. Shared GameWorld3D uses
 the same node path/RPC configuration on both sides. `InstanceResource.use_3d`
 selects the server adapter; the client detects the loaded scene type.
 
@@ -47,11 +47,13 @@ broadcast player cap exists yet. This first stage targets a small local spike.
 
 | File | Responsibility |
 | --- | --- |
-| `source/common/gameplay/spike3d/spike_world_3d.gd` | Arena, shared RPCs, input validation, snapshots, camera and overlay. |
-| `source/common/gameplay/spike3d/spike_character_3d.gd` | Capsule body/collision, server physics, client interpolation. |
-| `source/common/gameplay/maps/spike/spike_map_3d.tscn` | Default Spike map scene. |
-| `source/server/world/components/spike_instance_3d.gd` | Server instance adapter. |
-| `source/client/network/spike_instance_3d.gd` | Client instance adapter. |
+| `source/common/gameplay/world3d/game_world_3d.gd` | Arena, shared RPCs, input validation, snapshots, camera and overlay. |
+| `source/common/gameplay/world3d/actors/actor_3d.gd` | Shared body/reaction/knockback and interpolation plumbing. |
+| `source/common/gameplay/world3d/actors/player_actor_3d.gd` | Player movement/advance/BODY policy, equipment and Warrior presentation. |
+| `source/common/gameplay/world3d/actors/mob_actor_3d.gd` | Mob body/visual and AI-facing state; lifecycle belongs to MobSystem. |
+| `tests/fixtures/world3d/test_arena.tscn` | Default Spike map scene. |
+| `source/server/world/components/world_instance_3d.gd` | Server instance adapter. |
+| `source/client/network/world_instance_3d.gd` | Client instance adapter. |
 | `tests/spike3d_network.gd` | Two-client WebSocket test without changing accounts or DB. |
 | `tests/run-spike3d.ps1` | Launch three processes and verify exit codes/test markers. |
 
