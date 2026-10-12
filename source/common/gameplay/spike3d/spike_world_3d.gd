@@ -84,7 +84,7 @@ func _ready() -> void:
 		local_peer = multiplayer.get_unique_id()
 		_build_camera_and_ui()
 		if WebUiHost.supported_client():
-			var web_inventory := InventoryWebController.new()
+			var web_inventory := CoreUiController.new()
 			web_inventory.name = "WebInventory"
 			add_child(web_inventory)
 			web_inventory.setup(self)
@@ -268,7 +268,7 @@ func _npc_direction(manual: Vector2) -> Vector2:
 		_npc_repath_ms = now + 200
 	var result: Dictionary = _npc_approach.step(body.target_position, actor.global_position, actor.definition.interaction_radius, manual)
 	if not str(result.interact).is_empty():
-		var ui: InventoryWebController = get_node_or_null("WebInventory")
+		var ui: CoreUiController = get_node_or_null("WebInventory")
 		if ui != null: ui.interact_npc(result.interact,_npc_preselected_item)
 		_npc_preselected_item = {}
 	return result.direction

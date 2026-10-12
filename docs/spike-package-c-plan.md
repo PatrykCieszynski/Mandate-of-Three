@@ -2,16 +2,17 @@
 
 Plan wykonawczy z 2026-10-12. Baza: `codex/spike-graduation`, HEAD `c6f5cbb`,
 po integracji Package B i poprawkach review. Branch: `codex/spike-package-c`.
-Ten dokument ustala zakres; implementacja nie jest jeszcze rozpoczęta.
+C1–C4 zaimplementowane i sprawdzone headless/browser; natywny odbiór CEF pozostaje
+do wykonania. Branch pozostaje osobny do review/integracji.
 Obowiązują [plan nadrzędny](spike-graduation-plan.md),
 [kierunek projektu](project-direction.md), [Core UI](core-ui.md),
 [Web UI](web-ui.md) i [polityka testów](testing.md).
 
 ## Cel i obecny stan
 
-`InventoryWebController` jest obecnie kontrolerem całego klientowego UI: tworzy
-CEF/bridge/dispatcher, rejestruje komendy itemów/NPC/Shop/Upgrade, koreluje RPC,
-przygotowuje modele itemów i rzutuje NPC na ekran. C redukuje go do composition
+Przed C `InventoryWebController` był kontrolerem całego klientowego UI: tworzył
+CEF/bridge/dispatcher, rejestrował komendy itemów/NPC/Shop/Upgrade, korelował RPC,
+przygotowywał modele itemów i rzutował NPC na ekran. C redukuje go do composition
 root i wspólnej polityki UI, pod nazwą `CoreUiController`.
 
 Głównym miejscem ekstrakcji jest GDScript w `source/client/ui_web/`. TypeScript
@@ -218,3 +219,33 @@ Zamknięty C integrujemy lokalnie przez `--no-ff` do `codex/spike-graduation`, p
 sprawdzeniu diffu i właściwych kontraktów oraz odnotowaniu native acceptance.
 Usuwamy tylko zmergowany local branch. Main i publikacja wymagają oddzielnej
 końcowej integracji/prośby zgodnie z zatwierdzonym workflow.
+
+## Realizacja — 2026-10-12
+
+- C1: `8421899`; session native RPC, bridge-owned generation i dispatcher gating.
+  Jeden nowy scenariusz w obecnym web_ui_bridge.gd odtwarza reused browser ID
+  przez reload oraz repeated ready. Wyniki starego handlera nie trafiają do nowej strony.
+- C2: `f28b7a2`; projector bez ticka/komend, cadence/cache zachowane w composition.
+- C3a: `7911f51`; jeden ItemUiAdapter, bez rozbijania na kontenery/helper framework.
+  Headless Web Inventory używa wstrzykniętego hosta bez CEF: wcześniej fixture
+  kontynuowała komendy po realnym failure otwarcia browsera, co nie reprezentuje
+  kontraktu production UI. Rzeczywisty bridge/RPC/SQLite pozostaje w testowanej ścieżce.
+- C3b: `e4df5f7`; NPC/Upgrade adapters; exact-service workflow w composition.
+  Fixture podmienia jawne operacje adapterów, zamiast dziedziczyć prywatne submit.
+- C3c: `892504e`; Shop adapter, decyzja o widoczności Inventory w composition.
+- C4: CoreUiController z zachowanym UID/node path, terminalny dispatcher i jawny
+  cleanup bindings. Cancellation revision w composition chroni wieloetapowy NPC
+  flow także wtedy, gdy pierwszy wynik był już przyjęty tuż przed disconnectem;
+  nie jest drugą browser generation ani native pending mapą.
+  Guard rozszerzony o usunięte połączenia, z kontraktami allowed/rejected.
+
+PASS: import/parse, diff check, smoke 10 Godot + 74 Web UI, architecture guard i
+jego kontrakty; Web Inventory (także po C4), NPC, Upgrade i Shop network kolejno;
+Core UI real DOM/preview oraz Shop/Upgrade browser dla obu skinów.
+Bez zmian production TypeScript/static JS, wire/RPC, contentu, ekonomii i combatu.
+Istniejący browser fixture Upgrade czeka na widoczny wynik zamiast jednej klatki
+podczas forging; nie powstał animation timing test ani nowa suite.
+
+Natywny Godot/CEF pass nie został wykonany. Headless/browser nie potwierdza
+embedded CEF input routing ani Vulkan. Nie integrujemy do main ani nie publikujemy
+implementacji bez właściwego odbioru/prośby. Implementacja w tym odbiorze pozostaje lokalna.

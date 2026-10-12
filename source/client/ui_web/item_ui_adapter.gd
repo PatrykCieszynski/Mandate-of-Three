@@ -106,7 +106,6 @@ func _unequip(payload: Dictionary) -> Dictionary:
 func _move(payload: Dictionary) -> Dictionary:
 	return await _submit(payload)
 
-
 func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
 	var id: String = _session.begin()
 	if id.is_empty(): return _session.closed_result()
@@ -117,6 +116,3 @@ func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
 	else:
 		_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id, int(payload.page) * InventoryGrid.PAGE_CELLS + int(payload.y) * InventoryGrid.COLUMNS + int(payload.x) if payload.has("x") else -1)
 	return await _session.wait(id, _tree)
-
-
-

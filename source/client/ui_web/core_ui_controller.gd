@@ -1,4 +1,4 @@
-class_name InventoryWebController
+class_name CoreUiController
 extends Node
 ## Client composition only. UID/revision intentions go through authenticated RPCs.
 var host: WebUiHost
@@ -20,6 +20,9 @@ var _npc_target_elapsed: float = 0.0
 var _npc_targets_state: Dictionary = {}
 var _tooltip_alt: bool = false
 var _tooltip_focused: bool = true
+var _stopped: bool = false
+var _flow_revision: int = 0
+var _flow_error: String = ""
 
 func setup(game_world: SpikeWorld3D) -> void:
 	world = game_world
@@ -38,10 +41,9 @@ func setup(game_world: SpikeWorld3D) -> void:
 	add_child(dispatcher)
 	host.message_received.connect(bridge.receive)
 	host.navigation_started.connect(bridge.reset_transport)
-	host.navigation_started.connect(func() -> void: session.cancel("ui_reload"))
-	Client.connection_changed.connect(func(connected: bool) -> void:
-		if not connected: session.cancel("disconnected"))
-	bridge.ui_ready.connect(func() -> void: bridge.send("ui.tooltip_details", {"alt": _tooltip_alt}))
+	host.navigation_started.connect(_navigation_started)
+	Client.connection_changed.connect(_connection_changed)
+	bridge.ui_ready.connect(_ui_ready)
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
@@ -56,7 +58,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
 	dispatcher.register_command("equipment.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_equipment)
 	dispatcher.register_command("inventory.close", func(p: Dictionary) -> bool: return p.is_empty(), _close)
-	host.keyboard_owner_changed.connect(func(owner: String) -> void: ClientState.menu_open = owner != "gameplay")
+	host.keyboard_owner_changed.connect(_keyboard_owner)
 	host.resized.connect(_layout)
 	host.failure.connect(_failure)
 	world.currency_endpoint.state_changed.connect(_wallet)
@@ -67,9 +69,6 @@ func setup(game_world: SpikeWorld3D) -> void:
 	# UI_READY receives the current snapshot, including updates during startup.
 	host.open()
 
-
-
-
 func _drop_on_npc(p: Dictionary) -> Dictionary:
 	if not world.begin_npc_approach(p.npc_instance_id,{"id":p.id,"revision":int(p.revision),"service_id":p.service_id}): return {"ok":false,"error":"unavailable"}
 	return {"ok":true}
@@ -78,8 +77,6 @@ func _shop_state(snapshot: Dictionary) -> void:
 	if snapshot.get("active", false):
 		opened = true
 		_layout()
-
-
 
 func _npc_state(snapshot: Dictionary) -> void:
 	# Opening Inventory changes presentation only; Upgrade owns its transaction.
@@ -90,44 +87,31 @@ func _npc_state(snapshot: Dictionary) -> void:
 				_layout()
 				break
 
-
-
 func interact_npc(instance_id: String, preselected_item: Dictionary = {}) -> Dictionary:
-	var generation: int = bridge.generation() if is_instance_valid(bridge) else -1
+	if _stopped: return session.closed_result()
+	var revision: int = _flow_revision
 	var result: Dictionary = await npcs.interact(instance_id)
 	if not result.ok or preselected_item.is_empty(): return result
-	if is_instance_valid(bridge) and bridge.generation() != generation: return {"ok":false,"error":"ui_reload"}
+	if revision != _flow_revision: return {"ok":false,"error":_flow_error}
 	# Same service and selection commands as the manual menu/Upgrade slot.
 	for service: Dictionary in npcs.state().get("services",[]):
 		if service.id == preselected_item.get("service_id","") and service.kind == NpcServiceDefinition.Kind.UPGRADE and service.enabled:
 			result = await npcs.select_service(instance_id,service.id)
 			if not result.ok: return result
-			if is_instance_valid(bridge) and bridge.generation() != generation: return {"ok":false,"error":"ui_reload"}
+			if revision != _flow_revision: return {"ok":false,"error":_flow_error}
 			return await upgrades.select_item({"npc_instance_id":instance_id,"service_id":service.id,"id":preselected_item.id,"revision":preselected_item.revision})
 	return {"ok":false,"error":"unknown_service"}
-
 
 func _wallet(snapshot: Dictionary) -> void:
 	dispatcher.set_domain("wallet", {"balance": int(snapshot.get("balance", 0)), "ready": snapshot.has("balance")})
 
-
-
 static func _valid_scale(payload: Dictionary) -> bool:
 	return payload.size() == 1 and WebUiBridge.is_integer(payload.get("percent")) and float(payload.percent) / 100.0 in UI_SCALES
-
-
-
-
 
 func _close_storage(_payload: Dictionary) -> Dictionary:
 	storage_opened = false
 	_layout()
 	return {"ok":true}
-
-
-
-
-
 
 func _close(_payload: Dictionary) -> Dictionary:
 	opened = false
@@ -142,6 +126,7 @@ func _close_equipment(_payload: Dictionary) -> Dictionary:
 	return {"ok":true}
 
 func set_open(active: bool) -> void:
+	if _stopped: return
 	opened = active
 	if not active: storage_opened = false
 	equipment_opened = active
@@ -160,8 +145,8 @@ func _process(_delta: float) -> void:
 			dispatcher.set_domain("npc_targets",snapshot)
 	_set_tooltip_alt(_tooltip_focused and Input.is_key_pressed(KEY_ALT))
 
-
 func _set_tooltip_alt(pressed: bool) -> void:
+	if _stopped: return
 	if pressed == _tooltip_alt: return
 	_tooltip_alt = pressed
 	if is_instance_valid(bridge): bridge.send("ui.tooltip_details", {"alt": pressed})
@@ -189,23 +174,59 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		bridge.send("ui.shortcut", {"key": "Escape"})
 		get_viewport().set_input_as_handled()
 
+func _navigation_started() -> void:
+	_cancel_flows("ui_reload")
+
+func _connection_changed(connected: bool) -> void:
+	if not connected: _cancel_flows("disconnected")
+
+func _cancel_flows(reason: String) -> void:
+	_flow_revision += 1
+	_flow_error = reason
+	session.cancel(reason)
+
+func _ui_ready() -> void:
+	bridge.send("ui.tooltip_details", {"alt":_tooltip_alt})
+
+func _keyboard_owner(owner: String) -> void:
+	ClientState.menu_open = owner != "gameplay"
+
 func _failure(reason: String) -> void:
-	opened = false
-	ClientState.menu_open = false
-	session.close("ui_unavailable")
-	host.destroy_browser()
-	equipment_opened = false
-	storage_opened = false
-	world.show_ui_failure(reason)
-	set_process_unhandled_key_input(false)
+	_stop("ui_unavailable")
+	if is_instance_valid(world): world.show_ui_failure(reason)
 
 func _exit_tree() -> void:
-	session.close("teardown")
+	_stop("teardown")
+
+func _stop(reason: String) -> void:
+	if _stopped: return
+	_stopped = true
+	_cancel_flows(reason)
+	session.close(reason)
+	if is_instance_valid(dispatcher): dispatcher.dispose()
 	items.dispose()
 	npcs.dispose()
 	upgrades.dispose()
 	shop.dispose()
+	if Client.connection_changed.is_connected(_connection_changed): Client.connection_changed.disconnect(_connection_changed)
+	if ClientState.settings.setting_changed.is_connected(_setting_changed): ClientState.settings.setting_changed.disconnect(_setting_changed)
+	if is_instance_valid(world):
+		if is_instance_valid(world.currency_endpoint) and world.currency_endpoint.state_changed.is_connected(_wallet): world.currency_endpoint.state_changed.disconnect(_wallet)
+		if is_instance_valid(world.camera_controller) and is_instance_valid(host) and world.camera_controller.pointer_capture_changed.is_connected(host.set_world_pointer_capture):
+			world.camera_controller.pointer_capture_changed.disconnect(host.set_world_pointer_capture)
+	if is_instance_valid(host) and is_instance_valid(bridge):
+		if host.message_received.is_connected(bridge.receive): host.message_received.disconnect(bridge.receive)
+		if host.navigation_started.is_connected(bridge.reset_transport): host.navigation_started.disconnect(bridge.reset_transport)
+		if host.navigation_started.is_connected(_navigation_started): host.navigation_started.disconnect(_navigation_started)
+		if bridge.ui_ready.is_connected(_ui_ready): bridge.ui_ready.disconnect(_ui_ready)
+		if bridge.outgoing.is_connected(host.send): bridge.outgoing.disconnect(host.send)
+		if bridge.interactive_regions_received.is_connected(host.update_interactive_regions): bridge.interactive_regions_received.disconnect(host.update_interactive_regions)
+	opened = false
+	equipment_opened = false
+	storage_opened = false
 	ClientState.menu_open = false
+	set_process(false)
+	set_process_unhandled_key_input(false)
 	if is_instance_valid(host): host.destroy_browser()
 
 func _setting_changed(section: StringName, property: StringName, value: Variant) -> void:
@@ -222,6 +243,7 @@ func set_ui_scale(value: float) -> void:
 	_layout()
 
 func _layout() -> void:
+	if _stopped: return
 	if not is_instance_valid(host) or not is_instance_valid(dispatcher): return
 	if not _scale_initialized:
 		ui_scale = 0.9 if host.size.y <= 720 else (1.5 if host.size.y >= 2160 else (1.1 if host.size.y >= 1440 else 1.0))

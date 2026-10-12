@@ -49,6 +49,3 @@ func _submit(action: String, instance_id: String = "", service_id: String = "") 
 	if id.is_empty(): return _session.closed_result()
 	_endpoint.request_interaction.rpc_id(1, action, instance_id, service_id, id)
 	return await _session.wait(id, _tree)
-
-
-

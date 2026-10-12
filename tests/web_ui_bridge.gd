@@ -53,7 +53,7 @@ func _run() -> void:
 	drop_actor.definition.get_service(&"upgrade").content_ref = &"missing"
 	assert(NpcDropTargetProjector.upgrade_targets(drop_actor,Rect2(1,2,3,4)).is_empty())
 	drop_actor.free()
-	var drop_controller := InventoryWebController.new()
+	var drop_controller := CoreUiController.new()
 	var npc_fixture := NpcAdapterFixture.new()
 	var upgrade_fixture := UpgradeAdapterFixture.new()
 	var drop_commands: Array[Dictionary] = []
@@ -129,10 +129,10 @@ func _run() -> void:
 		partial.erase(coordinate)
 		assert(not ItemUiAdapter.valid_unequip(partial))
 	for percent: int in [80,90,100,110,125,140,150]:
-		assert(InventoryWebController._valid_scale({"percent":percent}))
+		assert(CoreUiController._valid_scale({"percent":percent}))
 	for invalid: Variant in [0,79,81,151,100.5,"125",null]:
-		assert(not InventoryWebController._valid_scale({"percent":invalid}))
-	assert(not InventoryWebController._valid_scale({"percent":100,"extra":true}))
+		assert(not CoreUiController._valid_scale({"percent":invalid}))
+	assert(not CoreUiController._valid_scale({"percent":100,"extra":true}))
 	var storage_command: Dictionary = {"id":item_uid,"revision":0,"from":"inventory","to":"storage","x":14,"y":8,"page":1,"quick":false}
 	assert(ItemUiAdapter.valid_storage(storage_command))
 	for bad: Variant in [INF,NAN,-1,15,1.5]:
@@ -143,7 +143,7 @@ func _run() -> void:
 	inventory_route.merge({"from":"inventory","to":"inventory","x":0,"page":0},true)
 	assert(not ItemUiAdapter.valid_storage(inventory_route),"Inventory has one authoritative move path")
 	# Independent requests accept out-of-order replies and ignore expired IDs.
-	var controller := InventoryWebController.new()
+	var controller := CoreUiController.new()
 	add_child(controller)
 	controller.host=WebUiHost.new()
 	controller.add_child(controller.host)
@@ -275,7 +275,7 @@ func _run() -> void:
 	var fractional_tooltip: Dictionary = ItemUiAdapter.tooltip_details(fractional_item)
 	assert(fractional_tooltip.affixes == [{"lines":["+1.5 Attack"]},{"lines":["-0.25 Attack"]},{"lines":["+0 Attack"]}], "Affix display preserves fractional values and explicit signs")
 	assert(fractional_item.affixes[0].value == 1.5 and fractional_item.affixes[1].value == -0.25)
-	var tooltip_controller := InventoryWebController.new()
+	var tooltip_controller := CoreUiController.new()
 	tooltip_controller.bridge = bridge
 	var tooltip_count: int = messages.size()
 	tooltip_controller._set_tooltip_alt(true)

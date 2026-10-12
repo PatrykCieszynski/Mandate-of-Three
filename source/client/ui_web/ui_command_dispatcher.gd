@@ -5,6 +5,7 @@ const DOMAINS: Array[String] = ["upgrade", "npc_targets", "shop", "npc", "storag
 var bridge: WebUiBridge
 var _handlers: Dictionary = {}
 var _state: Dictionary = {}
+var _disposed: bool = false
 
 func attach(transport: WebUiBridge) -> void:
 	assert(bridge == null)
@@ -18,6 +19,7 @@ func register_command(type: String, validator: Callable, handler: Callable) -> v
 	bridge.allow_command(type, validator)
 
 func set_domain(domain: String, state: Dictionary) -> void:
+	if _disposed: return
 	assert(domain in DOMAINS)
 	_state[domain] = state.duplicate(true)
 	bridge.send(domain + ".updated", _state[domain])
@@ -26,6 +28,7 @@ func _snapshot() -> void:
 	bridge.send("ui.snapshot", _state.duplicate(true))
 
 func _command(type: String, id: String, payload: Dictionary) -> void:
+	if _disposed: return
 	# Callable is registered explicitly by the application; never supplied by JS.
 	var transport := bridge
 	var generation: int = transport.generation()
@@ -33,3 +36,12 @@ func _command(type: String, id: String, payload: Dictionary) -> void:
 	assert(result.has("ok") and result.ok is bool)
 	if is_instance_valid(transport) and transport.generation() == generation:
 		transport.send("command.result", result, id)
+
+func dispose() -> void:
+	if _disposed: return
+	_disposed = true
+	if is_instance_valid(bridge):
+		bridge.reset_transport()
+		if bridge.ui_ready.is_connected(_snapshot): bridge.ui_ready.disconnect(_snapshot)
+		if bridge.command_received.is_connected(_command): bridge.command_received.disconnect(_command)
+	_handlers.clear()

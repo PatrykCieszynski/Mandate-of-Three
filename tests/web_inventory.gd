@@ -4,7 +4,7 @@ class HeadlessUiHost extends WebUiHost:
 	# Exercise the real bridge/controller without invoking an unavailable native browser.
 	func open() -> bool: return true
 
-var web: InventoryWebController
+var web: CoreUiController
 var web_results: Dictionary = {}
 var running: bool = false
 
@@ -46,7 +46,7 @@ func command(type: String, payload: Dictionary) -> Dictionary:
 	return web_results.get(id, {"ok": false})
 
 func run_client() -> void:
-	web = InventoryWebController.new()
+	web = CoreUiController.new()
 	web.host = HeadlessUiHost.new()
 	world.add_child(web)
 	web.setup(world)
