@@ -86,6 +86,10 @@ shadows, SSAO, light SSIL and native horizon haze. [Visual V2](visual-upgrade-v2
 now drives continuous day/night, moon phases and stars from the shared World Server
 calendar (96 real minutes per game day), including lighting, exposure and fog.
 Weather and terrain conversion remain deferred.
+[Visual V3](visual-upgrade-v3.md) replaces the water strip's solid box with a
+custom depth/Fresnel/Gerstner ShaderMaterial, fine normals, subtle refraction
+and intersection foam. It follows V2 sky/sun/moon lighting; the coastline remains
+graybox and swimming is deferred.
 The existing First Region graybox and assets remain the basis for visual tuning.
 Server/headless composition omits the visual environment nodes.
 

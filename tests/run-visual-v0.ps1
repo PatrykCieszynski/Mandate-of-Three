@@ -1,6 +1,6 @@
 param(
     [ValidateSet('mobile','forward_plus','both')][string]$RenderingMethod = 'both',
-    [ValidateSet('visual_v0','visual_v1','visual_v2')][string]$Scene = 'visual_v0'
+    [ValidateSet('visual_v0','visual_v1','visual_v2','visual_v3')][string]$Scene = 'visual_v0'
 )
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
@@ -33,11 +33,12 @@ try {
                 $taskOutput = Get-Content -LiteralPath "$($taskEntry.Prefix).out.log" -Raw
                 $taskErrors = Get-Content -LiteralPath "$($taskEntry.Prefix).err.log" -Raw
                 $taskMarker = if ($taskEntry.Role -eq 'server') { 'VISUAL_V0_SERVER_OK' } else { 'VISUAL_V0_CLIENT_OK' }
-                if ($taskEntry.Process.ExitCode -ne 0 -or $taskOutput -notmatch $taskMarker -or $taskErrors -match 'SCRIPT ERROR|Parse Error') { throw "Failed: $taskMethod $($taskEntry.Role). See $($taskEntry.Prefix).*log" }
+                if ($taskEntry.Process.ExitCode -ne 0 -or $taskOutput -notmatch $taskMarker -or $taskErrors -match 'SCRIPT ERROR|Parse Error|SHADER ERROR|Shader compilation failed') { throw "Failed: $taskMethod $($taskEntry.Role). See $($taskEntry.Prefix).*log" }
                 if ($taskEntry.Role -eq 'client') {
                     if ($taskOutput -notmatch 'accelerated_osr_supported=true' -or $taskOutput -notmatch 'Creating browser in accelerated rendering mode') { throw 'CEF did not confirm accelerated OSR' }
                     if ($Scene -eq 'visual_v1' -and $taskOutput -notmatch 'VISUAL_V1_ENVIRONMENT_OK') { throw 'V1 environment review did not complete' }
                     if ($Scene -eq 'visual_v2' -and $taskOutput -notmatch 'VISUAL_V2_CYCLE_OK') { throw 'V2 full day/night review did not complete' }
+                    if ($Scene -eq 'visual_v3' -and $taskOutput -notmatch 'VISUAL_V3_WATER_OK') { throw 'V3 native water review did not complete' }
                     $taskReport = Get-Content -LiteralPath (Join-Path $taskLogs "$taskCapturePrefix-$taskMethod.json") -Raw | ConvertFrom-Json
                     if ($taskReport.renderer -ne $taskMethod -or $taskReport.driver -ne 'vulkan') { throw 'Native probe used a different renderer/driver' }
                 }
