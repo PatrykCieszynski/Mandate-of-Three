@@ -135,6 +135,9 @@ cancel przez death/knockdown, full-motion advance, overlapa, finishera i respawn
 
 ## Package C — Core UI
 
+Szczegółowy plan wykonawczy po integracji B: [Package C](spike-package-c-plan.md).
+Baza c6f5cbb; osobny branch codex/spike-package-c.
+
 1. UiCommandSession: IDs, pending, reply, timeout, reload/disconnect, late reply.
 2. NpcDropTargetProjector: projekcja i data-driven targety z jawnymi zależnościami.
 3. ItemUiAdapter: wspólne modelowanie Inventory, Equipment i Storage.
