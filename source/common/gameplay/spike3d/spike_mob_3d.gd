@@ -1,5 +1,5 @@
-class_name SpikeWildDog3D
-extends SpikeCharacter3D
+class_name SpikeMob3D
+extends SpikeActor3D
 ## Visuals resolve independently. AI, hit stun and knockback run only
 ## on the server; clients interpolate position and play presentation effects.
 
@@ -43,7 +43,7 @@ var name_label: Label3D
 var presentation: DogVisual3D
 var movement_collider: CollisionShape3D
 
-func setup_dog(id: int, spawn: Vector3) -> void:
+func setup_mob(id: int, spawn: Vector3) -> void:
 	hp = max_hp
 	mob_id = id
 	home = spawn
@@ -94,7 +94,7 @@ func _label(text: String, height: float, size: int) -> Label3D:
 	add_child(label)
 	return label
 
-func move_dog(delta: float, direction: Vector2, now: int) -> void:
+func simulate_mob(delta: float, direction: Vector2, now: int) -> void:
 	if now < stunned_until_ms or hit_reaction.locked(now) or knockback_active(): direction = Vector2.ZERO
 	var displaced := knockback_active()
 	var displacement_velocity := damp_knockback(delta)
@@ -108,6 +108,7 @@ func move_dog(delta: float, direction: Vector2, now: int) -> void:
 	collision_mask = regular_mask
 
 func die(now: int) -> void:
+	alive = false
 	ai_state = MobState.Value.DEAD
 	hit_reaction.clear()
 	target_peer = 0
@@ -121,6 +122,7 @@ func present_snapshot(snapshot: Array) -> void:
 	hp = snapshot[MobSnapshot.Field.HP]
 	ai_state = MobState.from_wire(int(snapshot[MobSnapshot.Field.STATE]))
 	var active := ai_state not in [MobState.Value.DEAD, MobState.Value.DISABLED]
+	alive = active
 	# The corpse is presentation only. Collision disables immediately as before.
 	visible = ai_state != MobState.Value.DISABLED
 	collision_layer = 4 if active else 0

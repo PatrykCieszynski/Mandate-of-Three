@@ -18,7 +18,7 @@ func phase(command: String, _uid: String) -> void:
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
 	var combat := world.combat_endpoint
-	for dog: SpikeWildDog3D in world.mob_system.mobs.values(): dog.ai_enabled = false
+	for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	var hero: int = world.characters.keys()[0]
 	var owner: int = WorldServer.curr.connected_players[hero].player_id
 	var runtime: Dictionary = WorldServer.curr.runtime_equipment[owner]
@@ -89,7 +89,7 @@ func run_server() -> void:
 	runtime.stats.attack_speed = 100.0
 	for lethal: bool in [false,true]:
 		combat.attack_runtime(hero).next_attack_ms = 0
-		combat.health[hero] = 100
+		world.characters[hero].hp = 100
 		world.characters[hero].hit_reaction.clear()
 		world.characters[hero].knockback_velocity = Vector3.ZERO
 		var now := Time.get_ticks_msec()
@@ -108,7 +108,7 @@ func run_server() -> void:
 	var feedback := CombatFeedback3D.new()
 	add_child(feedback)
 	feedback.set_process(false)
-	var target: SpikeWildDog3D = world.mob_system.mobs.values()[0]
+	var target: SpikeMob3D = world.mob_system.mobs.values()[0]
 	var hp := target.hp
 	for count: int in [20,50]:
 		var before := feedback.number_events

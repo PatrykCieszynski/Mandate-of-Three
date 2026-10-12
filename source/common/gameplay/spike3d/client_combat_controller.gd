@@ -27,7 +27,7 @@ func receive_attack_wait(delay_ms: int) -> void:
 
 func receive_swing(peer_id: int, animation_key: StringName, step_index: int, motion_ms: int, finisher: bool, ratio: float = 1.0, action_id: int = 0, yaw: float = 0.0, preinput_ms: int = 0) -> void:
 	if not GameMode.is_client(): return
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
+	var body: SpikePlayer3D = _world.characters.get(peer_id)
 	if body != null:
 		body.accept_swing_facing(yaw)
 		body.play_swing(animation_key,motion_ms,finisher,ratio)
@@ -45,7 +45,7 @@ func receive_swing(peer_id: int, animation_key: StringName, step_index: int, mot
 			_world.add_child(overlay)
 			overlay.global_transform = Transform3D(Basis(Vector3.UP,body.rotation.y),body.global_position)
 			var targets: Array[Dictionary] = []
-			for dog: SpikeWildDog3D in _world.mob_system.mobs.values():
+			for dog: SpikeMob3D in _world.mob_system.mobs.values():
 				targets.append({"id":dog.mob_id,"position":overlay.to_local(dog.global_position),"radius":dog.combat_radius(),"height":dog.combat_height(),"bottom_offset":dog.combat_bottom_offset()})
 			overlay.configure(step,targets,OS.get_cmdline_user_args().has("--dev-legacy-melee"))
 			_trace_debug[peer_id] = overlay
@@ -67,7 +67,7 @@ func receive_hits(peer_id: int, results: Array[Dictionary], action_id: int = 0, 
 		if target != null and _feedback.confirm(event,target,peer_id == _world.local_peer):
 			_endpoint.publish_confirmed_hit(event)
 			if _world.camera_controller != null: _world.camera_controller.confirm_finisher(event,peer_id == _world.local_peer)
-		var body: SpikeWildDog3D = _world.mob_system.mobs.get(int(result.id))
+		var body: SpikeMob3D = _world.mob_system.mobs.get(int(result.id))
 		if body != null: present_reaction(body,result)
 	if peer_id == _world.local_peer:
 		_endpoint.set_notice("Trafiono: %d" % results.size())
@@ -76,14 +76,14 @@ func receive_hits(peer_id: int, results: Array[Dictionary], action_id: int = 0, 
 
 func receive_hurt(peer_id: int, result: Dictionary) -> void:
 	if not GameMode.is_client(): return
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
+	var body: SpikePlayer3D = _world.characters.get(peer_id)
 	if body != null: present_reaction(body,result)
 	if peer_id == _world.local_peer and (int(result.reaction) == HitReaction.Type.KNOCKDOWN or (body != null and not body.alive)):
 		_client_intent_sent = false
 		_client_request_at = Time.get_ticks_msec()+int((float(result.duration)+float(result.get_up_duration))*1000)+100
 
 
-func present_reaction(body: SpikeCharacter3D, result: Dictionary) -> void:
+func present_reaction(body: SpikeActor3D, result: Dictionary) -> void:
 	match int(result.reaction):
 		HitReaction.Type.FLINCH, HitReaction.Type.KNOCKBACK: body.play_hit()
 		HitReaction.Type.KNOCKDOWN:
@@ -94,7 +94,7 @@ func resolve_target(target: Dictionary) -> Node3D:
 	if target.is_empty(): return null
 	match target.get("kind"):
 		&"mob":
-			var dog: SpikeWildDog3D = _world.mob_system.mobs.get(int(target.get("id",0)))
+			var dog: SpikeMob3D = _world.mob_system.mobs.get(int(target.get("id",0)))
 			if not is_instance_valid(dog) or dog.is_queued_for_deletion() or dog.hp <= 0 or dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: return null
 			return dog
 		&"metin":
@@ -113,7 +113,7 @@ func select_target(target: Dictionary) -> void:
 	if not target.is_empty(): _world.cancel_npc_approach()
 	selected_target = target.duplicate()
 	if resolve_target(selected_target) == null: selected_target = {}
-	for dog: SpikeWildDog3D in _world.mob_system.mobs.values():
+	for dog: SpikeMob3D in _world.mob_system.mobs.values():
 		if is_instance_valid(dog) and not dog.is_queued_for_deletion():
 			dog.mark_selected(selected_target.get("kind") == &"mob" and dog.mob_id == int(selected_target.get("id",0)))
 	if selected_target.is_empty(): autoattack = false
@@ -127,7 +127,7 @@ func handle_input(event: InputEvent) -> void:
 		var origin: Vector3 = camera.project_ray_origin(event.position)
 		var ray := PhysicsRayQueryParameters3D.create(origin, origin + camera.project_ray_normal(event.position) * 100, 4)
 		var hit: Dictionary = _world.get_world_3d().direct_space_state.intersect_ray(ray)
-		var dog: SpikeWildDog3D = hit.get("collider") as SpikeWildDog3D
+		var dog: SpikeMob3D = hit.get("collider") as SpikeMob3D
 		if hit.get("collider") is MetinStone3D and _world.metin_encounter != null:
 			select_target({"kind":&"metin","id":_world.metin_encounter.runtime.stone_instance_id})
 		elif dog != null:
@@ -162,7 +162,7 @@ func assist_direction(manual: Vector2) -> Vector2:
 	if actor == null:
 		autoattack = false
 		return Vector2.ZERO
-	var body: SpikeCharacter3D = _world.characters[_world.local_peer]
+	var body: SpikePlayer3D = _world.characters[_world.local_peer]
 	var offset: Vector3 = actor.position - body.position
 	var direction := Vector2(offset.x, offset.z).normalized()
 	if Vector2(offset.x, offset.z).length() > 1.7: return direction

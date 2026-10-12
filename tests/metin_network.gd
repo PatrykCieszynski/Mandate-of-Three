@@ -30,7 +30,7 @@ func run_server() -> void:
 	encounter.definition = encounter.definition.duplicate()
 	encounter.definition.respawn_seconds = 5
 	encounter.runtime.definition = encounter.definition
-	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
+	for dog: SpikeMob3D in world.mob_system.mobs.values():
 		dog.ai_state = MobState.Value.DISABLED
 		dog.ai_enabled = false
 		dog.collision_layer = 0
@@ -92,7 +92,7 @@ func run_server() -> void:
 	check(world.ground_loot.drops.size()==1 and world.currency_endpoint.ground.size()==1,"one ground item and Yang reward: items=%d currency=%d" % [world.ground_loot.drops.size(),world.currency_endpoint.ground.size()])
 	check(encounter.runtime.spawned_mobs.size()==11,"all threshold waves issued once")
 	for id: int in encounter.runtime.spawned_mobs:
-		var dog: SpikeWildDog3D = world.mob_system.mobs[id]
+		var dog: SpikeMob3D = world.mob_system.mobs[id]
 		check(dog.source_metinstone_id==initial_stone_id and not dog.respawn_enabled,"wave provenance and no respawn")
 		check(dog.definition.valid() and dog.pack_instance_id > 0,"wave uses shared data-defined pack runtime")
 		check(dog.target_peer != 0,"passive wave dogs still attack stone contributors")
@@ -141,7 +141,7 @@ func _process(delta: float) -> void:
 	if GameMode.is_world_server():
 		# Isolate stone reward assertions from ordinary wave kills in the same swing.
 		if world != null:
-			for dog: SpikeWildDog3D in world.mob_system.mobs.values():
+			for dog: SpikeMob3D in world.mob_system.mobs.values():
 				if not dog.source_metinstone_id.is_empty():
 					dog.ai_enabled = false
 					dog.collision_layer = 0
@@ -164,7 +164,7 @@ func _process(delta: float) -> void:
 		saw_stone_death = saw_stone_death or saw_stone
 		if saw_stone:
 			check(world.combat_endpoint.client_combat.selected_target.is_empty() and not world.combat_endpoint.client_combat.autoattack,"death snapshot clears selection even without autoattack")
-	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
+	for dog: SpikeMob3D in world.mob_system.mobs.values():
 		check(dog.mob_instance_id > 0 and dog.definition == MobDefinitions.resolve(dog.mob_key),"compact snapshot reconstructs identity and local definition")
 		check(dog.max_hp == dog.definition.max_hp and dog.title == dog.definition.display_name and dog.visual_id == dog.definition.visual_id,"presentation metadata comes from local definition")
 		if not dog.source_metinstone_id.is_empty():

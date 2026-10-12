@@ -35,12 +35,12 @@ func run_server() -> void:
 	var currency: SpikeCurrency3D = world.currency_endpoint
 	var combat: SpikeCombat3D = world.combat_endpoint
 	currency.set_physics_process(false) # Explicit phases control the live autoloot tick.
-	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
+	for dog: SpikeMob3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		dog.ai_state = MobState.Value.DISABLED
 		dog.collision_layer = 0
 	place_far()
-	var dog: SpikeWildDog3D = world.mob_system.mobs[1]
+	var dog: SpikeMob3D = world.mob_system.mobs[1]
 	dog.hp = 0
 	dog.ai_state = MobState.Value.IDLE
 	dog.contributions = {owner:20, other_owner:15}
@@ -94,9 +94,9 @@ func run_server() -> void:
 	currency.ground[currency_id].expires = 0
 	check(currency.pickup_for_peer(hero,currency_id,Time.get_ticks_msec()).error == "gone", "expired currency")
 	currency_id = currency.spawn_currency(point,owner,"",Time.get_ticks_msec())
-	combat.health[hero] = 0
+	world.characters[hero].hp = 0
 	check(currency.pickup_for_peer(hero,currency_id,Time.get_ticks_msec()).error == "player", "dead player cannot loot")
-	combat.health[hero] = 100
+	world.characters[hero].hp = 100
 	currency.ground[currency_id].position = Vector3(-1.5,0,-3.5)
 	world.characters[hero].position = Vector3(-1.5,0,-1.6)
 	check(currency.pickup_for_peer(hero,currency_id,Time.get_ticks_msec()).error == "distance", "obstruction denies pickup")

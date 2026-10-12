@@ -2,7 +2,7 @@ class_name MobSystem
 extends RefCounted
 ## Owns live mobs/packs and their lifecycle. Hit formulas and rewards are callers.
 signal mob_died(result: MobDeathResult)
-var mobs: Dictionary[int, SpikeWildDog3D] = {}
+var mobs: Dictionary[int, SpikeMob3D] = {}
 var packs: Dictionary[int, MobPackRuntime] = {}
 var _next_mob_id: int = 0
 var _next_pack_id: int = 0
@@ -42,13 +42,13 @@ func create_pack(members: Array[MobSpawnEntry], anchor: Vector3, spawn_radius: f
 		for i: int in entry.count: spawn_mob(entry.mob,pack.random_point(spawn_radius),pack)
 	return pack
 
-func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntime) -> SpikeWildDog3D:
+func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntime) -> SpikeMob3D:
 	if not MobDefinitions.is_registered(definition) or not definition.valid():
 		push_warning("Rejected mob spawn: invalid or noncanonical definition")
 		return null
 	assert(GameMode.is_world_server() and packs.get(pack.pack_instance_id) == pack)
 	_next_mob_id += 1
-	var dog := SpikeWildDog3D.new()
+	var dog := SpikeMob3D.new()
 	dog.name = "Mob_%d" % _next_mob_id
 	dog.definition = definition
 	dog.reaction_profile = definition.reaction_profile
@@ -63,7 +63,7 @@ func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntim
 	dog.source_metinstone_id = pack.source_metinstone_id
 	dog.respawn_enabled = pack.respawn_enabled
 	dog.expires_at = pack.expires_at
-	dog.setup_dog(_next_mob_id,position)
+	dog.setup_mob(_next_mob_id,position)
 	dog.home = pack.anchor
 	dog.wander_at_ms = Time.get_ticks_msec() + pack.rng.randi_range(1000,4000)
 	_world.add_child(dog)
@@ -76,7 +76,7 @@ func aggro_pack(pack_id: int, peer_id: int) -> void:
 	var pack: MobPackRuntime = packs[pack_id]
 	if horizontal_distance(_world.characters[peer_id].position,pack.anchor) > pack.leash_radius: return
 	for id: int in pack.actor_ids:
-		var dog: SpikeWildDog3D = mobs.get(id)
+		var dog: SpikeMob3D = mobs.get(id)
 		if dog == null or dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: continue
 		dog.target_peer = peer_id
 		dog.ai_state = MobState.Value.CHASE
@@ -85,7 +85,7 @@ static func horizontal_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x-b.x,a.z-b.z).length()
 
 func remove_mob(id: int) -> void:
-	var dog: SpikeWildDog3D = mobs[id]
+	var dog: SpikeMob3D = mobs[id]
 	dog.collision_layer = 0
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if pack != null: pack.actor_ids.erase(id)
@@ -94,7 +94,7 @@ func remove_mob(id: int) -> void:
 
 func tick(delta: float, now: int) -> void:
 	for id: int in mobs.keys():
-		var dog: SpikeWildDog3D = mobs[id]
+		var dog: SpikeMob3D = mobs[id]
 		if (dog.expires_at > 0 and now >= dog.expires_at) or (dog.ai_state == MobState.Value.DEAD and now >= dog.dead_until_ms):
 			remove_mob(id)
 		else: tick_mob(dog,delta,now)
@@ -106,7 +106,7 @@ func tick(delta: float, now: int) -> void:
 			spawn_mob(ticket.definition,pack.random_point(pack.spawn_radius),pack)
 		if not pack.respawn_enabled and pack.actor_ids.is_empty(): packs.erase(pack_id)
 
-func die(dog: SpikeWildDog3D, now: int) -> void:
+func die(dog: SpikeMob3D, now: int) -> void:
 	if dog.ai_state == MobState.Value.DEAD: return
 	dog.die(now)
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
@@ -116,18 +116,18 @@ func die(dog: SpikeWildDog3D, now: int) -> void:
 	mob_died.emit(death)
 	dog.contribution_players.clear()
 
-func begin_return(dog: SpikeWildDog3D) -> void:
+func begin_return(dog: SpikeMob3D) -> void:
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	dog.return_target = pack.random_point(pack.wander_radius) if pack != null else dog.home
 	dog.ai_state = MobState.Value.RETURN
 	dog.target_peer = 0
 
-func tick_mob(dog: SpikeWildDog3D, delta: float, now: int) -> void:
+func tick_mob(dog: SpikeMob3D, delta: float, now: int) -> void:
 	if dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: return
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if pack == null: return
 	if dog.hit_reaction.locked(now) or dog.knockback_active():
-		dog.move_dog(delta,Vector2.ZERO,now)
+		dog.simulate_mob(delta,Vector2.ZERO,now)
 		return
 	if not dog.ai_enabled: return
 	if dog.proximity_aggro and dog.ai_state in [MobState.Value.IDLE,MobState.Value.WANDER]:
@@ -144,7 +144,7 @@ func tick_mob(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 			begin_return(dog)
 	var direction := Vector2.ZERO
 	if dog.ai_state in [MobState.Value.CHASE,MobState.Value.ATTACK]:
-		var body: SpikeCharacter3D = _world.characters[dog.target_peer]
+		var body: SpikePlayer3D = _world.characters[dog.target_peer]
 		var offset: Vector3 = body.position - dog.position
 		if horizontal_distance(dog.position,body.position) > dog.definition.attack_reach or absf(offset.y) > 1.2 or not _world.has_line_of_sight(dog.position,body.position):
 			dog.ai_state = MobState.Value.CHASE
@@ -175,11 +175,11 @@ func tick_mob(dog: SpikeWildDog3D, delta: float, now: int) -> void:
 			dog.wander_at_ms = now + pack.rng.randi_range(2000,5000)
 		else:
 			direction = Vector2(dog.wander_target.x-dog.position.x,dog.wander_target.z-dog.position.z).normalized()
-	dog.move_dog(delta,direction,now)
+	dog.simulate_mob(delta,direction,now)
 
 func snapshot(now: int = Time.get_ticks_msec()) -> Array:
 	var records: Array = []
-	for mob: SpikeWildDog3D in mobs.values(): records.append(MobSnapshot.capture(mob,now))
+	for mob: SpikeMob3D in mobs.values(): records.append(MobSnapshot.capture(mob,now))
 	return records
 
 func apply_snapshot(records: Array) -> void:
@@ -195,7 +195,7 @@ func apply_snapshot(records: Array) -> void:
 			continue
 		present[id] = true
 		if not mobs.has(id):
-			var mob := SpikeWildDog3D.new()
+			var mob := SpikeMob3D.new()
 			mob.name = "Mob_%d" % id
 			mob.definition = definition
 			mob.mob_key = definition.mob_key
@@ -203,7 +203,7 @@ func apply_snapshot(records: Array) -> void:
 			mob.title = definition.display_name
 			mob.visual_id = definition.visual_id
 			mob.source_metinstone_id = record[MobSnapshot.Field.SOURCE_METIN]
-			mob.setup_dog(id, record[MobSnapshot.Field.POSITION])
+			mob.setup_mob(id, record[MobSnapshot.Field.POSITION])
 			_world.add_child(mob)
 			mobs[id] = mob
 		mobs[id].present_snapshot(record)
@@ -213,7 +213,7 @@ func apply_snapshot(records: Array) -> void:
 			mobs[id].queue_free()
 			mobs.erase(id)
 
-func apply_hit(dog: SpikeWildDog3D, peer_id: int, result: CombatHitResult, direction: Vector3, now: int) -> void:
+func apply_hit(dog: SpikeMob3D, peer_id: int, result: CombatHitResult, direction: Vector3, now: int) -> void:
 	aggro_pack(dog.pack_instance_id,peer_id)
 	dog.hp -= result.damage
 	var owner_id: int = services.owner_id_for_peer(peer_id)
@@ -226,10 +226,10 @@ func apply_hit(dog: SpikeWildDog3D, peer_id: int, result: CombatHitResult, direc
 
 
 func remove_peer(peer_id: int) -> void:
-	for mob: SpikeWildDog3D in mobs.values():
+	for mob: SpikeMob3D in mobs.values():
 		if mob.target_peer == peer_id:
 			mob.target_peer = 0
 			if mob.ai_state not in [MobState.Value.DEAD,MobState.Value.DISABLED]: begin_return(mob)
 
 func interpolate(delta: float) -> void:
-	for mob: SpikeWildDog3D in mobs.values(): mob.interpolate(delta)
+	for mob: SpikeMob3D in mobs.values(): mob.interpolate(delta)

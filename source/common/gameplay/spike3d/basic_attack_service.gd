@@ -55,7 +55,7 @@ func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	if not _endpoint.is_player_alive(peer_id) or sequence < 0 or sequence > 2147483647 or sequence <= attack_runtime(peer_id).sequence: return false
 	if services.owner_id_for_peer(peer_id) <= 0: return false
 	attack_runtime(peer_id).sequence = sequence
-	var body: SpikeCharacter3D = _world.characters[peer_id]
+	var body: SpikePlayer3D = _world.characters[peer_id]
 	if body.hit_reaction.locked(now) or body.knockback_active(): return false
 	if attack_runtime(peer_id).queued_sequence >= 0: return false # At most one next intent.
 	var active: Dictionary = attack_runtime(peer_id).active_action
@@ -83,7 +83,7 @@ func _start_attack(peer_id: int, sequence: int, now: int, chained: bool = false)
 	if resolved.is_empty(): return false
 	var hit: BasicAttackStepDefinition = resolved.step
 	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-legacy-melee"): hit.combat_trace = null
-	var body: SpikeCharacter3D = _world.characters[peer_id]
+	var body: SpikePlayer3D = _world.characters[peer_id]
 	var facing: Dictionary = attack_runtime(peer_id).desired_facing
 	if not facing.is_empty() and (now-int(facing.time) <= 500 or (not attack_runtime(peer_id).active_action.is_empty() and int(facing.time) >= int(attack_runtime(peer_id).active_action.started))): body.rotation.y = facing.yaw
 	attack_runtime(peer_id).desired_facing = {}
@@ -106,7 +106,7 @@ func _start_attack(peer_id: int, sequence: int, now: int, chained: bool = false)
 func advance_queue(now: int) -> void:
 	for peer_id: int in ordered_peers(false):
 		var active: Dictionary = attack_runtime(peer_id).active_action
-		var body: SpikeCharacter3D = _world.characters.get(peer_id)
+		var body: SpikePlayer3D = _world.characters.get(peer_id)
 		if not _endpoint.is_player_alive(peer_id) or body == null or body.hit_reaction.locked(now) or body.knockback_active():
 			cancel(peer_id)
 			continue
@@ -121,7 +121,7 @@ func advance_queue(now: int) -> void:
 			attack_runtime(peer_id).active_action = {}
 
 func cancel(peer_id: int) -> void:
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
+	var body: SpikePlayer3D = _world.characters.get(peer_id)
 	if body != null: body.cancel_attack_advance()
 	if _attack_runtimes.has(peer_id): _attack_runtimes[peer_id].clear_intents()
 
@@ -142,7 +142,7 @@ func movement_unlock(peer_id: int) -> int:
 func request_intent(peer_id: int, sequence: int, now: int) -> int:
 	if sequence < 0 or sequence > 2147483647 or sequence <= attack_runtime(peer_id).sequence: return 0
 	if not begin_attack(peer_id,sequence,now) and _endpoint.is_player_alive(peer_id) and attack_runtime(peer_id).queued_sequence < 0:
-		var body: SpikeCharacter3D = _world.characters[peer_id]
+		var body: SpikePlayer3D = _world.characters[peer_id]
 		var retry_at: int = maxi(attack_runtime(peer_id).next_attack_ms,body.hit_reaction.get_up_until_ms)
 		var active: Dictionary = attack_runtime(peer_id).active_action
 		if not active.is_empty() and now < int(active.started)+int(active.timing.preinput): retry_at = int(active.started)+int(active.timing.preinput)
@@ -163,7 +163,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	var measured_at := Time.get_ticks_usec()
 	var trace_tests := 0
 	var results: Array[Dictionary] = []
-	var body: SpikeCharacter3D = _world.characters[peer_id]
+	var body: SpikePlayer3D = _world.characters[peer_id]
 	var yaw: float = swing.yaw
 	var forward := Vector3(-sin(yaw), 0, -cos(yaw))
 	var actor := Transform3D(Basis(Vector3.UP,yaw),body.global_position)
@@ -182,7 +182,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 					hit_ids.append(-1) # Stone is immovable and has no actor action lock.
 					results.append({"id":-1,"damage":previous_hp-metin.runtime.hp,"reaction":HitReaction.Type.NONE,"duration":0.0,"get_up_duration":0.0,"target_kind":"metin","target_id":metin.runtime.stone_instance_id})
 			continue
-		var dog: SpikeWildDog3D = hit.collider as SpikeWildDog3D
+		var dog: SpikeMob3D = hit.collider as SpikeMob3D
 		if dog == null or hit_set.has(dog.mob_id) or dog.ai_state in [MobState.Value.DEAD, MobState.Value.RETURN, MobState.Value.DISABLED]: continue
 		var offset: Vector3 = dog.position - body.position
 		var horizontal := Vector3(offset.x, 0, offset.z)
@@ -206,7 +206,7 @@ func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	return hit_ids
 
 
-func _legacy_candidates(body: SpikeCharacter3D) -> Array[Dictionary]:
+func _legacy_candidates(body: SpikePlayer3D) -> Array[Dictionary]:
 	var shape := SphereShape3D.new()
 	shape.radius = ATTACK_REACH+0.4
 	var query := PhysicsShapeQueryParameters3D.new()

@@ -40,7 +40,7 @@ func run_server() -> void:
 	server.database.item_store = store
 	var inventory: SpikeInventory3D = world.inventory_endpoint
 	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
-	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
+	for dog: SpikeMob3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
 			dog.ai_state = MobState.Value.DISABLED
@@ -95,7 +95,7 @@ func run_server() -> void:
 	check(server.runtime_attack(owner_id) == 29, "committed swap updates runtime stats")
 	check(store.inventory(server.connected_players[other].player_id).items.size() == 2, "other player receives no inventory")
 	await get_tree().create_timer(1.2).timeout
-	var old_dog: SpikeWildDog3D = world.mob_system.mobs[1]
+	var old_dog: SpikeMob3D = world.mob_system.mobs[1]
 	var pack: MobPackRuntime = world.mob_system.packs[old_dog.pack_instance_id]
 	pack.replacements.clear()
 	world.mob_system.remove_mob(1)

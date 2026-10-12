@@ -18,8 +18,8 @@ func _ready() -> void:
 	check(scene != null and scene.resource_path == expected_path, "resolution priority " + expected)
 	check(VisualResolver.resolve(&"unknown") == null, "unknown logical IDs do not load files")
 	scene = null # The live presenter must retain its own resource, not this fixture.
-	var dog := SpikeWildDog3D.new()
-	dog.setup_dog(9, Vector3(3,0,2))
+	var dog := SpikeMob3D.new()
+	dog.setup_mob(9, Vector3(3,0,2))
 	add_child(dog)
 	await get_tree().process_frame
 	check(dog.name_label != null and dog.hp_label != null, "client creates name and HP presentation")
@@ -105,7 +105,7 @@ func _ready() -> void:
 	combat._world = snapshot_world
 	var record: Array = [101,Vector3(4,0,2),0.5,80,MobState.Value.IDLE,&"feral_dog","stone-test",0,0]
 	world.mob_system.apply_snapshot([record])
-	var replicated: SpikeWildDog3D = world.mob_system.mobs[101]
+	var replicated: SpikeMob3D = world.mob_system.mobs[101]
 	check(replicated.definition == MobDefinitions.FERAL_DOG and replicated.max_hp == MobDefinitions.FERAL_DOG.max_hp and replicated.title == MobDefinitions.FERAL_DOG.display_name, "new actor uses local presentation definition")
 	check(replicated.hp == 80 and replicated.source_metinstone_id == "stone-test", "dynamic fields and provenance survive reconciliation")
 	check(replicated.pack_instance_id == 0, "client has no replicated pack runtime")

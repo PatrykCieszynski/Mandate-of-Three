@@ -29,8 +29,8 @@ func _check_target_identity() -> void:
 	world.add_child(combat)
 	combat._world = world
 	combat.client_combat.setup(world,combat)
-	var dog := SpikeWildDog3D.new()
-	dog.setup_dog(17,Vector3.ZERO)
+	var dog := SpikeMob3D.new()
+	dog.setup_mob(17,Vector3.ZERO)
 	world.add_child(dog)
 	world.mob_system.mobs[17] = dog
 	var mob: Dictionary = {"kind":&"mob","id":17}
@@ -42,8 +42,8 @@ func _check_target_identity() -> void:
 	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack, "Death clears even without autoattack")
 	world.mob_system.mobs.erase(17)
 	dog.free()
-	dog = SpikeWildDog3D.new()
-	dog.setup_dog(18,Vector3.ZERO)
+	dog = SpikeMob3D.new()
+	dog.setup_mob(18,Vector3.ZERO)
 	world.add_child(dog)
 	world.mob_system.mobs[18] = dog
 	assert(combat.client_combat.selected_target.is_empty() and combat.client_combat.resolve_target({"kind":&"mob","id":17}) == null, "Replacement identity never revives old selection")

@@ -3,7 +3,7 @@ extends RefCounted
 ## Full-snapshot wire contract; no server AI/persistence metadata.
 ## Keep values stable on both peers when extending this record.
 enum Field { ID = 0, POSITION = 1, YAW = 2, HP = 3, STATE = 4, MOB_KEY = 5, SOURCE_METIN = 6, DOWN_REMAINING = 7, GET_UP_REMAINING = 8, COUNT = 9 }
-static func capture(mob: SpikeWildDog3D, now: int = Time.get_ticks_msec()) -> Array:
+static func capture(mob: SpikeMob3D, now: int = Time.get_ticks_msec()) -> Array:
 	var wire_state: int = mob.ai_state
 	assert(MobState.NAMES.has(wire_state), "Unknown mob AI state")
 	var lock := mob.hit_reaction.snapshot(now)

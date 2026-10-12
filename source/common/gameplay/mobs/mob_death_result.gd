@@ -20,7 +20,7 @@ static func owner_for_contributions(contributions: Dictionary) -> int:
 			highest = contributions[contributor]
 	return owner_id
 
-static func capture(mob: SpikeWildDog3D, now: int, services: MandateWorldServices) -> MobDeathResult:
+static func capture(mob: SpikeMob3D, now: int, services: MandateWorldServices) -> MobDeathResult:
 	var result := MobDeathResult.new()
 	result.mob_id = mob.mob_instance_id
 	result.definition_id = mob.mob_key

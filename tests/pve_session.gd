@@ -4,7 +4,7 @@ extends "res://tests/items_session.gd"
 var movement_sequence: int = 0
 
 func face_or_approach(point: Vector3, stop_distance: float = 1.7) -> void:
-	var body: SpikeCharacter3D = world.characters[world.local_peer]
+	var body: SpikePlayer3D = world.characters[world.local_peer]
 	var offset: Vector3 = point - body.target_position
 	var direction := Vector2(offset.x, offset.z).normalized()
 	if Vector2(offset.x, offset.z).length() <= stop_distance: direction *= 0.05
@@ -45,7 +45,7 @@ func run() -> void:
 	while combat.state.is_empty() or combat.state.drops.is_empty() or (CmdlineUtils.get_parsed_args().has("xp-levelup") and int(combat.state.progression.level) < 2):
 		var nearest: float = INF
 		var point: Vector3 = Vector3.ZERO
-		for dog: SpikeWildDog3D in world.mob_system.mobs.values():
+		for dog: SpikeMob3D in world.mob_system.mobs.values():
 			if dog.ai_state in [MobState.Value.DEAD, MobState.Value.DISABLED]: continue
 			var distance: float = world.characters[world.local_peer].target_position.distance_to(dog.target_position)
 			if distance < nearest:

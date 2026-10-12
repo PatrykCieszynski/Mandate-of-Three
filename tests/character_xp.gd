@@ -31,7 +31,7 @@ func run_server() -> void:
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var store: WorldStoreSqlite = server.database.store
 	var starting_points: int = store.get_player(owner_id).available_attributes_points
-	for dog: SpikeWildDog3D in world.mob_system.mobs.values():
+	for dog: SpikeMob3D in world.mob_system.mobs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
 			dog.ai_state = MobState.Value.DISABLED
@@ -66,7 +66,7 @@ func run_server() -> void:
 	world.characters[other].position = Vector3(-12, 0, 12)
 	for id: int in [2, 3, 4]:
 		await get_tree().create_timer(1.2).timeout
-		var dog: SpikeWildDog3D = world.mob_system.mobs[id]
+		var dog: SpikeMob3D = world.mob_system.mobs[id]
 		world.characters[hero].position = Vector3(0,0,3)
 		world.characters[hero].rotation.y = 0
 		dog.position = Vector3(0, 0, 1.4)

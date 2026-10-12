@@ -63,7 +63,7 @@ func _ready() -> void:
 		add_child(host)
 		world = host.get_node("SpikeMap")
 		# Opt in only in the fixture to retain natural-aggro/return coverage.
-		for dog: SpikeWildDog3D in world.mob_system.mobs.values(): dog.proximity_aggro = true
+		for dog: SpikeMob3D in world.mob_system.mobs.values(): dog.proximity_aggro = true
 		api.peer_connected.connect(func(id: int) -> void:
 			var number: int = server.connected_players.size() + 1
 			var owner: int = server.database.store.create_player_character("pve%d" % number, {"name": "Pve%d" % number, "skin": 1})
@@ -156,7 +156,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.CHASE)
 	fixture_checkpoint = "ATTACK"
 	await wait_until(func() -> bool: return world.mob_system.mobs[1].ai_state == MobState.Value.ATTACK)
-	check(combat.health.values().min() < 100, "server mob attack")
+	check(world.characters.values().map(func(body: SpikePlayer3D) -> int: return body.hp).min() < 100, "server mob attack")
 	world.mob_system.mobs[1].hp = 50
 	place_far()
 	fixture_checkpoint = "RETURN"
@@ -260,10 +260,10 @@ func _physics_process(_delta: float) -> void:
 	# assistance does in gameplay. An accepted swing keeps its own frozen yaw.
 	if not aim_fixture_fight or not GameMode.is_world_server() or phase_name!="FIGHT" or world==null: return
 	var combat: SpikeCombat3D = world.combat_endpoint
-	var dog: SpikeWildDog3D = world.mob_system.mobs.get(1)
+	var dog: SpikeMob3D = world.mob_system.mobs.get(1)
 	if dog==null or dog.ai_state==MobState.Value.DEAD: return
 	for id: int in world.characters:
-		var body: SpikeCharacter3D = world.characters[id]
+		var body: SpikePlayer3D = world.characters[id]
 		var offset: Vector3 = dog.position-body.position
 		body.rotation.y = atan2(-offset.x,-offset.z)
 		combat.remember_next_facing(id,Vector2(offset.x,offset.z))
@@ -271,7 +271,7 @@ func _physics_process(_delta: float) -> void:
 func _process(delta: float) -> void:
 	elapsed += delta
 	if elapsed > 40:
-		check(false, "timeout phase=" + phase_name + " checkpoint=" + fixture_checkpoint + " health=" + str(world.combat_endpoint.health) + " ready=" + str(ready_peers.size()) + " mobs=" + str(world.mob_system.snapshot()) if world != null else "timeout before world setup")
+		check(false, "timeout phase=" + phase_name + " checkpoint=" + fixture_checkpoint + " health=" + str(world.characters.values().map(func(body: SpikePlayer3D) -> int: return body.hp)) + " ready=" + str(ready_peers.size()) + " mobs=" + str(world.mob_system.snapshot()) if world != null else "timeout before world setup")
 		return
 	if GameMode.is_world_server() or world == null or world.combat_endpoint.state.is_empty(): return
 	if not ready_peers.has(world.local_peer):

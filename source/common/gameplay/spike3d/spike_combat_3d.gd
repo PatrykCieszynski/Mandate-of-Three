@@ -9,8 +9,6 @@ const HOME: Vector3 = Vector3(-4, 0, 0)
 signal swing_received(peer_id: int, animation_key: StringName, step_index: int)
 signal feedback_received(result: Dictionary)
 signal state_changed(snapshot: Dictionary)
-var health: Dictionary[int, int] = {}
-var _respawn_ms: Dictionary[int, int] = {}
 var attacks := BasicAttackService.new()
 var client_combat := ClientCombatController.new()
 var _pickup_ms: Dictionary[int, int] = {}
@@ -86,7 +84,10 @@ func _build_navigation() -> void:
 	_world.add_child(navigation_region)
 
 func initialize_peer(peer_id: int) -> void:
-	health[peer_id] = 100
+	var body: SpikePlayer3D = _world.characters[peer_id]
+	body.hp = body.max_hp
+	body.set_alive(true)
+	body.respawn_at_ms = 0
 	attack_runtime(peer_id)
 	if OS.has_feature("editor"):
 		for arg: String in OS.get_cmdline_user_args():
@@ -96,8 +97,12 @@ func initialize_peer(peer_id: int) -> void:
 func remove_peer(peer_id: int) -> void:
 	client_combat.remove_peer(peer_id)
 	attacks.remove_peer(peer_id)
-	for collection: Dictionary in [health, _respawn_ms, _pickup_ms]:
-		collection.erase(peer_id)
+	_pickup_ms.erase(peer_id)
+	var body: SpikePlayer3D = _world.characters.get(peer_id)
+	if body != null:
+		body.hp = 0
+		body.set_alive(false)
+		body.respawn_at_ms = 0
 	_world.mob_system.remove_peer(peer_id)
 
 func _owner(peer_id: int) -> int:
@@ -105,11 +110,12 @@ func _owner(peer_id: int) -> int:
 	return 0 if resource == null else resource.player_id
 
 func is_player_alive(peer_id: int) -> bool:
-	return _world.characters.has(peer_id) and health.get(peer_id, 0) > 0
+	var body: SpikePlayer3D = _world.characters.get(peer_id)
+	return body != null and body.alive and body.hp > 0
 
 func can_move(peer_id: int, now: int = Time.get_ticks_msec()) -> bool:
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
-	return health.get(peer_id,100) > 0 and now >= attacks.movement_unlock(peer_id) and (body == null or (not body.hit_reaction.locked(now) and not body.knockback_active()))
+	var body: SpikePlayer3D = _world.characters.get(peer_id)
+	return body != null and body.alive and body.hp > 0 and now >= attacks.movement_unlock(peer_id) and not body.hit_reaction.locked(now) and not body.knockback_active()
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_attack(sequence: int) -> void:
@@ -221,15 +227,7 @@ func _physics_process(delta: float) -> void:
 	if not GameMode.is_world_server() or not services.item_domain_ready(): return
 	var now: int = Time.get_ticks_msec()
 	_world.ground_loot.expire(now)
-	for peer_id: int in _respawn_ms.keys():
-		if now >= _respawn_ms[peer_id] and _world.characters.has(peer_id):
-			health[peer_id] = 100
-			_world.characters[peer_id].set_alive(true)
-			var body: SpikeCharacter3D = _world.characters[peer_id]
-			body.position = _world.player_spawn()
-			body.velocity = Vector3.ZERO
-			_world.intentions[peer_id]["direction"] = Vector2.ZERO
-			_respawn_ms.erase(peer_id)
+	_tick_player_lifecycle(now)
 	attacks.process_impacts(now)
 	_world.mob_system.tick(delta,now)
 	_advance_attack_queue(now)
@@ -242,9 +240,9 @@ func _physics_process(delta: float) -> void:
 func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition = BasicAttackHits.MOB_MELEE, hit_direction: Vector3 = Vector3.ZERO) -> CombatHitResult:
 	if not is_player_alive(peer_id): return null
 	if dev_god_mode: return CombatHitResult.new() # No damage, action lock or impulse.
-	var body: SpikeCharacter3D = _world.characters[peer_id]
-	var result := HitReactionResolver.resolve(hit,body.reaction_profile,damage,int(health[peer_id]),body.hit_reaction.locked(now))
-	health[peer_id] -= result.damage
+	var body: SpikePlayer3D = _world.characters[peer_id]
+	var result := HitReactionResolver.resolve(hit,body.reaction_profile,damage,body.hp,body.hit_reaction.locked(now))
+	body.hp -= result.damage
 	body.hit_reaction.apply(result,now)
 	body.apply_knockback(hit_direction,result.knockback_distance)
 	if result.interrupts_attack:
@@ -252,11 +250,11 @@ func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition =
 		attack_runtime(peer_id).display_combo_step = 0
 		combo_state(peer_id).reset()
 	for observer: int in _world.characters: receive_hurt.rpc_id(observer,peer_id,result.presentation())
-	if health[peer_id] == 0:
+	if body.hp == 0:
 		body.set_alive(false)
 		body.hit_reaction.clear()
 		body.knockback_velocity = Vector3.ZERO
-		_respawn_ms[peer_id] = now + 2000
+		body.respawn_at_ms = now + 2000
 		_clear_attack_intents(peer_id)
 		attack_runtime(peer_id).display_combo_step = 0
 		combo_state(peer_id).reset()
@@ -274,13 +272,15 @@ func _send_snapshot() -> void:
 	var now: int = Time.get_ticks_msec()
 	var mob_snapshots: Array = _world.mob_system.snapshot(now)
 	var combos: Dictionary = attacks.combo_snapshot()
+	var health: Dictionary = {}
 	var respawns: Dictionary = {}
 	var levels: Dictionary = {}
 	var hit_locks: Dictionary = {}
 	for id: int in _world.characters:
+		health[id] = _world.characters[id].hp
+		if _world.characters[id].respawn_at_ms > 0: respawns[id] = maxf(0,(_world.characters[id].respawn_at_ms-now)/1000.0)
 		levels[id] = services.player_for_peer(id).level
 		hit_locks[id] = _world.characters[id].hit_reaction.snapshot(now)
-	for id: int in _respawn_ms: respawns[id] = maxf(0, (_respawn_ms[id] - now) / 1000.0)
 	for peer_id: int in _world.characters:
 		var drops: Dictionary = _world.ground_loot.snapshot_for_peer(peer_id,now)
 		var player: PlayerResource = services.player_for_peer(peer_id)
@@ -296,14 +296,15 @@ func receive_state(snapshot: Dictionary) -> void:
 	state = snapshot
 	state_changed.emit(snapshot)
 	for peer_id: int in snapshot.levels:
-		var player: SpikeCharacter3D = _world.characters.get(peer_id)
+		var player: SpikePlayer3D = _world.characters.get(peer_id)
 		if player != null: player.set_level(int(snapshot.levels[peer_id]))
 	if _world.metin_encounter != null and not snapshot.get("metin",{}).is_empty(): _world.metin_encounter.receive_snapshot(snapshot.metin)
 	_world.mob_system.apply_snapshot(snapshot.mobs)
 	for peer_id: int in snapshot.health:
-		var body: SpikeCharacter3D = _world.characters.get(peer_id)
+		var body: SpikePlayer3D = _world.characters.get(peer_id)
 		if body != null:
-			body.set_alive(int(snapshot.health[peer_id]) > 0)
+			body.hp = int(snapshot.health[peer_id])
+			body.set_alive(body.hp > 0)
 			var lock: Array = snapshot.hit_locks.get(peer_id,[0,0])
 			body.present_hit_lock(int(lock[0]),int(lock[1]))
 	client_combat.snapshot_changed(snapshot)
@@ -349,7 +350,7 @@ func refresh_hud() -> void:
 	var actor: Node3D = client_combat.resolve_target(client_combat.selected_target)
 	if actor is MetinStone3D:
 		target = "%s: %d / %d" % [_world.metin_encounter.definition.display_name,_world.metin_encounter.runtime.hp,_world.metin_encounter.definition.max_hp]
-	elif actor is SpikeWildDog3D:
+	elif actor is SpikeMob3D:
 		target = "%s: %d / %d" % [actor.title, actor.hp, actor.max_hp]
 	var combo: int = int(state.get("combos", {}).get(_world.local_peer, 0))
 	var options: Dictionary = state.get("combo_options",{"enabled":false,"skill_level":0,"length":4})
@@ -409,3 +410,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _exit_tree() -> void:
 	client_combat.dispose()
+
+func _tick_player_lifecycle(now: int) -> void:
+	# Existing player-only respawn policy; shared actor and attack service do not own it.
+	for peer_id: int in _world.characters:
+		var body: SpikePlayer3D = _world.characters[peer_id]
+		if body.respawn_at_ms <= 0 or now < body.respawn_at_ms: continue
+		body.hp = body.max_hp
+		body.set_alive(true)
+		body.position = _world.player_spawn()
+		body.velocity = Vector3.ZERO
+		_world.intentions[peer_id]["direction"] = Vector2.ZERO
+		body.respawn_at_ms = 0
