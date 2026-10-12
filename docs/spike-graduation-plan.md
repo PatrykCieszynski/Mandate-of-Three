@@ -193,5 +193,55 @@ side-effects podczas publikacji oraz brak committed-change facts przy
 rollback/rejection. Fixture Upgrade po bezpośrednim seedzie SQL używa jawnego
 resynchronize zamiast polegać na side-effect publikacji.
 
-A2–A5 pozostają do wykonania: kolejne prywatne cross-calls, adapter TinyMMO,
-rewards/ground loot i architecture guard. Package A nie jest jeszcze zamknięty.
+Po commicie A1 pozostały do wykonania: kolejne prywatne cross-calls, adapter TinyMMO,
+rewards/ground loot i architecture guard. Zamknięcie pakietu opisano poniżej.
+
+## Package A — zamknięcie 2026-10-12
+
+A1–A5 ukończone. Package A integrujemy lokalnie do codex/spike-graduation,
+bez integracji do main i bez publikacji topic branchy.
+
+- A2: world posiada jawne gameplay_camera(), cancel_npc_approach() i
+  has_line_of_sight(); Combat udostępnia is_player_alive(). Naprawa Currency jest
+  jawną operacją resynchronize. Zniknęły prywatne cross-calls objęte planem.
+- A3: jeden MandateWorldServices jest przekazywany z composition root do
+  endpointów/encountera. Tylko jego plik zna WorldServer.curr w tym production
+  path. Adapter odczytuje aktualne sesje i store'y, nie zatrzymuje starych
+  referencji przy reconnect/fixture store swap. item_domain_ready() zachowuje
+  dotychczasową granicę physics-only fixtures bez oddawania Combatowi store'u.
+- A4: Combat emituje mob_died po runtime death guard i lifecycle/respawn ticket.
+  KillRewardResolver wybiera contribution winner (remis: niższy stable owner ID)
+  i dotychczasowy roll; GroundLootSystem posiada live item drops, rights, expiry,
+  snapshot i pickup. Yang pozostaje w istniejącym Currency endpoint.
+  WorldDatabase.award_experience() jest tymczasowym właścicielem operacji
+  progression: RAM → dirty → fact. Resolver wybiera aktualny resource po
+  disconnect/relog; Combat pozostaje fasadą dotychczasowego XP RPC.
+- SQL claim przyjmuje przygotowany ItemInstance, waliduje UID/owner/definition
+  i atomowo zapisuje receipt/item/placement. Nie generuje już iron_sword/affix.
+  Starter kit i dev sword policy pozostają odłożone zgodnie z P2.
+- A5: tools/check-mandate-boundaries.ps1 egzekwuje wskazane production scopes,
+  jeden dokładny wyjątek adaptera, zakaz prywatnych cross-calls/pól świata
+  i zakaz persistence/reward/ground state w Combat. Default smoke i osobny
+  krok CI uruchamiają guard oraz jego pozytywne/negatywne kontrakty.
+  Starsze TinyMMO modules i fixtures nie są szeroką whitelistą naruszeń:
+  są osobnym, jawnie nieobjętym tym refaktorem zakresem.
+
+Weryfikacja: import Godota, diff check, architecture guard/contracts, default
+smoke (10 Godot + 74 Web UI), PvE/ground claim, XP/checkpoint/disconnect, Yang,
+progression, Metin network, ACTION, FEEL2, combat, Shop, Upgrade i web-inventory.
+Suite'y sieciowe wykonane sekwencyjnie. Zmiany RPC paths/wire, attack timeline,
+physics policy, balance i checkpoint intervals nie należały do pakietu.
+
+Przy weryfikacji odtworzono PvE timeout także na źródłach sprzed A4. Fixture
+utrzymywało stały kierunek mimo full-motion advance; teraz celuje kolejne
+intencje w poruszającego się moba, zachowując frozen yaw przyjętego swing.
+XP fixture czeka na can_move zamiast dawnego 0.5 s i resetuje własną geometrię
+przed kolejnym kontrolowanym killem. Metin fixture rozdziela działania
+contributorów i obserwuje spawn nagrody przed niezależnym autolootem Yang.
+Asercje ownership, damage/replay, rollback, once-only rewards, checkpointów
+i disconnect zostały zachowane. Native CEF/subjective feel pozostaje odbiorem
+właściwych kolejnych milestone'ów; ten pakiet weryfikowano headless.
+
+Kolejne pakiety B i C mają osobne branche z aktualnego spike-graduation.
+World split i pełny extraction Wallet/Progression z WorldDatabase nadal są
+odłożone do ponownej oceny/P2, zgodnie z zatwierdzonym planem.

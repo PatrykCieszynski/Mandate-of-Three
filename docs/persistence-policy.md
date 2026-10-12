@@ -132,3 +132,18 @@ still tests logout/relog, level-up and the exact weapon UID.
 rollback, private HUD, rights/autoloot/pickup races, expiry, obstacles, RPC replay
 and real disconnect. Full `pve_session` verifies combat/autoloot income and exact
 balance after logout/relog.
+
+## Package A reward boundary (2026-10-12)
+
+Combat's death guard emits mob_died once. KillRewardResolver selects the existing
+contribution winner and reward policy. It resolves the current PlayerResource via
+MandateWorldServices before WorldDatabase.award_experience updates RAM/dirty
+progression and emits the XP fact; the combat endpoint only publishes its existing
+XP RPC. Full progression runtime extraction remains P2.
+
+GroundLootSystem owns live item drops, rights, expiry and pickup. Its application
+operation prepares an ItemInstance from the authoritative drop and passes it to
+ItemStoreSqlite.claim_ground_item(owner_id, drop_uid, item). SQL validates identity
+and owner and commits receipt/item/placement together. It no longer generates a
+sword or attack roll. Cache refresh and notification follow commit and ground
+erase. No schema, checkpoint intervals or per-kill durability were added.
