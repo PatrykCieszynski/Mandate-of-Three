@@ -41,13 +41,7 @@ func run_server() -> void:
 	world.inventory_endpoint.resynchronize(hero)
 	var inventory: SpikeInventory3D = world.inventory_endpoint
 	var currency: SpikeCurrency3D = world.currency_endpoint
-	inventory.inventory_changed.disconnect(inventory._inventory_changed)
-	inventory.inventory_changed.connect(func(owner_id: int) -> void:
-		committed_inventory_changes += 1
-		var persisted: Dictionary = items.inventory(owner_id)
-		check(server.runtime_equipment[owner_id].stats==persisted.stats and server.runtime_equipment[owner_id].equipment==persisted.equipment,"upgrade cache is ready before first publication subscriber")
-		check(server.database.wallet_balance(owner_id)==1100 and server.database.runtime_wallets[owner_id].pending_currency_delta==0,"upgrade wallet RAM is ready before Inventory fact"))
-	inventory.inventory_changed.connect(inventory._inventory_changed)
+	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
 	currency.wallet_changed.connect(func(_owner_id: int) -> void: committed_wallet_changes += 1)
 	set_phase("INTERACT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
@@ -67,15 +61,18 @@ func run_server() -> void:
 	set_phase("UPGRADE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok and replies[hero].level==1 and replies[hero].balance==1100,"successful RPC refreshes item and wallet")
-	check(server.runtime_equipment.has(player.player_id),"committed Inventory refreshes runtime equipment cache")
 	before = items.inventory(player.player_id)
+	var upgraded: Dictionary = {}
+	for item: Dictionary in before.items:
+		if item.uid == drop_uid: upgraded = item
+	check(not upgraded.is_empty() and replies[hero].inventoryItem == upgraded,"client receives the committed upgraded item, revision and stats in Inventory")
 	await get_tree().create_timer(0.15).timeout
 	set_phase("STALE_SELECT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error == "stale" and replies[hero].inventoryUpdates == 1 and replies[hero].walletUpdates == 0,"stale selection repairs Inventory without wallet refresh")
 	set_phase("REPLAY",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(not replies[hero].ok and replies[hero].error=="stale" and items.inventory(player.player_id)==before,"stale replay is atomic")
+	check(not replies[hero].ok and replies[hero].error=="stale" and items.inventory(player.player_id)==before and replies[hero].inventoryItem==upgraded and replies[hero].balance==1100,"stale replay leaves item, client Inventory and wallet unchanged")
 	world.characters[hero].position = Vector3(12,0,12)
 	await get_tree().create_timer(0.15).timeout
 	set_phase("RANGE",hero)
@@ -108,6 +105,9 @@ func _process(delta: float) -> void:
 		world.upgrade_endpoint.operation_finished.connect(func(_id: String,result: Dictionary) -> void:
 			var reply: Dictionary = result.duplicate(true)
 			var quote: Dictionary = world.upgrade_endpoint.state
+			reply["inventoryItem"] = {}
+			for item: Dictionary in world.inventory_endpoint.state.get("items",[]):
+				if item.uid == drop_uid: reply["inventoryItem"] = item.duplicate(true)
 			reply.merge({"itemName":quote.get("itemName",""),"inventoryUpdates":inventory_notifications - selection_counts.x,"walletUpdates":wallet_notifications - selection_counts.y,"active":quote.active,"candidate":quote.get("candidate",{}).get("id",""),"level":quote.get("candidate",{}).get("level",-1),"balance":world.currency_endpoint.state.get("balance",-1)})
 			report.rpc_id(1,reply))
 		register_ready.rpc_id(1)

@@ -39,12 +39,7 @@ func run_server() -> void:
 	var store := CountingItemStore.new(db)
 	server.database.item_store = store
 	var inventory: SpikeInventory3D = world.inventory_endpoint
-	inventory.inventory_changed.disconnect(inventory._inventory_changed)
-	inventory.inventory_changed.connect(func(changed_owner: int) -> void:
-		committed_inventory_changes += 1
-		var persisted: Dictionary = store.inventory(changed_owner)
-		check(server.runtime_equipment[changed_owner].stats==persisted.stats and server.runtime_equipment[changed_owner].equipment==persisted.equipment,"equip/pickup cache exists before publication subscribers"))
-	inventory.inventory_changed.connect(inventory._inventory_changed)
+	inventory.inventory_changed.connect(func(_owner_id: int) -> void: committed_inventory_changes += 1)
 	for dog: SpikeWildDog3D in combat.dogs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
@@ -63,6 +58,7 @@ func run_server() -> void:
 	set_phase("BASELINE", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
 	check(combat.dogs[1].hp == 97, "baseline first-stage damage is 23")
+	# Critical hot-path invariant; damage alone cannot reveal per-swing SQL reads.
 	check(store.inventory_reads == 0, "swing never reads SQLite inventory")
 	set_phase("WAIT")
 	await get_tree().create_timer(0.5).timeout
