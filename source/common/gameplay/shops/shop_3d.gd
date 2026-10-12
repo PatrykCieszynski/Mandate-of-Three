@@ -1,5 +1,6 @@
 class_name Shop3D
 extends Node
+var services: MandateWorldServices
 signal state_changed(snapshot: Dictionary)
 signal operation_finished(command_id: String, result: Dictionary)
 var state: Dictionary = {"active":false}
@@ -32,10 +33,17 @@ func buy_for_peer(peer_id: int, instance_id: String, service_id: StringName, off
 	_last_buy[peer_id] = now
 	var authorization: Dictionary = _authorization(peer_id, instance_id, service_id)
 	if not authorization.ok: return authorization
-	if WorldServer.curr == null or WorldServer.curr.database == null: return {"ok":false, "error":"storage"}
-	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	if not services.available() or services.economy() == null: return {"ok":false, "error":"storage"}
+	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false, "error":"unknown_player"}
-	return WorldServer.curr.database.purchase_shop_offer(player.player_id, authorization.shop, offer_id, position)
+	var result: Dictionary = services.economy().purchase_shop_offer(player.player_id, authorization.shop, offer_id, position)
+	if result.ok:
+		# The database operation has committed and accepted wallet RAM.
+		# Prepare equipment/cache before either endpoint sees a change fact.
+		_world.inventory_endpoint.refresh_authoritative_state(peer_id)
+		_world.inventory_endpoint.inventory_changed.emit(player.player_id)
+		_world.currency_endpoint.wallet_changed.emit(player.player_id)
+	return result
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
 	if not _open.has(peer_id): return {"active":false}
@@ -70,9 +78,6 @@ func request_shop(action: String, instance_id: String, service_id: String, offer
 		"open": result = open_for_peer(peer_id, instance_id, StringName(service_id))
 		"buy": result = buy_for_peer(peer_id, instance_id, StringName(service_id), StringName(offer_id), position, Time.get_ticks_msec())
 		_: result = {"ok":false, "error":"request"}
-	if action == "buy" and result.ok:
-		_world.inventory_endpoint._send_state(peer_id)
-		_world.currency_endpoint._send_snapshot(peer_id)
 	_publish(peer_id)
 	# Browser command results use the existing narrow ok/error contract.
 	receive_operation.rpc_id(peer_id, command_id, {"ok":true} if result.ok else {"ok":false, "error":result.error})

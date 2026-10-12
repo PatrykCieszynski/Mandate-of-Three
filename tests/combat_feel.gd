@@ -188,12 +188,12 @@ func run_server() -> void:
 	var dead_position: Vector3 = world.characters[hero].position
 	var before: Dictionary = server.database.item_store.inventory(server.connected_players[hero].player_id)
 	drop_uid = Crypto.new().generate_random_bytes(16).hex_encode()
-	combat.ground[drop_uid] = {"position": dead_position, "definition_id": "iron_sword", "bonus": 3,
+	world.ground_loot.drops[drop_uid] = {"position": dead_position, "definition_id": "iron_sword", "bonus": 3,
 		"owner": server.connected_players[hero].player_id, "owner_name": "Test", "protected_until": 0, "expires": Time.get_ticks_msec() + 120000}
 	set_phase("DEAD", hero)
 	await get_tree().create_timer(0.6).timeout
 	check(world.characters[hero].position.distance_to(dead_position) < 0.03 and dog.hp == 120, "dead input and attack denied")
-	check(combat.ground.has(drop_uid) and server.database.item_store.inventory(server.connected_players[hero].player_id) == before, "dead pickup denied")
+	check(world.ground_loot.drops.has(drop_uid) and server.database.item_store.inventory(server.connected_players[hero].player_id) == before, "dead pickup denied")
 	set_phase("WAIT")
 	await wait_until(func() -> bool: return combat.health[hero] == 100)
 	check(world.characters[hero].position.distance_to(Vector3(-3, 0, 3)) < 0.2 and not combat._respawn_ms.has(hero), "authoritative respawn")

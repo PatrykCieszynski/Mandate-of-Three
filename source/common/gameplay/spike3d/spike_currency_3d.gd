@@ -1,5 +1,6 @@
 class_name SpikeCurrency3D
 extends Node
+var services: MandateWorldServices
 ## Ground currency is transient; only character wallet deltas reach SQLite.
 const DOG_YANG: int = 30
 const AUTO_REACH: float = 1.25
@@ -7,6 +8,7 @@ const PICKUP_REACH: float = 2.5
 const TEST_SPEND_COST: int = 50
 signal feedback_received(result: Dictionary)
 signal state_changed(snapshot: Dictionary)
+signal wallet_changed(owner_id: int)
 var ground: Dictionary[int, Dictionary] = {}
 var state: Dictionary = {}
 var _next_drop_id: int = 0
@@ -23,10 +25,11 @@ var _notice: String = ""
 
 func _ready() -> void:
 	_world = get_parent()
+	wallet_changed.connect(_wallet_changed)
 	if GameMode.is_client(): _build_hud()
 
 func _database() -> WorldDatabase:
-	return null if WorldServer.curr == null else WorldServer.curr.database
+	return null if not services.available() else services.economy()
 
 func initialize_peer(peer_id: int) -> void:
 	if _database() == null: return # Physics-only fixture.
@@ -40,18 +43,18 @@ func remove_peer(peer_id: int) -> void:
 	_pickup_ms.erase(peer_id)
 
 func _owner(peer_id: int) -> int:
-	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var player: PlayerResource = services.player_for_peer(peer_id)
 	return 0 if player == null else player.player_id
 
 func spawn_currency(position: Vector3, owner_id: int, owner_name: String, now: int, amount: int = DOG_YANG) -> int:
 	_next_drop_id += 1 # Local entity ID, never persisted and never an ItemInstance UID.
 	ground[_next_drop_id] = {"amount": amount, "position": position,
 		"owner": owner_id, "owner_name": owner_name,
-		"protected_until": now + SpikeCombat3D.PROTECTION_MS, "expires": now + SpikeCombat3D.LOOT_LIFETIME_MS}
+		"protected_until": now + GroundLootSystem.PROTECTION_MS, "expires": now + GroundLootSystem.LOOT_LIFETIME_MS}
 	return _next_drop_id
 
 func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP_REACH) -> Dictionary:
-	if not _world.combat_endpoint._living(peer_id) or _database() == null:
+	if not _world.combat_endpoint.is_player_alive(peer_id) or _database() == null:
 		return {"ok": false, "error": "player"}
 	if not ground.has(drop_id): return {"ok": false, "error": "gone"}
 	var drop: Dictionary = ground[drop_id]
@@ -62,7 +65,7 @@ func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP
 	if now < int(drop.protected_until) and owner_id != int(drop.owner):
 		return {"ok": false, "error": "reserved"}
 	var position: Vector3 = _world.characters[peer_id].position
-	if position.distance_to(drop.position) > reach or not _world.combat_endpoint._visible_between(position, drop.position):
+	if position.distance_to(drop.position) > reach or not _world.has_line_of_sight(position, drop.position):
 		return {"ok": false, "error": "distance"}
 	if not _database().add_yang(owner_id, int(drop.amount)):
 		return {"ok": false, "error": "wallet"}
@@ -71,7 +74,7 @@ func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_pickup(drop_id: int) -> void:
-	if not GameMode.is_world_server() or not _world.combat_endpoint._living(multiplayer.get_remote_sender_id()): return
+	if not GameMode.is_world_server() or not _world.combat_endpoint.is_player_alive(multiplayer.get_remote_sender_id()): return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	var now: int = Time.get_ticks_msec()
 	if now - _pickup_ms.get(peer_id, -1000) < 100: return
@@ -80,7 +83,7 @@ func request_pickup(drop_id: int) -> void:
 	_send_snapshot()
 
 func spend_for_peer(peer_id: int, sequence: int, now: int) -> Dictionary:
-	if not _world.combat_endpoint._living(peer_id) or _database() == null:
+	if not _world.combat_endpoint.is_player_alive(peer_id) or _database() == null:
 		return {"ok": false, "error": "player"}
 	if sequence < 0 or sequence > 2147483647 or sequence <= _spend_sequences.get(peer_id, -1):
 		return {"ok": false, "error": "replay"}
@@ -88,7 +91,9 @@ func spend_for_peer(peer_id: int, sequence: int, now: int) -> Dictionary:
 	if now - _spend_ms.get(peer_id, -1000) < 100: return {"ok": false, "error": "too_fast"}
 	_spend_ms[peer_id] = now
 	var result: Dictionary = _database().spend_yang(_owner(peer_id), TEST_SPEND_COST)
-	if result.ok: result["spent"] = TEST_SPEND_COST
+	if result.ok:
+		result["spent"] = TEST_SPEND_COST
+		wallet_changed.emit(_owner(peer_id))
 	return result
 
 @rpc("any_peer", "call_remote", "reliable", 1)
@@ -96,8 +101,9 @@ func request_test_spend(sequence: int) -> void:
 	if not GameMode.is_world_server(): return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id): return
-	receive_feedback.rpc_id(peer_id, spend_for_peer(peer_id, sequence, Time.get_ticks_msec()))
-	_send_snapshot()
+	var result: Dictionary = spend_for_peer(peer_id, sequence, Time.get_ticks_msec())
+	receive_feedback.rpc_id(peer_id, result)
+	if not result.ok: _send_snapshot() # Repair, not a committed-change notification.
 
 func _physics_process(delta: float) -> void:
 	if not GameMode.is_world_server() or _database() == null: return
@@ -116,6 +122,13 @@ func _physics_process(delta: float) -> void:
 				receive_feedback.rpc_id(peer_id, result)
 				break
 	_send_snapshot()
+
+func _wallet_changed(owner_id: int) -> void:
+	for peer_id: int in _world.characters:
+		if _owner(peer_id) == owner_id: _send_snapshot(peer_id)
+
+func resynchronize(peer_id: int) -> void:
+	_send_snapshot(peer_id)
 
 func _send_snapshot(only_peer: int = -1) -> void:
 	if _database() == null: return

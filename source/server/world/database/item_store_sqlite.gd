@@ -55,10 +55,10 @@ func initialize_character(owner_id: int) -> Dictionary:
 static func ensure_ground_claim_schema(database: SQLite) -> bool:
 	return database.query("CREATE TABLE IF NOT EXISTS ground_item_claims (drop_uid TEXT PRIMARY KEY NOT NULL, owner_character_id INTEGER NOT NULL);")
 
-func claim_ground_item(owner_id: int, drop_uid: String, bonus: int) -> Dictionary:
-	# Only the world server supplies this roll and drop identity. The RPC accepts
+func claim_ground_item(owner_id: int, drop_uid: String, item: ItemInstance) -> Dictionary:
+	# The application supplies the prepared item and exact drop identity. RPC accepts
 	# a drop UID alone. Receipt + item + placement commit together, before despawn.
-	if not ItemInstance.valid_uid(drop_uid) or bonus < 1 or bonus > 9:
+	if item == null or not ItemInstance.valid_uid(drop_uid) or item.uid != drop_uid:
 		return _error("request")
 	if not db.query("BEGIN IMMEDIATE;"):
 		return _error("storage")
@@ -70,11 +70,12 @@ func claim_ground_item(owner_id: int, drop_uid: String, bonus: int) -> Dictionar
 		return _rollback("storage")
 	if db.query_result.is_empty():
 		return _rollback("owner")
-	var position: int = _free_bag_position(owner_id, ItemDefinitions.IRON_SWORD.inventory_height)
+	if item.owner_character_id != owner_id: return _rollback("owner")
+	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
+	if definition == null: return _rollback("request")
+	var position: int = _free_bag_position(owner_id, definition.inventory_height)
 	if position < 0:
 		return _rollback("bag_full" if position == -1 else "storage")
-	var item: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD, owner_id, [{"stat": "attack", "value": bonus}])
-	item.uid = drop_uid
 	if not db.query_with_bindings("INSERT INTO ground_item_claims(drop_uid,owner_character_id) VALUES(?,?);", [drop_uid, owner_id]) or not _insert_item(item, position):
 		return _rollback("storage")
 	var result: Dictionary = _commit()

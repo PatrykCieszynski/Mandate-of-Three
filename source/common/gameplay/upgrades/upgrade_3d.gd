@@ -1,5 +1,6 @@
 class_name Upgrade3D
 extends Node
+var services: MandateWorldServices
 signal state_changed(snapshot: Dictionary)
 signal operation_finished(command_id: String, result: Dictionary)
 var state: Dictionary = {"active":false}
@@ -25,9 +26,9 @@ func authorization(peer_id: int, instance_id: String, service_id: StringName) ->
 func select_for_peer(peer_id: int, instance_id: String, service_id: StringName, uid: String, revision: int) -> Dictionary:
 	var auth: Dictionary = authorization(peer_id,instance_id,service_id)
 	if not auth.ok: return auth
-	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
-	var candidate: Dictionary = UpgradeStoreSqlite.new(WorldServer.curr.database.db).candidate(player.player_id,uid,revision,auth.recipe)
+	var candidate: Dictionary = UpgradeStoreSqlite.new(services.economy().db).candidate(player.player_id,uid,revision,auth.recipe)
 	if not candidate.ok: return candidate
 	_selected[peer_id] = uid # Selection never mutates placement or consumes anything.
 	return {"ok":true}
@@ -37,9 +38,15 @@ func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName,
 	_last_upgrade[peer_id] = now
 	var auth: Dictionary = authorization(peer_id,instance_id,service_id)
 	if not auth.ok: return {"ok":false,"error":auth.error}
-	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
-	return WorldServer.curr.database.upgrade_item(player.player_id,auth.recipe,uid,revision)
+	var result: Dictionary = services.economy().upgrade_item(player.player_id,auth.recipe,uid,revision)
+	if result.ok:
+		# Commit + wallet RAM are complete; cache refresh precedes fan-out.
+		_world.inventory_endpoint.refresh_authoritative_state(peer_id)
+		_world.inventory_endpoint.inventory_changed.emit(player.player_id)
+		_world.currency_endpoint.wallet_changed.emit(player.player_id)
+	return result
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
 	var context: NpcInteractionContext = _world.npc_endpoint.contexts.get(peer_id)
@@ -51,9 +58,9 @@ func snapshot_for_peer(peer_id: int) -> Dictionary:
 		_selected.erase(peer_id)
 		return {"active":false}
 	var recipe: UpgradeDefinition = auth.recipe
-	var player: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"active":false}
-	var inventory: Dictionary = _world.inventory_endpoint._store().inventory(player.player_id)
+	var inventory: Dictionary = services.economy().item_store.inventory(player.player_id)
 	if not inventory.ok: return {"active":false}
 	var owned: int = 0
 	var candidate: Dictionary = {}
@@ -83,11 +90,11 @@ func request_upgrade(action: String, instance_id: String, service_id: String, ui
 		"upgrade": result = upgrade_for_peer(peer_id,instance_id,StringName(service_id),uid,revision,Time.get_ticks_msec())
 		_: result = {"ok":false,"error":"request"}
 	# Selection changes only the quote; a stale revision also repairs Inventory.
-	if action == "upgrade":
-		_world.inventory_endpoint._send_state(peer_id)
-		_world.currency_endpoint._send_snapshot(peer_id)
+	if action == "upgrade" and not result.ok:
+		_world.inventory_endpoint.resynchronize(peer_id)
+		_world.currency_endpoint.resynchronize(peer_id)
 	elif result.get("error","") == "stale":
-		_world.inventory_endpoint._send_state(peer_id)
+		_world.inventory_endpoint.resynchronize(peer_id)
 	publish(peer_id)
 	receive_operation.rpc_id(peer_id,command_id,{"ok":true} if result.ok else {"ok":false,"error":result.error})
 

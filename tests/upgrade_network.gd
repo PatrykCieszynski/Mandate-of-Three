@@ -1,5 +1,7 @@
 extends "res://tests/pve_network.gd"
 var listening: bool = false
+var committed_inventory_changes: int = 0
+var committed_wallet_changes: int = 0
 var inventory_notifications: int = 0
 var wallet_notifications: int = 0
 var selection_counts: Vector2i
@@ -36,7 +38,17 @@ func run_server() -> void:
 	check(db.query("BEGIN IMMEDIATE;"),"begin material fixture")
 	check(items.receive_item_in_transaction(ore).ok and db.query("COMMIT;"),"seed material")
 	check(server.database.add_yang(player.player_id,2100),"pending income")
-	world.inventory_endpoint._send_state(hero)
+	world.inventory_endpoint.resynchronize(hero)
+	var inventory: SpikeInventory3D = world.inventory_endpoint
+	var currency: SpikeCurrency3D = world.currency_endpoint
+	inventory.inventory_changed.disconnect(inventory._inventory_changed)
+	inventory.inventory_changed.connect(func(owner_id: int) -> void:
+		committed_inventory_changes += 1
+		var persisted: Dictionary = items.inventory(owner_id)
+		check(server.runtime_equipment[owner_id].stats==persisted.stats and server.runtime_equipment[owner_id].equipment==persisted.equipment,"upgrade cache is ready before first publication subscriber")
+		check(server.database.wallet_balance(owner_id)==1100 and server.database.runtime_wallets[owner_id].pending_currency_delta==0,"upgrade wallet RAM is ready before Inventory fact"))
+	inventory.inventory_changed.connect(inventory._inventory_changed)
+	currency.wallet_changed.connect(func(_owner_id: int) -> void: committed_wallet_changes += 1)
 	set_phase("INTERACT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok,"open NPC context")
@@ -69,6 +81,7 @@ func run_server() -> void:
 	set_phase("RANGE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error in ["out_of_range","no_interaction"] and items.inventory(player.player_id)==before,"execution reauthorizes range")
+	check(committed_inventory_changes==1 and committed_wallet_changes==1,"selection, stale/replay and range repair never emit committed-change facts")
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
 	if not failed:

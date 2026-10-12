@@ -3,6 +3,7 @@ extends "res://tests/pve_network.gd"
 ## roll in the server fixture. SQLite is isolated; no live accounts are changed.
 
 var improved: bool = false
+var committed_inventory_changes: int = 0
 
 class CountingItemStore extends ItemStoreSqlite:
 	var inventory_reads: int = 0
@@ -37,6 +38,13 @@ func run_server() -> void:
 	var combat: SpikeCombat3D = world.combat_endpoint
 	var store := CountingItemStore.new(db)
 	server.database.item_store = store
+	var inventory: SpikeInventory3D = world.inventory_endpoint
+	inventory.inventory_changed.disconnect(inventory._inventory_changed)
+	inventory.inventory_changed.connect(func(changed_owner: int) -> void:
+		committed_inventory_changes += 1
+		var persisted: Dictionary = store.inventory(changed_owner)
+		check(server.runtime_equipment[changed_owner].stats==persisted.stats and server.runtime_equipment[changed_owner].equipment==persisted.equipment,"equip/pickup cache exists before publication subscribers"))
+	inventory.inventory_changed.connect(inventory._inventory_changed)
 	for dog: SpikeWildDog3D in combat.dogs.values():
 		dog.ai_enabled = false
 		if dog.mob_id != 1:
@@ -63,11 +71,11 @@ func run_server() -> void:
 	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
 	for ticket: Dictionary in combat.packs[combat.dogs[1].pack_instance_id].replacements: ticket.at = Time.get_ticks_msec() + 60000
 	set_phase("WAIT")
-	check(combat.ground.size() == 1 and store.inventory(owner_id).items.size() == 2, "mob creates ground loot, no automatic grant")
-	drop_uid = combat.ground.keys()[0]
+	check(world.ground_loot.drops.size() == 1 and store.inventory(owner_id).items.size() == 2, "mob creates ground loot, no automatic grant")
+	drop_uid = world.ground_loot.drops.keys()[0]
 	# Fix only the fixture's roll to guarantee the better-weapon branch. The
 	# production random range, receipt, pickup and equip code remain unchanged.
-	combat.ground[drop_uid].bonus = 9
+	world.ground_loot.drops[drop_uid].bonus = 9
 	await get_tree().create_timer(0.2).timeout
 	set_phase("PICKUP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
@@ -77,9 +85,11 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok, "weapon comparison, picked item and immutable snapshot")
 	check(db.query("CREATE TEMP TRIGGER fail_runtime_equip BEFORE INSERT ON item_placements BEGIN SELECT RAISE(ABORT,'intentional runtime equip failure'); END;"), "failed equip fixture")
+	var before_failed_notifications := committed_inventory_changes
 	set_phase("FAIL_EQUIP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and server.runtime_attack(owner_id) == 23, "rollback leaves runtime attack unchanged")
+	check(committed_inventory_changes==before_failed_notifications,"rolled-back equip only resynchronizes; it emits no committed-change fact")
 	check(db.query("DROP TRIGGER fail_runtime_equip;"), "remove equip fault")
 	await get_tree().create_timer(0.15).timeout
 	set_phase("BETTER", hero)

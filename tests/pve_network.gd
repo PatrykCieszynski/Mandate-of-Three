@@ -23,6 +23,8 @@ var saw_death: bool = false
 var saw_loot: bool = false
 var won: bool = false
 var failed: bool = false
+var fixture_checkpoint: String = "entry"
+var aim_fixture_fight: bool = false
 
 func check(ok: bool, description: String) -> void:
 	if not ok:
@@ -118,6 +120,7 @@ func phase(command: String, uid: String) -> void:
 			get_tree().quit()
 
 func set_phase(command: String, selected_peer: int = 0) -> void:
+	phase_name = command
 	replies.clear()
 	for id: int in world.characters:
 		phase.rpc_id(id, command if selected_peer == 0 or selected_peer == id else "WAIT", drop_uid)
@@ -135,6 +138,7 @@ func place_near() -> void:
 		index += 1
 
 func run_server() -> void:
+	aim_fixture_fight = true
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
 	var combat: SpikeCombat3D = world.combat_endpoint
 	for id: int in combat.dogs:
@@ -148,12 +152,16 @@ func run_server() -> void:
 	await get_tree().create_timer(0.3).timeout
 	check(combat.dogs[1].ai_state == "IDLE", "idle outside aggro")
 	for id: int in world.characters: world.characters[id].position = SpikeCombat3D.HOME + Vector3(0, 0, 5)
+	fixture_checkpoint = "CHASE"
 	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "CHASE")
+	fixture_checkpoint = "ATTACK"
 	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "ATTACK")
 	check(combat.health.values().min() < 100, "server mob attack")
 	combat.dogs[1].hp = 50
 	place_far()
+	fixture_checkpoint = "RETURN"
 	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "RETURN")
+	fixture_checkpoint = "IDLE"
 	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "IDLE")
 	check(combat.dogs[1].hp == SpikeCombat3D.MOB_HP and combat.dogs[1].contributions.is_empty(), "return heals and resets encounter")
 	set_phase("RANGE")
@@ -184,9 +192,9 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return combat.dogs[1].ai_state == "DEAD")
 	check(Time.get_ticks_msec() - fight_started_ms >= 1800, "spam/replay cannot bypass server combo recovery")
 	combat.dogs[1].dead_until_ms = Time.get_ticks_msec() + 60000
-	check(combat.dogs[1].contributions.size() == 2 and combat.ground.size() == 1, "two attackers, one death and one drop")
-	drop_uid = combat.ground.keys()[0]
-	var drop: Dictionary = combat.ground[drop_uid]
+	check(combat.dogs[1].contributions.size() == 2 and world.ground_loot.drops.size() == 1, "two attackers, one death and one drop")
+	drop_uid = world.ground_loot.drops.keys()[0]
+	var drop: Dictionary = world.ground_loot.drops[drop_uid]
 	var owner_peer: int = 0
 	var other_peer: int = 0
 	for id: int in world.characters:
@@ -197,7 +205,7 @@ func run_server() -> void:
 	check(db.query("SELECT COUNT(*) AS n FROM item_instances;") and db.query_result[0].n == 4, "loot stays on ground before pickup")
 	set_phase("PICKUP", other_peer)
 	await wait_until(func() -> bool: return replies.has(other_peer))
-	check(replies[other_peer].get("error", "") == "reserved" and combat.ground.has(drop_uid), "non-owner denied, ground retained")
+	check(replies[other_peer].get("error", "") == "reserved" and world.ground_loot.drops.has(drop_uid), "non-owner denied, ground retained")
 	var owner_id: int = server.connected_players[owner_peer].player_id
 	var filler: Array[String] = []
 	while server.database.item_store._free_bag_position(owner_id, ItemDefinitions.IRON_SWORD.inventory_height) >= 0:
@@ -207,7 +215,7 @@ func run_server() -> void:
 		filler.append(item.uid)
 	set_phase("PICKUP", owner_peer)
 	await wait_until(func() -> bool: return replies.has(owner_peer))
-	check(replies[owner_peer].get("error", "") == "bag_full" and combat.ground.has(drop_uid), "full bag keeps ground loot")
+	check(replies[owner_peer].get("error", "") == "bag_full" and world.ground_loot.drops.has(drop_uid), "full bag keeps ground loot")
 	for uid: String in filler:
 		db.query_with_bindings("DELETE FROM item_placements WHERE item_uid=?;", [uid])
 		db.query_with_bindings("DELETE FROM item_instances WHERE uid=?;", [uid])
@@ -217,7 +225,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return replies.has(owner_peer))
 	check(replies[owner_peer].get("error", "") == "distance", "remote pickup denied")
 	world.characters[owner_peer].position = drop.position + Vector3(0.5, 0, 0.5)
-	combat.ground[drop_uid].protected_until = 0 # exercise public phase without a 15s wait
+	world.ground_loot.drops[drop_uid].protected_until = 0 # exercise public phase without a 15s wait
 	await get_tree().create_timer(0.15).timeout
 	set_phase("RACE")
 	await wait_until(func() -> bool: return replies.size() == 2)
@@ -227,7 +235,7 @@ func run_server() -> void:
 		if replies[id].ok:
 			winners += 1
 			winner_id = server.connected_players[id].player_id
-	check(winners == 1 and combat.ground.is_empty(), "double pickup has one winner")
+	check(winners == 1 and world.ground_loot.drops.is_empty(), "double pickup has one winner")
 	check(db.query("SELECT COUNT(*) AS n FROM item_instances;") and db.query_result[0].n == 5, "one additional persistent instance")
 	check(db.query("SELECT COUNT(*) AS n FROM ground_item_claims;") and db.query_result[0].n == 1, "one durable receipt")
 	await get_tree().create_timer(0.2).timeout
@@ -246,10 +254,24 @@ func run_server() -> void:
 		db.close_db()
 		get_tree().quit()
 
+func _physics_process(_delta: float) -> void:
+	# This fixture exercises a sustained two-player fight. Full-motion advance
+	# moves actors; keep subsequent intentions aimed at the moving dog, as target
+	# assistance does in gameplay. An accepted swing keeps its own frozen yaw.
+	if not aim_fixture_fight or not GameMode.is_world_server() or phase_name!="FIGHT" or world==null: return
+	var combat: SpikeCombat3D = world.combat_endpoint
+	var dog: SpikeWildDog3D = combat.dogs.get(1)
+	if dog==null or dog.ai_state=="DEAD": return
+	for id: int in world.characters:
+		var body: SpikeCharacter3D = world.characters[id]
+		var offset: Vector3 = dog.position-body.position
+		body.rotation.y = atan2(-offset.x,-offset.z)
+		combat.remember_next_facing(id,Vector2(offset.x,offset.z))
+
 func _process(delta: float) -> void:
 	elapsed += delta
 	if elapsed > 40:
-		check(false, "timeout phase=" + phase_name)
+		check(false, "timeout phase=" + phase_name + " checkpoint=" + fixture_checkpoint + " health=" + str(world.combat_endpoint.health) + " ready=" + str(ready_peers.size()) + " mobs=" + str(world.combat_endpoint._mob_snapshots()) if world != null else "timeout before world setup")
 		return
 	if GameMode.is_world_server() or world == null or world.combat_endpoint.state.is_empty(): return
 	if not ready_peers.has(world.local_peer):

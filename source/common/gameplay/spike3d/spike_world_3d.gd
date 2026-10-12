@@ -1,5 +1,8 @@
 class_name SpikeWorld3D
 extends Node3D
+var services := MandateWorldServices.new()
+var ground_loot := GroundLootSystem.new()
+var kill_rewards := KillRewardResolver.new()
 ## Shared RPC endpoint under the authenticated TinyMMO instance path.
 ## Position never comes from a client: only a bounded movement intention does.
 
@@ -36,23 +39,33 @@ func _ready() -> void:
 	_server = GameMode.is_world_server()
 	region = get_node_or_null("Region") as FirstRegionGraybox
 	_build_arena()
+	ground_loot.setup(self,services)
 	inventory_endpoint = SpikeInventory3D.new()
 	inventory_endpoint.name = "Inventory"
+	inventory_endpoint.services = services
 	add_child(inventory_endpoint)
 	combat_endpoint = SpikeCombat3D.new()
 	combat_endpoint.name = "Combat"
+	combat_endpoint.services = services
 	add_child(combat_endpoint)
 	currency_endpoint = SpikeCurrency3D.new()
 	currency_endpoint.name = "Currency"
+	currency_endpoint.services = services
 	add_child(currency_endpoint)
+	kill_rewards.setup(services,ground_loot,currency_endpoint)
+	combat_endpoint.mob_died.connect(kill_rewards.handle_mob_death)
+	if _server and services.progression()!=null:
+		services.progression().experience_awarded.connect(combat_endpoint.publish_experience)
 	npc_endpoint = NpcInteraction3D.new()
 	npc_endpoint.name = "NpcInteraction"
 	add_child(npc_endpoint)
 	shop_endpoint = Shop3D.new()
 	shop_endpoint.name = "Shop"
+	shop_endpoint.services = services
 	add_child(shop_endpoint)
 	upgrade_endpoint = Upgrade3D.new()
 	upgrade_endpoint.name = "Upgrade"
+	upgrade_endpoint.services = services
 	add_child(upgrade_endpoint)
 	var blacksmith := preload("res://source/common/gameplay/npcs/blacksmith_fixture.tscn").instantiate() as NeutralNpc3D
 	if region != null: blacksmith.position = FirstRegionGraybox.BLACKSMITH
@@ -63,6 +76,7 @@ func _ready() -> void:
 	if region != null:
 		metin_encounter = MetinEncounter.new()
 		metin_encounter.name = "MetinEncounter"
+		metin_encounter.services = services
 		add_child(metin_encounter)
 	if not _server:
 		local_peer = multiplayer.get_unique_id()
@@ -182,6 +196,16 @@ func _build_camera_and_ui() -> void:
 		if not _options.visible: get_viewport().gui_release_focus())
 	options_button.pressed.connect(func() -> void: _options.show())
 
+func gameplay_camera() -> Camera3D:
+	return _camera
+
+func cancel_npc_approach() -> void:
+	_npc_approach.cancel()
+
+func has_line_of_sight(from: Vector3, to: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(from+Vector3.UP*.65,to+Vector3.UP*.65,1)
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
 func show_ui_failure(reason: String) -> void:
 	push_warning("Web inventory unavailable: " + reason)
 	if not is_instance_valid(_ui_failure_label): return
@@ -255,7 +279,7 @@ func join_world() -> void:
 	var host: ServerInstance = get_parent() as ServerInstance
 	if host == null or not host.awaiting_peers.has(peer_id) or characters.has(peer_id):
 		return
-	var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null:
 		return
 	host.awaiting_peers.erase(peer_id)
@@ -272,9 +296,9 @@ func join_world() -> void:
 
 func remove_peer(peer_id: int) -> void:
 	if _server:
-		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
-		if resource != null and WorldServer.curr.database != null:
-			WorldServer.curr.database.flush_character(resource.player_id)
+		var resource: PlayerResource = services.player_for_peer(peer_id)
+		if resource != null and services.economy() != null:
+			services.economy().flush_character(resource.player_id)
 	upgrade_endpoint.remove_peer(peer_id)
 	shop_endpoint.remove_peer(peer_id)
 	npc_endpoint.remove_peer(peer_id)
@@ -295,7 +319,7 @@ func remove_peer(peer_id: int) -> void:
 func _send_roster() -> void:
 	var roster: Dictionary = {}
 	for peer_id: int in characters:
-		var resource: PlayerResource = WorldServer.curr.connected_players.get(peer_id)
+		var resource: PlayerResource = services.player_for_peer(peer_id)
 		if resource != null:
 			roster[peer_id] = resource.display_name
 	for peer_id: int in characters:

@@ -82,11 +82,14 @@ func run_server() -> void:
 	set_phase("FIGHT",int(contributors[0]))
 	await wait_until(func() -> bool: return encounter.runtime.participants.has(combat._owner(int(contributors[0]))))
 	set_phase("WAIT")
-	await get_tree().create_timer(0.3).timeout
+	await _settle_attacks()
+	# Observe newly created rewards before the independent autoloot loop claims
+	# Yang. Yang network tests cover autoloot; this assertion covers stone spawn.
+	world.currency_endpoint.set_physics_process(false)
 	set_phase("FIGHT",int(contributors[1]))
 	await wait_until(func() -> bool: return encounter.runtime.reward_claimed)
 	set_phase("WAIT")
-	check(world.combat_endpoint.ground.size()==1 and world.currency_endpoint.ground.size()==1,"one ground item and Yang reward")
+	check(world.ground_loot.drops.size()==1 and world.currency_endpoint.ground.size()==1,"one ground item and Yang reward: items=%d currency=%d" % [world.ground_loot.drops.size(),world.currency_endpoint.ground.size()])
 	check(encounter.runtime.spawned_mobs.size()==11,"all threshold waves issued once")
 	for id: int in encounter.runtime.spawned_mobs:
 		var dog: SpikeWildDog3D = world.combat_endpoint.dogs[id]
@@ -94,22 +97,23 @@ func run_server() -> void:
 		check(dog.definition.valid() and dog.pack_instance_id > 0,"wave uses shared data-defined pack runtime")
 		check(dog.target_peer != 0,"passive wave dogs still attack stone contributors")
 		dog.ai_enabled = false
-	drop_uid = str(world.combat_endpoint.ground.keys()[0])
-	var reward_owner: int = int(world.combat_endpoint.ground[drop_uid].owner)
+	drop_uid = str(world.ground_loot.drops.keys()[0])
+	var reward_owner: int = int(world.ground_loot.drops[drop_uid].owner)
 	check(encounter.runtime.participants.size()==2,"both players contributed")
 	var applied: int = 0
 	for value: int in encounter.runtime.participants.values(): applied += value
 	check(applied==encounter.definition.max_hp,"overkill never inflates contribution")
 	for id: int in world.characters:
 		check(not encounter.apply_damage(id,10000,Time.get_ticks_msec()),"dead stone rejects further damage")
-	check(world.combat_endpoint.ground.size()==1,"dead stone cannot reward again")
+	check(world.ground_loot.drops.size()==1,"dead stone cannot reward again")
+	world.currency_endpoint.set_physics_process(true)
 	await get_tree().create_timer(0.5).timeout
 	set_phase("RACE")
 	await wait_until(func() -> bool: return replies.size()==2)
 	var wins: int = 0
 	for result: Dictionary in replies.values():
 		if result.get("ok",false): wins += 1
-	check(wins==1 and world.combat_endpoint.ground.is_empty(),"one authorized pickup wins")
+	check(wins==1 and world.ground_loot.drops.is_empty(),"one authorized pickup wins")
 	var found: bool = false
 	for item: Dictionary in server.database.item_store.inventory(reward_owner).items: found = found or item.uid==drop_uid
 	check(found,"reward pickup persists exact UID")

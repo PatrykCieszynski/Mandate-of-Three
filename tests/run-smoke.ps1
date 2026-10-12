@@ -1,6 +1,8 @@
 param([string]$NodeExecutable = 'node')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
+& (Join-Path $taskRoot 'tools/check-mandate-boundaries.ps1')
+& (Join-Path $PSScriptRoot 'check-mandate-boundaries.ps1')
 $taskLogs = Join-Path $taskRoot '.godot/verification'
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
 New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
