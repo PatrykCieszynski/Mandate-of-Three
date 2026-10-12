@@ -251,7 +251,7 @@ func begin_npc_approach(instance_id: String, preselected_item: Dictionary = {}) 
 	_npc_preselected_item = preselected_item.duplicate(true)
 	_npc_repath_ms = 0
 	_npc_approach_until_ms = Time.get_ticks_msec() + 15000
-	combat_endpoint.autoattack = false
+	combat_endpoint.cancel_autoattack()
 	return true
 
 func _npc_direction(manual: Vector2) -> Vector2:

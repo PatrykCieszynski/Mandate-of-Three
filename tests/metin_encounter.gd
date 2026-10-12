@@ -28,41 +28,42 @@ func _check_target_identity() -> void:
 	var combat := SpikeCombat3D.new()
 	world.add_child(combat)
 	combat._world = world
+	combat.client_combat.setup(world,combat)
 	var dog := SpikeWildDog3D.new()
 	dog.setup_dog(17,Vector3.ZERO)
 	world.add_child(dog)
 	world.mob_system.mobs[17] = dog
 	var mob: Dictionary = {"kind":&"mob","id":17}
-	combat.select_target(mob)
+	combat.client_combat.select_target(mob)
 	mob.id = 18
-	assert(combat.selected_target.id == 17 and combat._resolve_target(combat.selected_target) == dog, "Selection owns its identity")
+	assert(combat.client_combat.selected_target.id == 17 and combat.client_combat.resolve_target(combat.client_combat.selected_target) == dog, "Selection owns its identity")
 	dog.die(0)
 	combat.assist_direction(Vector2.ZERO)
-	assert(combat.selected_target.is_empty() and not combat.autoattack, "Death clears even without autoattack")
+	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack, "Death clears even without autoattack")
 	world.mob_system.mobs.erase(17)
 	dog.free()
 	dog = SpikeWildDog3D.new()
 	dog.setup_dog(18,Vector3.ZERO)
 	world.add_child(dog)
 	world.mob_system.mobs[18] = dog
-	assert(combat.selected_target.is_empty() and combat._resolve_target({"kind":&"mob","id":17}) == null, "Replacement identity never revives old selection")
-	combat.select_target({"kind":&"mob","id":18})
-	combat.autoattack = true
+	assert(combat.client_combat.selected_target.is_empty() and combat.client_combat.resolve_target({"kind":&"mob","id":17}) == null, "Replacement identity never revives old selection")
+	combat.client_combat.select_target({"kind":&"mob","id":18})
+	combat.client_combat.autoattack = true
 	dog.ai_state = MobState.Value.DISABLED
-	combat._clear_invalid_target()
-	assert(combat.selected_target.is_empty() and not combat.autoattack)
+	combat.client_combat.clear_invalid_target()
+	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack)
 	dog.ai_state = MobState.Value.IDLE
-	combat.select_target({"kind":&"mob","id":18})
-	combat.autoattack = true
+	combat.client_combat.select_target({"kind":&"mob","id":18})
+	combat.client_combat.autoattack = true
 	world.mob_system.mobs.erase(18)
-	combat._clear_invalid_target()
-	assert(combat.selected_target.is_empty() and not combat.autoattack, "Dynamic removal clears selection")
+	combat.client_combat.clear_invalid_target()
+	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack, "Dynamic removal clears selection")
 	world.mob_system.mobs[18] = dog
-	combat.select_target({"kind":&"mob","id":18})
-	combat.autoattack = true
+	combat.client_combat.select_target({"kind":&"mob","id":18})
+	combat.client_combat.autoattack = true
 	dog.queue_free()
-	combat._clear_invalid_target()
-	assert(combat.selected_target.is_empty() and not combat.autoattack, "Queued deletion cannot remain a target")
+	combat.client_combat.clear_invalid_target()
+	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack, "Queued deletion cannot remain a target")
 	world.mob_system.mobs.erase(18)
 	var encounter := MetinEncounter.new()
 	world.add_child(encounter)
@@ -72,23 +73,23 @@ func _check_target_identity() -> void:
 	world.add_child(encounter.stone)
 	encounter.runtime.spawn(0)
 	var stone_target: Dictionary = {"kind":&"metin","id":encounter.runtime.stone_instance_id}
-	combat.select_target(stone_target)
-	assert(combat._resolve_target(combat.selected_target) == encounter.stone)
-	combat.autoattack = true
+	combat.client_combat.select_target(stone_target)
+	assert(combat.client_combat.resolve_target(combat.client_combat.selected_target) == encounter.stone)
+	combat.client_combat.autoattack = true
 	encounter.runtime.damage(1,encounter.definition.max_hp,0)
-	combat._clear_invalid_target()
-	assert(combat.selected_target.is_empty() and not combat.autoattack, "Metin death clears selection")
+	combat.client_combat.clear_invalid_target()
+	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack, "Metin death clears selection")
 	encounter.runtime.spawn(0)
-	assert(combat.selected_target.is_empty())
-	combat.select_target({"kind":&"metin","id":encounter.runtime.stone_instance_id})
-	combat.autoattack = true
+	assert(combat.client_combat.selected_target.is_empty())
+	combat.client_combat.select_target({"kind":&"metin","id":encounter.runtime.stone_instance_id})
+	combat.client_combat.autoattack = true
 	encounter.runtime.spawn(1)
-	combat._clear_invalid_target()
-	assert(combat.selected_target.is_empty() and not combat.autoattack and combat._resolve_target(stone_target) == null, "New instance/site invalidates an old identity even on the same stone node")
-	combat.select_target({"kind":&"metin","id":encounter.runtime.stone_instance_id})
-	combat.autoattack = true
+	combat.client_combat.clear_invalid_target()
+	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack and combat.client_combat.resolve_target(stone_target) == null, "New instance/site invalidates an old identity even on the same stone node")
+	combat.client_combat.select_target({"kind":&"metin","id":encounter.runtime.stone_instance_id})
+	combat.client_combat.autoattack = true
 	encounter.runtime.state = "COOLDOWN"
-	combat._clear_invalid_target()
-	assert(combat.selected_target.is_empty() and not combat.autoattack, "Cooldown invalidates selection without requiring a DEAD snapshot")
-	assert(combat._resolve_target({}) == null and combat._resolve_target({"kind":&"missing","id":18}) == null)
+	combat.client_combat.clear_invalid_target()
+	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack, "Cooldown invalidates selection without requiring a DEAD snapshot")
+	assert(combat.client_combat.resolve_target({}) == null and combat.client_combat.resolve_target({"kind":&"missing","id":18}) == null)
 	world.free()

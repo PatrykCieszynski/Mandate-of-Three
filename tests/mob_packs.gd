@@ -121,10 +121,10 @@ func _ready() -> void:
 	for id: int in ids.slice(1): assert(world.mob_system.mobs[id].hp > 0, "Other members survive replacement")
 	world.mob_system.tick(1.0/60,6100)
 	assert(not world.mob_system.mobs.has(killed_id) and pack.actor_ids.size() == 14)
-	combat.selected_target = {"kind":&"mob","id":killed_id}
-	combat.autoattack = true
-	combat._clear_invalid_target()
-	assert(combat.selected_target.is_empty() and not combat.autoattack)
+	combat.client_combat.selected_target = {"kind":&"mob","id":killed_id}
+	combat.client_combat.autoattack = true
+	combat.client_combat.clear_invalid_target()
+	assert(combat.client_combat.selected_target.is_empty() and not combat.client_combat.autoattack)
 	# A temporary Metin pack shares definitions but expires without replacement.
 	var wave := world.mob_system.create_pack([entry(wild,2),entry(feral,1)],Vector3(6,0,-6),2,3,10,0,"metin-test",10000)
 	var wave_ids: Array[int] = wave.actor_ids.duplicate()

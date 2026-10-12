@@ -230,3 +230,6 @@ func remove_peer(peer_id: int) -> void:
 		if mob.target_peer == peer_id:
 			mob.target_peer = 0
 			if mob.ai_state not in [MobState.Value.DEAD,MobState.Value.DISABLED]: begin_return(mob)
+
+func interpolate(delta: float) -> void:
+	for mob: SpikeWildDog3D in mobs.values(): mob.interpolate(delta)

@@ -12,24 +12,16 @@ signal state_changed(snapshot: Dictionary)
 var health: Dictionary[int, int] = {}
 var _respawn_ms: Dictionary[int, int] = {}
 var attacks := BasicAttackService.new()
+var client_combat := ClientCombatController.new()
 var _pickup_ms: Dictionary[int, int] = {}
 var _snapshot_accum: float = 0
 var _world: SpikeWorld3D
 var _hud: Label
 var _notice: String = ""
 var _visual_drops: Dictionary[String, Node3D] = {}
-var _client_sequence: int = 0
-var _client_request_at: int = -1
-var _client_intent_sent := false
-var _client_was_active := false
-var _feedback: CombatFeedback3D
 signal confirmed_hit_received(event: Dictionary)
-var selected_target: Dictionary = {}
-var autoattack: bool = false
 var state: Dictionary = {}
 var dev_god_mode: bool = false
-var trace_debug_enabled: bool = false
-var _trace_debug: Dictionary[int, CombatTraceDebug3D] = {}
 var navigation_region: NavigationRegion3D
 var _experience_label: Label
 var _experience_bar: ProgressBar
@@ -39,8 +31,8 @@ var _xp_notice_until_ms: int = 0
 func _ready() -> void:
 	_world = get_parent()
 	attacks.setup(_world,self,services)
+	client_combat.setup(_world,self)
 	dev_god_mode = GameMode.is_world_server() and OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-god-mode")
-	trace_debug_enabled = OS.has_feature("editor") and (OS.get_cmdline_user_args().has("--combat-trace-debug") or (DisplayServer.get_name() != "headless" and FileAccess.file_exists("res://.godot/runtime/trace-debug.enabled")))
 	if dev_god_mode: print("DEV_GOD_MODE enabled for local World players")
 	_build_navigation() # Shared geometry also guides client NPC approach intentions.
 	if GameMode.is_world_server():
@@ -75,19 +67,7 @@ func _ready() -> void:
 		_experience_bar.custom_minimum_size = Vector2(400, 14)
 		_experience_bar.show_percentage = false
 		content.add_child(_experience_bar)
-		_refresh_hud()
-
-
-
-
-
-
-
-
-
-
-
-
+		refresh_hud()
 
 func _build_navigation() -> void:
 	var mesh := NavigationMesh.new()
@@ -114,9 +94,7 @@ func initialize_peer(peer_id: int) -> void:
 	_send_snapshot()
 
 func remove_peer(peer_id: int) -> void:
-	if _trace_debug.has(peer_id):
-		_trace_debug[peer_id].queue_free()
-		_trace_debug.erase(peer_id)
+	client_combat.remove_peer(peer_id)
 	attacks.remove_peer(peer_id)
 	for collection: Dictionary in [health, _respawn_ms, _pickup_ms]:
 		collection.erase(peer_id)
@@ -143,14 +121,10 @@ func request_attack(sequence: int) -> void:
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_attack_wait(delay_ms: int) -> void:
-	if not GameMode.is_client(): return
-	_client_intent_sent = false
-	_client_request_at = Time.get_ticks_msec()+delay_ms
+	if GameMode.is_client(): client_combat.receive_attack_wait(delay_ms)
 
 func attack_runtime(peer_id: int) -> PlayerCombatRuntime:
 	return attacks.attack_runtime(peer_id)
-
-
 
 func combo_state(peer_id: int) -> BasicAttackComboState:
 	return attacks.combo_state(peer_id)
@@ -177,23 +151,14 @@ func remember_next_facing(peer_id: int, direction: Vector2) -> void:
 func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	return attacks.begin_attack(peer_id,sequence,now)
 
-
-
 func _advance_attack_queue(now: int) -> void:
 	attacks.advance_queue(now)
 
 func _clear_attack_intents(peer_id: int) -> void:
 	attacks.cancel(peer_id)
 
-
 func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
 	return attacks.resolve_swing(peer_id,swing,now)
-
-
-
-
-
-
 
 func publish_experience(owner_id: int, amount: int, levels_gained: int, level: int) -> void:
 	for peer_id: int in _world.characters:
@@ -206,62 +171,15 @@ func receive_experience(amount: int, levels_gained: int, level: int) -> void:
 	_xp_notice = "+%d XP" % amount
 	if levels_gained > 0: _xp_notice += " · Awans! Poziom %d" % level
 	_xp_notice_until_ms = Time.get_ticks_msec() + 5000
-	_refresh_hud()
+	refresh_hud()
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_swing(peer_id: int, animation_key: StringName, step_index: int, motion_ms: int, finisher: bool, ratio: float = 1.0, action_id: int = 0, yaw: float = 0.0, preinput_ms: int = 0) -> void:
-	if not GameMode.is_client(): return
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
-	if body != null:
-		body.accept_swing_facing(yaw)
-		body.play_swing(animation_key,motion_ms,finisher,ratio)
-	if peer_id == _world.local_peer:
-		_client_intent_sent = false
-		_client_request_at = Time.get_ticks_msec()+preinput_ms+10
-	if trace_debug_enabled and body != null:
-		var step: BasicAttackStepDefinition
-		for combo: BasicAttackComboDefinition in [BasicAttackCombos.BASE,BasicAttackCombos.COMBO_5,BasicAttackCombos.COMBO_6]:
-			for candidate: BasicAttackStepDefinition in combo.steps:
-				if candidate.animation_key == animation_key: step = candidate
-		if step != null:
-			if _trace_debug.has(peer_id): _trace_debug[peer_id].queue_free()
-			var overlay := CombatTraceDebug3D.new()
-			_world.add_child(overlay)
-			overlay.global_transform = Transform3D(Basis(Vector3.UP,body.rotation.y),body.global_position)
-			var targets: Array[Dictionary] = []
-			for dog: SpikeWildDog3D in _world.mob_system.mobs.values():
-				targets.append({"id":dog.mob_id,"position":overlay.to_local(dog.global_position),"radius":dog.combat_radius(),"height":dog.combat_height(),"bottom_offset":dog.combat_bottom_offset()})
-			overlay.configure(step,targets,OS.get_cmdline_user_args().has("--dev-legacy-melee"))
-			_trace_debug[peer_id] = overlay
-	swing_received.emit(peer_id,animation_key,step_index)
+	if GameMode.is_client(): client_combat.receive_swing(peer_id,animation_key,step_index,motion_ms,finisher,ratio,action_id,yaw,preinput_ms)
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_hits(peer_id: int, results: Array[Dictionary], action_id: int = 0, step_index: int = 0, finisher: bool = false) -> void:
-	if not GameMode.is_client(): return
-	if _trace_debug.has(peer_id): _trace_debug[peer_id].mark_hits(results)
-	if _feedback == null:
-		_feedback = CombatFeedback3D.new()
-		_world.add_child(_feedback)
-	for result: Dictionary in results:
-		var target: Node3D = _world.mob_system.mobs.get(int(result.id))
-		if int(result.id) == -1 and _world.metin_encounter != null:
-			if str(result.get("target_id","")) == _world.metin_encounter.runtime.stone_instance_id: target = _world.metin_encounter.stone
-		var event := result.duplicate()
-		event.merge({"attacker":peer_id,"action_id":action_id,"step_index":step_index,"finisher":finisher})
-		if target != null and _feedback.confirm(event,target,peer_id == _world.local_peer):
-			confirmed_hit_received.emit(event)
-			if _world.camera_controller != null: _world.camera_controller.confirm_finisher(event,peer_id == _world.local_peer)
-		var body: SpikeWildDog3D = _world.mob_system.mobs.get(int(result.id))
-		if body != null: _present_reaction(body,result)
-	if peer_id == _world.local_peer:
-		_notice = "Trafiono: %d" % results.size()
-		_refresh_hud()
-
-func _present_reaction(body: SpikeCharacter3D, result: Dictionary) -> void:
-	match int(result.reaction):
-		HitReaction.Type.FLINCH, HitReaction.Type.KNOCKBACK: body.play_hit()
-		HitReaction.Type.KNOCKDOWN:
-			body.present_hit_lock(int(float(result.duration)*1000),int(float(result.get_up_duration)*1000))
+	if GameMode.is_client(): client_combat.receive_hits(peer_id,results,action_id,step_index,finisher)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_pickup(uid: String) -> void:
@@ -296,7 +214,7 @@ func receive_feedback(result: Dictionary) -> void:
 		"gone", "claimed": _notice = "Ten łup został już zabrany lub zniknął."
 		"too_fast": _notice = "Odczekaj chwilę przed kolejną próbą."
 		_: _notice = "Nie udało się zapisać przedmiotu. Spróbuj ponownie."
-	_refresh_hud()
+	refresh_hud()
 	feedback_received.emit(result)
 
 func _physics_process(delta: float) -> void:
@@ -349,20 +267,7 @@ func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition =
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_hurt(peer_id: int, result: Dictionary) -> void:
-	if not GameMode.is_client(): return
-	var body: SpikeCharacter3D = _world.characters.get(peer_id)
-	if body != null: _present_reaction(body,result)
-	if peer_id == _world.local_peer and (int(result.reaction) == HitReaction.Type.KNOCKDOWN or (body != null and not body.alive)):
-		_client_intent_sent = false
-		_client_request_at = Time.get_ticks_msec()+int((float(result.duration)+float(result.get_up_duration))*1000)+100
-
-
-
-
-
-
-
-
+	if GameMode.is_client(): client_combat.receive_hurt(peer_id,result)
 
 func _send_snapshot() -> void:
 	if not services.item_domain_ready(): return
@@ -388,10 +293,6 @@ func _send_snapshot() -> void:
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_state(snapshot: Dictionary) -> void:
 	if GameMode.is_world_server(): return
-	for peer_id: int in _trace_debug.keys():
-		if not snapshot.health.has(peer_id):
-			_trace_debug[peer_id].queue_free()
-			_trace_debug.erase(peer_id)
 	state = snapshot
 	state_changed.emit(snapshot)
 	for peer_id: int in snapshot.levels:
@@ -405,8 +306,7 @@ func receive_state(snapshot: Dictionary) -> void:
 			body.set_alive(int(snapshot.health[peer_id]) > 0)
 			var lock: Array = snapshot.hit_locks.get(peer_id,[0,0])
 			body.present_hit_lock(int(lock[0]),int(lock[1]))
-	_clear_invalid_target()
-	if int(snapshot.health.get(_world.local_peer, 0)) <= 0: autoattack = false
+	client_combat.snapshot_changed(snapshot)
 	for uid: String in _visual_drops.keys():
 		if not snapshot.drops.has(uid):
 			_visual_drops[uid].queue_free()
@@ -440,13 +340,13 @@ func receive_state(snapshot: Dictionary) -> void:
 		var label: Label3D = _visual_drops[uid].get_node("Name")
 		label.text = "%s · Atak %d · E" % [drop.item_name, int(drop.weapon_attack)] + ("\n" + str(drop.reserved_for) if drop.reserved_for != "" else "")
 		label.modulate = Color("ffe291") if drop.allowed else Color("e0a681")
-	_refresh_hud()
+	refresh_hud()
 
-func _refresh_hud() -> void:
+func refresh_hud() -> void:
 	if _hud == null: return
 	var hp: int = int(state.get("health", {}).get(_world.local_peer, 100))
 	var target: String = "Brak celu"
-	var actor: Node3D = _resolve_target(selected_target)
+	var actor: Node3D = client_combat.resolve_target(client_combat.selected_target)
 	if actor is MetinStone3D:
 		target = "%s: %d / %d" % [_world.metin_encounter.definition.display_name,_world.metin_encounter.runtime.hp,_world.metin_encounter.definition.max_hp]
 	elif actor is SpikeWildDog3D:
@@ -454,128 +354,58 @@ func _refresh_hud() -> void:
 	var combo: int = int(state.get("combos", {}).get(_world.local_peer, 0))
 	var options: Dictionary = state.get("combo_options",{"enabled":false,"skill_level":0,"length":4})
 	var status: String = "Odrodzenie za %.1f s" % float(state.get("respawns", {}).get(_world.local_peer, 0)) if hp == 0 else _notice
-	_hud.text = "HP: %d / 100 · Combo: %d / %d (%s, Lv%d)\nSpacja — combo · C — Combo ON/OFF · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, combo, int(options.length), "ON" if options.enabled else "OFF", int(options.skill_level), "wł." if autoattack else "wył.", target, status]
+	_hud.text = "HP: %d / 100 · Combo: %d / %d (%s, Lv%d)\nSpacja — combo · C — Combo ON/OFF · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, combo, int(options.length), "ON" if options.enabled else "OFF", int(options.skill_level), "wł." if client_combat.autoattack else "wył.", target, status]
 	var progression: Dictionary = state.get("progression", {"level": 1, "experience": 0, "next": PlayerResource.LEVEL_XP_BASE})
 	_experience_label.text = "Poziom %d · XP: %d / %d%s" % [int(progression.level), int(progression.experience), int(progression.next), "\n" + _xp_notice if _xp_notice != "" else ""]
 	_experience_bar.max_value = int(progression.next)
 	_experience_bar.value = int(progression.experience)
 
-func _resolve_target(target: Dictionary) -> Node3D:
-	if target.is_empty(): return null
-	match target.get("kind"):
-		&"mob":
-			var dog: SpikeWildDog3D = _world.mob_system.mobs.get(int(target.get("id",0)))
-			if not is_instance_valid(dog) or dog.is_queued_for_deletion() or dog.hp <= 0 or dog.ai_state in [MobState.Value.DEAD,MobState.Value.DISABLED]: return null
-			return dog
-		&"metin":
-			var encounter: MetinEncounter = _world.metin_encounter
-			if not is_instance_valid(encounter) or not encounter.active() or encounter.runtime.hp <= 0 or encounter.runtime.stone_instance_id != str(target.get("id","")): return null
-			return encounter.stone if is_instance_valid(encounter.stone) and not encounter.stone.is_queued_for_deletion() else null
-	return null
-
-func _clear_invalid_target() -> void:
-	if _resolve_target(selected_target) == null and (not selected_target.is_empty() or autoattack):
-		select_target({})
-
-func select_target(target: Dictionary) -> void:
-	if not target.is_empty(): _world.cancel_npc_approach()
-	selected_target = target.duplicate()
-	if _resolve_target(selected_target) == null: selected_target = {}
-	for dog: SpikeWildDog3D in _world.mob_system.mobs.values():
-		if is_instance_valid(dog) and not dog.is_queued_for_deletion():
-			dog.mark_selected(selected_target.get("kind") == &"mob" and dog.mob_id == int(selected_target.get("id",0)))
-	if selected_target.is_empty(): autoattack = false
-	_refresh_hud()
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not GameMode.is_client() or not _world.input_enabled or ClientState.menu_open: return
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var camera: Camera3D = _world.gameplay_camera()
-		var origin: Vector3 = camera.project_ray_origin(event.position)
-		var ray := PhysicsRayQueryParameters3D.create(origin, origin + camera.project_ray_normal(event.position) * 100, 4)
-		var hit: Dictionary = _world.get_world_3d().direct_space_state.intersect_ray(ray)
-		var dog: SpikeWildDog3D = hit.get("collider") as SpikeWildDog3D
-		if hit.get("collider") is MetinStone3D and _world.metin_encounter != null:
-			select_target({"kind":&"metin","id":_world.metin_encounter.runtime.stone_instance_id})
-		elif dog != null:
-			select_target({"kind":&"mob","id":dog.mob_id})
-		else:
-			select_target({})
-	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_F8 and OS.has_feature("editor"):
-			trace_debug_enabled = not trace_debug_enabled
-			if not trace_debug_enabled:
-				for overlay: CombatTraceDebug3D in _trace_debug.values(): overlay.queue_free()
-				_trace_debug.clear()
-			_notice = "Combat trace debug: " + ("ON" if trace_debug_enabled else "OFF")
-			_refresh_hud()
-			get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_C:
-			request_combo_toggle.rpc_id(1)
-			get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_F:
-			_clear_invalid_target()
-			autoattack = not autoattack and not selected_target.is_empty()
-			_refresh_hud()
-			get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_E:
-			if not _world.characters.has(_world.local_peer): return
-			var nearest: float = INF
-			var selected: String = ""
-			for uid: String in state.get("drops", {}):
-				var distance: float = _world.characters[_world.local_peer].position.distance_to(state.drops[uid].position)
-				if distance < nearest:
-					nearest = distance
-					selected = uid
-			if selected != "": request_pickup.rpc_id(1, selected)
-			get_viewport().set_input_as_handled()
-
-func assist_direction(manual: Vector2) -> Vector2:
-	_clear_invalid_target()
-	if manual.length_squared() > 0.001:
-		autoattack = false
-		return manual
-	if not autoattack or not _world.characters.has(_world.local_peer): return manual
-	var actor: Node3D = _resolve_target(selected_target)
-	if actor == null:
-		autoattack = false
-		return Vector2.ZERO
-	var body: SpikeCharacter3D = _world.characters[_world.local_peer]
-	var offset: Vector3 = actor.position - body.position
-	var direction := Vector2(offset.x, offset.z).normalized()
-	if Vector2(offset.x, offset.z).length() > 1.7: return direction
-	var forward := Vector2(-sin(body.rotation.y), -cos(body.rotation.y))
-	return direction * 0.05 if forward.dot(direction) < 0.98 else Vector2.ZERO
-
-func _process(delta: float) -> void:
-	if not GameMode.is_client(): return
-	_clear_invalid_target()
-	if _xp_notice != "" and Time.get_ticks_msec() >= _xp_notice_until_ms:
-		_xp_notice = ""
-		_refresh_hud()
-	for dog: SpikeWildDog3D in _world.mob_system.mobs.values(): dog.interpolate(delta)
-	if not _world.input_enabled or ClientState.menu_open or not DisplayServer.window_is_focused(): return
-	var active: bool = Input.is_physical_key_pressed(KEY_SPACE)
-	if autoattack and _world.characters.has(_world.local_peer):
-		var actor: Node3D = _resolve_target(selected_target)
-		active = actor != null and _world.characters[_world.local_peer].position.distance_to(actor.position) <= BasicAttackService.ATTACK_REACH
-	active = active and _world.characters.has(_world.local_peer) and _world.characters[_world.local_peer].alive
-	if active and not _client_was_active and _client_request_at < 0: _client_intent_sent = false
-	if active and not _client_intent_sent and Time.get_ticks_msec() >= _client_request_at:
-		_client_intent_sent = true
-		_client_request_at = -1
-		_client_sequence += 1
-		request_attack.rpc_id(1,_client_sequence)
-	if not active:
-		_client_intent_sent = false
-	_client_was_active = active
-
 func publish_swing(peer_id: int, resolved: Dictionary) -> void:
 	for observer: int in _world.characters:
 		receive_swing.rpc_id(observer,peer_id,resolved.animation_key,resolved.step_index,int(resolved.timing.motion),resolved.finisher,resolved.ratio,resolved.action_id,resolved.yaw,int(resolved.timing.preinput))
 
-
-
 func publish_hits(peer_id: int, results: Array[Dictionary], swing: Dictionary) -> void:
 	for observer: int in _world.characters:
 		receive_hits.rpc_id(observer,peer_id,results,int(swing.get("action_id",0)),int(swing.get("step_index",maxi(1,attack_runtime(peer_id).display_combo_step)-1)),bool(swing.get("finisher",false)))
+
+func assist_direction(manual: Vector2) -> Vector2:
+	return client_combat.assist_direction(manual)
+
+func cancel_autoattack() -> void:
+	client_combat.autoattack = false
+
+func set_notice(message: String) -> void:
+	_notice = message
+	refresh_hud()
+
+func publish_swing_presentation(peer_id: int, animation_key: StringName, step_index: int) -> void:
+	swing_received.emit(peer_id,animation_key,step_index)
+
+func publish_confirmed_hit(event: Dictionary) -> void:
+	confirmed_hit_received.emit(event)
+
+func _process(delta: float) -> void:
+	if not GameMode.is_client(): return
+	if _xp_notice != "" and Time.get_ticks_msec() >= _xp_notice_until_ms:
+		_xp_notice = ""
+		refresh_hud()
+	_world.mob_system.interpolate(delta)
+	client_combat.process(delta)
+
+func _unhandled_input(event: InputEvent) -> void:
+	client_combat.handle_input(event)
+	if not GameMode.is_client() or not _world.input_enabled or ClientState.menu_open: return
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_E:
+		if not _world.characters.has(_world.local_peer): return
+		var nearest: float = INF
+		var selected: String = ""
+		for uid: String in state.get("drops",{}):
+			var distance: float = _world.characters[_world.local_peer].position.distance_to(state.drops[uid].position)
+			if distance < nearest:
+				nearest = distance
+				selected = uid
+		if selected != "": request_pickup.rpc_id(1,selected)
+		get_viewport().set_input_as_handled()
+
+func _exit_tree() -> void:
+	client_combat.dispose()
