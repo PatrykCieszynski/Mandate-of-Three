@@ -193,3 +193,14 @@ The same ACTION suite also checks full-motion advance versus interrupted chainin
 asymmetric movement BODY blocking, existing-overlap escape and finisher knockback
 freeing space. The actual-physics native volume preview and measurements are in
 [Warrior BODY collision](warrior-body-collision.md). These checks remain opt-in.
+
+`run-visual-v0.ps1` is an optional native Windows/Vulkan/CEF feasibility pass for
+Mobile and Forward+ on the production First Region scene. It reuses the isolated
+PvE fixture (port 18098, run sequentially), real production Web UI and server RPCs.
+It protects renderer migration against missing/black CEF output, broken native
+synthetic input/drag/orbit, lifecycle recovery and NPC transactions; headless
+bridge/Node suites cannot exercise the native accelerated texture or GPU path.
+Logs, captures and a short timing sample remain ignored under `.godot/verification`.
+No pixel snapshots or balance/timing assertions are added to smoke. Physical
+mouse/keyboard, DPI/alt-tab, feel and release executable packaging remain separate.
+See [Visual V0](visual-upgrade-v0.md) for commands and current evidence.
