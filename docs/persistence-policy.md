@@ -25,10 +25,11 @@ server weapon state before any notification/publication. `_send_state()` consume
 the prepared snapshot; publication never refreshes the authoritative combat cache.
 
 Shop and Upgrade retain their existing application operation owners: the database
-operation commits items/Yang and accepts wallet RAM, then the endpoint explicitly
-refreshes Inventory/cache, and only then emits `inventory_changed(owner_id)` and
-`wallet_changed(owner_id)`. Subscribers publish already-prepared state; their
-registration order is not part of transaction correctness. Account Storage
+operation commits items/Yang and accepts wallet RAM, then the caller invokes
+Inventory `accept_committed_change(peer_id)` (refresh/cache → its own fact), then
+Currency `accept_committed_change(peer_id)` (its own fact after the already-accepted
+wallet RAM). External callers never emit endpoint signals. Subscribers publish
+already-prepared state; their registration order is not part of transaction correctness. Account Storage
 prepares all affected on-map characters before the first notification.
 
 Combat reads `attack` from runtime without querying on a swing. Failed equipment
@@ -138,7 +139,8 @@ balance after logout/relog.
 Combat's death guard emits mob_died once. KillRewardResolver selects the existing
 contribution winner and reward policy. It resolves the current PlayerResource via
 MandateWorldServices before WorldDatabase.award_experience updates RAM/dirty
-progression and emits the XP fact; the combat endpoint only publishes its existing
+progression and emits the XP fact. The adapter uses pending_progression_player()
+rather than accessing the dirty set; the combat endpoint only publishes its existing
 XP RPC. Full progression runtime extraction remains P2.
 
 GroundLootSystem owns live item drops, rights, expiry and pickup. Its application
@@ -146,4 +148,8 @@ operation prepares an ItemInstance from the authoritative drop and passes it to
 ItemStoreSqlite.claim_ground_item(owner_id, drop_uid, item). SQL validates identity
 and owner and commits receipt/item/placement together. It no longer generates a
 sword or attack roll. Cache refresh and notification follow commit and ground
-erase. No schema, checkpoint intervals or per-kill durability were added.
+erase. The current live drop model still encodes a weapon attack roll (1..9),
+weapon_attack presentation and an attack affix on pickup. It is not a generic item
+payload yet; the first real non-weapon ground drop will drive that cleanup. The
+prepared SQL claim can already accept non-weapons. No schema, checkpoint intervals
+or per-kill durability were added.
