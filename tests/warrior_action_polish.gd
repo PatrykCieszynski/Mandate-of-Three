@@ -35,7 +35,7 @@ func run_server() -> void:
 	await get_tree().physics_frame
 	var now := Time.get_ticks_msec()
 	check(combat.begin_attack(hero,100,now),"accept hitch fixture")
-	var swing: Dictionary = combat._active_attacks[hero]
+	var swing: Dictionary = combat.attack_runtime(hero).active_action
 	check(combat.resolve_swing(hero,swing,now+200).is_empty(),"scheduled hit cannot resolve early")
 	var before := target.hp
 	check(combat.resolve_swing(hero,swing,now+400).has(target.mob_id),"late tick resolves scheduled impact beyond active-window end")
@@ -45,7 +45,7 @@ func run_server() -> void:
 	check(combat.begin_attack(hero,101,now+int(swing.timing.preinput)),"next intent queues")
 	combat.remember_next_facing(hero,Vector2.RIGHT)
 	combat._advance_attack_queue(now+int(swing.timing.direct))
-	var next: Dictionary = combat._active_attacks[hero]
+	var next: Dictionary = combat.attack_runtime(hero).active_action
 	check(next.step_index == 1 and is_equal_approx(next.yaw,-PI/2) and is_zero_approx(swing.yaw),"link starts new action with its own frozen yaw")
 	check(is_equal_approx(body._advance_yaw,next.yaw) and not combat.can_move(hero,now+int(swing.timing.direct)),"successor owns advance and movement lock")
 	var wall := StaticBody3D.new()
@@ -64,7 +64,7 @@ func run_server() -> void:
 	for speed: float in [100.0,122.0,150.0]:
 		combat._clear_attack_intents(hero)
 		combat.combo_state(hero).reset()
-		combat._next_attack_ms.erase(hero)
+		combat.attack_runtime(hero).next_attack_ms = 0
 		stats.attack_speed = speed
 		body.position = Vector3(12,0,10)
 		body.velocity = Vector3.ZERO
@@ -75,7 +75,7 @@ func run_server() -> void:
 		seq += 1
 		var frame := 0
 		var advance_ticks := 0
-		var motion_ms: int = combat._active_attacks[hero].timing.motion
+		var motion_ms: int = combat.attack_runtime(hero).active_action.timing.motion
 		check(is_equal_approx(body._advance_duration,motion_ms/1000.0),"production advance duration uses full scaled motion, not link")
 		while frame*1000.0/60 < motion_ms:
 			await get_tree().physics_frame
@@ -87,13 +87,13 @@ func run_server() -> void:
 		distances.append(start.z-body.position.z)
 		ticks.append(advance_ticks)
 		# Full unchained motion consumes the authored distance; link remains separate.
-		check(not combat.can_move(hero,started+int(combat._active_attacks[hero].timing.direct)),"single attack tail remains locked")
+		check(not combat.can_move(hero,started+int(combat.attack_runtime(hero).active_action.timing.direct)),"single attack tail remains locked")
 	check(absf(distances[0]-distances[1])<.02 and absf(distances[0]-distances[2])<.02 and absf(distances[0]-BasicAttackCombos.BASE.steps[0].advance_distance)<.03,"speed preserves authored advance distance")
 	check(ticks[0]>ticks[1] and ticks[1]>ticks[2],"higher speed shortens advance duration")
 	print("ACTION_ADVANCE distances=",distances," ticks=",ticks)
 	combat._clear_attack_intents(hero)
 	combat.combo_state(hero).reset()
-	combat._next_attack_ms.erase(hero)
+	combat.attack_runtime(hero).next_attack_ms = 0
 	stats.attack_speed = 100.0
 	body.position = Vector3(10,0,10)
 	body.velocity = Vector3.ZERO
@@ -176,12 +176,12 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikeCharacter3D, target:
 	body.rotation.y = 0
 	body.velocity = Vector3.ZERO
 	combat._clear_attack_intents(hero)
-	combat._next_attack_ms.erase(hero)
+	combat.attack_runtime(hero).next_attack_ms = 0
 	combat.combo_state(hero).reset()
 	stats.attack_speed = 100.0
 	var started := Time.get_ticks_msec()
 	check(combat.begin_attack(hero,300,started),"BODY blocking does not reject attack")
-	var swing: Dictionary = combat._active_attacks[hero]
+	var swing: Dictionary = combat.attack_runtime(hero).active_action
 	await physics_steps(body,60)
 	check(absf(body.position.z-walking_stop)<.02,"advance stops on same BODY as walking")
 	check(combat.resolve_swing(hero,swing,started+1100).has(target.mob_id),"blocked advance still resolves combat trace")

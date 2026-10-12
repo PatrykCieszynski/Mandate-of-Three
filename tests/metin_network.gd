@@ -58,7 +58,7 @@ func run_server() -> void:
 	for id: int in pack.actor_ids.duplicate() + other_pack.actor_ids.duplicate(): combat._remove_mob(id)
 	combat.packs.erase(pack.pack_instance_id)
 	combat.packs.erase(other_pack.pack_instance_id)
-	combat._pending.clear()
+	for id: int in world.characters: combat.attack_runtime(id).pending_impact = {}
 	await get_tree().create_timer(0.7).timeout
 	var index: int = 0
 	for id: int in world.characters:
@@ -133,7 +133,7 @@ func _settle_attacks() -> void:
 	# Releasing input does not cancel an already accepted current/queued swing.
 	# Keep fixture yaw/position stable until both finish before the next scenario.
 	await get_tree().create_timer(.15).timeout
-	await wait_until(func() -> bool: return world.combat_endpoint._pending.is_empty() and world.combat_endpoint._queued_attacks.is_empty())
+	await wait_until(func() -> bool: return world.characters.keys().all(func(id: int) -> bool: return world.combat_endpoint.attack_runtime(id).pending_impact.is_empty() and world.combat_endpoint.attack_runtime(id).queued_sequence < 0))
 
 func _process(delta: float) -> void:
 	elapsed += delta

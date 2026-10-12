@@ -106,7 +106,7 @@ func run_server() -> void:
 	store.inventory_reads = 0
 	set_phase("IMPROVED", hero)
 	await wait_until(func() -> bool: return replacement.hp < 120)
-	check(combat._combo[hero] == 1 and replacement.hp == 91, "same first-stage attack now deals 29 instead of 23")
+	check(combat.attack_runtime(hero).display_combo_step == 1 and replacement.hp == 91, "same first-stage attack now deals 29 instead of 23")
 	check(store.inventory_reads == 0, "improved attack also uses RAM only")
 	set_phase("WAIT")
 	check(db.close_db() and db.open_db(), "reopen SQLite")

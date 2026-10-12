@@ -170,21 +170,21 @@ func run_server() -> void:
 	# A fixture position inside the obstacle gives a short, obstructed ray.
 	# Freeze AI only here so RETURN cannot mask the line-of-sight assertion.
 	combat.dogs[1].ai_enabled = false
-	combat._pending.clear()
-	combat._next_attack_ms.clear()
+	for id: int in world.characters: combat.attack_runtime(id).pending_impact = {}
+	for id: int in world.characters: combat.attack_runtime(id).next_attack_ms = 0
 	combat.dogs[1].position = Vector3(-1.5, 0, -3.5)
 	combat.dogs[1].ai_state = "CHASE"
 	for id: int in world.characters: world.characters[id].position = Vector3(-1.5, 0, -1.6)
 	await get_tree().create_timer(0.4).timeout
-	check(not combat._pending.has(world.characters.keys()[0]), "obstructed swing reached its impact")
+	check(combat.attack_runtime(world.characters.keys()[0]).pending_impact.is_empty(), "obstructed swing reached its impact")
 	check(combat.dogs[1].hp == SpikeCombat3D.MOB_HP, "attack through obstacle denied")
 	combat.dogs[1].position = SpikeCombat3D.HOME
 	combat.dogs[1].ai_state = "IDLE"
 	combat.dogs[1].target_peer = 0
-	combat._pending.clear()
-	combat._combo.clear()
-	combat._combo_states.clear()
-	combat._next_attack_ms.clear()
+	for id: int in world.characters: combat.attack_runtime(id).pending_impact = {}
+	for id: int in world.characters: combat.attack_runtime(id).display_combo_step = 0
+	for id: int in world.characters: combat.attack_runtime(id).combo = BasicAttackComboState.new()
+	for id: int in world.characters: combat.attack_runtime(id).next_attack_ms = 0
 	combat.dogs[1].ai_enabled = true
 	place_near()
 	var fight_started_ms: int = Time.get_ticks_msec()

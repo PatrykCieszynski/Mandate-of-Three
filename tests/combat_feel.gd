@@ -63,14 +63,14 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return combat.dogs[1].hp < 120)
 	check(combat.dogs[1].hp == 110 and combat.dogs[2].hp == 110, "one swing hits both front dogs exactly once")
 	check(combat.dogs[3].hp == 120 and combat.dogs[4].hp == 120, "behind and side excluded")
-	check(combat._combo[hero] == 1 and combat._pending.is_empty(), "fresh sequence flood cannot bypass recovery")
-	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
+	check(combat.attack_runtime(hero).display_combo_step == 1 and world.characters.keys().all(func(id: int) -> bool: return combat.attack_runtime(id).pending_impact.is_empty()), "fresh sequence flood cannot bypass recovery")
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat.attack_runtime(hero).next_attack_ms)
 	set_phase("TWO", hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hp == 100)
-	check(combat._combo[hero] == 2 and combat.dogs[2].hp == 100, "second combo hit: dog2=%d" % combat.dogs[2].hp)
-	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
+	check(combat.attack_runtime(hero).display_combo_step == 2 and combat.dogs[2].hp == 100, "second combo hit: dog2=%d" % combat.dogs[2].hp)
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat.attack_runtime(hero).next_attack_ms)
 	set_phase("THREE", hero)
-	await wait_until(func() -> bool: return combat._combo.get(hero,0) == 3 and not combat._pending.has(hero))
+	await wait_until(func() -> bool: return combat.attack_runtime(hero).display_combo_step == 3 and combat.attack_runtime(hero).pending_impact.is_empty())
 	check(not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()), "third hit is a non-locking flinch")
 	var attacking_dog: SpikeWildDog3D = combat.dogs[1]
 	attacking_dog.position = world.characters[hero].position + Vector3(0,0,-1.2)
@@ -80,10 +80,10 @@ func run_server() -> void:
 	combat._tick_dog(attacking_dog,1.0/60,Time.get_ticks_msec())
 	check(combat.health[hero] < before_flinch_attack, "flinching mob can continue its range attack")
 	attacking_dog.ai_enabled = false
-	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
+	await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat.attack_runtime(hero).next_attack_ms)
 	set_phase("FOUR",hero)
 	await wait_until(func() -> bool: return combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()))
-	check(combat._combo[hero] == 4 and combat.dogs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets: dog2 hp=%d pos=%s" % [combat.dogs[2].hp,combat.dogs[2].position])
+	check(combat.attack_runtime(hero).display_combo_step == 4 and combat.dogs[2].hit_reaction.locked(Time.get_ticks_msec()), "finisher locks all surviving targets: dog2 hp=%d pos=%s" % [combat.dogs[2].hp,combat.dogs[2].position])
 	set_phase("CHECK_BASE")
 	var hit_position: Vector3 = combat.dogs[1].position
 	for dog: SpikeWildDog3D in combat.dogs.values():
@@ -100,13 +100,13 @@ func run_server() -> void:
 	combat.dogs[1].position = Vector3(-0.25,0,3.8)
 	combat.dogs[2].position = Vector3(0.25,0,3.8)
 	for step_index: int in BasicAttackCombos.COMBO_6.steps.size():
-		await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat._next_attack_ms.get(hero,0))
+		await wait_until(func() -> bool: return Time.get_ticks_msec() >= combat.attack_runtime(hero).next_attack_ms)
 		set_phase("EXT%d" % step_index,hero)
-		await wait_until(func() -> bool: return combat._pending.has(hero))
-		var pending: Dictionary = combat._pending[hero]
+		await wait_until(func() -> bool: return not combat.attack_runtime(hero).pending_impact.is_empty())
+		var pending: Dictionary = combat.attack_runtime(hero).pending_impact
 		check(pending.step_index == step_index and pending.animation_key == BasicAttackCombos.COMBO_6.steps[step_index].animation_key,"server resolves extended step identity")
 		check(not combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()),"no knockdown before accepted impact")
-		await wait_until(func() -> bool: return not combat._pending.has(hero))
+		await wait_until(func() -> bool: return combat.attack_runtime(hero).pending_impact.is_empty())
 		check(combat.dogs[1].hit_reaction.locked(Time.get_ticks_msec()) == (step_index == 5),"only final impact knocks down")
 	set_phase("CHECK_EXTENDED")
 	combat.set_combo_enabled(hero,false)
@@ -117,23 +117,23 @@ func run_server() -> void:
 	check(combat.combo_state(other).definition() == BasicAttackCombos.COMBO_5,"level one resolves five-hit definition")
 	var toggle_now := Time.get_ticks_msec()
 	check(combat.begin_attack(other,1,toggle_now),"accept swing before toggle")
-	var frozen_step: BasicAttackStepDefinition = combat._pending[other].step
+	var frozen_step: BasicAttackStepDefinition = combat.attack_runtime(other).pending_impact.step
 	combat.set_combo_enabled(other,false)
-	check(combat._pending[other].step == frozen_step and combat._pending[other].combo_key == &"warrior_combo_5","toggle preserves accepted pending definition")
+	check(combat.attack_runtime(other).pending_impact.step == frozen_step and combat.attack_runtime(other).pending_impact.combo_key == &"warrior_combo_5","toggle preserves accepted pending definition")
 	await wait_until(func() -> bool: return combat.can_move(other))
-	check(not combat._pending.has(other),"accepted swing resolves after toggle")
+	check(combat.attack_runtime(other).pending_impact.is_empty(),"accepted swing resolves after toggle")
 	# Player-target path, also used for a future authorized PvP hit. No friendly-fire policy here.
 	var now := Time.get_ticks_msec()
 	check(combat.begin_attack(other,2,now), "player can begin a swing")
 	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[0])
-	check(combat._pending.has(other) and not world.characters[other].hit_reaction.locked(now), "flinch preserves player pending attack")
-	var canceled_swing: Dictionary = combat._pending[other].duplicate()
+	check(not combat.attack_runtime(other).pending_impact.is_empty() and not world.characters[other].hit_reaction.locked(now), "flinch preserves player pending attack")
+	var canceled_swing: Dictionary = combat.attack_runtime(other).pending_impact.duplicate()
 	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[3],Vector3.RIGHT)
 	check(combat.resolve_swing(other,canceled_swing,now+1).is_empty(), "canceled delayed hit cannot resolve during knockdown")
 	var deadline: int = world.characters[other].hit_reaction.get_up_until_ms
 	var player_hit_position: Vector3 = world.characters[other].position
 	check(world.characters[other].knockback_active(),"accepted player knockdown has physical impulse")
-	check(not combat._pending.has(other) and not combat.can_move(other,now) and not combat.begin_attack(other,3,now), "knockdown cancels pending player damage and blocks actions")
+	check(combat.attack_runtime(other).pending_impact.is_empty() and not combat.can_move(other,now) and not combat.begin_attack(other,3,now), "knockdown cancels pending player damage and blocks actions")
 	combat.hurt_player(other,1,now+1,BasicAttackCombos.BASE.steps[3])
 	check(world.characters[other].hit_reaction.get_up_until_ms == deadline, "re-hit does not extend player lock")
 	await wait_until(func() -> bool: return not world.characters[other].hit_reaction.locked(Time.get_ticks_msec()))
@@ -142,11 +142,11 @@ func run_server() -> void:
 	now = Time.get_ticks_msec()
 	check(combat.begin_attack(other,4,now), "actions resume after get-up")
 	combat.hurt_player(other,1,now,BasicAttackCombos.BASE.steps[3])
-	check(combat._pending.has(other) and not world.characters[other].hit_reaction.locked(now), "immune target keeps its pending attack")
+	check(not combat.attack_runtime(other).pending_impact.is_empty() and not world.characters[other].hit_reaction.locked(now), "immune target keeps its pending attack")
 	world.characters[other].reaction_profile = HitReactionProfiles.PLAYER
 	await get_tree().create_timer(0.3).timeout
 	set_phase("RESET", hero)
-	await wait_until(func() -> bool: return combat._combo.get(hero,0) == 1)
+	await wait_until(func() -> bool: return combat.attack_runtime(hero).display_combo_step == 1)
 	await get_tree().create_timer(0.2).timeout
 	set_phase("ASSIST")
 	await wait_until(func() -> bool: return replies.size() == 2)
@@ -178,13 +178,13 @@ func run_server() -> void:
 	combat.health[hero] = 6
 	dog.ai_enabled = false
 	set_phase("DYING", hero)
-	await wait_until(func() -> bool: return combat._pending.has(hero))
+	await wait_until(func() -> bool: return not combat.attack_runtime(hero).pending_impact.is_empty())
 	dog.last_attack_ms = -10000
 	dog.target_peer = hero
 	dog.ai_state = "ATTACK"
 	dog.ai_enabled = true
 	await wait_until(func() -> bool: return combat.health[hero] == 0)
-	check(not combat.can_move(hero) and not combat._pending.has(hero) and not combat._combo.has(hero), "death interrupts attack and movement")
+	check(not combat.can_move(hero) and combat.attack_runtime(hero).pending_impact.is_empty() and combat.attack_runtime(hero).display_combo_step == 0, "death interrupts attack and movement")
 	var dead_position: Vector3 = world.characters[hero].position
 	var before: Dictionary = server.database.item_store.inventory(server.connected_players[hero].player_id)
 	drop_uid = Crypto.new().generate_random_bytes(16).hex_encode()
@@ -199,8 +199,8 @@ func run_server() -> void:
 	check(world.characters[hero].position.distance_to(Vector3(-3, 0, 3)) < 0.2 and not combat._respawn_ms.has(hero), "authoritative respawn")
 	check(server.database.item_store.inventory(server.connected_players[hero].player_id) == before, "death/respawn preserves inventory")
 	set_phase("RESTART", hero)
-	await wait_until(func() -> bool: return combat._combo.get(hero, 0) == 1)
-	await wait_until(func() -> bool: return not combat._pending.has(hero))
+	await wait_until(func() -> bool: return combat.attack_runtime(hero).display_combo_step == 1)
+	await wait_until(func() -> bool: return combat.attack_runtime(hero).pending_impact.is_empty())
 	check(combat.health[hero] > 0, "attack resumes with first combo stage after respawn")
 	await get_tree().create_timer(0.2).timeout
 	set_phase("DONE")
