@@ -7,8 +7,6 @@ const MOB_HP: int = 120
 const HOME: Vector3 = Vector3(-4, 0, 0)
 const AGGRO: float = 6.0
 const MOB_REACH: float = 1.65
-const ATTACK_REACH: float = 2.4
-const HALF_ANGLE: float = 65.0
 
 signal swing_received(peer_id: int, animation_key: StringName, step_index: int)
 signal feedback_received(result: Dictionary)
@@ -241,8 +239,7 @@ func receive_attack_wait(delay_ms: int) -> void:
 func attack_runtime(peer_id: int) -> PlayerCombatRuntime:
 	return attacks.attack_runtime(peer_id)
 
-func _ordered_attack_peers(pending: bool) -> Array:
-	return attacks.ordered_peers(pending)
+
 
 func combo_state(peer_id: int) -> BasicAttackComboState:
 	return attacks.combo_state(peer_id)
@@ -279,86 +276,11 @@ func _clear_attack_intents(peer_id: int) -> void:
 
 
 func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
-	var hit_ids: Array[int] = []
-	if not is_player_alive(peer_id) or _world.characters[peer_id].hit_reaction.locked(now): return hit_ids
-	var definition: BasicAttackStepDefinition = swing.step
-	if swing.get("resolved",false) or now < int(swing.get("impact",now)): return hit_ids
-	var traced := definition.combat_trace != null
-	if traced:
-		if definition.impact_ms < definition.hit_start_ms or definition.impact_ms > definition.hit_end_ms: return hit_ids
-	swing["resolved"] = true # One scheduled resolution; never repeat damage from this swing.
-	var hit_set: Dictionary = swing.get("hit_set",{})
-	swing["hit_set"] = hit_set
-	var measured_at := Time.get_ticks_usec()
-	var trace_tests := 0
-	var results: Array[Dictionary] = []
-	var body: SpikeCharacter3D = _world.characters[peer_id]
-	var yaw: float = swing.yaw
-	var forward := Vector3(-sin(yaw), 0, -cos(yaw))
-	var actor := Transform3D(Basis(Vector3.UP,yaw),body.global_position)
-	var candidates: Array[Dictionary]
-	if traced: candidates = CombatTraceResolver.candidates(_world.get_world_3d().direct_space_state,definition.combat_trace,actor)
-	else: candidates = _legacy_candidates(body)
-	for hit: Dictionary in candidates:
-		if hit.collider is MetinStone3D:
-			var metin: MetinEncounter = _world.metin_encounter
-			if hit_set.has(-1): continue
-			trace_tests += 1
-			if metin.active() and _melee_hits(definition,actor,metin.stone,forward) and _world.has_line_of_sight(body.position,metin.stone.position):
-				var previous_hp: int = metin.runtime.hp
-				if metin.apply_damage(peer_id,int(swing.attack*definition.damage_multiplier),now):
-					hit_set[-1] = true
-					hit_ids.append(-1) # Stone is immovable and has no actor action lock.
-					results.append({"id":-1,"damage":previous_hp-metin.runtime.hp,"reaction":HitReaction.Type.NONE,"duration":0.0,"get_up_duration":0.0,"target_kind":"metin","target_id":metin.runtime.stone_instance_id})
-			continue
-		var dog: SpikeWildDog3D = hit.collider as SpikeWildDog3D
-		if dog == null or hit_set.has(dog.mob_id) or dog.ai_state in ["DEAD", "RETURN", "DISABLED"]: continue
-		var offset: Vector3 = dog.position - body.position
-		var horizontal := Vector3(offset.x, 0, offset.z)
-		trace_tests += 1
-		if not _melee_hits(definition,actor,dog,forward): continue
-		if not _world.has_line_of_sight(body.position, dog.position): continue
-		var result := HitReactionResolver.resolve(definition,dog.reaction_profile,int(swing.attack),dog.hp,dog.hit_reaction.locked(now))
-		var damage: int = result.damage
-		if damage <= 0: continue
-		hit_set[dog.mob_id] = true
-		hit_ids.append(dog.mob_id)
-		aggro_pack(dog.pack_instance_id,peer_id)
-		dog.hp -= damage
-		var owner_id: int = _owner(peer_id)
-		dog.contributions[owner_id] = dog.contributions.get(owner_id, 0) + damage
-		dog.contribution_players[owner_id] = services.player_for_peer(peer_id)
-		if dog.hp == 0:
-			_die(dog, now)
-		else:
-			dog.hit_reaction.apply(result,now)
-			dog.apply_knockback(horizontal if horizontal.length_squared() > 0.001 else forward,result.knockback_distance)
-		var event := result.presentation()
-		event["id"] = dog.mob_instance_id
-		event["target_kind"] = "mob"
-		event["target_id"] = dog.mob_instance_id
-		results.append(event)
-	for observer: int in _world.characters:
-		receive_hits.rpc_id(observer, peer_id, results,int(swing.get("action_id",0)),int(swing.get("step_index",maxi(1,attack_runtime(peer_id).display_combo_step)-1)),bool(swing.get("finisher",false)))
-	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--combat-trace-metrics"):
-		print("COMBAT_TRACE_METRICS path=", "trace" if traced else "legacy", " candidates=",candidates.size()," tests=",trace_tests," hits=",hit_ids.size()," usec=",Time.get_ticks_usec()-measured_at)
-	return hit_ids
+	return attacks.resolve_swing(peer_id,swing,now)
 
-func _legacy_candidates(body: SpikeCharacter3D) -> Array[Dictionary]:
-	var shape := SphereShape3D.new()
-	shape.radius = ATTACK_REACH+0.4
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = shape
-	query.transform = Transform3D(Basis.IDENTITY,body.global_position+Vector3.UP*0.5)
-	query.collision_mask = 4
-	return _world.get_world_3d().direct_space_state.intersect_shape(query,CombatTraceResolver.MAX_CANDIDATES)
 
-func _melee_hits(step: BasicAttackStepDefinition, actor: Transform3D, target: Node3D, forward: Vector3) -> bool:
-	if step.combat_trace != null:
-		return CombatTraceResolver.hits_capsule(step.combat_trace,actor,target.global_position,target.combat_radius(),target.combat_height(),target.combat_bottom_offset())
-	var offset := target.global_position-actor.origin
-	var horizontal := Vector3(offset.x,0,offset.z)
-	return horizontal.length() <= ATTACK_REACH and absf(offset.y) <= 1.2 and (horizontal.length_squared() < 0.001 or horizontal.normalized().dot(forward) >= cos(deg_to_rad(HALF_ANGLE)))
+
+
 
 func _die(dog: SpikeWildDog3D, now: int) -> void:
 	if dog.ai_state == "DEAD": return
@@ -486,11 +408,7 @@ func _physics_process(delta: float) -> void:
 			body.velocity = Vector3.ZERO
 			_world.intentions[peer_id]["direction"] = Vector2.ZERO
 			_respawn_ms.erase(peer_id)
-	for peer_id: int in _ordered_attack_peers(true):
-		if now >= int(attack_runtime(peer_id).pending_impact.impact):
-			var swing: Dictionary = attack_runtime(peer_id).pending_impact
-			attack_runtime(peer_id).pending_impact = {}
-			resolve_swing(peer_id, swing, now)
+	attacks.process_impacts(now)
 	_tick_mobs(delta,now)
 	_advance_attack_queue(now)
 	if _world.metin_encounter != null: _world.metin_encounter.tick(now)
@@ -825,7 +743,7 @@ func _process(delta: float) -> void:
 	var active: bool = Input.is_physical_key_pressed(KEY_SPACE)
 	if autoattack and _world.characters.has(_world.local_peer):
 		var actor: Node3D = _resolve_target(selected_target)
-		active = actor != null and _world.characters[_world.local_peer].position.distance_to(actor.position) <= ATTACK_REACH
+		active = actor != null and _world.characters[_world.local_peer].position.distance_to(actor.position) <= BasicAttackService.ATTACK_REACH
 	active = active and _world.characters.has(_world.local_peer) and _world.characters[_world.local_peer].alive
 	if active and not _client_was_active and _client_request_at < 0: _client_intent_sent = false
 	if active and not _client_intent_sent and Time.get_ticks_msec() >= _client_request_at:
@@ -840,3 +758,18 @@ func _process(delta: float) -> void:
 func publish_swing(peer_id: int, resolved: Dictionary) -> void:
 	for observer: int in _world.characters:
 		receive_swing.rpc_id(observer,peer_id,resolved.animation_key,resolved.step_index,int(resolved.timing.motion),resolved.finisher,resolved.ratio,resolved.action_id,resolved.yaw,int(resolved.timing.preinput))
+
+func apply_mob_hit(dog: SpikeWildDog3D, peer_id: int, result: CombatHitResult, direction: Vector3, now: int) -> void:
+	aggro_pack(dog.pack_instance_id,peer_id)
+	dog.hp -= result.damage
+	var owner_id: int = services.owner_id_for_peer(peer_id)
+	dog.contributions[owner_id] = dog.contributions.get(owner_id,0)+result.damage
+	dog.contribution_players[owner_id] = services.player_for_peer(peer_id)
+	if dog.hp == 0: _die(dog,now)
+	else:
+		dog.hit_reaction.apply(result,now)
+		dog.apply_knockback(direction,result.knockback_distance)
+
+func publish_hits(peer_id: int, results: Array[Dictionary], swing: Dictionary) -> void:
+	for observer: int in _world.characters:
+		receive_hits.rpc_id(observer,peer_id,results,int(swing.get("action_id",0)),int(swing.get("step_index",maxi(1,attack_runtime(peer_id).display_combo_step)-1)),bool(swing.get("finisher",false)))
