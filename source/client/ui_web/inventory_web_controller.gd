@@ -9,6 +9,7 @@ var opened: bool = false
 var equipment_opened: bool = false
 var storage_opened: bool = false
 var session := UiCommandSession.new()
+var items := ItemUiAdapter.new()
 const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
 var ui_scale: float = 1.0
 var _scale_initialized: bool = false
@@ -22,7 +23,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 10
 	add_child(layer)
-	host = WebUiHost.new()
+	if host == null: host = WebUiHost.new()
 	host.capture_keyboard_on_click = false
 	host.entry_path = "res://source/client/ui_web/web/inventory/game.html"
 	layer.add_child(host)
@@ -41,6 +42,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	dispatcher.attach(bridge)
+	items.attach(world.inventory_endpoint, dispatcher, session, get_tree(), func() -> bool: return storage_opened)
 	dispatcher.register_command("npc.interact", _valid_npc, func(p: Dictionary) -> Dictionary: return await interact_npc(p.npc_instance_id))
 	dispatcher.register_command("npc.select_service", _valid_npc_service, func(p: Dictionary) -> Dictionary: return await _npc_submit("select", p.npc_instance_id, p.service_id))
 	dispatcher.register_command("npc.close", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary: return await _npc_submit("close"))
@@ -60,21 +62,13 @@ func setup(game_world: SpikeWorld3D) -> void:
 	world.npc_endpoint.state_changed.connect(_npc_state)
 	world.npc_endpoint.operation_finished.connect(session.finish)
 	_npc_state(world.npc_endpoint.state)
-	dispatcher.register_command("storage.transfer", _valid_storage, _storage_transfer)
 	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
-	dispatcher.register_command("inventory.move_item", _valid_move, _move)
-	dispatcher.register_command("item.activate", _valid_equipment, _activate)
-	dispatcher.register_command("equipment.equip", _valid_equipment, _equip)
-	dispatcher.register_command("equipment.unequip", _valid_unequip, _unequip)
 	dispatcher.register_command("equipment.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_equipment)
 	dispatcher.register_command("inventory.close", func(p: Dictionary) -> bool: return p.is_empty(), _close)
 	host.keyboard_owner_changed.connect(func(owner: String) -> void: ClientState.menu_open = owner != "gameplay")
 	host.resized.connect(_layout)
 	host.failure.connect(_failure)
-	world.inventory_endpoint.state_changed.connect(_inventory)
-	world.inventory_endpoint.operation_finished.connect(session.finish)
 	world.currency_endpoint.state_changed.connect(_wallet)
-	_inventory(world.inventory_endpoint.state)
 	_wallet(world.currency_endpoint.state)
 	ClientState.settings.setting_changed.connect(_setting_changed)
 	_layout()
@@ -83,7 +77,7 @@ func setup(game_world: SpikeWorld3D) -> void:
 	host.open()
 
 static func _valid_upgrade(p: Dictionary) -> bool:
-	return p.size() == 4 and _valid_identity(p) and _valid_npc_service({"npc_instance_id":p.get("npc_instance_id"),"service_id":p.get("service_id")})
+	return p.size() == 4 and ItemUiAdapter.valid_item_identity(p) and _valid_npc_service({"npc_instance_id":p.get("npc_instance_id"),"service_id":p.get("service_id")})
 
 static func _valid_upgrade_drop(p: Dictionary) -> bool:
 	return _valid_upgrade(p)
@@ -153,106 +147,27 @@ func _npc_submit(action: String, instance_id: String = "", service_id: String = 
 	world.npc_endpoint.request_interaction.rpc_id(1, action, instance_id, service_id, id)
 	return await session.wait(id, get_tree())
 
-static func _item_tooltip_details(item: Dictionary) -> Dictionary:
-	# Existing rolls are shown faithfully. Prefix/suffix metadata is absent until
-	# the content model defines it; no generated affixes or combat changes here.
-	var affixes: Array = []
-	for affix: Dictionary in item.get("affixes", []):
-		var value_text: String = str(affix.value)
-		if affix.value >= 0: value_text = "+" + value_text
-		affixes.append({"lines": ["%s %s" % [value_text, str(affix.stat).capitalize()]]})
-	var properties: Array = []
-	for stat: Variant in item.get("stats",{}): properties.append("%s: %d" % [str(stat).capitalize(),int(item.stats[stat])])
-	return {"properties":properties,"affixes":affixes}
 
-static func _item_ui_model(item: Dictionary) -> Dictionary:
-	var definition: ItemDefinition = ItemDefinitions.get_definition(StringName(item.definition_id))
-	var name_text: String = str(item.item_name)
-	if definition != null and not definition.stats_per_upgrade.is_empty(): name_text += " +%d" % int(item.upgrade_level)
-	return {"id":str(item.uid),"revision":int(item.revision),"definition_id":str(item.definition_id),"upgrade_level":int(item.upgrade_level),"name":name_text,"icon_id":str(item.get("icon_id","")),"height":int(item.inventory_height),"quantity":int(item.amount),"tooltip":_item_tooltip_details(item)}
 
-func _inventory(snapshot: Dictionary) -> void:
-	if not snapshot.get("ok", false): return
-	var bag: Array = []
-	var equipped: Array = []
-	for item: Dictionary in snapshot.items:
-		var display: Dictionary = _item_ui_model(item)
-		if item.location == "equipment":
-			display["slot"] = str(item.equipment_slot)
-			equipped.append(display)
-		elif item.location == "bag":
-			var position: int = int(item.bag_position)
-			display.merge({"x":position % InventoryGrid.COLUMNS, "y":(position % InventoryGrid.PAGE_CELLS) / InventoryGrid.COLUMNS, "page":position / InventoryGrid.PAGE_CELLS})
-			bag.append(display)
-	var stored: Array = []
-	for item: Dictionary in snapshot.get("storage",{}).get("items",[]):
-		var position: int = int(item.bag_position)
-		var display: Dictionary = _item_ui_model(item)
-		display.merge({"x":position % 15,"y":(position % 135) / 15,"page":position / 135})
-		stored.append(display)
-	if snapshot.get("storage",{}).get("ok",false): dispatcher.set_domain("storage",{"columns":15,"rows":9,"pages":2,"items":stored})
-	dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag})
-	dispatcher.set_domain("equipment", {"items":equipped, "stats":snapshot.get("stats", {})})
 
 func _wallet(snapshot: Dictionary) -> void:
 	dispatcher.set_domain("wallet", {"balance": int(snapshot.get("balance", 0)), "ready": snapshot.has("balance")})
 
-static func _valid_identity(payload: Dictionary) -> bool:
-	return payload.get("id") is String and ItemInstance.valid_uid(payload.id) and WebUiBridge.is_integer(payload.get("revision")) and payload.revision >= 0
 
-static func _valid_move(p: Dictionary) -> bool:
-	return p.size() == 5 and p.has_all(["id", "revision", "x", "y", "page"]) and _valid_identity(p) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and WebUiBridge.is_integer(p.page) and p.page >= 0 and p.page < InventoryGrid.PAGES
 
 static func _valid_scale(payload: Dictionary) -> bool:
 	return payload.size() == 1 and WebUiBridge.is_integer(payload.get("percent")) and float(payload.percent) / 100.0 in UI_SCALES
 
-static func _valid_equipment(payload: Dictionary) -> bool:
-	return payload.size() == 2 and _valid_identity(payload)
 
-static func _valid_unequip(payload: Dictionary) -> bool:
-	return _valid_equipment(payload) or _valid_move(payload)
 
-static func _valid_storage(p: Dictionary) -> bool:
-	if p.size() != 8 or not p.has_all(["id","revision","from","to","x","y","page","quick"]) or not _valid_identity(p): return false
-	if (p.from == "inventory" and p.to == "inventory") or p.from not in ["inventory","storage"] or p.to not in ["inventory","storage"] or not p.quick is bool: return false
-	var columns: int = 15 if p.to == "storage" else 5
-	var pages: int = 2 if p.to == "storage" else 4
-	return WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < columns and p.y >= 0 and p.y < 9 and p.page >= 0 and p.page < pages
-func _storage_transfer(payload: Dictionary) -> Dictionary:
-	# UX guard only. World authorizes account access; Storage currently has no NPC/range restriction.
-	if not storage_opened: return {"ok":false,"error":"closed"}
-	var id: String = session.begin()
-	if id.is_empty(): return session.closed_result()
-	world.inventory_endpoint.request_storage.rpc_id(1,payload.id,int(payload.revision),payload.from,payload.to,int(payload.x),int(payload.y),int(payload.page),payload.quick,id)
-	return await session.wait(id, get_tree())
+
+
 func _close_storage(_payload: Dictionary) -> Dictionary:
 	storage_opened = false
 	_layout()
 	return {"ok":true}
 
-func _activate(payload: Dictionary) -> Dictionary:
-	return await _submit(payload, "activate")
 
-func _equip(payload: Dictionary) -> Dictionary:
-	return await _submit(payload, "equip")
-
-func _unequip(payload: Dictionary) -> Dictionary:
-	return await _submit(payload, "unequip")
-
-func _move(payload: Dictionary) -> Dictionary:
-	return await _submit(payload)
-
-
-func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
-	var id: String = session.begin()
-	if id.is_empty(): return session.closed_result()
-	if action == "move":
-		world.inventory_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), id)
-	elif action == "activate":
-		world.inventory_endpoint.request_activate_item.rpc_id(1, payload.id, int(payload.revision), id)
-	else:
-		world.inventory_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id, int(payload.page) * InventoryGrid.PAGE_CELLS + int(payload.y) * InventoryGrid.COLUMNS + int(payload.x) if payload.has("x") else -1)
-	return await session.wait(id, get_tree())
 
 
 
@@ -329,6 +244,7 @@ func _failure(reason: String) -> void:
 
 func _exit_tree() -> void:
 	session.close("teardown")
+	items.dispose()
 	ClientState.menu_open = false
 	if is_instance_valid(host): host.destroy_browser()
 

@@ -100,38 +100,38 @@ func _run() -> void:
 		assert(not ClassDB.class_exists("SQLite"), "Exported client validation must work without SQLite")
 	# Run the real client validator; this also runs in an exported client without SQLite.
 	var item_uid := "0123456789abcdef0123456789abcdef"
-	assert(InventoryWebController._valid_identity({"id":item_uid,"revision":0}))
+	assert(ItemUiAdapter.valid_item_identity({"id":item_uid,"revision":0}))
 	for invalid: Variant in ["", item_uid.left(31), item_uid.to_upper(), "g".repeat(32), 42]:
-		assert(not InventoryWebController._valid_identity({"id":invalid,"revision":0}))
-	assert(not InventoryWebController._valid_identity({"id":item_uid,"revision":-1}))
-	assert(InventoryWebController._valid_equipment({"id":item_uid,"revision":2}))
-	assert(not InventoryWebController._valid_equipment({"id":item_uid,"revision":2,"action":"quit"}))
-	assert(not InventoryWebController._valid_equipment({"id":"bad","revision":2}))
-	assert(InventoryWebController._valid_unequip({"id":item_uid,"revision":2}))
+		assert(not ItemUiAdapter.valid_item_identity({"id":invalid,"revision":0}))
+	assert(not ItemUiAdapter.valid_item_identity({"id":item_uid,"revision":-1}))
+	assert(ItemUiAdapter.valid_equipment({"id":item_uid,"revision":2}))
+	assert(not ItemUiAdapter.valid_equipment({"id":item_uid,"revision":2,"action":"quit"}))
+	assert(not ItemUiAdapter.valid_equipment({"id":"bad","revision":2}))
+	assert(ItemUiAdapter.valid_unequip({"id":item_uid,"revision":2}))
 	var exact_unequip: Dictionary = {"id":item_uid,"revision":2,"x":2,"y":3,"page":1}
-	assert(InventoryWebController._valid_unequip(exact_unequip))
+	assert(ItemUiAdapter.valid_unequip(exact_unequip))
 	for coordinate: String in ["x","y","page"]:
 		for bad: Variant in [NAN,INF,-1,1.5,1000000,"1"]:
 			var malformed: Dictionary = exact_unequip.duplicate()
 			malformed[coordinate] = bad
-			assert(not InventoryWebController._valid_unequip(malformed))
+			assert(not ItemUiAdapter.valid_unequip(malformed))
 		var partial: Dictionary = exact_unequip.duplicate()
 		partial.erase(coordinate)
-		assert(not InventoryWebController._valid_unequip(partial))
+		assert(not ItemUiAdapter.valid_unequip(partial))
 	for percent: int in [80,90,100,110,125,140,150]:
 		assert(InventoryWebController._valid_scale({"percent":percent}))
 	for invalid: Variant in [0,79,81,151,100.5,"125",null]:
 		assert(not InventoryWebController._valid_scale({"percent":invalid}))
 	assert(not InventoryWebController._valid_scale({"percent":100,"extra":true}))
 	var storage_command: Dictionary = {"id":item_uid,"revision":0,"from":"inventory","to":"storage","x":14,"y":8,"page":1,"quick":false}
-	assert(InventoryWebController._valid_storage(storage_command))
+	assert(ItemUiAdapter.valid_storage(storage_command))
 	for bad: Variant in [INF,NAN,-1,15,1.5]:
 		var invalid: Dictionary = storage_command.duplicate()
 		invalid.x=bad
-		assert(not InventoryWebController._valid_storage(invalid))
+		assert(not ItemUiAdapter.valid_storage(invalid))
 	var inventory_route: Dictionary = storage_command.duplicate()
 	inventory_route.merge({"from":"inventory","to":"inventory","x":0,"page":0},true)
-	assert(not InventoryWebController._valid_storage(inventory_route),"Inventory has one authoritative move path")
+	assert(not ItemUiAdapter.valid_storage(inventory_route),"Inventory has one authoritative move path")
 	# Independent requests accept out-of-order replies and ignore expired IDs.
 	var controller := InventoryWebController.new()
 	add_child(controller)
@@ -258,11 +258,11 @@ func _run() -> void:
 	bridge.send("storage.updated",{"items":"x".repeat(WebUiBridge.MAX_STATE_BYTES)})
 	assert(messages.size()==count+1,"State boundary remains finite")
 	var original_item: Dictionary = {"stats":{"attack":13},"affixes":[{"stat":"attack","value":3}]}
-	var tooltip_model: Dictionary = InventoryWebController._item_tooltip_details(original_item)
+	var tooltip_model: Dictionary = ItemUiAdapter.tooltip_details(original_item)
 	assert(tooltip_model.properties == ["Attack: 13"] and tooltip_model.affixes == [{"lines":["+3 Attack"]}], "Existing rolls are displayed without inventing prefix/suffix kind")
 	assert(original_item.stats.attack == 13 and original_item.affixes[0].value == 3)
 	var fractional_item: Dictionary = {"affixes":[{"stat":"attack","value":1.5},{"stat":"attack","value":-0.25},{"stat":"attack","value":0}]}
-	var fractional_tooltip: Dictionary = InventoryWebController._item_tooltip_details(fractional_item)
+	var fractional_tooltip: Dictionary = ItemUiAdapter.tooltip_details(fractional_item)
 	assert(fractional_tooltip.affixes == [{"lines":["+1.5 Attack"]},{"lines":["-0.25 Attack"]},{"lines":["+0 Attack"]}], "Affix display preserves fractional values and explicit signs")
 	assert(fractional_item.affixes[0].value == 1.5 and fractional_item.affixes[1].value == -0.25)
 	var tooltip_controller := InventoryWebController.new()
