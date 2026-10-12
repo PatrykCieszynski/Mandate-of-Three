@@ -231,3 +231,10 @@ func process_impacts(now: int) -> void:
 			var swing: Dictionary = runtime.pending_impact
 			runtime.pending_impact = {}
 			resolve_swing(peer_id,swing,now)
+
+func interrupt(peer_id: int, death: bool = false) -> void:
+	cancel(peer_id)
+	var runtime := attack_runtime(peer_id)
+	runtime.display_combo_step = 0
+	runtime.combo.reset()
+	if death: runtime.next_attack_ms = 0

@@ -34,18 +34,18 @@ func run_server() -> void:
 	target.position = Vector3(0,0,3.6)
 	await get_tree().physics_frame
 	var now := Time.get_ticks_msec()
-	check(combat.begin_attack(hero,100,now),"accept hitch fixture")
-	var swing: Dictionary = combat.attack_runtime(hero).active_action
-	check(combat.resolve_swing(hero,swing,now+200).is_empty(),"scheduled hit cannot resolve early")
+	check(combat.attacks.begin_attack(hero,100,now),"accept hitch fixture")
+	var swing: Dictionary = combat.attacks.attack_runtime(hero).active_action
+	check(combat.attacks.resolve_swing(hero,swing,now+200).is_empty(),"scheduled hit cannot resolve early")
 	var before := target.hp
-	check(combat.resolve_swing(hero,swing,now+400).has(target.mob_id),"late tick resolves scheduled impact beyond active-window end")
-	check(target.hp < before and combat.resolve_swing(hero,swing,now+500).is_empty(),"late hit applies exactly once")
+	check(combat.attacks.resolve_swing(hero,swing,now+400).has(target.mob_id),"late tick resolves scheduled impact beyond active-window end")
+	check(target.hp < before and combat.attacks.resolve_swing(hero,swing,now+500).is_empty(),"late hit applies exactly once")
 	check(not combat.can_move(hero,now+int(swing.timing.direct)),"link does not unlock WASD")
 	check(combat.can_move(hero,now+int(swing.timing.motion)),"motion end unlocks WASD")
-	check(combat.begin_attack(hero,101,now+int(swing.timing.preinput)),"next intent queues")
+	check(combat.attacks.begin_attack(hero,101,now+int(swing.timing.preinput)),"next intent queues")
 	combat.remember_next_facing(hero,Vector2.RIGHT)
-	combat._advance_attack_queue(now+int(swing.timing.direct))
-	var next: Dictionary = combat.attack_runtime(hero).active_action
+	combat.attacks.advance_queue(now+int(swing.timing.direct))
+	var next: Dictionary = combat.attacks.attack_runtime(hero).active_action
 	check(next.step_index == 1 and is_equal_approx(next.yaw,-PI/2) and is_zero_approx(swing.yaw),"link starts new action with its own frozen yaw")
 	check(is_equal_approx(body._advance_yaw,next.yaw) and not combat.can_move(hero,now+int(swing.timing.direct)),"successor owns advance and movement lock")
 	var wall := StaticBody3D.new()
@@ -62,20 +62,20 @@ func run_server() -> void:
 	var ticks: Array[int] = []
 	var seq := 200
 	for speed: float in [100.0,122.0,150.0]:
-		combat._clear_attack_intents(hero)
+		combat.attacks.cancel(hero)
 		combat.combo_state(hero).reset()
-		combat.attack_runtime(hero).next_attack_ms = 0
+		combat.attacks.attack_runtime(hero).next_attack_ms = 0
 		stats.attack_speed = speed
 		body.position = Vector3(12,0,10)
 		body.velocity = Vector3.ZERO
 		body.rotation.y = 0
 		var start := body.position
 		var started := Time.get_ticks_msec()
-		check(combat.begin_attack(hero,seq,started),"accept advance at each speed")
+		check(combat.attacks.begin_attack(hero,seq,started),"accept advance at each speed")
 		seq += 1
 		var frame := 0
 		var advance_ticks := 0
-		var motion_ms: int = combat.attack_runtime(hero).active_action.timing.motion
+		var motion_ms: int = combat.attacks.attack_runtime(hero).active_action.timing.motion
 		check(is_equal_approx(body._advance_duration,motion_ms/1000.0),"production advance duration uses full scaled motion, not link")
 		while frame*1000.0/60 < motion_ms:
 			await get_tree().physics_frame
@@ -87,18 +87,18 @@ func run_server() -> void:
 		distances.append(start.z-body.position.z)
 		ticks.append(advance_ticks)
 		# Full unchained motion consumes the authored distance; link remains separate.
-		check(not combat.can_move(hero,started+int(combat.attack_runtime(hero).active_action.timing.direct)),"single attack tail remains locked")
+		check(not combat.can_move(hero,started+int(combat.attacks.attack_runtime(hero).active_action.timing.direct)),"single attack tail remains locked")
 	check(absf(distances[0]-distances[1])<.02 and absf(distances[0]-distances[2])<.02 and absf(distances[0]-BasicAttackCombos.BASE.steps[0].advance_distance)<.03,"speed preserves authored advance distance")
 	check(ticks[0]>ticks[1] and ticks[1]>ticks[2],"higher speed shortens advance duration")
 	print("ACTION_ADVANCE distances=",distances," ticks=",ticks)
-	combat._clear_attack_intents(hero)
+	combat.attacks.cancel(hero)
 	combat.combo_state(hero).reset()
-	combat.attack_runtime(hero).next_attack_ms = 0
+	combat.attacks.attack_runtime(hero).next_attack_ms = 0
 	stats.attack_speed = 100.0
 	body.position = Vector3(10,0,10)
 	body.velocity = Vector3.ZERO
 	body.rotation.y = 0
-	check(combat.begin_attack(hero,seq,Time.get_ticks_msec()),"accept wall advance")
+	check(combat.attacks.begin_attack(hero,seq,Time.get_ticks_msec()),"accept wall advance")
 	while body._advance_elapsed < body._advance_duration:
 		await get_tree().physics_frame
 		body.simulate(1.0/60,Vector2.ZERO)
@@ -146,7 +146,7 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikePlayer3D, target: Sp
 	target.hp = target.max_hp
 	body.hit_reaction.clear()
 	body.knockback_velocity = Vector3.ZERO
-	combat._clear_attack_intents(hero)
+	combat.attacks.cancel(hero)
 	var step := BasicAttackCombos.BASE.steps[0]
 	body.position = Vector3(15,0,10)
 	target.position = Vector3(18,0,8)
@@ -175,16 +175,16 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikePlayer3D, target: Sp
 	body.position = Vector3(15,0,10)
 	body.rotation.y = 0
 	body.velocity = Vector3.ZERO
-	combat._clear_attack_intents(hero)
-	combat.attack_runtime(hero).next_attack_ms = 0
+	combat.attacks.cancel(hero)
+	combat.attacks.attack_runtime(hero).next_attack_ms = 0
 	combat.combo_state(hero).reset()
 	stats.attack_speed = 100.0
 	var started := Time.get_ticks_msec()
-	check(combat.begin_attack(hero,300,started),"BODY blocking does not reject attack")
-	var swing: Dictionary = combat.attack_runtime(hero).active_action
+	check(combat.attacks.begin_attack(hero,300,started),"BODY blocking does not reject attack")
+	var swing: Dictionary = combat.attacks.attack_runtime(hero).active_action
 	await physics_steps(body,60)
 	check(absf(body.position.z-walking_stop)<.02,"advance stops on same BODY as walking")
-	check(combat.resolve_swing(hero,swing,started+1100).has(target.mob_id),"blocked advance still resolves combat trace")
+	check(combat.attacks.resolve_swing(hero,swing,started+1100).has(target.mob_id),"blocked advance still resolves combat trace")
 	target.hit_reaction.clear()
 	target.knockback_velocity = Vector3.ZERO
 	body.cancel_attack_advance()
@@ -212,14 +212,14 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikePlayer3D, target: Sp
 	target.position = Vector3(15,0,9)
 	target.hit_reaction.clear()
 	target.hp = target.max_hp
-	combat._clear_attack_intents(hero)
+	combat.attacks.cancel(hero)
 	var finisher := BasicAttackCombos.BASE.steps[3]
 	body.start_attack_advance(0,finisher.advance_distance,finisher.motion_duration_ms/1000.0)
 	await physics_steps(body,37)
 	var blocked_position := body.position.z
 	var impact := Time.get_ticks_msec()
 	var final_swing := {"step":finisher,"impact":impact,"started":impact-finisher.impact_ms,"attack":1,"yaw":0.0,"finisher":true,"hit_set":{},"action_id":301,"step_index":3}
-	check(combat.resolve_swing(hero,final_swing,impact).has(target.mob_id) and target.knockback_active(),"finisher uses existing authoritative knockback")
+	check(combat.attacks.resolve_swing(hero,final_swing,impact).has(target.mob_id) and target.knockback_active(),"finisher uses existing authoritative knockback")
 	for frame: int in 40:
 		await get_tree().physics_frame
 		target.simulate_mob(1.0/60,Vector2.ZERO,Time.get_ticks_msec())
@@ -249,7 +249,7 @@ func check_body_contracts(combat: SpikeCombat3D, body: SpikePlayer3D, target: Sp
 	check(body.position.x>spawn_position.x,"normal movement resumes after respawn")
 
 func check_body_edge_cases(combat: SpikeCombat3D, body: SpikePlayer3D, target: SpikeMob3D, hero: int) -> void:
-	combat._clear_attack_intents(hero)
+	combat.attacks.cancel(hero)
 	body.hit_reaction.clear()
 	body.knockback_velocity = Vector3.ZERO
 	target.hit_reaction.clear()
@@ -321,7 +321,7 @@ func check_body_edge_cases(combat: SpikeCombat3D, body: SpikePlayer3D, target: S
 		var impact := Time.get_ticks_msec()
 		var finisher := BasicAttackCombos.BASE.steps[3]
 		var swing := {"step":finisher,"impact":impact,"started":impact-finisher.impact_ms,"attack":1,"yaw":0.0,"finisher":true,"hit_set":{},"action_id":400+count,"step_index":3}
-		var hits := combat.resolve_swing(hero,swing,impact)
+		var hits := combat.attacks.resolve_swing(hero,swing,impact)
 		var displaced := 0
 		var starts: Array[Vector3] = []
 		for dog: SpikeMob3D in pack: starts.append(dog.position)

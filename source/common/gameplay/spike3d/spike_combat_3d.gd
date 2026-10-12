@@ -88,7 +88,7 @@ func initialize_peer(peer_id: int) -> void:
 	body.hp = body.max_hp
 	body.set_alive(true)
 	body.respawn_at_ms = 0
-	attack_runtime(peer_id)
+	attacks.attack_runtime(peer_id)
 	if OS.has_feature("editor"):
 		for arg: String in OS.get_cmdline_user_args():
 			if arg.begins_with("--dev-combo-skill="): set_combo_skill_level(peer_id,arg.get_slice("=",1).to_int())
@@ -129,9 +129,6 @@ func request_attack(sequence: int) -> void:
 func receive_attack_wait(delay_ms: int) -> void:
 	if GameMode.is_client(): client_combat.receive_attack_wait(delay_ms)
 
-func attack_runtime(peer_id: int) -> PlayerCombatRuntime:
-	return attacks.attack_runtime(peer_id)
-
 func combo_state(peer_id: int) -> BasicAttackComboState:
 	return attacks.combo_state(peer_id)
 
@@ -153,18 +150,6 @@ func request_combo_toggle() -> void:
 
 func remember_next_facing(peer_id: int, direction: Vector2) -> void:
 	attacks.remember_next_facing(peer_id,direction)
-
-func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
-	return attacks.begin_attack(peer_id,sequence,now)
-
-func _advance_attack_queue(now: int) -> void:
-	attacks.advance_queue(now)
-
-func _clear_attack_intents(peer_id: int) -> void:
-	attacks.cancel(peer_id)
-
-func resolve_swing(peer_id: int, swing: Dictionary, now: int) -> Array[int]:
-	return attacks.resolve_swing(peer_id,swing,now)
 
 func publish_experience(owner_id: int, amount: int, levels_gained: int, level: int) -> void:
 	for peer_id: int in _world.characters:
@@ -230,7 +215,7 @@ func _physics_process(delta: float) -> void:
 	_tick_player_lifecycle(now)
 	attacks.process_impacts(now)
 	_world.mob_system.tick(delta,now)
-	_advance_attack_queue(now)
+	attacks.advance_queue(now)
 	if _world.metin_encounter != null: _world.metin_encounter.tick(now)
 	_snapshot_accum += delta
 	if _snapshot_accum >= 0.1:
@@ -246,19 +231,14 @@ func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition =
 	body.hit_reaction.apply(result,now)
 	body.apply_knockback(hit_direction,result.knockback_distance)
 	if result.interrupts_attack:
-		_clear_attack_intents(peer_id)
-		attack_runtime(peer_id).display_combo_step = 0
-		combo_state(peer_id).reset()
+		attacks.interrupt(peer_id)
 	for observer: int in _world.characters: receive_hurt.rpc_id(observer,peer_id,result.presentation())
 	if body.hp == 0:
 		body.set_alive(false)
 		body.hit_reaction.clear()
 		body.knockback_velocity = Vector3.ZERO
 		body.respawn_at_ms = now + 2000
-		_clear_attack_intents(peer_id)
-		attack_runtime(peer_id).display_combo_step = 0
-		combo_state(peer_id).reset()
-		attack_runtime(peer_id).next_attack_ms = 0
+		attacks.interrupt(peer_id,true)
 		_world.intentions[peer_id]["direction"] = Vector2.ZERO
 		_send_snapshot()
 	return result
@@ -367,7 +347,7 @@ func publish_swing(peer_id: int, resolved: Dictionary) -> void:
 
 func publish_hits(peer_id: int, results: Array[Dictionary], swing: Dictionary) -> void:
 	for observer: int in _world.characters:
-		receive_hits.rpc_id(observer,peer_id,results,int(swing.get("action_id",0)),int(swing.get("step_index",maxi(1,attack_runtime(peer_id).display_combo_step)-1)),bool(swing.get("finisher",false)))
+		receive_hits.rpc_id(observer,peer_id,results,int(swing.get("action_id",0)),int(swing.get("step_index",maxi(1,attacks.attack_runtime(peer_id).display_combo_step)-1)),bool(swing.get("finisher",false)))
 
 func assist_direction(manual: Vector2) -> Vector2:
 	return client_combat.assist_direction(manual)
