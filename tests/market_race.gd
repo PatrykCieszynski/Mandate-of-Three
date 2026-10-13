@@ -5,6 +5,10 @@ var native_buy_id := ""
 var native_focus_observed := false
 var native_peer := 0
 var native_command_ids: Dictionary={}
+var browsed_peers: Dictionary={}
+@rpc("any_peer","call_remote","reliable",0)
+func register_browsed() -> void:
+	if GameMode.is_world_server(): browsed_peers[multiplayer.get_remote_sender_id()]=true
 @rpc("any_peer","call_remote","reliable",0)
 func register_native() -> void:
 	if GameMode.is_world_server(): native_peer=multiplayer.get_remote_sender_id()
@@ -49,7 +53,14 @@ func run_client() -> void:
 	check((await command("market.browser.catalog",{"query":"miecz"})).ok,"normalized catalog through real Web command")
 	fixture_checkpoint="search"
 	var filters: Dictionary={"definition_id":"iron_sword","upgrade_min":7,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[{"stat_id":"monster_damage","minimum":10},{"stat_id":"critical_chance","minimum":5}],"sort":"price_asc","cursor":"","limit":20}
-	check((await command("market.browser.search",filters)).ok,"indexed AND search through native adapter")
+	var searched:=await command("market.browser.search",filters)
+	# Aggregate World budget may reject one of the simultaneous clients. Retry is
+	# a new read, never an economic mutation or an unbounded queued job.
+	for retry: int in 3:
+		if searched.get("error","")!="rate_limited": break
+		await get_tree().create_timer(0.25).timeout
+		searched=await command("market.browser.search",filters)
+	check(searched.ok,"indexed AND search through native adapter after bounded load shedding")
 	check(browser_snapshot.results.size()==1,"one +9 matching rolled offer")
 	fixture_checkpoint="visit"
 	var found: Dictionary=browser_snapshot.results[0]
@@ -86,6 +97,8 @@ func run_client() -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("res://.godot/verification/market-native.png")
 		print("MARKET_NATIVE_OK Vulkan Mobile CEF UI_READY, render, focus lease, resize, reload snapshot")
+	register_browsed.rpc_id(1)
+	await wait_until(func()->bool:return phase_name=="RACE")
 	if CmdlineUtils.get_parsed_args().has("native-market-peer"): await get_tree().create_timer(3).timeout
 	var result: Dictionary
 	if native:
@@ -121,6 +134,10 @@ func run_server() -> void:
 	for id: int in world.characters:
 		check(server.database.add_yang(server.connected_players[id].player_id,500),"pending buyer income")
 		phase.rpc_id(id,"GO",str(offer.shop_id)+":"+offer.offer_id)
+	# Barrier: both buyers must browse before either may consume the shared offer.
+	# Load shedding changes read completion order, not the purchase-race contract.
+	await wait_until(func()->bool:return browsed_peers.size()==2)
+	for id: int in world.characters: phase.rpc_id(id,"RACE",str(offer.shop_id)+":"+offer.offer_id)
 	await wait_until(func()->bool:return replies.size()==2 and done_peers.size()==2)
 	check(replies.values().filter(func(r: Dictionary)->bool:return r.ok).size()==1,"exactly one buyer wins over real concurrent RPC")
 	check(market.mine(seller).offers.is_empty(),"sold escrow removed")

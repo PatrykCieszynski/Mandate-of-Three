@@ -276,7 +276,7 @@ func open_database() -> void:
 
 
 func close_database() -> void:
-	# Plugin doesnâ€™t always expose close explicitly; if it does, call it.
+	# Plugin doesn’t always expose close explicitly; if it does, call it.
 	# Otherwise let refcount drop; but prefer close if available.
 	flush_character()
 
@@ -315,7 +315,7 @@ func save_guild(g: Guild) -> void:
 
 
 ## Flush every still-connected player to disk. Called from the periodic save
-## tick AND from the console's `save` / `shutdown` commands â€” previously the
+## tick AND from the console's `save` / `shutdown` commands — previously the
 ## console called a method that didn't exist, so shutdowns silently lost
 ## anyone who hadn't disconnected yet. Returns the count actually saved.
 func save_all_connected(connected_players: Dictionary) -> int:
@@ -336,7 +336,7 @@ func save_all_connected(connected_players: Dictionary) -> int:
 ##
 ## CRITICAL: checkpoint the WAL into the main .db FIRST. In WAL mode recent writes
 ## live in the -wal sidecar until checkpointed, and this backup byte-copies ONLY the
-## .db â€” so without the checkpoint every backup silently omitted everything since the
+## .db — so without the checkpoint every backup silently omitted everything since the
 ## last auto-checkpoint (observed live: a 332 KB .db beside a 4 MB uncheckpointed
 ## -wal, i.e. hours of progress missing from every "successful" backup). TRUNCATE
 ## also folds the -wal back to ~0, so the live .db stays current and the -wal can't
@@ -392,6 +392,12 @@ func _rotate_backups(backup_dir: String, name_prefix: String, keep_last: int) ->
 		var to_remove: String = backups.pop_front()
 		DirAccess.remove_absolute(backup_dir + "/" + to_remove)
 
+# Synchronous reads have no application queue. Shared across every instance/account.
+# One admission / 200 ms (5/s), burst one, and never twice in the same physics frame.
+const MARKET_SEARCH_INTERVAL_MS := 200
+var _market_search_after_ms := 0
+var _market_search_frame := -1
+
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	if db==null or not wallet_ready: return {"ok":false,"error":"storage"}
 	if wallet_account_id(character_id)<=0: return {"ok":false,"error":"owner"}
@@ -401,6 +407,13 @@ func market_query(character_id: int, action: String, payload: Dictionary) -> Dic
 			var snapshot:=ExchangeStoreSqlite.new(db,market_rejected_commands).orders_snapshot(character_id,int(runtime_wallets.get(account,{}).get("pending_currency_delta",0)))
 			return snapshot
 		"catalog": return MarketSearchSqlite.catalog(payload.query)
-		"search": return MarketSearchSqlite.new(db).search(payload)
+		"search":
+			if not MarketSearchSqlite.valid(payload): return {"ok":false,"error":"request"}
+			var now:=Time.get_ticks_msec()
+			var frame:=Engine.get_physics_frames()
+			if now<_market_search_after_ms or frame==_market_search_frame: return {"ok":false,"error":"rate_limited"}
+			_market_search_after_ms=now+MARKET_SEARCH_INTERVAL_MS
+			_market_search_frame=frame
+			return MarketSearchSqlite.new(db).search(payload)
 		"visit": return MarketStoreSqlite.new(db,market_rejected_commands).visit(int(payload.shop_id))
 	return {"ok":false,"error":"request"}

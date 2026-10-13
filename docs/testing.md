@@ -257,3 +257,11 @@ The production Chrome milestone is source/client/ui_web/test/market_browser.mts
 Run normal-role account/item session suites sequentially too: their avatars share
 one live world. Full item relog validates its own public actor, so another fixture
 finishing earlier cannot hang it. Do not run native milestones for routine styles.
+
+Marketplace R0–R2 adds `run-combat.ps1 -Scene market_load -MarkerPrefix MARKET_LOAD`:
+production physics/combat/replication with two real clients plus 16 emulated search
+sources over 10k legal offers. It reports full-physics work and monotonic tick
+intervals, verifies actual impacts and bounds admitted requests; no exact-ms
+assertions. Existing custody/order suites now also protect rejection-spam row
+count, bounded negative cache, conflict, rollback and durable replay. See
+[baseline and measurements](marketplace-refactor-r0-r2.md).

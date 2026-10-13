@@ -15,6 +15,8 @@ var seen_damage := false
 var hero := 0
 var character_id := 0
 var attack_sequence := 0
+var query_replies: Array[Dictionary] = []
+var queries_started := false
 const PARAMS := {"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[],"sort":"price_asc","cursor":"","limit":50}
 
 class TickProbe extends Node:
@@ -46,6 +48,8 @@ func run_server() -> void:
 		var deadline:=Time.get_ticks_msec()+6000
 		while Time.get_ticks_msec()<deadline: await get_tree().physics_frame
 		measuring=false
+		if searching:
+			check(denied>0 and accepted<=31,"World sheds aggregate burst; at most 5 expensive reads/s, no backlog")
 		check(attacks>0 and seen_damage,"real accepted combat impacts continue under search load")
 		print("MARKET_LOAD_BENCH ",JSON.stringify({"phase":mode,"offers":10000,"sources":16,"source_limit_per_second":8,"accepted":accepted,"denied":denied,"attacks":attacks,"physics_work":summary(costs),"tick_interval":summary(intervals),"search":summary(searches)}))
 	set_phase("DONE")
@@ -93,4 +97,10 @@ func _process(delta: float) -> void:
 	elapsed+=delta
 	if elapsed>40: check(false,"market load timeout");return
 	if GameMode.is_world_server() or world==null or world.combat_endpoint.state.is_empty(): return
-	if not ready_peers.has(world.local_peer): ready_peers[world.local_peer]=true;register_ready.rpc_id(1)
+	if not queries_started:
+		queries_started=true
+		world.market_endpoint.query_finished.connect(func(_id: String,result: Dictionary)->void: query_replies.append(result))
+		for request: int in 9: world.market_endpoint.request_query.rpc_id(1,"catalog",{"query":"sword"},"client_limit_%d" % request)
+	if query_replies.size()==9 and not ready_peers.has(world.local_peer):
+		check(query_replies.filter(func(r: Dictionary)->bool:return r.ok).size()==8 and query_replies.back().get("error")=="rate_limited","independent per-client query budget retained")
+		ready_peers[world.local_peer]=true;register_ready.rpc_id(1)

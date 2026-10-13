@@ -97,6 +97,12 @@ func _ready() -> void:
 	assert(db.query("SELECT COUNT(*) AS n FROM item_instances i JOIN item_custody c ON c.uid=i.uid;") and db.query_result[0].n==items.inventory(alt).items.size()+items.inventory(foreign).items.size()+storage.snapshot(first).items.size(),"every UID has one legal location")
 	assert(db.close_db() and db.open_db() and MarketStoreSqlite.ensure_schema(db))
 	assert(market.claim_item(alt,"claim_a",item.uid,claim.revision)==received,"receipt survives restart")
+	var fresh:=EconomyFixture.create_character(store,"negative_rollback",{"name":"NegativeRollback","skin":1})
+	assert(market.configure(fresh,"rejected_config",1,"Fresh","active").error=="stale")
+	assert(db.query_with_bindings("SELECT shop_id FROM account_shops WHERE account_id=?;",[store.resolve_account_id(fresh)]) and db.query_result.is_empty(),"rejection rolls back provisional shop creation")
+	assert(market.configure(fresh,"rejected_config",0,"Fresh","active").error=="command_conflict")
+	market.rejected.remember(store.resolve_account_id(fresh),"rejected_config","configure",JSON.stringify([1,"Fresh","active"]),{"ok":false,"error":"stale"},Time.get_ticks_msec()-MarketRejectedCommands.TTL_MS)
+	assert(market.configure(fresh,"rejected_config",0,"Fresh","active").ok,"expired unsuccessful command can revalidate; it never committed value")
 	# R0/R1: distinct rejected IDs must not create durable economic history.
 	assert(db.query("SELECT COUNT(*) AS n FROM market_commands;"));var before_receipts:=int(db.query_result[0].n)
 	var spam_started:=Time.get_ticks_usec()
