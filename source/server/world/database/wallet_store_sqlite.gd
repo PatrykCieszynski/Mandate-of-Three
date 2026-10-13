@@ -43,10 +43,10 @@ static func migrate_accounts(database: SQLite, master_ids: Dictionary) -> Dictio
 	return {"ok":true,"already_migrated":false}
 
 func load_wallet(owner_id: int) -> Dictionary:
-	if not db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;", [owner_id]):
+	if not db.query_with_bindings("SELECT * FROM account_wallets WHERE account_id=?;", [owner_id]):
 		return {"ok": false, "error": "storage"}
 	if db.query_result.is_empty(): return {"ok": false, "error": "owner"}
-	return {"ok": true, "balance": int(db.query_result[0].yang)}
+	return {"ok": true, "balance": int(db.query_result[0].yang),"reserved_yang":int(db.query_result[0].get("reserved_yang",0))}
 
 func checkpoint(deltas: Dictionary) -> Dictionary:
 	if deltas.is_empty(): return {"ok": true, "balances": {}}
@@ -74,6 +74,7 @@ func spend_in_transaction(owner_id: int, pending_income: int, cost: int) -> Dict
 	if cost <= 0 or cost > MAX_YANG: return {"ok": false, "error": "request"}
 	var income: Dictionary = _apply_income(owner_id, pending_income)
 	if not income.ok: return income
+	if int(income.balance)-int(income.reserved_yang)<cost: return {"ok":false,"error":"funds"}
 	if not db.query_with_bindings("UPDATE account_wallets SET yang=yang-? WHERE account_id=? AND yang>=?;", [cost, owner_id, cost]):
 		return {"ok": false, "error": "storage"}
 	if not db.query("SELECT changes() AS n;"): return {"ok": false, "error": "storage"}
@@ -86,9 +87,9 @@ func _apply_income(owner_id: int, amount: int) -> Dictionary:
 		return {"ok": false, "error": "storage"}
 	if not db.query("SELECT changes() AS n;"): return {"ok": false, "error": "storage"}
 	if int(db.query_result[0].n) != 1: return {"ok": false, "error": "owner"}
-	if not db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;", [owner_id]):
+	if not db.query_with_bindings("SELECT * FROM account_wallets WHERE account_id=?;", [owner_id]):
 		return {"ok": false, "error": "storage"}
-	return {"ok": true, "balance": int(db.query_result[0].yang)}
+	return {"ok": true, "balance": int(db.query_result[0].yang),"reserved_yang":int(db.query_result[0].get("reserved_yang",0))}
 
 func _rollback(reason: String) -> Dictionary:
 	db.query("ROLLBACK;")

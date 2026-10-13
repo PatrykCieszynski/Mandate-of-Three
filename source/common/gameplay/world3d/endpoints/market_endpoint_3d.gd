@@ -16,6 +16,8 @@ static func valid(action: String, p: Dictionary) -> bool:
 	if not p.get("command_id") is String or p.command_id.is_empty() or p.command_id.length()>96: return false
 	var fields: Array
 	match action:
+		"deposit": fields = ["command_id","uid","revision","amount","source"]
+		"withdraw": fields = ["command_id","asset_id","amount","destination"]
 		"list": fields = ["command_id","uid","revision","position","price"]
 		"buy": fields = ["command_id","shop_id","offer_id","revision","price"]
 		"edit": fields = ["command_id","offer_id","revision","position","price"]
@@ -25,6 +27,9 @@ static func valid(action: String, p: Dictionary) -> bool:
 		"receipt": fields = ["command_id"]
 		_: return false
 	if p.size()!=fields.size() or not p.has_all(fields): return false
+	if p.has("amount") and (not integer(p.amount,200) or p.amount<=0): return false
+	if action=="deposit" and p.source not in ["bag","account_storage"]: return false
+	if action=="withdraw" and (not p.asset_id is String or ExchangeStoreSqlite.asset_definition(p.asset_id)==null or p.destination not in ["bag","claim"]): return false
 	if p.has("shop_id") and (not integer(p.shop_id) or p.shop_id<=0): return false
 	if p.has("uid") and (not p.uid is String or not ItemInstance.valid_uid(p.uid)): return false
 	if p.has("offer_id") and (not p.offer_id is String or not ItemInstance.valid_uid(p.offer_id)): return false
@@ -44,7 +49,7 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	if owner<=0: return {"ok":false,"error":"owner"}
 	if action=="open": return {"ok":true}
 	var result := services.economy().market_command(owner,action,payload)
-	if result.ok and action in ["list","claim","buy"]:
+	if result.ok and action in ["list","claim","buy","deposit","withdraw"]:
 		_world.inventory_endpoint.accept_committed_change(peer_id)
 	if result.ok and action=="buy":
 		for observer: int in _world.characters:
@@ -90,6 +95,7 @@ func receive_operation(request_id: String,result: Dictionary) -> void:
 signal query_finished(request_id: String, result: Dictionary)
 static func valid_query(action: String,p: Dictionary) -> bool:
 	match action:
+		"exchange": return p.is_empty()
 		"catalog": return p.size()==1 and p.get("query") is String and p.query.length()<=80
 		"search": return MarketSearchSqlite.valid(p)
 		"visit": return p.size()==1 and integer(p.get("shop_id")) and p.shop_id>0
