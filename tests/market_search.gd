@@ -49,7 +49,7 @@ func _ready() -> void:
 	assert(persistence.market_query(other,"search",p).error=="rate_limited","another authenticated account shares World budget")
 	assert(persistence.market_query(other,"catalog",{"query":"sword"}).ok,"cheap catalog does not consume expensive budget")
 	assert(persistence.market_query(other,"visit",{"shop_id":1}).ok,"public shop read remains available")
-	var after:=Time.get_ticks_msec()+WorldDatabase.MARKET_SEARCH_INTERVAL_MS+20
+	var after:=Time.get_ticks_msec()+MarketplaceService.MARKET_SEARCH_INTERVAL_MS+20
 	while Time.get_ticks_msec()<after: await get_tree().physics_frame
 	assert(persistence.market_query(other,"search",p).ok,"budget refills without queued work")
 	assert(persistence.market_query(owner,"search",p).error=="rate_limited")

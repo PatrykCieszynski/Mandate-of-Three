@@ -1,19 +1,18 @@
 class_name MarketStoreSqlite
 extends RefCounted
-## One explicit marketplace store. Character context/definitions remain server-owned.
+## Shop domain SQL. Atomic commands compose the shared SQLite receipt boundary.
 const COLUMNS := 5
 const ROWS := 8
 const CAPACITY := COLUMNS*ROWS
 var db: SQLite
-var _account := 0
-var _command := ""
-var _kind := ""
-var _request := ""
-var _cached: Dictionary = {}
-var rejected: MarketRejectedCommands
+var _transaction: EconomyCommandSqlite
+var committed: bool:
+	get: return _transaction.committed
+var rejected: MarketRejectedCommands:
+	get: return _transaction.rejected
 func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
 	db = database
-	rejected = rejected_commands if rejected_commands!=null else MarketRejectedCommands.new()
+	_transaction = EconomyCommandSqlite.new(db,rejected_commands)
 
 static func ensure_schema(database: SQLite) -> bool:
 	database.foreign_keys = true
@@ -70,58 +69,6 @@ static func ensure_schema(database: SQLite) -> bool:
 			return false
 	return true
 
-func _abort(error: String) -> Dictionary:
-	db.query("ROLLBACK;")
-	return {"ok":false,"error":error}
-
-var committed := false
-
-func _open_command(character_id: int, command_id: String, kind: String, args: Array) -> bool:
-	committed = false
-	_cached = {}
-	var valid_command := not command_id.is_empty() and command_id.length()<=96
-	for character: String in command_id:
-		if not "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-:".contains(character): valid_command = false
-	if not valid_command:
-		_cached = {"ok":false,"error":"request"}
-		return false
-	if not db.query("BEGIN IMMEDIATE;"):
-		_cached = {"ok":false,"error":"storage"}
-		return false
-	_account = WorldStoreSqlite.new(db).resolve_account_id(character_id)
-	if _account <= 0:
-		_cached = _abort("owner")
-		return false
-	_command = command_id
-	_kind = kind
-	_request = JSON.stringify(args)
-	if not db.query_with_bindings("SELECT kind,request_json,result_json FROM market_commands WHERE account_id=? AND command_id=?;",[_account,_command]):
-		_cached = _abort("storage")
-		return false
-	if not db.query_result.is_empty():
-		var row: Dictionary = db.query_result[0]
-		_cached = JSON.parse_string(row.result_json) if row.kind==kind and row.request_json==_request else {"ok":false,"error":"command_conflict"}
-		for field: String in ["revision","position","shop_id","price","balance"]:
-			if _cached.has(field): _cached[field] = int(_cached[field])
-		db.query("ROLLBACK;")
-		return false
-	_cached = rejected.lookup(_account,_command,_kind,_request)
-	if not _cached.is_empty():
-		db.query("ROLLBACK;")
-		return false
-	return true
-
-func _finish(result: Dictionary) -> Dictionary:
-	if not result.ok:
-		# Validation may have made provisional writes; none survive a rejection.
-		if not db.query("ROLLBACK;"): return {"ok":false,"error":"storage"}
-		rejected.remember(_account,_command,_kind,_request,result)
-		return result
-	if not db.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[_account,_command,_kind,_request,JSON.stringify(result)]): return _abort("storage")
-	if not db.query("COMMIT;"): return _abort("storage")
-	committed = true
-	return result
-
 func _shop(account_id: int) -> int:
 	if not db.query_with_bindings("INSERT OR IGNORE INTO account_shops(account_id) VALUES(?);",[account_id]): return 0
 	if not db.query_with_bindings("SELECT shop_id FROM account_shops WHERE account_id=?;",[account_id]) or db.query_result.is_empty(): return 0
@@ -139,27 +86,27 @@ func _item_view(row: Dictionary) -> Dictionary:
 func mine(character_id: int) -> Dictionary:
 	if not db.query("BEGIN IMMEDIATE;"): return {"ok":false,"error":"storage"}
 	var account_id := WorldStoreSqlite.new(db).resolve_account_id(character_id)
-	if account_id <= 0: return _abort("owner")
+	if account_id <= 0: return _transaction.rollback("owner")
 	var shop_id := _shop(account_id)
-	if shop_id <= 0: return _abort("storage")
-	if not db.query_with_bindings("SELECT shop_id,display_name AS name,status,revision FROM account_shops WHERE shop_id=?;",[shop_id]): return _abort("storage")
+	if shop_id <= 0: return _transaction.rollback("storage")
+	if not db.query_with_bindings("SELECT shop_id,display_name AS name,status,revision FROM account_shops WHERE shop_id=?;",[shop_id]): return _transaction.rollback("storage")
 	var result: Dictionary = db.query_result[0].duplicate(true)
 	result.ok = true
 	result.columns = COLUMNS
 	result.rows = ROWS
 	result.offers = []
-	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.position,o.price_yang,o.revision AS offer_revision FROM shop_offers o JOIN item_custody c ON c.uid=o.item_uid JOIN item_instances i ON i.uid=o.item_uid WHERE o.shop_id=? ORDER BY o.position;",[shop_id]): return _abort("storage")
+	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.position,o.price_yang,o.revision AS offer_revision FROM shop_offers o JOIN item_custody c ON c.uid=o.item_uid JOIN item_instances i ON i.uid=o.item_uid WHERE o.shop_id=? ORDER BY o.position;",[shop_id]): return _transaction.rollback("storage")
 	for row: Dictionary in db.query_result.duplicate(true):
 		var view := _item_view(row)
-		if view.is_empty(): return _abort("unknown_definition")
+		if view.is_empty(): return _transaction.rollback("unknown_definition")
 		result.offers.append({"offer_id":row.offer_id,"position":row.position,"price":row.price_yang,"revision":row.offer_revision,"item":view})
 	result.claims = []
-	if not db.query_with_bindings("SELECT i.*,c.location,-1 AS bag_position,'' AS equipment_slot FROM item_custody c JOIN item_instances i ON i.uid=c.uid WHERE c.location='account_claim' AND c.owner_id=? ORDER BY c.uid LIMIT 200;",[account_id]): return _abort("storage")
+	if not db.query_with_bindings("SELECT i.*,c.location,-1 AS bag_position,'' AS equipment_slot FROM item_custody c JOIN item_instances i ON i.uid=c.uid WHERE c.location='account_claim' AND c.owner_id=? ORDER BY c.uid LIMIT 200;",[account_id]): return _transaction.rollback("storage")
 	for row: Dictionary in db.query_result.duplicate(true):
 		var view := _item_view(row)
-		if view.is_empty(): return _abort("unknown_definition")
+		if view.is_empty(): return _transaction.rollback("unknown_definition")
 		result.claims.append(view)
-	if not db.query("COMMIT;"): return _abort("storage")
+	if not db.query("COMMIT;"): return _transaction.rollback("storage")
 	return result
 
 func _cells(position: int, height: int) -> Array[int]:
@@ -169,123 +116,117 @@ func _cells(position: int, height: int) -> Array[int]:
 	return cells
 
 func list_item(character_id: int, command_id: String, uid: String, revision: int, position: int, price: int) -> Dictionary:
-	if not _open_command(character_id,command_id,"list",[uid,revision,position,price]): return _cached
-	if not ItemInstance.valid_uid(uid) or revision<0 or price<=0 or price>WalletStoreSqlite.MAX_YANG: return _finish({"ok":false,"error":"request"})
-	if not db.query_with_bindings(ItemStoreSqlite.ITEM_SELECT+"WHERE i.uid=? AND i.owner_character_id=? AND p.owner_character_id=? AND p.location='bag';",[uid,character_id,character_id]): return _abort("storage")
-	if db.query_result.is_empty(): return _finish({"ok":false,"error":"owner"})
+	if not _transaction.begin(character_id,command_id,"list",[uid,revision,position,price]): return _transaction.cached
+	if not ItemInstance.valid_uid(uid) or revision<0 or price<=0 or price>WalletStoreSqlite.MAX_YANG: return _transaction.commit({"ok":false,"error":"request"})
+	if not db.query_with_bindings(ItemStoreSqlite.ITEM_SELECT+"WHERE i.uid=? AND i.owner_character_id=? AND p.owner_character_id=? AND p.location='bag';",[uid,character_id,character_id]): return _transaction.rollback("storage")
+	if db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"owner"})
 	var item := ItemInstance.from_row(db.query_result[0])
-	if item == null: return _finish({"ok":false,"error":"invalid_item"})
-	if item.revision!=revision: return _finish({"ok":false,"error":"stale"})
+	if item == null: return _transaction.commit({"ok":false,"error":"invalid_item"})
+	if item.revision!=revision: return _transaction.commit({"ok":false,"error":"stale"})
 	var definition := ItemDefinitions.get_definition(item.definition_id)
-	if definition == null or not definition.tradeable or item.amount>definition.stack_limit: return _finish({"ok":false,"error":"not_tradeable"})
+	if definition == null or not definition.tradeable or item.amount>definition.stack_limit: return _transaction.commit({"ok":false,"error":"not_tradeable"})
 	var cells := _cells(position,definition.inventory_height)
-	if cells.is_empty(): return _finish({"ok":false,"error":"placement"})
-	var shop_id := _shop(_account)
-	if shop_id<=0: return _abort("storage")
+	if cells.is_empty(): return _transaction.commit({"ok":false,"error":"placement"})
+	var shop_id := _shop(_transaction.account_id)
+	if shop_id<=0: return _transaction.rollback("storage")
 	for cell: int in cells:
-		if not db.query_with_bindings("SELECT 1 FROM shop_cells WHERE shop_id=? AND position=?;",[shop_id,cell]): return _abort("storage")
-		if not db.query_result.is_empty(): return _finish({"ok":false,"error":"occupied"})
+		if not db.query_with_bindings("SELECT 1 FROM shop_cells WHERE shop_id=? AND position=?;",[shop_id,cell]): return _transaction.rollback("storage")
+		if not db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"occupied"})
 	var offer_id := Crypto.new().generate_random_bytes(16).hex_encode()
-	if not db.query_with_bindings("UPDATE item_custody SET location='shop_escrow',owner_id=?,position=?,container_id=?,offer_id=? WHERE uid=?;",[_account,position,shop_id,offer_id,uid]): return _abort("storage")
-	if not db.query_with_bindings("INSERT INTO shop_offers(offer_id,shop_id,account_id,item_uid,position,price_yang) VALUES(?,?,?,?,?,?);",[offer_id,shop_id,_account,uid,position,price]): return _abort("storage")
+	if not db.query_with_bindings("UPDATE item_custody SET location='shop_escrow',owner_id=?,position=?,container_id=?,offer_id=? WHERE uid=?;",[_transaction.account_id,position,shop_id,offer_id,uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("INSERT INTO shop_offers(offer_id,shop_id,account_id,item_uid,position,price_yang) VALUES(?,?,?,?,?,?);",[offer_id,shop_id,_transaction.account_id,uid,position,price]): return _transaction.rollback("storage")
 	for cell: int in cells:
-		if not db.query_with_bindings("INSERT INTO shop_cells(shop_id,position,item_uid) VALUES(?,?,?);",[shop_id,cell,uid]): return _abort("storage")
-	if not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[uid]): return _abort("storage")
-	return _finish({"ok":true,"offer_id":offer_id,"uid":uid,"revision":0,"shop_id":shop_id})
+		if not db.query_with_bindings("INSERT INTO shop_cells(shop_id,position,item_uid) VALUES(?,?,?);",[shop_id,cell,uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[uid]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"offer_id":offer_id,"uid":uid,"revision":0,"shop_id":shop_id})
 
 func cancel_offer(character_id: int, command_id: String, offer_id: String, revision: int) -> Dictionary:
-	if not _open_command(character_id,command_id,"cancel",[offer_id,revision]): return _cached
-	if not db.query_with_bindings("SELECT * FROM shop_offers WHERE offer_id=? AND account_id=?;",[offer_id,_account]): return _abort("storage")
-	if db.query_result.is_empty(): return _finish({"ok":false,"error":"unavailable"})
+	if not _transaction.begin(character_id,command_id,"cancel",[offer_id,revision]): return _transaction.cached
+	if not db.query_with_bindings("SELECT * FROM shop_offers WHERE offer_id=? AND account_id=?;",[offer_id,_transaction.account_id]): return _transaction.rollback("storage")
+	if db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"unavailable"})
 	var offer: Dictionary = db.query_result[0].duplicate(true)
-	if int(offer.revision)!=revision: return _finish({"ok":false,"error":"stale"})
-	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _abort("storage")
-	if not db.query_with_bindings("UPDATE item_custody SET location='account_claim',position=-1,container_id=0,offer_id=NULL WHERE uid=?;",[offer.item_uid]): return _abort("storage")
-	if not db.query_with_bindings("DELETE FROM shop_offers WHERE offer_id=?;",[offer_id]): return _abort("storage")
-	if not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[offer.item_uid]): return _abort("storage")
-	return _finish({"ok":true,"uid":offer.item_uid})
+	if int(offer.revision)!=revision: return _transaction.commit({"ok":false,"error":"stale"})
+	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE item_custody SET location='account_claim',position=-1,container_id=0,offer_id=NULL WHERE uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("DELETE FROM shop_offers WHERE offer_id=?;",[offer_id]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"uid":offer.item_uid})
 
 func claim_item(character_id: int, command_id: String, uid: String, revision: int, requested_position: int = -1) -> Dictionary:
-	if not _open_command(character_id,command_id,"claim",[character_id,uid,revision,requested_position]): return _cached
-	if not db.query_with_bindings("SELECT i.*,c.location,-1 AS bag_position,'' AS equipment_slot FROM item_instances i JOIN item_custody c ON c.uid=i.uid WHERE i.uid=? AND c.location='account_claim' AND c.owner_id=?;",[uid,_account]): return _abort("storage")
-	if db.query_result.is_empty(): return _finish({"ok":false,"error":"owner"})
+	if not _transaction.begin(character_id,command_id,"claim",[character_id,uid,revision,requested_position]): return _transaction.cached
+	if not db.query_with_bindings("SELECT i.*,c.location,-1 AS bag_position,'' AS equipment_slot FROM item_instances i JOIN item_custody c ON c.uid=i.uid WHERE i.uid=? AND c.location='account_claim' AND c.owner_id=?;",[uid,_transaction.account_id]): return _transaction.rollback("storage")
+	if db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"owner"})
 	var item := ItemInstance.from_row(db.query_result[0])
-	if item==null or item.revision!=revision: return _finish({"ok":false,"error":"stale"})
+	if item==null or item.revision!=revision: return _transaction.commit({"ok":false,"error":"stale"})
 	var definition := ItemDefinitions.get_definition(item.definition_id)
-	if definition == null: return _finish({"ok":false,"error":"unknown_definition"})
+	if definition == null: return _transaction.commit({"ok":false,"error":"unknown_definition"})
 	var receiving := ItemStoreSqlite.new(db).resolve_inventory_position(character_id,definition.inventory_height,requested_position)
-	if not receiving.ok: return _finish({"ok":false,"error":receiving.error})
-	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id,uid]): return _abort("storage")
-	if not db.query_with_bindings("UPDATE item_custody SET location='bag',owner_id=?,position=?,container_id=0,offer_id=NULL WHERE uid=?;",[character_id,receiving.position,uid]): return _abort("storage")
-	return _finish({"ok":true,"uid":uid,"position":int(receiving.position)})
+	if not receiving.ok: return _transaction.commit({"ok":false,"error":receiving.error})
+	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id,uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE item_custody SET location='bag',owner_id=?,position=?,container_id=0,offer_id=NULL WHERE uid=?;",[character_id,receiving.position,uid]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"uid":uid,"position":int(receiving.position)})
 
 func receipt(character_id: int, command_id: String) -> Dictionary:
-	var account_id := WorldStoreSqlite.new(db).resolve_account_id(character_id)
-	if account_id <= 0: return {"ok":false,"error":"owner"}
-	if not db.query_with_bindings("SELECT result_json FROM market_commands WHERE account_id=? AND command_id=?;",[account_id,command_id]): return {"ok":false,"error":"storage"}
-	if db.query_result.is_empty():
-		var cached:=rejected.receipt(account_id,command_id)
-		return cached if not cached.is_empty() else {"ok":false,"error":"unknown_command"}
-	return JSON.parse_string(db.query_result[0].result_json)
+	return _transaction.receipt(character_id,command_id)
 
 func configure(character_id: int, command_id: String, revision: int, name: String, status: String) -> Dictionary:
-	if not _open_command(character_id,command_id,"configure",[revision,name,status]): return _cached
-	if name.strip_edges().is_empty() or name.length()>40 or status not in ["active","paused"]: return _finish({"ok":false,"error":"request"})
+	if not _transaction.begin(character_id,command_id,"configure",[revision,name,status]): return _transaction.cached
+	if name.strip_edges().is_empty() or name.length()>40 or status not in ["active","paused"]: return _transaction.commit({"ok":false,"error":"request"})
 	for character: String in name:
-		if character.unicode_at(0)<32: return _finish({"ok":false,"error":"request"})
-	var shop_id := _shop(_account)
-	if shop_id<=0 or not db.query_with_bindings("SELECT revision FROM account_shops WHERE shop_id=?;",[shop_id]): return _abort("storage")
-	if int(db.query_result[0].revision)!=revision: return _finish({"ok":false,"error":"stale"})
-	if not db.query_with_bindings("UPDATE account_shops SET display_name=?,status=?,revision=revision+1 WHERE shop_id=?;",[name.strip_edges(),status,shop_id]): return _abort("storage")
-	return _finish({"ok":true,"revision":revision+1})
+		if character.unicode_at(0)<32: return _transaction.commit({"ok":false,"error":"request"})
+	var shop_id := _shop(_transaction.account_id)
+	if shop_id<=0 or not db.query_with_bindings("SELECT revision FROM account_shops WHERE shop_id=?;",[shop_id]): return _transaction.rollback("storage")
+	if int(db.query_result[0].revision)!=revision: return _transaction.commit({"ok":false,"error":"stale"})
+	if not db.query_with_bindings("UPDATE account_shops SET display_name=?,status=?,revision=revision+1 WHERE shop_id=?;",[name.strip_edges(),status,shop_id]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"revision":revision+1})
 
 func edit_offer(character_id: int, command_id: String, offer_id: String, revision: int, position: int, price: int) -> Dictionary:
-	if not _open_command(character_id,command_id,"edit",[offer_id,revision,position,price]): return _cached
-	if price<=0 or price>WalletStoreSqlite.MAX_YANG: return _finish({"ok":false,"error":"request"})
-	if not db.query_with_bindings("SELECT o.*,i.definition_id FROM shop_offers o JOIN item_instances i ON i.uid=o.item_uid WHERE o.offer_id=? AND o.account_id=?;",[offer_id,_account]): return _abort("storage")
-	if db.query_result.is_empty(): return _finish({"ok":false,"error":"unavailable"})
+	if not _transaction.begin(character_id,command_id,"edit",[offer_id,revision,position,price]): return _transaction.cached
+	if price<=0 or price>WalletStoreSqlite.MAX_YANG: return _transaction.commit({"ok":false,"error":"request"})
+	if not db.query_with_bindings("SELECT o.*,i.definition_id FROM shop_offers o JOIN item_instances i ON i.uid=o.item_uid WHERE o.offer_id=? AND o.account_id=?;",[offer_id,_transaction.account_id]): return _transaction.rollback("storage")
+	if db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"unavailable"})
 	var offer: Dictionary = db.query_result[0].duplicate(true)
-	if int(offer.revision)!=revision: return _finish({"ok":false,"error":"stale"})
+	if int(offer.revision)!=revision: return _transaction.commit({"ok":false,"error":"stale"})
 	var definition := ItemDefinitions.get_definition(StringName(offer.definition_id))
-	if definition == null: return _finish({"ok":false,"error":"unknown_definition"})
+	if definition == null: return _transaction.commit({"ok":false,"error":"unknown_definition"})
 	var cells := _cells(position,definition.inventory_height)
-	if cells.is_empty(): return _finish({"ok":false,"error":"placement"})
+	if cells.is_empty(): return _transaction.commit({"ok":false,"error":"placement"})
 	for cell: int in cells:
-		if not db.query_with_bindings("SELECT 1 FROM shop_cells WHERE shop_id=? AND position=? AND item_uid<>?;",[offer.shop_id,cell,offer.item_uid]): return _abort("storage")
-		if not db.query_result.is_empty(): return _finish({"ok":false,"error":"occupied"})
-	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _abort("storage")
-	if not db.query_with_bindings("UPDATE item_custody SET position=? WHERE uid=?;",[position,offer.item_uid]): return _abort("storage")
-	if not db.query_with_bindings("UPDATE shop_offers SET position=?,price_yang=?,revision=revision+1 WHERE offer_id=?;",[position,price,offer_id]): return _abort("storage")
+		if not db.query_with_bindings("SELECT 1 FROM shop_cells WHERE shop_id=? AND position=? AND item_uid<>?;",[offer.shop_id,cell,offer.item_uid]): return _transaction.rollback("storage")
+		if not db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"occupied"})
+	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE item_custody SET position=? WHERE uid=?;",[position,offer.item_uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE shop_offers SET position=?,price_yang=?,revision=revision+1 WHERE offer_id=?;",[position,price,offer_id]): return _transaction.rollback("storage")
 	for cell: int in cells:
-		if not db.query_with_bindings("INSERT INTO shop_cells(shop_id,position,item_uid) VALUES(?,?,?);",[offer.shop_id,cell,offer.item_uid]): return _abort("storage")
-	if position!=int(offer.position) and not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[offer.item_uid]): return _abort("storage")
-	return _finish({"ok":true,"revision":revision+1})
+		if not db.query_with_bindings("INSERT INTO shop_cells(shop_id,position,item_uid) VALUES(?,?,?);",[offer.shop_id,cell,offer.item_uid]): return _transaction.rollback("storage")
+	if position!=int(offer.position) and not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"revision":revision+1})
 
 
 ## Same transaction owns both wallets, live offer removal and UID transfer.
 func purchase(character_id: int, command_id: String, shop_id: int, offer_id: String, revision: int, price: int, pending: Dictionary) -> Dictionary:
-	if not _open_command(character_id,command_id,"buy",[character_id,shop_id,offer_id,revision,price]): return _cached
-	if not db.query_with_bindings("SELECT o.*,s.status,i.definition_id FROM shop_offers o JOIN account_shops s ON s.shop_id=o.shop_id JOIN item_instances i ON i.uid=o.item_uid WHERE o.offer_id=? AND o.shop_id=?;",[offer_id,shop_id]): return _abort("storage")
-	if db.query_result.is_empty(): return _finish({"ok":false,"error":"unavailable"})
+	if not _transaction.begin(character_id,command_id,"buy",[character_id,shop_id,offer_id,revision,price]): return _transaction.cached
+	if not db.query_with_bindings("SELECT o.*,s.status,i.definition_id FROM shop_offers o JOIN account_shops s ON s.shop_id=o.shop_id JOIN item_instances i ON i.uid=o.item_uid WHERE o.offer_id=? AND o.shop_id=?;",[offer_id,shop_id]): return _transaction.rollback("storage")
+	if db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"unavailable"})
 	var offer: Dictionary = db.query_result[0].duplicate(true)
 	var seller := int(offer.account_id)
-	if seller==_account: return _finish({"ok":false,"error":"self_trade"})
-	if offer.status!="active": return _finish({"ok":false,"error":"paused"})
-	if int(offer.revision)!=revision or int(offer.price_yang)!=price: return _finish({"ok":false,"error":"stale"})
+	if seller==_transaction.account_id: return _transaction.commit({"ok":false,"error":"self_trade"})
+	if offer.status!="active": return _transaction.commit({"ok":false,"error":"paused"})
+	if int(offer.revision)!=revision or int(offer.price_yang)!=price: return _transaction.commit({"ok":false,"error":"stale"})
 	var definition := ItemDefinitions.get_definition(StringName(offer.definition_id))
-	if definition==null: return _finish({"ok":false,"error":"unknown_definition"})
+	if definition==null: return _transaction.commit({"ok":false,"error":"unknown_definition"})
 	var receiving := ItemStoreSqlite.new(db).resolve_inventory_position(character_id,definition.inventory_height,-1)
-	if not receiving.ok: return _finish({"ok":false,"error":receiving.error})
+	if not receiving.ok: return _transaction.commit({"ok":false,"error":receiving.error})
 	var wallets := WalletStoreSqlite.new(db)
-	var spent := wallets.spend_in_transaction(_account,int(pending.get(_account,0)),price)
-	if not spent.ok: return _abort(str(spent.error))
+	var spent := wallets.spend_in_transaction(_transaction.account_id,int(pending.get(_transaction.account_id,0)),price)
+	if not spent.ok: return _transaction.rollback(str(spent.error))
 	var credited := wallets.credit_in_transaction(seller,int(pending.get(seller,0)),price)
-	if not credited.ok: return _abort(str(credited.error))
-	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _abort("storage")
-	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id,offer.item_uid]): return _abort("storage")
-	if not db.query_with_bindings("UPDATE item_custody SET location='bag',owner_id=?,position=?,container_id=0,offer_id=NULL WHERE uid=?;",[character_id,receiving.position,offer.item_uid]): return _abort("storage")
-	if not db.query_with_bindings("DELETE FROM shop_offers WHERE offer_id=?;",[offer_id]): return _abort("storage")
-	return _finish({"ok":true,"uid":offer.item_uid,"buyer_account":_account,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_balance":int(credited.balance),"shop_id":int(offer.shop_id)})
+	if not credited.ok: return _transaction.rollback(str(credited.error))
+	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id,offer.item_uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE item_custody SET location='bag',owner_id=?,position=?,container_id=0,offer_id=NULL WHERE uid=?;",[character_id,receiving.position,offer.item_uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("DELETE FROM shop_offers WHERE offer_id=?;",[offer_id]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"uid":offer.item_uid,"buyer_account":_transaction.account_id,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_balance":int(credited.balance),"shop_id":int(offer.shop_id)})
 
 ## Public read has no claims, credentials or offline player/session dependency.
 func visit(shop_id: int) -> Dictionary:

@@ -103,8 +103,8 @@ browsing before the simultaneous purchase race. No automatic retry loop was adde
 
 ## First-batch review boundary
 
-R0/R1/R2 are separate commits on `codex/shop-r0-r2`, based on shop. They remain
-unmerged/unpublished until review. R3–R4 architecture and R6 UX/native acceptance
+R0/R1/R2 were reviewed and merged locally into shop on 2026-10-13 after publication
+of the topic branch. The no-ff merge preserves their three separate commits. R3–R4 architecture and R6 UX/native acceptance
 are not implemented here. Successful receipts are intentionally retained forever;
 legitimate successful activity still grows the economic audit/idempotency table.
 Prior legacy negative rows are retained, not migrated/pruned. Gateway session

@@ -185,3 +185,11 @@ fresh COMMIT, never receipt replay. [Exchange](marketplace-e5-exchange.md) docum
 integer ratio bounds, limits, rollback and recovery. World uses WAL synchronous FULL
 by default; NORMAL is an explicit development choice. Backup checks checkpoint busy
 status before copying the main file, under the single authoritative writer contract.
+
+Marketplace orchestration is owned by MarketplaceService. WorldDatabase retains
+its connection and runtime/dirty categories and delegates the existing marketplace
+entry points. MarketStoreSqlite and ExchangeStoreSqlite compose EconomyCommandSqlite
+for command identity/replay and atomic receipt+commit; Exchange does not inherit
+from Shop. Failed validation rolls back and uses the bounded RAM rejection cache;
+successful economic receipts remain durable. See
+[R3–R4 boundaries](marketplace-refactor-r3-r4.md).
