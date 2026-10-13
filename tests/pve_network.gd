@@ -66,8 +66,9 @@ func _ready() -> void:
 		for dog: MobActor3D in world.mob_system.mobs.values(): dog.proximity_aggro = true
 		api.peer_connected.connect(func(id: int) -> void:
 			var number: int = server.connected_players.size() + 1
-			var owner: int = server.database.store.create_player_character("pve%d" % number, {"name": "Pve%d" % number, "skin": 1})
-			check(db.query_with_bindings("UPDATE wallets SET yang=0 WHERE character_id=?;", [owner]), "explicit zero wallet fixture")
+			var owner: int = EconomyFixture.create_character(server.database.store,"pve%d" % number, {"name": "Pve%d" % number, "skin": 1})
+			check(db.query_with_bindings("UPDATE account_wallets SET yang=0 WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);", [owner]), "explicit zero wallet fixture")
+			EconomyFixture.prepare(server.database)
 			server.connected_players[id] = server.database.store.get_player(owner)
 			host.awaiting_peers[id] = {})
 		call_deferred("run_server")

@@ -17,7 +17,32 @@ var mail_store: MailStore
 var item_store: ItemStoreSqlite
 var wallet_store: WalletStoreSqlite
 const WALLET_SAVE_SECONDS: float = 30.0
+# Wallet RAM/dirty keys are global Master account IDs within this World.
 var runtime_wallets: Dictionary[int, Dictionary] = {}
+var _wallet_accounts: Dictionary[int, int] = {}
+var wallet_ready := false
+
+func wallet_account_id(character_id: int) -> int:
+	if not _wallet_accounts.has(character_id) and store != null:
+		var account_id := store.resolve_account_id(character_id)
+		if account_id > 0: _wallet_accounts[character_id] = account_id
+	return _wallet_accounts.get(character_id,0)
+
+func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
+	var result := WorldSchema.migrate_account_wallets(db,master_ids)
+	wallet_ready = result.ok
+	return result
+
+## Server-only durable credit; online pending income shares the same commit.
+func credit_account(account_id: int, amount: int) -> Dictionary:
+	if not wallet_ready or wallet_store == null: return {"ok":false,"error":"storage"}
+	var pending := int(runtime_wallets.get(account_id,{}).get("pending_currency_delta",0))
+	var result := wallet_store.credit(account_id,pending,amount)
+	if result.ok and runtime_wallets.has(account_id):
+		runtime_wallets[account_id].wallet_balance = int(result.balance)
+		runtime_wallets[account_id].pending_currency_delta = 0
+		dirty_wallet.erase(account_id)
+	return result
 var dirty_wallet: Dictionary[int, bool] = {}
 var _wallet_elapsed: float = 0.0
 const PROGRESSION_SAVE_SECONDS: float = 60.0
@@ -40,7 +65,9 @@ func flush_progression(owner_id: int = -1) -> bool:
 	for player: PlayerResource in players: dirty_progression.erase(player.player_id)
 	return true
 
-func load_wallet(owner_id: int) -> bool:
+func load_wallet(character_id: int) -> bool:
+	var owner_id := wallet_account_id(character_id)
+	if not wallet_ready or owner_id <= 0: return false
 	if runtime_wallets.has(owner_id): return true
 	if wallet_store == null:
 		if db == null: return false
@@ -50,10 +77,12 @@ func load_wallet(owner_id: int) -> bool:
 	runtime_wallets[owner_id] = {"wallet_balance": int(result.balance), "pending_currency_delta": 0}
 	return true
 
-func wallet_balance(owner_id: int) -> int:
+func wallet_balance(character_id: int) -> int:
+	var owner_id := wallet_account_id(character_id)
 	return int(runtime_wallets.get(owner_id, {}).get("wallet_balance", -1))
 
-func add_yang(owner_id: int, amount: int) -> bool:
+func add_yang(character_id: int, amount: int) -> bool:
+	var owner_id := wallet_account_id(character_id)
 	if not runtime_wallets.has(owner_id) or amount <= 0: return false
 	var wallet: Dictionary = runtime_wallets[owner_id]
 	if amount > WalletStoreSqlite.MAX_YANG - int(wallet.wallet_balance): return false
@@ -62,7 +91,9 @@ func add_yang(owner_id: int, amount: int) -> bool:
 	dirty_wallet[owner_id] = true
 	return true
 
-func flush_wallet(owner_id: int = -1) -> bool:
+func flush_wallet(character_id: int = -1) -> bool:
+	var owner_id := wallet_account_id(character_id) if character_id >= 0 else -1
+	if character_id >= 0 and owner_id <= 0: return false
 	var deltas: Dictionary = {}
 	for id: int in dirty_wallet:
 		if owner_id < 0 or id == owner_id:
@@ -77,24 +108,27 @@ func flush_wallet(owner_id: int = -1) -> bool:
 		dirty_wallet.erase(id)
 	return true
 
-func spend_yang(owner_id: int, cost: int) -> Dictionary:
+func spend_yang(character_id: int, cost: int) -> Dictionary:
+	var owner_id := wallet_account_id(character_id)
 	# Affordability is checked against authoritative RAM, including pending income.
 	if cost <= 0 or not runtime_wallets.has(owner_id): return {"ok": false, "error": "request"}
 	var wallet: Dictionary = runtime_wallets[owner_id]
 	if int(wallet.wallet_balance) < cost: return {"ok": false, "error": "funds"}
 	var result: Dictionary = wallet_store.spend(owner_id, int(wallet.pending_currency_delta), cost)
-	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
+	if result.ok: accept_committed_wallet_balance(character_id, int(result.balance))
 	return result
 
-func accept_committed_wallet_balance(owner_id: int, balance: int) -> void:
+func accept_committed_wallet_balance(character_id: int, balance: int) -> void:
+	var owner_id := wallet_account_id(character_id)
 	assert(runtime_wallets.has(owner_id) and balance >= 0 and balance <= WalletStoreSqlite.MAX_YANG)
 	runtime_wallets[owner_id].wallet_balance = balance
 	runtime_wallets[owner_id].pending_currency_delta = 0
 	dirty_wallet.erase(owner_id)
 
 func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> Dictionary:
-	if db == null or not runtime_wallets.has(owner_id): return {"ok":false, "error":"storage"}
-	var result: Dictionary = ShopStoreSqlite.new(db).purchase(owner_id, int(runtime_wallets[owner_id].pending_currency_delta), shop, offer_id, requested_position)
+	var account_id := wallet_account_id(owner_id)
+	if db == null or not runtime_wallets.has(account_id): return {"ok":false, "error":"storage"}
+	var result: Dictionary = ShopStoreSqlite.new(db).purchase(owner_id, int(runtime_wallets[account_id].pending_currency_delta), shop, offer_id, requested_position)
 	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
 	return result
 
@@ -111,14 +145,16 @@ func transfer_storage(owner_id: int, uid: String, revision: int, source: String,
 	return AccountStorageSqlite.new(db).transfer(owner_id,uid,revision,source,destination,position)
 
 func upgrade_item(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> Dictionary:
-	if db == null or not runtime_wallets.has(owner_id): return {"ok":false, "error":"storage"}
+	var account_id := wallet_account_id(owner_id)
+	if db == null or not runtime_wallets.has(account_id): return {"ok":false, "error":"storage"}
 	if recipe == null or not recipe.validation_errors().is_empty(): return {"ok":false, "error":"invalid_definition"}
 	if wallet_balance(owner_id) < recipe.yang_cost: return {"ok":false, "error":"funds"}
-	var result: Dictionary = UpgradeStoreSqlite.new(db).upgrade(owner_id,int(runtime_wallets[owner_id].pending_currency_delta),recipe,uid,revision)
+	var result: Dictionary = UpgradeStoreSqlite.new(db).upgrade(owner_id,int(runtime_wallets[account_id].pending_currency_delta),recipe,uid,revision)
 	if result.ok: accept_committed_wallet_balance(owner_id,int(result.balance))
 	return result
 
-func release_wallet(owner_id: int) -> void:
+func release_wallet(character_id: int) -> void:
+	var owner_id := wallet_account_id(character_id)
 	# Failed offline saves remain authoritative until a later successful retry.
 	if not dirty_wallet.has(owner_id): runtime_wallets.erase(owner_id)
 

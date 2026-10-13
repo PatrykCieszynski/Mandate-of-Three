@@ -1,6 +1,10 @@
 extends RefCounted
 class_name WorldSchema
 
+## v18 needs verified Master mappings, so startup invokes it after the internal manifest.
+static func migrate_account_wallets(db: SQLite, master_ids: Dictionary) -> Dictionary:
+	return WalletStoreSqlite.migrate_accounts(db,master_ids)
+
 
 static func ensure_schema(db: SQLite) -> void:
 	_create_table_if_missing(db, "meta", {

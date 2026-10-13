@@ -40,7 +40,8 @@ func upgrade(owner_id: int, pending_yang: int, recipe: UpgradeDefinition, uid: S
 		else:
 			if not db.query_with_bindings("UPDATE item_instances SET amount=amount-?,revision=revision+1 WHERE uid=? AND owner_character_id=? AND revision=?;",[used,row.uid,owner_id,row.revision]): return _rollback("storage")
 		remaining -= used
-	var spent: Dictionary = WalletStoreSqlite.new(db).spend_in_transaction(owner_id,pending_yang,recipe.yang_cost)
+	var account_id := WorldStoreSqlite.new(db).resolve_account_id(owner_id)
+	var spent: Dictionary = WalletStoreSqlite.new(db).spend_in_transaction(account_id,pending_yang,recipe.yang_cost)
 	if not spent.ok: return _rollback(str(spent.error))
 	if not db.query_with_bindings("UPDATE item_instances SET upgrade_level=?,revision=revision+1 WHERE uid=? AND owner_character_id=? AND revision=? AND upgrade_level=?;",[recipe.to_level,uid,owner_id,revision,recipe.from_level]): return _rollback("storage")
 	if not db.query("SELECT changes() AS n;") or int(db.query_result[0].n) != 1: return _rollback("stale")

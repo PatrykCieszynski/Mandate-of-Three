@@ -11,9 +11,9 @@ func seed_item(definition: ItemDefinition, amount: int = 1) -> String:
 	assert(db.query("COMMIT;"))
 	return item.uid
 func state() -> Dictionary:
-	assert(db.query_with_bindings("SELECT yang FROM wallets WHERE character_id=?;",[character_id]))
+	assert(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);",[character_id]))
 	var balance: int = int(db.query_result[0].yang)
-	return {"items":persistence.item_store.inventory(character_id),"db_yang":balance,"ram":persistence.runtime_wallets[character_id].duplicate(true),"dirty":persistence.dirty_wallet.has(character_id)}
+	return {"items":persistence.item_store.inventory(character_id),"db_yang":balance,"ram":persistence.runtime_wallets[persistence.wallet_account_id(character_id)].duplicate(true),"dirty":persistence.dirty_wallet.has(persistence.wallet_account_id(character_id))}
 func _ready() -> void:
 	assert(recipe.validation_errors().is_empty())
 	var bad: UpgradeDefinition = recipe.duplicate(true)
@@ -28,8 +28,9 @@ func _ready() -> void:
 	persistence.store = WorldStoreSqlite.new(db)
 	persistence.item_store = ItemStoreSqlite.new(db)
 	persistence.wallet_store = WalletStoreSqlite.new(db)
-	character_id = persistence.store.create_player_character("upgrade_fixture",{"name":"Smith tester","skin":1})
-	assert(db.query_with_bindings("UPDATE wallets SET yang=0 WHERE character_id=?;", [character_id])) # Explicit economy fixture, independent of starter grant.
+	character_id = EconomyFixture.create_character(persistence.store,"upgrade_fixture",{"name":"Smith tester","skin":1})
+	assert(db.query_with_bindings("UPDATE account_wallets SET yang=0 WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);", [character_id])) # Explicit economy fixture, independent of starter grant.
+	EconomyFixture.prepare(persistence)
 	assert(persistence.load_wallet(character_id))
 	var sword: String = seed_item(ItemDefinitions.IRON_SWORD)
 	assert(persistence.add_yang(character_id,2100))
@@ -45,7 +46,7 @@ func _ready() -> void:
 	assert(persistence.upgrade_item(character_id,recipe,sword,0).error == "storage")
 	assert(state() == before, "Late sword write failure rolls back consumed material, pending Yang and spend, including RAM dirty state")
 	assert(db.query("DROP TRIGGER fail_upgrade;"))
-	assert(db.query("CREATE TEMP TRIGGER fail_wallet BEFORE UPDATE ON wallets BEGIN SELECT RAISE(ABORT,'wallet fault'); END;"))
+	assert(db.query("CREATE TEMP TRIGGER fail_wallet BEFORE UPDATE ON account_wallets BEGIN SELECT RAISE(ABORT,'wallet fault'); END;"))
 	assert(persistence.upgrade_item(character_id,recipe,sword,0).error == "storage")
 	assert(state() == before, "Wallet failure restores material")
 	assert(db.query("DROP TRIGGER fail_wallet;"))
@@ -83,7 +84,7 @@ func _ready() -> void:
 	before = state()
 	assert(persistence.upgrade_item(character_id,recipe,poor_sword,0).error == "funds")
 	assert(state() == before)
-	var other: int = persistence.store.create_player_character("other",{"name":"Other","skin":1})
+	var other: int = EconomyFixture.create_character(persistence.store,"other",{"name":"Other","skin":1})
 	assert(persistence.load_wallet(other) and persistence.add_yang(other,1000))
 	assert(persistence.upgrade_item(other,recipe,poor_sword,0).error == "owner")
 	assert(state() == before)

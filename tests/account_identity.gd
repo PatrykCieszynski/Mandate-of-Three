@@ -25,6 +25,8 @@ func _ready() -> void:
 	assert(db.open_db())
 	WorldSchema.ensure_schema(db)
 	var store := WorldStoreSqlite.new(db)
+	assert(WalletStoreSqlite.migrate_accounts(db,{}).ok)
+	assert(store.bind_account_identity("alpha",21,true) and store.bind_account_identity("beta",22,true))
 	var characters: Array[int] = []
 	for account: String in ["alpha","beta"]:
 		for index: int in 2:
@@ -32,6 +34,7 @@ func _ready() -> void:
 	var database := WorldDatabase.new()
 	database.db = db
 	database.store = store
+	assert(database.prepare_account_wallets({"alpha":21,"beta":22}).ok)
 	var server := WorldServer.new()
 	server.database = database
 	assert(server.accept_master_handoff("a0","alpha",characters[0],21))

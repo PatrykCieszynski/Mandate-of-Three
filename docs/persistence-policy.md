@@ -69,7 +69,7 @@ immediate transactions and their own double-pickup protection.
 
 ## Yang: runtime wallet and ground currency
 
-Spike 3D has a separate Yang wallet and runtime GroundCurrency. Dogs drop 30 Yang
+Each Master account has one Yang wallet in a logical World and runtime GroundCurrency. Dogs drop 30 Yang
 with the same loot rights as their items. Auto-pickup works within 1.25 m; G picks
 up within 2.5 m. There is no pet, persistent stack UID or per-drop DB record.
 Legacy gold remains separate upstream state and is not migrated into the wallet.
@@ -80,9 +80,13 @@ marks the wallet dirty. Every 30 seconds, checkpoints add the delta rather than
 overwriting an older snapshot:
 
 ```sql
-UPDATE wallets SET yang = yang + ? WHERE character_id = ?;
+UPDATE account_wallets SET yang = yang + ? WHERE account_id = ?;
 ```
 
+`runtime_wallets` and `dirty_wallet` are keyed by verified Master account ID.
+Gameplay consumers keep their authenticated character context; WorldDatabase
+resolves/caches the account once and owns the shared wallet. New character
+creation grants 1500 Yang only when that account's wallet is first created.
 Successful commit clears pending delta; failure retains it for retry.
 WorldDatabase's separate `dirty_wallet` checkpoint is not part of full
 PlayerResource autosave or dirty progression.
@@ -116,9 +120,18 @@ currency remains an item/stack with immediate persistence.
 Wallet and progression have separate dirty sets and independent checkpoints.
 Position dirty state is future work. Wallet loads on entry; logout/disconnect/
 handoff/save/shutdown force both checkpoints. Failed wallet saving retains RAM
-and pending delta even offline. Schema v14 adds `wallets`; PlayerResource's
+and pending delta even offline. Schema v18 atomically replaces v14 `wallets` with
+`account_wallets`, summing legacy balances exactly once after trusted Master
+mapping; no silent orphan repair or overflow clipping. PlayerResource's
 serializer does not overwrite it. A crash may lose unsaved income and ground
 currency, normally from a roughly 30-second window. Committed critical spending is durable.
+
+Critical account credits include an online account's pending income in the same
+transaction, then refresh shared RAM after commit. Offline credit changes only SQL.
+Future Player Shop purchases must use the in-transaction credit API alongside
+buyer debit and item transfer, never separate sale/payment commits. World stops
+before first account-wallet migration; startup awaits the full trusted Master
+manifest before admitting characters/economic actions. See [E0b](marketplace-e0b-wallet.md).
 
 ## Tests
 

@@ -356,8 +356,18 @@ func player_disconnected(_username: String) -> void:
 
 
 @rpc("authority")
-func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary) -> void:
-	var character_id: int = database.create_player_character(username, character_data)
+func account_identity_manifest(identities: Dictionary) -> void:
+	var result := database.prepare_account_wallets(identities)
+	if not result.ok:
+		ServerLog.error("Account wallet migration refused: %s" % str(result))
+		return
+	ServerLog.info("Account wallet identity/migration ready.")
+
+@rpc("authority")
+func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary, account_id: int) -> void:
+	var character_id := 0
+	if database.wallet_ready and database.store.bind_account_identity(username,account_id,true):
+		character_id = database.create_player_character(username, character_data)
 	
 	player_character_creation_result.rpc_id(
 		1,
@@ -398,7 +408,7 @@ func request_login(
 	character_id: int
 ) -> void:
 	var player: PlayerResource = database.get_player_resource(character_id)
-	if player == null or player.account_name != username:
+	if not database.wallet_ready or player == null or player.account_name != username:
 		result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id)
 		return
 	result_login.rpc_id(

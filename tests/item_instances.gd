@@ -20,8 +20,8 @@ func run() -> void:
 	check(db.open_db(), "open isolated database")
 	WorldSchema.ensure_schema(db)
 	var legacy := WorldStoreSqlite.new(db)
-	var owner_a: int = legacy.create_player_character("test_alpha", {"name": "Alpha", "skin": 1})
-	var owner_b: int = legacy.create_player_character("test_beta", {"name": "Beta", "skin": 1})
+	var owner_a: int = EconomyFixture.create_character(legacy,"test_alpha", {"name": "Alpha", "skin": 1})
+	var owner_b: int = EconomyFixture.create_character(legacy,"test_beta", {"name": "Beta", "skin": 1})
 	var player: PlayerResource = legacy.get_player(owner_a)
 	player.profile_status = "preserve legacy player data"
 	legacy.save_player(player)
@@ -117,9 +117,9 @@ func run() -> void:
 	check(db.query_with_bindings("DELETE FROM item_placements WHERE owner_character_id=?;", [owner_b]), "empty second inventory placements")
 	check(db.query_with_bindings("DELETE FROM item_instances WHERE owner_character_id=?;", [owner_b]), "empty second inventory items")
 	check(store.initialize_character(owner_b).ok and store.inventory(owner_b).items.is_empty(), "empty inventory does not regrant starter kit")
-	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 17, "schema v17")
+	check(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value) == 18, "schema v18")
 	_check_storage(db,legacy,store)
-	var dev_owner: int = legacy.create_player_character("dev_trace_fixture",{"name":"TraceFixture","skin":1})
+	var dev_owner: int = EconomyFixture.create_character(legacy,"dev_trace_fixture",{"name":"TraceFixture","skin":1})
 	check(store.initialize_character(dev_owner).ok,"dev fixture initialized")
 	var granted := store.grant_dev_trace_sword(dev_owner)
 	check(granted.ok and store.grant_dev_trace_sword(dev_owner).uid == granted.uid,"dev sword grant is idempotent")
@@ -137,9 +137,9 @@ func _find(snapshot: Dictionary, uid: String) -> Dictionary:
 	return {}
 
 func _check_storage(database: SQLite, legacy: WorldStoreSqlite, store: ItemStoreSqlite) -> void:
-	var first: int = legacy.create_player_character("storage_account",{"name":"StorageA","skin":1})
-	var second: int = legacy.create_player_character("storage_account",{"name":"StorageB","skin":1})
-	var foreign: int = legacy.create_player_character("foreign_storage",{"name":"Foreign","skin":1})
+	var first: int = EconomyFixture.create_character(legacy,"storage_account",{"name":"StorageA","skin":1})
+	var second: int = EconomyFixture.create_character(legacy,"storage_account",{"name":"StorageB","skin":1})
+	var foreign: int = EconomyFixture.create_character(legacy,"foreign_storage",{"name":"Foreign","skin":1})
 	for character: int in [first,second,foreign]: check(store.initialize_character(character).ok,"Storage starter fixture")
 	var storage := AccountStorageSqlite.new(database)
 	var bag_snapshot: Dictionary = store.inventory(first)

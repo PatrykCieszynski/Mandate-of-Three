@@ -23,7 +23,7 @@ func phase(command: String, uid: String) -> void:
 			get_tree().quit()
 
 func sql_balance(owner_id: int) -> int:
-	check(db.query_with_bindings("SELECT yang FROM wallets WHERE character_id=?;",[owner_id]), "read wallet")
+	check(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);",[owner_id]), "read wallet")
 	return int(db.query_result[0].yang)
 
 func run_server() -> void:
@@ -68,12 +68,12 @@ func run_server() -> void:
 		var filler: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD,owner,[])
 		check(server.database.item_store._insert_item(filler,position), "full bag fixture")
 	var full_bag: Dictionary = server.database.item_store.inventory(owner)
-	check(db.query("CREATE TEMP TRIGGER reject_pickup_sql BEFORE UPDATE ON wallets BEGIN SELECT RAISE(ABORT,'currency pickup tried SQL'); END;"), "forbid per-pickup wallet writes")
+	check(db.query("CREATE TEMP TRIGGER reject_pickup_sql BEFORE UPDATE ON account_wallets BEGIN SELECT RAISE(ABORT,'currency pickup tried SQL'); END;"), "forbid per-pickup wallet writes")
 	world.characters[hero].position = point + Vector3(0,0,0.8)
 	currency.set_physics_process(true)
 	await wait_until(func() -> bool: return not currency.ground.has(currency_id))
 	currency.set_physics_process(false)
-	check(server.database.wallet_balance(owner) == 30 and sql_balance(owner) == 0 and server.database.runtime_wallets[owner].pending_currency_delta == 30, "autoloot credits RAM without DB write")
+	check(server.database.wallet_balance(owner) == 30 and sql_balance(owner) == 0 and server.database.runtime_wallets[server.database.wallet_account_id(owner)].pending_currency_delta == 30, "autoloot credits RAM without DB write")
 	check(server.database.wallet_balance(other_owner) == 0 and server.database.item_store.inventory(owner) == full_bag, "full inventory does not block autoloot or receive currency items")
 	check(currency.pickup_for_peer(hero,currency_id,Time.get_ticks_msec()).error == "gone", "no double pickup")
 	# Public currency: two actual client RPCs race for the same transient entity.
@@ -108,7 +108,7 @@ func run_server() -> void:
 	currency._send_snapshot()
 	set_phase("SPEND",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(replies[hero].ok and replies[hero].spent == 50 and sql_balance(owner) == before-50 and server.database.runtime_wallets[owner].pending_currency_delta == 0, "RPC spends from RAM and commits pending income atomically")
+	check(replies[hero].ok and replies[hero].spent == 50 and sql_balance(owner) == before-50 and server.database.runtime_wallets[server.database.wallet_account_id(owner)].pending_currency_delta == 0, "RPC spends from RAM and commits pending income atomically")
 	set_phase("WAIT")
 	check(currency.spend_for_peer(hero,1,Time.get_ticks_msec()+1000).error == "replay", "spend replay cannot charge twice")
 	check(currency.spend_for_peer(hero,-1,Time.get_ticks_msec()+1000).error == "replay", "invalid spend sequence")

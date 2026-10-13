@@ -27,9 +27,9 @@ func _ready() -> void:
 	check(db.open_db(), "open isolated SQLite")
 	WorldSchema.ensure_schema(db)
 	var store := CountingWorldStore.new(db)
-	var first: int = store.create_player_character("checkpoint_a", {"name": "A", "skin": 1})
-	var second: int = store.create_player_character("checkpoint_b", {"name": "B", "skin": 1})
-	var clean: int = store.create_player_character("checkpoint_c", {"name": "C", "skin": 1})
+	var first: int = EconomyFixture.create_character(store,"checkpoint_a", {"name": "A", "skin": 1})
+	var second: int = EconomyFixture.create_character(store,"checkpoint_b", {"name": "B", "skin": 1})
+	var clean: int = EconomyFixture.create_character(store,"checkpoint_c", {"name": "C", "skin": 1})
 	# Exercise the upgrade from the previously published schema, including removal
 	# of historical receipts, without losing existing character/item state.
 	check(db.query("CREATE TABLE kill_xp_rewards(kill_uid TEXT PRIMARY KEY,owner_character_id INTEGER,amount INTEGER);"), "old receipt fixture")
