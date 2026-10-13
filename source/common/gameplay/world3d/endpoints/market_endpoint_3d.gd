@@ -76,7 +76,7 @@ func request_market(action: String, payload: Dictionary, request_id: String) -> 
 		if services.economy().wallet_account_id(_owner(observer))==account_id: _publish(observer)
 	receive_operation.rpc_id(peer_id,request_id,{"ok":true} if result.ok else {"ok":false,"error":result.error})
 
-func remove_peer(_peer_id: int) -> void: pass
+func remove_peer(peer_id: int) -> void: _rate.erase("query_"+str(peer_id))
 
 @rpc("authority","call_remote","reliable",1)
 func receive_state(snapshot: Dictionary) -> void:
@@ -86,3 +86,28 @@ func receive_state(snapshot: Dictionary) -> void:
 @rpc("authority","call_remote","reliable",1)
 func receive_operation(request_id: String,result: Dictionary) -> void:
 	operation_finished.emit(request_id,result)
+
+signal query_finished(request_id: String, result: Dictionary)
+static func valid_query(action: String,p: Dictionary) -> bool:
+	match action:
+		"catalog": return p.size()==1 and p.get("query") is String and p.query.length()<=80
+		"search": return MarketSearchSqlite.valid(p)
+		"visit": return p.size()==1 and integer(p.get("shop_id")) and p.shop_id>0
+	return false
+@rpc("any_peer","call_remote","reliable",1)
+func request_query(action: String,payload: Dictionary,request_id: String) -> void:
+	if not GameMode.is_world_server() or request_id.is_empty() or request_id.length()>80 or not _world.characters.has(multiplayer.get_remote_sender_id()): return
+	var peer_id:=multiplayer.get_remote_sender_id()
+	if not services.available() or services.economy()==null: return
+	# Query work is independently bounded; mutations do not consume this budget.
+	var key:="query_"+str(peer_id)
+	var now:=Time.get_ticks_msec()
+	var rate: Dictionary=_rate.get(key,{"started":now,"count":0})
+	if now-int(rate.started)>1000: rate={"started":now,"count":0}
+	rate.count+=1;_rate[key]=rate
+	var result: Dictionary={"ok":false,"error":"rate_limited"} if rate.count>8 else {"ok":false,"error":"request"}
+	if rate.count<=8 and valid_query(action,payload): result=services.economy().market_query(_owner(peer_id),action,payload)
+	receive_query.rpc_id(peer_id,request_id,result)
+@rpc("authority","call_remote","reliable",1)
+func receive_query(request_id: String,result: Dictionary) -> void:
+	query_finished.emit(request_id,result)

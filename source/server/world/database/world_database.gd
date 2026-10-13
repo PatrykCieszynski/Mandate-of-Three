@@ -31,6 +31,7 @@ func wallet_account_id(character_id: int) -> int:
 func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
 	var result := WorldSchema.migrate_account_wallets(db,master_ids)
 	if result.ok and not MarketStoreSqlite.ensure_schema(db): result = {"ok":false,"error":"market_custody_migration"}
+	if result.ok and not MarketSearchSqlite.ensure_schema(db): result = {"ok":false,"error":"market_search_migration"}
 	wallet_ready = result.ok
 	return result
 
@@ -358,3 +359,11 @@ func _rotate_backups(backup_dir: String, name_prefix: String, keep_last: int) ->
 	while backups.size() > keep_last:
 		var to_remove: String = backups.pop_front()
 		DirAccess.remove_absolute(backup_dir + "/" + to_remove)
+
+func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
+	if wallet_account_id(character_id)<=0: return {"ok":false,"error":"owner"}
+	match action:
+		"catalog": return MarketSearchSqlite.catalog(payload.query)
+		"search": return MarketSearchSqlite.new(db).search(payload)
+		"visit": return MarketStoreSqlite.new(db).visit(int(payload.shop_id))
+	return {"ok":false,"error":"request"}
