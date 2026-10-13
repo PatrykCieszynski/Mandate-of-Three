@@ -1,3 +1,4 @@
+import { mountMarketBrowser } from '../screens/market/browser-view.js';
 import { mountMarket } from '../screens/market/market-view.js';
 import { mountNpcWorldDrop } from '../screens/upgrade/npc-world-drop.js';
 import { mountUpgrade } from '../screens/upgrade/upgrade-view.js';
@@ -38,6 +39,8 @@ const root = findElement(document, '#inventory', 'main'),
   storageRoot = findElement(document, '#storage', 'main'),
   equipmentRoot = findElement(document, '#equipment', 'main'),
   shopRoot = findElement(document, '#shop', 'main'),
+  marketBrowserRoot = findElement(document, '#market-browser', 'main'),
+  marketVisitorRoot = findElement(document, '#market-visitor', 'main'),
   marketRoot = findElement(document, '#market', 'main'),
   upgradeRoot = findElement(document, '#upgrade', 'main'),
   npcRoot = findElement(document, '#npc-menu', 'main'),
@@ -49,6 +52,7 @@ const bridge = new WebBridge({
   onShortcut: () => {
     if (drag.cancel()) return;
     if (
+      marketBrowser.closeIfActive() ||
       market.closeIfActive() ||
       upgrade.closeIfActive() ||
       npc.closeIfActive()
@@ -92,6 +96,11 @@ const bridge = new WebBridge({
       }
       regions?.refresh();
     }
+    if (
+      message.type === 'ui.snapshot' ||
+      message.type === 'market_browser.updated'
+    )
+      marketBrowser.setState(state.market_browser ?? { active: false });
     if (message.type === 'ui.snapshot' || message.type === 'market.updated')
       market.setState(state.market ?? { active: false });
     if (
@@ -201,6 +210,19 @@ const shop = mountShop(shopRoot, {
   },
   onRegionsChanged: () => regions?.refresh(),
 });
+const marketBrowser = mountMarketBrowser(marketBrowserRoot, marketVisitorRoot, {
+  manager,
+  resolveItemIcon,
+  catalog: (query) => bridge.request('market.browser.catalog', { query }),
+  search: (p) => bridge.request('market.browser.search', p),
+  visit: (shop_id, offer_id) =>
+    bridge.request('market.browser.visit', { shop_id, offer_id }),
+  buy: (p) => bridge.request('market.buy', p),
+  close: () => {
+    void bridge.request('market.browser.close', {});
+  },
+  regions: () => regions?.refresh(),
+});
 const market = mountMarket(marketRoot, {
   manager,
   drag,
@@ -255,6 +277,7 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
 regions = reportInteractiveRegions(bridge, [
   ...worldDrop.regions,
   ...shop.regions,
+  ...marketBrowser.regions,
   ...market.regions,
   ...upgrade.regions,
   ...npc.regions,
@@ -267,6 +290,7 @@ window.addEventListener('pagehide', () => {
   worldDrop.dispose();
   upgrade.dispose();
   shop.dispose();
+  marketBrowser.dispose();
   market.dispose();
   textFocus.dispose();
   npc.dispose();
@@ -282,7 +306,7 @@ document.addEventListener(
   'keydown',
   (event) => {
     if (event.key !== 'Escape' || event.repeat) return;
-    if (drag.cancel() || upgrade.closeIfActive() || npc.closeIfActive()) {
+    if (drag.cancel() || marketBrowser.closeIfActive() || market.closeIfActive() || upgrade.closeIfActive() || npc.closeIfActive()) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }

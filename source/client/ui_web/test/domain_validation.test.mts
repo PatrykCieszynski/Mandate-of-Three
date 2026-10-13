@@ -150,3 +150,11 @@ test('market rejects malformed offers atomically and survives snapshot reload',(
  assert.ok(store.apply(decodeAndValidate({v:1,type:'ui.snapshot',payload:{market}})));
  assert.deepEqual(store.state.market,market);
 });
+
+test('market browser validates public results and own claims remain separate',()=>{
+ const browser={active:true,catalog:[],stats:{},results:[],cursor:'',shop:{},highlight:'',error:''};
+ assert.ok(readDomainSnapshot({market_browser:browser}));
+ rejects('market_browser',{...browser,results:Array(51).fill({})});
+ rejects('market_browser',{...browser,cursor:'a'.repeat(65)});
+ rejects('market_browser',{...browser,shop:{active:true}});
+});

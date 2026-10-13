@@ -154,6 +154,31 @@ try {
       ),
     ),
   );
+
+  const publicItem={...item,name:'Iron Sword +9',upgrade_level:9};
+  const browserState={active:true,catalog:[{definition_id:'iron_sword',name:'Iron Sword',icon_id:'iron_sword'}],stats:{monster_damage:{label:'Monsters',unit:'percent',min:0,max:100},critical_chance:{label:'Critical',unit:'percent',min:0,max:100}},results:[{offerId:'b'.repeat(32),shopId:2,shopName:'Offline Shop',revision:0,price:500,item:publicItem}],cursor:'',shop:{},highlight:'',error:''};
+  await page.evaluate(s=>(window as any).emit('market_browser.updated',s),browserState);
+  await page.getByLabel('Upgrade from',{exact:true}).selectOption('7');
+  await page.getByLabel('Upgrade to',{exact:true}).selectOption('9');
+  await page.getByLabel('Bonus stat',{exact:true}).selectOption('monster_damage');
+  await page.getByLabel('Minimum bonus',{exact:true}).fill('10');
+  await page.getByRole('button',{name:'Add AND bonus',exact:true}).click();
+  await page.getByLabel('Bonus stat',{exact:true}).selectOption('critical_chance');
+  await page.getByLabel('Minimum bonus',{exact:true}).fill('5');
+  await page.getByRole('button',{name:'Add AND bonus',exact:true}).click();
+  await page.getByRole('button',{name:'Search',exact:true}).click();
+  const sentSearch=await page.evaluate(()=>(window as any).sent.findLast((m:any)=>m.type==='market.browser.search'));
+  assert.equal(sentSearch.payload.upgrade_min,7);assert.equal(sentSearch.payload.upgrade_max,9);assert.equal(sentSearch.payload.affix_filters.length,2);
+  await page.locator('.market-results tbody tr').click();
+  assert.equal(await page.evaluate(()=>(window as any).sent.filter((m:any)=>m.type==='market.buy').length),0,'result selection never purchases');
+  const offer={id:'b'.repeat(32),revision:0,price:500,item:publicItem};
+  await page.evaluate(s=>(window as any).emit('market_browser.updated',s),{...browserState,shop:{active:true,shopId:2,name:'Offline Shop',status:'active',revision:0,columns:5,rows:8,offers:[offer],claims:[]},highlight:offer.id});
+  assert.equal(await page.locator('.market-highlight').count(),1);
+  await page.getByRole('button',{name:'Buy selected item',exact:true}).click();
+  await page.waitForFunction(()=>(window as any).sent.some((m:any)=>m.type==='market.buy'));
+  const purchase=await page.evaluate(()=>(window as any).sent.find((m:any)=>m.type==='market.buy'));
+  assert.equal(purchase.payload.shop_id,2);assert.equal(purchase.payload.offer_id,offer.id);assert.equal(purchase.payload.price,500);
+  console.log('MARKET_SEARCH_BROWSER_OK +7..+9 AND filters, result opens shop, highlight, explicit purchase');
   assert.deepEqual(errors, []);
   console.log(
     'MARKET_BROWSER_OK module boot, text focus, configure, 10 viewport/scale cases',

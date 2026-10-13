@@ -1,3 +1,4 @@
+import { isBrowserSnapshot } from './screens/market/browser-model.js';
 import { isMarketSnapshot } from './screens/market/market-model.js';
 import { isItemTooltipDetails } from './game-ui/items/item-tooltip-model.js';
 import { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES, STORAGE_CAPACITY } from './screens/storage/storage-model.js';
@@ -42,10 +43,10 @@ export function isCommandResult(result) {
         (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message) {
-    return !message.id && ['ui.snapshot', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
+    return !message.id && ['ui.snapshot', 'market_browser.updated', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
 }
 export function isDomainName(value) {
-    return ['market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
+    return ['market_browser', 'market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
 }
 export function isRawDomainState(value) {
     return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -164,6 +165,7 @@ export function isValidDomainValue(domain, value) {
     if (!isObject(value))
         return false;
     switch (domain) {
+        case 'market_browser': return isBrowserSnapshot(value);
         case 'market': return isMarketSnapshot(value);
         case 'upgrade': return isUpgrade(value);
         case 'npc_targets': return isNpcTargets(value);
