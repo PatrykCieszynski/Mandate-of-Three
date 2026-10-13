@@ -124,7 +124,7 @@ func _physics_process(delta: float) -> void:
 	_send_snapshot()
 
 func _wallet_changed(owner_id: int) -> void:
-	var account_id := _database().wallet_account_id(owner_id)
+	var account_id: int = _database().wallet_account_id(owner_id)
 	for peer_id: int in _world.characters:
 		if _database().wallet_account_id(_owner(peer_id)) == account_id: _send_snapshot(peer_id)
 

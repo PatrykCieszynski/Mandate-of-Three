@@ -174,3 +174,14 @@ fixed UTC/game epoch and advances it from monotonic server ticks. Restart recove
 the ongoing calendar without SQL or dirty checkpoints. Client synchronization
 does not change combat/respawn/loot timers, progression checkpoint policy, or
 immediate atomic item/economy transactions.
+
+## Marketplace / Exchange
+
+Schemas 19-22 use canonical UID custody, account shops/claims, durable account
+command receipts and fungible Exchange free/reserved balances. Yang reserves stay
+on account_wallets, and all critical spend checks unreserved funds. Order matching
+and both-account settlement commit together with pending income; RAM updates follow
+fresh COMMIT, never receipt replay. [Exchange](marketplace-e5-exchange.md) documents
+integer ratio bounds, limits, rollback and recovery. World uses WAL synchronous FULL
+by default; NORMAL is an explicit development choice. Backup checks checkpoint busy
+status before copying the main file, under the single authoritative writer contract.

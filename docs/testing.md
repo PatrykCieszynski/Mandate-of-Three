@@ -243,3 +243,17 @@ constraint bypass attempts and fault injection. E1a coverage protects new
 economy contracts; it is not line coverage of a store extraction. See
 [E1a custody](marketplace-e1a-custody.md). Existing smoke/network item suites remain
 the regression baseline and seed complete transactions under custody constraints.
+
+## Marketplace integration checks
+
+Use run-market.ps1 -Scene market_custody / market_purchase / market_search /
+exchange_ledger / exchange_orders with the corresponding *_OK marker. These isolate
+real SQLite. run-market-recovery.ps1 exercises a disposable process crash and WAL
+restore. Optional run-combat.ps1 -Scene market_race -MarkerPrefix MARKET_RACE and
+-Scene exchange_network -MarkerPrefix EXCHANGE_NETWORK share port 18098: sequential.
+-NativeClient1 opts into the offscreen Vulkan Mobile/CEF market milestone.
+The production Chrome milestone is source/client/ui_web/test/market_browser.mts
+(after build-web-ui.ps1 -Tests); it covers UI commands/reload and all 10 scales.
+Run normal-role account/item session suites sequentially too: their avatars share
+one live world. Full item relog validates its own public actor, so another fixture
+finishing earlier cannot hang it. Do not run native milestones for routine styles.

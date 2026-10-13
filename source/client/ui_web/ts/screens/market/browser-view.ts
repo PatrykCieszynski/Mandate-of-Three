@@ -6,7 +6,11 @@ import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
 import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { paintItemIcon } from '../../game-ui/items/item-icon.js';
-import {marketCommandId,type MarketCommand,type MarketOffer} from './market-model.js';
+import {
+  marketCommandId,
+  type MarketCommand,
+  type MarketOffer,
+} from './market-model.js';
 import type {
   MarketBrowserSnapshot,
   MarketSearch,
@@ -70,6 +74,7 @@ export function mountMarketBrowser(
     timer: ReturnType<typeof setTimeout> | undefined,
     lastSearch: MarketSearch | undefined;
   let buyIntent: MarketCommand | undefined;
+  let criteriaKey = '';
   const tooltip = ItemTooltip(root, { geometry: () => o.manager }),
     shopTooltip = ItemTooltip(shopRoot, { geometry: () => o.manager });
   const filter = document.createElement('div');
@@ -218,7 +223,6 @@ export function mountMarketBrowser(
             cursor,
             limit: 20,
           };
-    lastSearch = p;
     pending = true;
     status.textContent = 'Searching…';
     try {
@@ -229,9 +233,13 @@ export function mountMarketBrowser(
     }
   }
   async function purchase(replay = false) {
-    if(pending||!state.active)return;
-    if(!replay&&(!selected||!('active' in state.shop)||!state.shop.active))return;
-    if (!replay && selected && "shopId" in state.shop)
+    if (pending || !state.active) return;
+    if (
+      !replay &&
+      (!selected || !('active' in state.shop) || !state.shop.active)
+    )
+      return;
+    if (!replay && selected && 'shopId' in state.shop)
       buyIntent = {
         command_id: marketCommandId(),
         shop_id: state.shop.shopId,
@@ -264,7 +272,11 @@ export function mountMarketBrowser(
       }
     } finally {
       pending = false;
-      buy.disabled=!selected||!state.active||!("status" in state.shop)||state.shop.status!=="active";
+      buy.disabled =
+        !selected ||
+        !state.active ||
+        !('status' in state.shop) ||
+        state.shop.status !== 'active';
     }
   }
   function choose(offer: MarketOffer) {
@@ -296,7 +308,27 @@ export function mountMarketBrowser(
   });
   function render() {
     if (!state.active) return;
-    const value = definitions.value;
+    const criteria = state.criteria,
+      key = JSON.stringify(criteria ?? null),
+      changed = key !== criteriaKey;
+    if (changed && criteria) {
+      lastSearch = structuredClone(criteria);
+      from.value = String(criteria.upgrade_min);
+      to.value = String(criteria.upgrade_max);
+      priceMin.value = String(criteria.price_min);
+      priceMax.value = String(criteria.price_max);
+      sort.value = criteria.sort;
+      conditions.splice(
+        0,
+        conditions.length,
+        ...criteria.affix_filters.map((f) => ({ ...f })),
+      );
+    }
+    criteriaKey = key;
+    if (document.activeElement !== query && state.catalogQuery !== undefined)
+      query.value = state.catalogQuery;
+    const value =
+      changed && criteria ? criteria.definition_id : definitions.value;
     definitions.replaceChildren(
       ...state.catalog.map((c) => new Option(c.name, c.definition_id)),
     );
@@ -348,6 +380,7 @@ export function mountMarketBrowser(
         : 'No matching offers.');
     next.disabled = !state.cursor;
     if ('active' in state.shop && state.shop.active) {
+      const openedShop = shopRoot.hidden;
       shopRoot.hidden = false;
       shopName.textContent = state.shop.name + ' · ' + state.shop.status;
       grid.render(
@@ -371,9 +404,12 @@ export function mountMarketBrowser(
         },
       );
       const highlight = state.highlight;
-      const chosen = state.shop.offers.find(x=>x.id===selected?.id)??state.shop.offers.find(x=>x.id===highlight);
+      const chosen =
+        state.shop.offers.find((x) => x.id === selected?.id) ??
+        state.shop.offers.find((x) => x.id === highlight);
       selected = undefined;
       buy.disabled = true;
+      if (openedShop) visitor.handle.activate();
       if (chosen) choose(chosen);
       else if (state.highlight)
         offerInfo.textContent = 'This offer is no longer available.';
@@ -386,6 +422,7 @@ export function mountMarketBrowser(
   return {
     regions: [shell.panel, visitor.panel],
     setState(v: MarketBrowserSnapshot) {
+      const opened = root.hidden && v.active;
       state = v;
       root.hidden = !v.active;
       if (!v.active) {
@@ -399,6 +436,7 @@ export function mountMarketBrowser(
         tooltip.hide();
         shopTooltip.hide();
       } else render();
+      if (opened) shell.handle.activate();
     },
     closeIfActive() {
       if (root.hidden) return false;

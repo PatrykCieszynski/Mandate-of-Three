@@ -70,4 +70,9 @@ export class OwnMarketOffer {
   constructor(readonly offer: MarketOffer) {}
 }
 
-export function marketCommandId(){return globalThis.crypto?.randomUUID?.()??"market_"+Date.now()+"_"+Math.random().toString(16).slice(2);}
+export function marketCommandId() {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    'market_' + Date.now() + '_' + Math.random().toString(16).slice(2)
+  );
+}

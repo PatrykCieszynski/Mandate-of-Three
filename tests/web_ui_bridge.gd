@@ -275,6 +275,13 @@ func _run() -> void:
 	var fractional_tooltip: Dictionary = ItemUiAdapter.tooltip_details(fractional_item)
 	assert(fractional_tooltip.affixes == [{"lines":["+1.5 Attack"]},{"lines":["-0.25 Attack"]},{"lines":["+0 Attack"]}], "Affix display preserves fractional values and explicit signs")
 	assert(fractional_item.affixes[0].value == 1.5 and fractional_item.affixes[1].value == -0.25)
+	assert(MarketEndpoint3D.valid("order",{"command_id":"pack_order","have_asset":"yang","want_asset":"upgrade_ore","quantity":60,"price_num":10,"price_den":1}),"exported client uses real shared order validation, not a server stub")
+	assert(MarketEndpoint3D.valid("withdraw",{"command_id":"pack_withdraw","asset_id":"upgrade_ore","amount":35,"destination":"bag"}),"exported client recognizes whitelisted plain asset")
+	assert(MarketEndpoint3D.valid_query("search",{"definition_id":"iron_sword","upgrade_min":7,"upgrade_max":9,"price_min":0,"price_max":1000,"affix_filters":[{"stat_id":"monster_damage","minimum":10}],"sort":"price_asc","cursor":"","limit":20}),"exported client retains bounded search validation")
+	var market_tooltip:=ItemUiAdapter.tooltip_details({"stats":{"attack":11.5},"affixes":[{"stat":"monster_damage","value":10},{"stat":"critical_chance","value":5}],"sockets":[{"definition_id":"test_stone"}]})
+	assert("Attack: 11.5" in market_tooltip.properties and "Socket 1: test_stone" in market_tooltip.properties,"market tooltip preserves actual final fraction and existing socket ID")
+	assert(market_tooltip.affixes[0].lines[0]=="+10% Damage against monsters" and market_tooltip.affixes[1].lines[0]=="+5% Critical hit chance","search and tooltip share authoritative stat units")
+
 	var tooltip_controller := CoreUiController.new()
 	tooltip_controller.bridge = bridge
 	var tooltip_count: int = messages.size()

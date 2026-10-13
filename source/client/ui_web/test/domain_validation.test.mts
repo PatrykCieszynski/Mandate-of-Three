@@ -157,4 +157,14 @@ test('market browser validates public results and own claims remain separate',()
  rejects('market_browser',{...browser,results:Array(51).fill({})});
  rejects('market_browser',{...browser,cursor:'a'.repeat(65)});
  rejects('market_browser',{...browser,shop:{active:true}});
+ rejects('market_browser',{...browser,criteria:{definition_id:'iron_sword',upgrade_min:9,upgrade_max:7,price_min:0,price_max:100,affix_filters:[],sort:'price_asc',cursor:'',limit:20}});
+});
+
+test('exchange bounds reserve, exact integer ratios, work size and reload retry presentation',()=>{
+ const exchange={active:true,yang:100,reservedYang:20,assets:[],orders:[],depth:[],fills:[],busy:false,retryAvailable:true};
+ assert.ok(readDomainSnapshot({exchange}));
+ rejects('exchange',{...exchange,reservedYang:101});
+ rejects('exchange',{...exchange,orders:Array(51).fill({})});
+ rejects('exchange',{...exchange,depth:[{side:'buy',asset:'upgrade_ore',remaining:1,priceNum:1.2,priceDen:1}]});
+ rejects('exchange',{...exchange,depth:[{side:'buy',asset:'upgrade_ore',remaining:1,priceNum:1000000001,priceDen:1}]});
 });

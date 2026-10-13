@@ -5,7 +5,7 @@ var _endpoint: MarketEndpoint3D
 var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
 var _tree: SceneTree
-var _view := {"active":false,"catalog":[],"stats":{},"results":[],"cursor":"","shop":{},"highlight":"","error":""}
+var _view := {"active":false,"catalog":[],"catalogQuery":"","stats":{},"results":[],"cursor":"","shop":{},"highlight":"","error":""}
 var _generations := {}
 var _epoch := 0
 func attach(endpoint: MarketEndpoint3D,dispatcher: UiCommandDispatcher,session: UiCommandSession,tree: SceneTree) -> void:
@@ -13,7 +13,6 @@ func attach(endpoint: MarketEndpoint3D,dispatcher: UiCommandDispatcher,session: 
 	for action: String in ["catalog","search","visit"]: dispatcher.register_command("market.browser."+action,_valid.bind(action),_query.bind(action))
 	dispatcher.register_command("market.browser.close",func(p: Dictionary)->bool:return p.is_empty(),func(_p: Dictionary)->Dictionary:
 		close();return {"ok":true})
-	endpoint.query_finished.connect(session.finish)
 	publish()
 static func _valid(p: Dictionary,action: String) -> bool:
 	if action=="visit": return p.size()==2 and p.has_all(["shop_id","offer_id"]) and MarketEndpoint3D.valid_query("visit",{"shop_id":p.shop_id}) and p.offer_id is String and (p.offer_id.is_empty() or ItemInstance.valid_uid(p.offer_id))
@@ -37,9 +36,9 @@ func _query(payload: Dictionary,action: String) -> Dictionary:
 	_view.error="" if result.ok else str(result.error)
 	if result.ok:
 		match action:
-			"catalog": _view.catalog=result.items;_view.stats=result.stats
+			"catalog": _view.catalog=result.items;_view.stats=result.stats;_view.catalogQuery=payload.query
 			"search":
-				_view.results=[];_view.cursor=result.next_cursor
+				_view.results=[];_view.cursor=result.next_cursor;_view.criteria=payload.duplicate(true)
 				for row: Dictionary in result.results: _view.results.append({"offerId":row.offer_id,"shopId":int(row.shop_id),"shopName":row.shop_name,"revision":int(row.revision),"price":int(row.price),"item":ItemUiAdapter.item_model(row.item)})
 			"visit":
 				_view.highlight=payload.offer_id
@@ -54,4 +53,4 @@ func _query(payload: Dictionary,action: String) -> Dictionary:
 func refresh_shop() -> void:
 	if active and not _view.shop.is_empty(): await _query({"shop_id":_view.shop.shopId,"offer_id":_view.highlight},"visit")
 func dispose() -> void:
-	if is_instance_valid(_endpoint) and _endpoint.query_finished.is_connected(_session.finish): _endpoint.query_finished.disconnect(_session.finish)
+	active=false;_epoch+=1;_generations.clear()

@@ -6,6 +6,7 @@ var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
 var _tree: SceneTree
 var active := false
+var _disposed := false
 func attach(endpoint: MarketEndpoint3D, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree) -> void:
 	_endpoint = endpoint
 	_dispatcher = dispatcher
@@ -17,13 +18,13 @@ func attach(endpoint: MarketEndpoint3D, dispatcher: UiCommandDispatcher, session
 		close()
 		return {"ok":true})
 	endpoint.state_changed.connect(publish)
-	endpoint.operation_finished.connect(session.finish)
 	publish(endpoint.state)
 
 func open() -> Dictionary:
+	if _disposed: return _session.closed_result()
 	active = true
 	var result := await _submit({},"open")
-	if not result.ok: close()
+	if not _disposed and not result.ok: close()
 	return result
 func close() -> void:
 	active = false
@@ -37,6 +38,7 @@ func _submit(payload: Dictionary, action: String) -> Dictionary:
 	_endpoint.request_market.rpc_id(1,action,payload,id)
 	return await _session.wait(id,_tree)
 func publish(snapshot: Dictionary) -> void:
+	if _disposed: return
 	if not active or not snapshot.get("ok",false):
 		_dispatcher.set_domain("market",{"active":false})
 		return
@@ -51,6 +53,6 @@ func publish(snapshot: Dictionary) -> void:
 	_dispatcher.set_domain("market",view)
 	state_updated.emit(view)
 func dispose() -> void:
+	_disposed=true;active=false
 	if is_instance_valid(_endpoint):
 		if _endpoint.state_changed.is_connected(publish): _endpoint.state_changed.disconnect(publish)
-		if _endpoint.operation_finished.is_connected(_session.finish): _endpoint.operation_finished.disconnect(_session.finish)

@@ -36,4 +36,7 @@ export class OwnMarketOffer {
         this.offer = offer;
     }
 }
-export function marketCommandId() { return globalThis.crypto?.randomUUID?.() ?? "market_" + Date.now() + "_" + Math.random().toString(16).slice(2); }
+export function marketCommandId() {
+    return (globalThis.crypto?.randomUUID?.() ??
+        'market_' + Date.now() + '_' + Math.random().toString(16).slice(2));
+}
