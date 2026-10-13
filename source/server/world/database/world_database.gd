@@ -30,6 +30,7 @@ func wallet_account_id(character_id: int) -> int:
 
 func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
 	var result := WorldSchema.migrate_account_wallets(db,master_ids)
+	if result.ok and not MarketStoreSqlite.ensure_schema(db): result = {"ok":false,"error":"market_custody_migration"}
 	wallet_ready = result.ok
 	return result
 

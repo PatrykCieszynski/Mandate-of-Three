@@ -84,13 +84,14 @@ func transfer(character_id: int, uid: String, revision: int, source: String, des
 	if source == destination and position == item.bag_position: return _finish(true)
 	query = "DELETE FROM account_storage WHERE item_uid=?;" if source == "storage" else "DELETE FROM item_placements WHERE item_uid=?;"
 	if not db.query_with_bindings(query,[uid]): return _finish(false,"storage")
+	# Prepare provenance before inserting a character placement; custody validates it.
+	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id if destination == "inventory" else item.owner_character_id,uid]): return _finish(false,"storage")
 	if destination == "storage":
 		if not db.query_with_bindings("INSERT INTO account_storage(item_uid,account_name,position) VALUES(?,?,?);",[uid,name,position]): return _finish(false,"storage")
 	else:
 		if not db.query_with_bindings("INSERT INTO item_placements(item_uid,owner_character_id,location,bag_position,equipment_slot) VALUES(?,?,'bag',?,'');",[uid,character_id,position]): return _finish(false,"storage")
 	# A stored item's account placement owns access; character owner is provenance
 	# until withdrawal atomically assigns the receiving character.
-	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id if destination == "inventory" else item.owner_character_id,uid]): return _finish(false,"storage")
 	return _finish(true)
 func _fits(position: int,height: int,occupied: Dictionary) -> bool:
 	var footprint: Array[int] = cells(position,height)

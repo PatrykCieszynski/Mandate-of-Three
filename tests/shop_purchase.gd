@@ -43,7 +43,7 @@ func _ready() -> void:
 	check(persistence.add_yang(owner,30), "pending income before rejection")
 	check(persistence.purchase_shop_offer(owner,shop,offer.offer_id,10).error=="occupied", "exact occupied never falls back")
 	check(balance(db,owner)==1100 and items.inventory(owner)==before and persistence.wallet_balance(owner)==1130 and persistence.runtime_wallets[persistence.wallet_account_id(owner)].pending_currency_delta==30 and persistence.dirty_wallet.has(persistence.wallet_account_id(owner)), "failed purchase preserves RAM delta and items")
-	check(db.query("CREATE TEMP TRIGGER shop_fail_item BEFORE INSERT ON item_placements BEGIN SELECT RAISE(ABORT,'shop item failure'); END;"), "item fault")
+	check(db.query("CREATE TEMP TRIGGER shop_fail_item BEFORE INSERT ON item_custody BEGIN SELECT RAISE(ABORT,'shop item failure'); END;"), "item fault")
 	check(persistence.purchase_shop_offer(owner,shop,offer.offer_id).error=="storage", "insertion fault returned")
 	check(balance(db,owner)==1100 and items.inventory(owner)==before and persistence.runtime_wallets[persistence.wallet_account_id(owner)].pending_currency_delta==30, "item failure rolls back pending income and spending")
 	check(db.query_with_bindings("SELECT COUNT(*) AS n FROM item_instances WHERE owner_character_id=?;",[owner]) and int(db.query_result[0].n)==1, "no orphan item")

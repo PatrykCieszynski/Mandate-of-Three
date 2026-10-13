@@ -7,6 +7,8 @@ static func migrate_account_wallets(db: SQLite, master_ids: Dictionary) -> Dicti
 
 
 static func ensure_schema(db: SQLite) -> void:
+	db.foreign_keys = true
+	db.query("PRAGMA foreign_keys=ON;")
 	_create_table_if_missing(db, "meta", {
 		"key": {"data_type": "text", "primary_key": true, "not_null": true},
 		"value": {"data_type": "text", "not_null": true}

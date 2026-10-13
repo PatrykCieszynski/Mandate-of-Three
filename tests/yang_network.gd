@@ -66,7 +66,7 @@ func run_server() -> void:
 	while server.database.item_store._free_bag_position(owner, ItemDefinitions.IRON_SWORD.inventory_height) >= 0:
 		var position: int = server.database.item_store._free_bag_position(owner, ItemDefinitions.IRON_SWORD.inventory_height)
 		var filler: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD,owner,[])
-		check(server.database.item_store._insert_item(filler,position), "full bag fixture")
+		check(EconomyFixture.insert_item(server.database.item_store,filler,position), "full bag fixture")
 	var full_bag: Dictionary = server.database.item_store.inventory(owner)
 	check(db.query("CREATE TEMP TRIGGER reject_pickup_sql BEFORE UPDATE ON account_wallets BEGIN SELECT RAISE(ABORT,'currency pickup tried SQL'); END;"), "forbid per-pickup wallet writes")
 	world.characters[hero].position = point + Vector3(0,0,0.8)

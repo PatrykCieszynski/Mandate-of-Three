@@ -3,6 +3,7 @@
 [resource]
 script = ExtResource("1")
 definition_id = &"dev_trace_sword"
+tradeable = false
 icon_id = &"iron_sword"
 item_name = "Practice sword (1 damage)"
 equipment_slot = &"weapon"
