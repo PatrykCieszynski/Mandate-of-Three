@@ -48,6 +48,7 @@ static var curr: WorldServer
 
 ## Internal Master connection only; public clients submit a token, never an ID.
 func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int) -> bool:
+	if not database.wallet_ready: return false
 	var player: PlayerResource = database.get_player_resource(character_id)
 	if auth_token.is_empty() or player == null or player.account_name != username: return false
 	if not database.store.bind_account_identity(username,account_id):
@@ -181,13 +182,17 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 	database.save_player(player)
 	runtime_equipment.erase(player.player_id)
-	database.release_wallet(player.player_id)
 
 	player_id_to_peer_id.erase(player.player_id)
 	BlockList.clear_player(player.player_id)
 
 	player.current_peer_id = 0
 	connected_players.erase(peer_id)
+	var shared_wallet_in_use := false
+	var account_id := database.wallet_account_id(player.player_id)
+	for other: PlayerResource in connected_players.values():
+		if database.wallet_account_id(other.player_id) == account_id: shared_wallet_in_use = true
+	if not shared_wallet_in_use: database.release_wallet(player.player_id)
 
 
 func _on_peer_authenticating(peer_id: int) -> void:

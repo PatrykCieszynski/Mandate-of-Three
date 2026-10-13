@@ -25,8 +25,11 @@ func rollback() -> void:
 
 #region Players
 ## Bind legacy world names only from a verified Master handoff. Never invent IDs.
-func bind_account_identity(account_name: String, account_id: int) -> bool:
+func bind_account_identity(account_name: String, account_id: int, create_verified: bool = false) -> bool:
 	if account_name.is_empty() or account_id <= 0 or not db.query("BEGIN IMMEDIATE;"): return false
+	if create_verified and not db.query_with_bindings("INSERT OR IGNORE INTO accounts(account_name) VALUES(?);",[account_name]):
+		db.query("ROLLBACK;")
+		return false
 	var ok := db.query_with_bindings("SELECT master_account_id FROM accounts WHERE account_name=?;",[account_name]) and db.query_result.size()==1
 	if ok:
 		var current: Variant = db.query_result[0].master_account_id
@@ -192,8 +195,10 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 	# Leave defaults to PlayerResource where possible.
 	if not db.query("BEGIN IMMEDIATE;"): return -1
 	save_player(player)
-	if not db.query_with_bindings("INSERT INTO wallets(character_id,yang) SELECT player_id,? FROM players WHERE player_id=?;", [STARTING_YANG, next_id]) \
-		or not db.query("SELECT changes() AS n;") or int(db.query_result[0].n) != 1:
+	if not db.query_with_bindings("INSERT OR IGNORE INTO account_wallets(account_id,yang) SELECT master_account_id,? FROM accounts WHERE account_name=? AND master_account_id IS NOT NULL;", [STARTING_YANG, account_name]):
+		db.query("ROLLBACK;")
+		return -1
+	if not db.query_with_bindings("SELECT master_account_id FROM accounts WHERE account_name=? AND master_account_id IS NOT NULL;",[account_name]) or db.query_result.is_empty():
 		db.query("ROLLBACK;")
 		return -1
 	if not db.query("COMMIT;"):

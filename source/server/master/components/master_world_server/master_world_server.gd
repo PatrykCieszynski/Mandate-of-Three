@@ -43,6 +43,10 @@ func fetch_server_info(info: Dictionary) -> void:
 	connected_worlds[game_server_id] = info
 	# Stamp connect time so the dashboard can show "connected for X minutes".
 	connected_worlds[game_server_id]["connected_at"] = int(Time.get_unix_time_from_system())
+	var identities := {}
+	for account: AccountResource in authentication_manager.account_collection.collection.values():
+		identities[account.username] = account.id
+	account_identity_manifest.rpc_id(game_server_id,identities)
 	gateway_manager.update_worlds_info.rpc(get_public_worlds())
 	var world_name: String = str(info.get("info", {}).get("name", "world#%d" % game_server_id))
 	DiscordNotifier.notify_world_connected(world_name)
@@ -153,6 +157,7 @@ func tell_all_worlds_to_save() -> int:
 # Stubs declared so Godot's RPC table accepts the outbound calls. World side
 # implements the actual behavior in WorldManagerClient.
 @rpc("authority") func master_save() -> void: pass
+@rpc("authority") func account_identity_manifest(_identities: Dictionary) -> void: pass
 @rpc("authority") func master_shutdown() -> void: pass
 @rpc("authority") func master_broadcast(_message: String) -> void: pass
 @rpc("authority") func master_restart(_seconds: int, _message: String) -> void: pass
@@ -222,7 +227,7 @@ func player_disconnected(username: String) -> void:
 
 
 @rpc("authority")
-func create_player_character_request(_gateway_id: int, _peer_id: int, _username: String, _character_data: Dictionary) -> void:
+func create_player_character_request(_gateway_id: int, _peer_id: int, _username: String, _character_data: Dictionary, _account_id: int) -> void:
 	pass
 
 

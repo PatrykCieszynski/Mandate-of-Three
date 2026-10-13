@@ -72,7 +72,7 @@ func run_server() -> void:
 	set_phase("BUY_EXACT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok and replies[hero].has_purchase and replies[hero].wallet==1500, "exact purchase publishes private inventory and committed wallet")
-	check(server.database.runtime_wallets[owner].pending_currency_delta==0 and not server.database.dirty_wallet.has(owner), "RPC commit clears pending income")
+	check(server.database.runtime_wallets[server.database.wallet_account_id(owner)].pending_currency_delta==0 and not server.database.dirty_wallet.has(server.database.wallet_account_id(owner)), "RPC commit clears pending income")
 	await get_tree().create_timer(0.12).timeout
 	set_phase("OCCUPIED",hero)
 	await wait_until(func() -> bool: return replies.has(hero))

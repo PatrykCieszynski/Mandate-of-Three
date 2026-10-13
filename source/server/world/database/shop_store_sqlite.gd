@@ -20,7 +20,8 @@ func purchase(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: 
 	# Capacity precedes all wallet writes. Explicit targets never fall back.
 	var receiving: Dictionary = items.resolve_inventory_position(owner_id, definition.inventory_height, requested_position)
 	if not receiving.ok: return _rollback(str(receiving.error))
-	var spent: Dictionary = WalletStoreSqlite.new(db).spend_in_transaction(owner_id, pending_yang, offer.price)
+	var account_id := WorldStoreSqlite.new(db).resolve_account_id(owner_id)
+	var spent: Dictionary = WalletStoreSqlite.new(db).spend_in_transaction(account_id, pending_yang, offer.price)
 	if not spent.ok: return _rollback(str(spent.error))
 	var item: ItemInstance = ItemInstance.create(definition, owner_id, [])
 	item.amount = offer.quantity

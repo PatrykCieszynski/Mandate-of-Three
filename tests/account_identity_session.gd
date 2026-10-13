@@ -4,10 +4,14 @@ var request := HTTPRequest.new()
 var world_ready := false
 var elapsed := 0.0
 var db := SQLite.new()
+var game_world: GameWorld3D
 
 func _ready() -> void:
 	add_child(request)
-	ClientState.world_ready.connect(func(_player: Node) -> void: world_ready = true)
+	ClientState.world_ready.connect(func(_player: Node) -> void:
+		game_world = Client.instance_manager.current_instance.get_node("GameWorld")
+		game_world.input_enabled = false
+		world_ready = true)
 	run.call_deferred()
 
 func _process(delta: float) -> void:
@@ -58,6 +62,7 @@ func run() -> void:
 	assert(FileAccess.file_exists(db.path) and db.open_db() and db.query("PRAGMA query_only=ON;"))
 	var store := WorldStoreSqlite.new(db)
 	for index: int in 2:
+		var spent := false
 		for raw_id: Variant in ids[index]:
 			var character_id := int(raw_id)
 			assert(store.resolve_account_id(character_id)==int(accounts[index].id),"real Master handoff persisted the global account ID")
@@ -67,9 +72,15 @@ func run() -> void:
 			Client.connect_to_server(handoff.address,handoff.port,handoff["auth-token"])
 			while not world_ready: await get_tree().process_frame
 			assert(ClientState.player_id==character_id,"token authentication enters the correct character")
+			while game_world.currency_endpoint.state.is_empty(): await get_tree().process_frame
+			assert(game_world.currency_endpoint.state.balance==(1450 if spent else 1500),"all alts see one account balance, other account isolated")
+			if not spent:
+				game_world.currency_endpoint.request_test_spend.rpc_id(1,1)
+				while int(game_world.currency_endpoint.state.balance)!=1450: await get_tree().process_frame
+				spent = true
 			Client.close_connection()
 			Client.instance_manager.teardown()
 			await get_tree().create_timer(.3).timeout
 	assert(db.close_db())
-	print("ACCOUNT_IDENTITY_SESSION_OK two verified accounts/four characters, spoof rejection, real token enter/reentry")
+	print("ACCOUNT_IDENTITY_SESSION_OK two verified accounts/four characters, spoof rejection, real token enter/reentry, shared account wallet and one-time starting Yang")
 	get_tree().quit()
