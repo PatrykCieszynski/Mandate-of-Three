@@ -228,3 +228,11 @@ Shader compilation errors fail the native runner. No pixel baselines are added:
 headless suites cannot establish screen/depth sampling or temporal appearance.
 The existing `run-first-region.ps1` protects shore blocking/navigation. See
 [Visual V3](visual-upgrade-v3.md) for configuration, artifacts and limits.
+
+Marketplace E0a adds `run-account-identity.ps1`: real populated SQLite migration,
+rollback/reopen, unique account mapping and verified handoff/session ownership.
+`-WithSession` uses the normal local Classic Gateway/Master/World and creates two
+accounts/four characters, exercising registration/login, guest flow, spoof
+rejection and real World token entry. Existing item-session regression remains
+`run-items.ps1 -WithSession`. These opt-in checks protect a previously uncovered
+authentication/ownership boundary; see [E0a identity](marketplace-e0a-identity.md).

@@ -209,7 +209,7 @@ func tell_world_to_revoke_role(world_id: int, player_id: int, role: String) -> b
 
 
 @rpc("authority")
-func fetch_token(_auth_token: String, _username: String, _character_id: int) -> void:
+func fetch_token(_auth_token: String, _username: String, _character_id: int, _account_id: int) -> void:
 	pass
 
 
@@ -229,6 +229,7 @@ func create_player_character_request(_gateway_id: int, _peer_id: int, _username:
 @rpc("any_peer")
 func player_character_creation_result(gateway_id: int, peer_id: int, username: String, result_code: int) -> void:
 	var world_id: int = multiplayer_api.get_remote_sender_id()
+	if not connected_worlds.has(world_id): return
 	if result_code:
 		var account: AccountResource = authentication_manager.account_collection.collection.get(username)
 		if not account:
@@ -241,7 +242,7 @@ func player_character_creation_result(gateway_id: int, peer_id: int, username: S
 		# release build. (Was gated on "debug", which masked this on the debug server.)
 		authentication_manager.save_account_collection()
 		var auth_token: String = authentication_manager.generate_random_token()
-		fetch_token.rpc_id(world_id, auth_token, username, result_code)
+		fetch_token.rpc_id(world_id, auth_token, username, result_code, account.id)
 		
 		gateway_manager.gateway_response.rpc_id(
 			gateway_id,
@@ -271,14 +272,18 @@ func request_login(_gateway_id: int, _peer_id: int, _username: String, _characte
 @rpc("any_peer")
 func result_login(result_code: int, gateway_id: int, peer_id: int, username: String, character_id: int) -> void:
 	var world_id: int = multiplayer_api.get_remote_sender_id()
+	if not connected_worlds.has(world_id): return
+	if result_code != OK:
+		gateway_manager.gateway_response.rpc_id(gateway_id,peer_id,{"error":result_code})
+		return
 	if result_code == OK:
 		# Mark the account connected so login_request refuses a second login;
 		# player_disconnected clears it on world disconnect.
 		var account: AccountResource = authentication_manager.account_collection.collection.get(username)
-		if account != null:
-			account.peer_id = peer_id
+		if account == null: return
+		account.peer_id = peer_id
 		var auth_token: String = authentication_manager.generate_random_token()
-		fetch_token.rpc_id(world_id, auth_token, username, character_id)
+		fetch_token.rpc_id(world_id, auth_token, username, character_id, account.id)
 		await get_tree().create_timer(0.5).timeout
 		gateway_manager.gateway_response.rpc_id(
 			gateway_id,

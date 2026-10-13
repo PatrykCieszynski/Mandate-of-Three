@@ -2,7 +2,7 @@ class_name WorldManagerClient
 extends BaseMultiplayerEndpoint
 
 
-signal token_received(auth_token: String, username: String, character_id: int)
+signal token_received(auth_token: String, username: String, character_id: int, account_id: int)
 
 @export var database: WorldDatabase
 @export var world_server: WorldServer
@@ -346,8 +346,8 @@ func fetch_server_info(_info: Dictionary) -> void:
 
 
 @rpc("authority")
-func fetch_token(auth_token: String, username: String, character_id: int) -> void:
-	token_received.emit(auth_token, username, character_id)
+func fetch_token(auth_token: String, username: String, character_id: int, account_id: int) -> void:
+	token_received.emit(auth_token, username, character_id, account_id)
 
 
 @rpc("any_peer")
@@ -398,10 +398,8 @@ func request_login(
 	character_id: int
 ) -> void:
 	var player: PlayerResource = database.get_player_resource(character_id)
-	if player == null:
-		return
-
-	if player.account_name != username:
+	if player == null or player.account_name != username:
+		result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id)
 		return
 	result_login.rpc_id(
 		1,
