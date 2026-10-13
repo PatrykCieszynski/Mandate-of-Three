@@ -9,6 +9,10 @@ Tiny MMO supplies gateway/master/world, auth/sessions, instance lifecycle,
 transport/replication and persistence. Preserve these working systems. Open-MT2
 is a behavioral reference, not a dependency or runtime.
 
+Marketplace work follows the [v1.1 package sequence](marketplace-implementation-plan.md)
+on the `shop` integration branch. The first package is [E0a verified account
+identity](marketplace-e0a-identity.md); account-wide Yang starts only in E0b.
+
 Movement, combat and pickup are server-authoritative. Clients send intentions;
 server validates input, ownership, revisions, placement and economic operations.
 The existing ItemDefinition/ItemInstance model is sufficient: UID, owner,

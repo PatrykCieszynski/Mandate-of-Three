@@ -1,0 +1,75 @@
+extends Node
+## New risk: verified identity handoff and additive migration are not covered by item suites.
+var db := SQLite.new()
+
+func _ready() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://.godot/verification"))
+	db.path = "res://.godot/verification/account-identity.db"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path))
+	assert(db.open_db())
+	# Populated v16 fixture. Fault after ALTER must roll back schema as well as data.
+	assert(db.query("CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT); INSERT INTO meta VALUES('schema_version','16'); CREATE TABLE accounts(account_name TEXT PRIMARY KEY NOT NULL); INSERT INTO accounts VALUES('legacy'); CREATE TRIGGER fail_identity_version BEFORE INSERT ON meta WHEN NEW.value='17' BEGIN SELECT RAISE(ABORT,'identity checkpoint failure'); END;"))
+	assert(not WorldSchema.migrate_account_identity(db))
+	assert(db.query("PRAGMA table_info(accounts);"))
+	assert(db.query_result.size()==1,"failed migration rolls back added column")
+	assert(db.query("SELECT value FROM meta WHERE key='schema_version';") and db.query_result[0].value=="16")
+	assert(db.query("DROP TRIGGER fail_identity_version;"))
+	WorldSchema.ensure_schema(db)
+	WorldSchema.ensure_schema(db)
+	assert(db.query("SELECT COUNT(*) AS n FROM accounts;") and db.query_result[0].n==1,"migration/retry never creates accounts")
+	assert(db.close_db() and db.open_db())
+	WorldSchema.ensure_schema(db)
+	assert(db.query("SELECT account_name,master_account_id FROM accounts;") and db.query_result[0].account_name=="legacy" and db.query_result[0].master_account_id==null)
+	assert(db.close_db())
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path))
+	assert(db.open_db())
+	WorldSchema.ensure_schema(db)
+	var store := WorldStoreSqlite.new(db)
+	var characters: Array[int] = []
+	for account: String in ["alpha","beta"]:
+		for index: int in 2:
+			characters.append(store.create_player_character(account,{"name":account+str(index),"skin":1}))
+	var database := WorldDatabase.new()
+	database.db = db
+	database.store = store
+	var server := WorldServer.new()
+	server.database = database
+	assert(server.accept_master_handoff("a0","alpha",characters[0],21))
+	assert(server.accept_master_handoff("a1","alpha",characters[1],21))
+	assert(server.accept_master_handoff("b0","beta",characters[2],22))
+	assert(server.accept_master_handoff("b1","beta",characters[3],22))
+	assert(server.resolve_account_id(characters[0])==21 and server.resolve_account_id(characters[1])==21)
+	assert(server.resolve_account_id(characters[2])==22 and server.resolve_account_id(characters[3])==22)
+	assert(not db.query("INSERT INTO accounts(account_name,master_account_id) VALUES('duplicate_sql',21);"),"SQL unique constraint prevents duplicate Master identity")
+	assert(not db.query("INSERT INTO accounts(account_name,master_account_id) VALUES('invalid_sql',0);"),"SQL rejects invalid identity independently of the helper")
+	assert(not server.accept_master_handoff("spoof","beta",characters[0],22))
+	assert(not server.accept_master_handoff("mismatch","alpha",characters[0],22))
+	assert(not server.accept_master_handoff("duplicate","beta",characters[2],21))
+	assert(not server.token_list.has("spoof") and not server.token_list.has("mismatch") and not server.token_list.has("duplicate"))
+	assert(not store.bind_account_identity("orphan",23) and not store.bind_account_identity("alpha",0))
+	assert(db.query("CREATE TRIGGER fail_binding BEFORE UPDATE ON accounts BEGIN SELECT RAISE(ABORT,'identity bind failure'); END;"))
+	assert(not server.accept_master_handoff("failed_commit","alpha",characters[0],21) and not server.token_list.has("failed_commit"),"SQL failure cannot install an authentication token")
+	assert(store.resolve_account_id(characters[0])==21 and db.query("DROP TRIGGER fail_binding;"))
+	server.connected_players[123] = store.get_player(characters[0])
+	assert(server.resolve_peer_account_id(123)==21 and server.resolve_peer_account_id(999)==0)
+	assert(db.close_db() and db.open_db())
+	WorldSchema.ensure_schema(db)
+	assert(store.resolve_account_id(characters[0])==21 and store.resolve_account_id(characters[3])==22)
+	assert(db.query("INSERT INTO accounts(account_name) VALUES('unbound');"))
+	assert(store.unbound_accounts().size()==1 and store.resolve_account_id(-1)==0)
+	var audit := store.audit_account_identities({"alpha":21,"beta":999,"unbound":23})
+	assert(audit.ok and audit.unbound==["unbound"] and audit.mismatched==["beta"] and audit.orphaned.is_empty())
+	assert(store.audit_account_identities({"alpha":21}).orphaned.size()==2,"deleted Master accounts are reported without remapping")
+	var gateway := preload("res://source/server/gateway/http_server.gd").new()
+	gateway.sessions["session"] = {"name":"alpha","id":21}
+	assert(gateway.verified_session({"t-id":"session","a-u":"alpha","a-id":22}).id==21)
+	assert(gateway.verified_session({"t-id":"session","a-u":"beta"}).is_empty())
+	assert(gateway.verified_session({"t-id":"fake","a-u":"alpha"}).is_empty())
+	gateway.free()
+	server.free()
+	database.db = null
+	database.free()
+	assert(db.close_db())
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path))
+	print("ACCOUNT_IDENTITY_OK migration rollback/restart, two accounts/two alts, handoff ownership, session spoof rejection")
+	get_tree().quit()

@@ -73,6 +73,12 @@ func create_session(account: Dictionary) -> String:
 
 
 func send_request(action: String, data: Dictionary, timeout_sec: float = 5.0) -> Dictionary:
+	if action in ["create_character", "get_characters", "enter_world"]:
+		var session: Dictionary = verified_session(data)
+		if session.is_empty(): return {"error": GatewayAPI.ERR_BAD_CREDENTIALS}
+		data = data.duplicate(true)
+		data[GatewayAPI.KEY_ACCOUNT_USERNAME] = session.name
+		data[GatewayAPI.KEY_ACCOUNT_ID] = session.id
 	# The link up to the master may not be established yet at cold start. Bail with
 	# a connection error rather than firing an RPC at an absent peer (which throws
 	# ERR_CONNECTION_ERROR); the client treats this as retryable.
@@ -95,6 +101,14 @@ func send_request(action: String, data: Dictionary, timeout_sec: float = 5.0) ->
 	)
 	
 	return await request.completed
+
+## Only the Gateway's credential-verified session may supply account identity.
+func verified_session(data: Dictionary) -> Dictionary:
+	var token: Variant = data.get(GatewayAPI.KEY_TOKEN_ID)
+	if not token is String or not sessions.has(token): return {}
+	var session: Dictionary = sessions[token]
+	if str(data.get(GatewayAPI.KEY_ACCOUNT_USERNAME,"")) != str(session.get("name","")): return {}
+	return session
 
 
 func _on_request_timeout(request_id: int) -> void:

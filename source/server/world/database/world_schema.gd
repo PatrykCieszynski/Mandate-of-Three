@@ -68,6 +68,28 @@ static func ensure_schema(db: SQLite) -> void:
 	if version < 16 and not AccountStorageSqlite.ensure_schema(db):
 		push_error("Could not create account Storage schema v16.")
 		return
+	if version < 17 and not migrate_account_identity(db):
+		push_error("Could not migrate account identity schema v17; previous data retained.")
+		return
+
+static func migrate_account_identity(db: SQLite) -> bool:
+	if not db.query("BEGIN IMMEDIATE;"): return false
+	if not db.query("PRAGMA table_info(accounts);"):
+		db.query("ROLLBACK;")
+		return false
+	var has_identity := false
+	for column: Dictionary in db.query_result:
+		if column.name == "master_account_id": has_identity = true
+	if not has_identity and not db.query("ALTER TABLE accounts ADD COLUMN master_account_id INTEGER CHECK(master_account_id > 0);"):
+		db.query("ROLLBACK;")
+		return false
+	for statement: String in [
+		"CREATE UNIQUE INDEX IF NOT EXISTS account_master_identity ON accounts(master_account_id);",
+		"INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version','17');", "COMMIT;"]:
+		if not db.query(statement):
+			db.query("ROLLBACK;")
+			return false
+	return true
 
 static func _migration_v1(db: SQLite) -> void:
 	_create_table_if_missing(db, "accounts", {

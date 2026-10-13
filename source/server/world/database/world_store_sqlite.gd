@@ -24,6 +24,44 @@ func rollback() -> void:
 
 
 #region Players
+## Bind legacy world names only from a verified Master handoff. Never invent IDs.
+func bind_account_identity(account_name: String, account_id: int) -> bool:
+	if account_name.is_empty() or account_id <= 0 or not db.query("BEGIN IMMEDIATE;"): return false
+	var ok := db.query_with_bindings("SELECT master_account_id FROM accounts WHERE account_name=?;",[account_name]) and db.query_result.size()==1
+	if ok:
+		var current: Variant = db.query_result[0].master_account_id
+		ok = current == null or int(current) == account_id
+	if ok:
+		ok = db.query_with_bindings("SELECT account_name FROM accounts WHERE master_account_id=? AND account_name<>?;",[account_id,account_name]) and db.query_result.is_empty()
+	if ok:
+		ok = db.query_with_bindings("UPDATE accounts SET master_account_id=? WHERE account_name=?;",[account_id,account_name])
+	if ok and db.query("COMMIT;"): return true
+	db.query("ROLLBACK;")
+	return false
+
+func resolve_account_id(character_id: int) -> int:
+	if not db.query_with_bindings("SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?;",[character_id]) or db.query_result.is_empty(): return 0
+	return int(db.query_result[0].master_account_id) if db.query_result[0].master_account_id != null else 0
+
+## Read-only diagnostics; legacy accounts stay unbound until a verified login.
+func unbound_accounts() -> Array:
+	if not db.query("SELECT account_name FROM accounts WHERE master_account_id IS NULL ORDER BY account_name;"): return []
+	return db.query_result.duplicate(true)
+
+## Explicit server-side Master manifest, never a client payload. Reports only; no repair.
+func audit_account_identities(master_ids: Dictionary) -> Dictionary:
+	var report := {"ok":false,"unbound":[],"orphaned":[],"mismatched":[]}
+	if not db.query("SELECT account_name,master_account_id FROM accounts ORDER BY account_name;"): return report
+	for row: Dictionary in db.query_result:
+		if not master_ids.has(row.account_name): report.orphaned.append(row.account_name)
+		elif row.master_account_id == null: report.unbound.append(row.account_name)
+		elif int(row.master_account_id) != int(master_ids[row.account_name]): report.mismatched.append(row.account_name)
+	if not db.query("SELECT DISTINCT p.account_name FROM players p LEFT JOIN accounts a ON a.account_name=p.account_name WHERE a.account_name IS NULL;"): return report
+	for row: Dictionary in db.query_result:
+		if not report.orphaned.has(row.account_name): report.orphaned.append(row.account_name)
+	report.ok = true
+	return report
+
 func get_player(player_id: int) -> PlayerResource:
 	db.query_with_bindings("SELECT * FROM players WHERE player_id=?;", [player_id])
 	if db.query_result.is_empty():

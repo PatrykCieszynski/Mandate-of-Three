@@ -46,13 +46,27 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 
 static var curr: WorldServer
 
+## Internal Master connection only; public clients submit a token, never an ID.
+func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int) -> bool:
+	var player: PlayerResource = database.get_player_resource(character_id)
+	if auth_token.is_empty() or player == null or player.account_name != username: return false
+	if not database.store.bind_account_identity(username,account_id):
+		push_warning("Rejected Master account identity mapping for world character %d." % character_id)
+		return false
+	token_list[auth_token] = player
+	return true
+
+## Zero means unknown/unbound. Character IDs are local to this World's database.
+func resolve_account_id(character_id: int) -> int:
+	return database.store.resolve_account_id(character_id)
+
+func resolve_peer_account_id(peer_id: int) -> int:
+	var player: PlayerResource = connected_players.get(peer_id)
+	return resolve_account_id(player.player_id) if player != null else 0
+
 
 func start_world_server() -> void:
-	world_manager.token_received.connect(
-		func(auth_token: String, _username: String, character_id: int):
-			var player: PlayerResource = database.get_player_resource(character_id)
-			token_list[auth_token] = player
-	)
+	world_manager.token_received.connect(accept_master_handoff)
 
 	var configuration: Dictionary = ConfigFileUtils.load_section(
 		"world-server",
@@ -188,7 +202,7 @@ func _on_peer_authentication_failed(peer_id: int) -> void:
 func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
 	# Cast as String if not returns empty String
 	var auth_token: String = bytes_to_var(data) as String
-	print("Peer: %d is trying to connect with data: \"%s\"." % [peer_id, auth_token])
+	print("Peer: %d is trying to authenticate." % peer_id)
 	if is_valid_authentication_token(auth_token):
 		multiplayer.complete_auth(peer_id)
 		connected_players[peer_id] = token_list[auth_token]
