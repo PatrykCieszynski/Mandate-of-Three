@@ -22,7 +22,6 @@ func command(character_id: int, action: String, payload: Dictionary) -> Dictiona
 	return result
 
 func _perform_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
-	var market := MarketStoreSqlite.new(_runtime.db,rejected_commands)
 	var command_id: String = payload.get("command_id","")
 	match action:
 		"order", "cancel_order":
@@ -38,6 +37,8 @@ func _perform_command(character_id: int, action: String, payload: Dictionary) ->
 			return result
 		"deposit": return ExchangeStoreSqlite.new(_runtime.db,rejected_commands).deposit(character_id,command_id,payload.uid,int(payload.revision),int(payload.amount),payload.source)
 		"withdraw": return ExchangeStoreSqlite.new(_runtime.db,rejected_commands).withdraw(character_id,command_id,payload.asset_id,int(payload.amount),payload.destination)
+	var market := MarketStoreSqlite.new(_runtime.db,rejected_commands)
+	match action:
 		"list": return market.list_item(character_id,command_id,payload.uid,int(payload.revision),int(payload.position),int(payload.price))
 		"cancel": return market.cancel_offer(character_id,command_id,payload.offer_id,int(payload.revision))
 		"claim": return market.claim_item(character_id,command_id,payload.uid,int(payload.revision))

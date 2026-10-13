@@ -1,6 +1,19 @@
 class_name ExchangeStoreSqlite
-extends MarketStoreSqlite
-## Same account-scoped receipt/transaction boundary; only whitelisted plain stacks.
+extends RefCounted
+## Ledger/orderbook SQL. No Shop inheritance or shop-specific APIs/state.
+var db: SQLite
+var _transaction: EconomyCommandSqlite
+var committed: bool:
+	get: return _transaction.committed
+var rejected: MarketRejectedCommands:
+	get: return _transaction.rejected
+func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
+	db = database
+	_transaction = EconomyCommandSqlite.new(db,rejected_commands)
+
+func receipt(character_id: int, command_id: String) -> Dictionary:
+	return _transaction.receipt(character_id,command_id)
+
 static func ensure_ledger_schema(database: SQLite) -> bool:
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
 	if int(database.query_result[0].value)>=21: return true
@@ -26,36 +39,36 @@ func ledger(character_id: int) -> Dictionary:
 	if not db.query_with_bindings("SELECT yang,reserved_yang FROM account_wallets WHERE account_id=?;",[account]) or db.query_result.is_empty(): return {"ok":false,"error":"storage"}
 	return {"ok":true,"assets":assets,"yang":int(db.query_result[0].yang),"reserved_yang":int(db.query_result[0].reserved_yang)}
 func deposit(character_id: int,command_id: String,uid: String,revision: int,amount: int,source: String) -> Dictionary:
-	if not _open_command(character_id,command_id,"exchange.deposit",[character_id,uid,revision,amount,source]): return _cached
-	if source not in ["bag","account_storage"] or amount<=0: return _finish({"ok":false,"error":"request"})
-	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,c.equipment_slot,c.owner_id FROM item_instances i JOIN item_custody c ON c.uid=i.uid WHERE i.uid=?;",[uid]): return _abort("storage")
-	if db.query_result.is_empty(): return _finish({"ok":false,"error":"owner"})
+	if not _transaction.begin(character_id,command_id,"exchange.deposit",[character_id,uid,revision,amount,source]): return _transaction.cached
+	if source not in ["bag","account_storage"] or amount<=0: return _transaction.commit({"ok":false,"error":"request"})
+	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,c.equipment_slot,c.owner_id FROM item_instances i JOIN item_custody c ON c.uid=i.uid WHERE i.uid=?;",[uid]): return _transaction.rollback("storage")
+	if db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"owner"})
 	var row: Dictionary=db.query_result[0].duplicate(true)
-	if row.location!=source or int(row.owner_id)!=(character_id if source=="bag" else _account): return _finish({"ok":false,"error":"owner"})
+	if row.location!=source or int(row.owner_id)!=(character_id if source=="bag" else _transaction.account_id): return _transaction.commit({"ok":false,"error":"owner"})
 	var item:=ItemInstance.from_row(row)
-	if item==null or item.revision!=revision: return _finish({"ok":false,"error":"stale"})
+	if item==null or item.revision!=revision: return _transaction.commit({"ok":false,"error":"stale"})
 	var definition:=asset_definition(str(item.definition_id))
-	if definition==null or item.upgrade_level!=0 or not item.affixes.is_empty() or not item.sockets.is_empty() or amount>item.amount or item.amount>definition.stack_limit: return _finish({"ok":false,"error":"not_fungible"})
-	if not db.query_with_bindings("INSERT INTO exchange_assets(account_id,asset_id,free) VALUES(?,?,?) ON CONFLICT(account_id,asset_id) DO UPDATE SET free=free+excluded.free;",[_account,str(item.definition_id),amount]): return _abort("storage")
+	if definition==null or item.upgrade_level!=0 or not item.affixes.is_empty() or not item.sockets.is_empty() or amount>item.amount or item.amount>definition.stack_limit: return _transaction.commit({"ok":false,"error":"not_fungible"})
+	if not db.query_with_bindings("INSERT INTO exchange_assets(account_id,asset_id,free) VALUES(?,?,?) ON CONFLICT(account_id,asset_id) DO UPDATE SET free=free+excluded.free;",[_transaction.account_id,str(item.definition_id),amount]): return _transaction.rollback("storage")
 	if amount==item.amount:
-		if not db.query_with_bindings("DELETE FROM item_custody WHERE uid=?;",[uid]) or not db.query_with_bindings("DELETE FROM item_instances WHERE uid=?;",[uid]): return _abort("storage")
-	elif not db.query_with_bindings("UPDATE item_instances SET amount=amount-?,revision=revision+1 WHERE uid=?;",[amount,uid]): return _abort("storage")
-	return _finish({"ok":true,"asset_id":str(item.definition_id),"amount":amount})
+		if not db.query_with_bindings("DELETE FROM item_custody WHERE uid=?;",[uid]) or not db.query_with_bindings("DELETE FROM item_instances WHERE uid=?;",[uid]): return _transaction.rollback("storage")
+	elif not db.query_with_bindings("UPDATE item_instances SET amount=amount-?,revision=revision+1 WHERE uid=?;",[amount,uid]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"asset_id":str(item.definition_id),"amount":amount})
 func withdraw(character_id: int,command_id: String,asset: String,amount: int,destination: String) -> Dictionary:
-	if not _open_command(character_id,command_id,"exchange.withdraw",[character_id,asset,amount,destination]): return _cached
+	if not _transaction.begin(character_id,command_id,"exchange.withdraw",[character_id,asset,amount,destination]): return _transaction.cached
 	var definition:=asset_definition(asset)
-	if definition==null or amount<=0 or amount>definition.stack_limit or destination not in ["bag","claim"]: return _finish({"ok":false,"error":"request"})
-	if not db.query_with_bindings("UPDATE exchange_assets SET free=free-? WHERE account_id=? AND asset_id=? AND free>=?;",[amount,_account,asset,amount]): return _abort("storage")
-	if not db.query("SELECT changes() AS n;"): return _abort("storage")
-	if int(db.query_result[0].n)!=1: return _finish({"ok":false,"error":"funds"})
+	if definition==null or amount<=0 or amount>definition.stack_limit or destination not in ["bag","claim"]: return _transaction.commit({"ok":false,"error":"request"})
+	if not db.query_with_bindings("UPDATE exchange_assets SET free=free-? WHERE account_id=? AND asset_id=? AND free>=?;",[amount,_transaction.account_id,asset,amount]): return _transaction.rollback("storage")
+	if not db.query("SELECT changes() AS n;"): return _transaction.rollback("storage")
+	if int(db.query_result[0].n)!=1: return _transaction.commit({"ok":false,"error":"funds"})
 	var item:=ItemInstance.create(definition,character_id,[]);item.amount=amount
 	if destination=="bag":
 		var inserted:=ItemStoreSqlite.new(db).receive_item_in_transaction(item)
-		if not inserted.ok: return _abort(str(inserted.error))
+		if not inserted.ok: return _transaction.rollback(str(inserted.error))
 	else:
-		if not db.query_with_bindings("INSERT INTO item_instances VALUES(?,?,?,?,?,?,?,?);",[item.uid,character_id,asset,amount,0,"[]","[]",0]): return _abort("storage")
-		if not db.query_with_bindings("INSERT INTO item_custody(uid,location,owner_id,position) VALUES(?,'account_claim',?,-1);",[item.uid,_account]): return _abort("storage")
-	return _finish({"ok":true,"uid":item.uid,"amount":amount})
+		if not db.query_with_bindings("INSERT INTO item_instances VALUES(?,?,?,?,?,?,?,?);",[item.uid,character_id,asset,amount,0,"[]","[]",0]): return _transaction.rollback("storage")
+		if not db.query_with_bindings("INSERT INTO item_custody(uid,location,owner_id,position) VALUES(?,'account_claim',?,-1);",[item.uid,_transaction.account_id]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"uid":item.uid,"amount":amount})
 ## Only order transactions may reserve/release. These are not exposed UI commands.
 func reserve_in_transaction(account: int,asset: String,amount: int,pending: int=0) -> Dictionary:
 	if amount<=0 or amount>WalletStoreSqlite.MAX_YANG: return {"ok":false,"error":"request"}
@@ -116,27 +129,27 @@ func _apply_fill(order: Dictionary,base: int,yang: int) -> bool:
 	return db.query_with_bindings("UPDATE exchange_orders SET remaining=remaining-?,reserved_amount=reserved_amount-?,received=received+?,revision=revision+1,status=CASE WHEN remaining=? THEN 'filled' ELSE 'active' END WHERE order_id=?;",[base,reserve,received,base,order.order_id])
 func place_order(character_id: int,p: Dictionary,pending: Dictionary) -> Dictionary:
 	if not valid_order(p): return {"ok":false,"error":"request_or_overflow"}
-	if not _open_command(character_id,p.command_id,"exchange.order",[p.have_asset,p.want_asset,int(p.quantity),int(p.price_num),int(p.price_den)]): return _cached
+	if not _transaction.begin(character_id,p.command_id,"exchange.order",[p.have_asset,p.want_asset,int(p.quantity),int(p.price_num),int(p.price_den)]): return _transaction.cached
 	var base: String=p.want_asset if p.have_asset=="yang" else p.have_asset
 	var side: String="buy" if p.have_asset=="yang" else "sell"
-	if not db.query_with_bindings("SELECT COUNT(*) AS n FROM exchange_orders WHERE status='active' AND account_id=?;",[_account]): return _abort("storage")
-	if int(db.query_result[0].n)>=MAX_ACCOUNT_ORDERS: return _finish({"ok":false,"error":"order_limit"})
-	if not db.query_with_bindings("SELECT COUNT(*) AS n FROM exchange_orders WHERE status='active' AND base_asset=?;",[base]): return _abort("storage")
-	if int(db.query_result[0].n)>=MAX_PAIR_ORDERS: return _finish({"ok":false,"error":"book_full"})
+	if not db.query_with_bindings("SELECT COUNT(*) AS n FROM exchange_orders WHERE status='active' AND account_id=?;",[_transaction.account_id]): return _transaction.rollback("storage")
+	if int(db.query_result[0].n)>=MAX_ACCOUNT_ORDERS: return _transaction.commit({"ok":false,"error":"order_limit"})
+	if not db.query_with_bindings("SELECT COUNT(*) AS n FROM exchange_orders WHERE status='active' AND base_asset=?;",[base]): return _transaction.rollback("storage")
+	if int(db.query_result[0].n)>=MAX_PAIR_ORDERS: return _transaction.commit({"ok":false,"error":"book_full"})
 	var divisor:=gcd(int(p.price_num),int(p.price_den));var numerator:=int(p.price_num)/divisor;var denominator:=int(p.price_den)/divisor
 	var reserve:=int(p.quantity)/denominator*numerator if side=="buy" else int(p.quantity)
 	var touched: Dictionary={}
-	if p.have_asset=="yang" and not _flush_pending(_account,pending,touched): return _abort("storage")
-	var reserved:=reserve_in_transaction(_account,p.have_asset,reserve)
-	if not reserved.ok: return _abort(str(reserved.error))
+	if p.have_asset=="yang" and not _flush_pending(_transaction.account_id,pending,touched): return _transaction.rollback("storage")
+	var reserved:=reserve_in_transaction(_transaction.account_id,p.have_asset,reserve)
+	if not reserved.ok: return _transaction.rollback(str(reserved.error))
 	var order_id:=Crypto.new().generate_random_bytes(16).hex_encode()
-	if not db.query_with_bindings("INSERT INTO exchange_orders(order_id,account_id,base_asset,quote_asset,side,quantity,remaining,price_num,price_den,reserved_amount,status) VALUES(?,?,?,'yang',?,?,?,?,?,?,'active');",[order_id,_account,base,side,int(p.quantity),int(p.quantity),numerator,denominator,reserve]): return _abort("storage")
-	if not db.query_with_bindings("SELECT * FROM exchange_orders WHERE order_id=?;",[order_id]): return _abort("storage")
+	if not db.query_with_bindings("INSERT INTO exchange_orders(order_id,account_id,base_asset,quote_asset,side,quantity,remaining,price_num,price_den,reserved_amount,status) VALUES(?,?,?,'yang',?,?,?,?,?,?,'active');",[order_id,_transaction.account_id,base,side,int(p.quantity),int(p.quantity),numerator,denominator,reserve]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("SELECT * FROM exchange_orders WHERE order_id=?;",[order_id]): return _transaction.rollback("storage")
 	var taker: Dictionary=db.query_result[0].duplicate(true)
-	if not db.query_with_bindings("SELECT * FROM exchange_orders WHERE base_asset=? AND quote_asset='yang' AND side<>? AND status='active' AND account_id<>?;",[base,side,_account]): return _abort("storage")
+	if not db.query_with_bindings("SELECT * FROM exchange_orders WHERE base_asset=? AND quote_asset='yang' AND side<>? AND status='active' AND account_id<>?;",[base,side,_transaction.account_id]): return _transaction.rollback("storage")
 	var makers:=db.query_result.duplicate(true)
 	makers.sort_custom(func(a: Dictionary,b: Dictionary)->bool:return price_before(a,b,side=="buy"))
-	var affected: Dictionary={_account:true}
+	var affected: Dictionary={_transaction.account_id:true}
 	for maker: Dictionary in makers:
 		var left:=int(maker.price_num)*denominator;var right:=numerator*int(maker.price_den)
 		if (side=="buy" and left>right) or (side=="sell" and left<right): break
@@ -146,31 +159,31 @@ func place_order(character_id: int,p: Dictionary,pending: Dictionary) -> Diction
 		var yang:=fill/int(maker.price_den)*int(maker.price_num)
 		# The validated taker reserve / maker reserve bounds prove this multiplication
 		# fits MAX_YANG; still reject before ledger writes if the price-side bound fails.
-		if yang<=0 or yang>WalletStoreSqlite.MAX_YANG: return _abort("overflow")
+		if yang<=0 or yang>WalletStoreSqlite.MAX_YANG: return _transaction.rollback("overflow")
 		var buyer: Dictionary=taker if side=="buy" else maker
 		var seller: Dictionary=maker if side=="buy" else taker
 		var buyer_reserve:=fill/int(buyer.price_den)*int(buyer.price_num)
-		if not _move_reserved(int(buyer.account_id),"yang",buyer_reserve,yang,pending,touched) or not _move_reserved(int(seller.account_id),base,fill,fill,pending,touched): return _abort("storage")
-		if not _credit_asset(int(buyer.account_id),base,fill,pending,touched) or not _credit_asset(int(seller.account_id),"yang",yang,pending,touched): return _abort("storage")
-		if not _apply_fill(maker,fill,yang) or not _apply_fill(taker,fill,yang): return _abort("storage")
-		if not db.query_with_bindings("INSERT INTO exchange_fills(maker_id,taker_id,base_quantity,yang_amount) VALUES(?,?,?,?);",[maker.order_id,taker.order_id,fill,yang]): return _abort("storage")
+		if not _move_reserved(int(buyer.account_id),"yang",buyer_reserve,yang,pending,touched) or not _move_reserved(int(seller.account_id),base,fill,fill,pending,touched): return _transaction.rollback("storage")
+		if not _credit_asset(int(buyer.account_id),base,fill,pending,touched) or not _credit_asset(int(seller.account_id),"yang",yang,pending,touched): return _transaction.rollback("storage")
+		if not _apply_fill(maker,fill,yang) or not _apply_fill(taker,fill,yang): return _transaction.rollback("storage")
+		if not db.query_with_bindings("INSERT INTO exchange_fills(maker_id,taker_id,base_quantity,yang_amount) VALUES(?,?,?,?);",[maker.order_id,taker.order_id,fill,yang]): return _transaction.rollback("storage")
 		taker.remaining=int(taker.remaining)-fill
 		affected[int(maker.account_id)]=true
 		if int(taker.remaining)==0: break
 	return _finish_exchange({"ok":true,"order_id":order_id,"remaining":int(taker.remaining),"affected_accounts":affected.keys()},touched)
 func cancel_order(character_id: int,command_id: String,order_id: String,revision: int,pending: Dictionary) -> Dictionary:
-	if not _open_command(character_id,command_id,"exchange.cancel",[order_id,revision]): return _cached
-	if not db.query_with_bindings("SELECT * FROM exchange_orders WHERE order_id=? AND account_id=?;",[order_id,_account]): return _abort("storage")
-	if db.query_result.is_empty(): return _finish({"ok":false,"error":"owner"})
+	if not _transaction.begin(character_id,command_id,"exchange.cancel",[order_id,revision]): return _transaction.cached
+	if not db.query_with_bindings("SELECT * FROM exchange_orders WHERE order_id=? AND account_id=?;",[order_id,_transaction.account_id]): return _transaction.rollback("storage")
+	if db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"owner"})
 	var order: Dictionary=db.query_result[0].duplicate(true)
-	if int(order.revision)!=revision: return _finish({"ok":false,"error":"stale"})
-	if order.status!="active": return _finish({"ok":false,"error":"closed"})
+	if int(order.revision)!=revision: return _transaction.commit({"ok":false,"error":"stale"})
+	if order.status!="active": return _transaction.commit({"ok":false,"error":"closed"})
 	var touched: Dictionary={}
 	var asset: String="yang" if order.side=="buy" else order.base_asset
-	if asset=="yang" and not _flush_pending(_account,pending,touched): return _abort("storage")
-	if not release_in_transaction(_account,asset,int(order.reserved_amount)): return _abort("storage")
-	if not db.query_with_bindings("UPDATE exchange_orders SET remaining=0,reserved_amount=0,status='cancelled',revision=revision+1 WHERE order_id=?;",[order_id]): return _abort("storage")
-	return _finish_exchange({"ok":true,"order_id":order_id,"refunded":int(order.reserved_amount),"affected_accounts":[_account]},touched)
+	if asset=="yang" and not _flush_pending(_transaction.account_id,pending,touched): return _transaction.rollback("storage")
+	if not release_in_transaction(_transaction.account_id,asset,int(order.reserved_amount)): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE exchange_orders SET remaining=0,reserved_amount=0,status='cancelled',revision=revision+1 WHERE order_id=?;",[order_id]): return _transaction.rollback("storage")
+	return _finish_exchange({"ok":true,"order_id":order_id,"refunded":int(order.reserved_amount),"affected_accounts":[_transaction.account_id]},touched)
 func orders_snapshot(character_id: int,pending_yang: int=0) -> Dictionary:
 	var snapshot:=ledger(character_id)
 	if not snapshot.ok: return snapshot
@@ -196,7 +209,7 @@ func _finish_exchange(result: Dictionary,touched: Dictionary) -> Dictionary:
 	var wallets:=WalletStoreSqlite.new(db)
 	for account: int in touched:
 		var wallet:=wallets.load_wallet(account)
-		if not wallet.ok: return _abort("storage")
+		if not wallet.ok: return _transaction.rollback("storage")
 		states.append({"account_id":account,"balance":int(wallet.balance),"reserved_yang":int(wallet.reserved_yang)})
 	result.wallet_states=states
-	return _finish(result)
+	return _transaction.commit(result)
