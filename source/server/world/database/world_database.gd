@@ -141,6 +141,21 @@ func storage_snapshot(owner_id: int) -> Dictionary:
 	if db == null: return {"ok":false,"error":"storage"}
 	return AccountStorageSqlite.new(db).snapshot(owner_id)
 
+func market_snapshot(character_id: int) -> Dictionary:
+	return MarketStoreSqlite.new(db).mine(character_id)
+
+func market_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
+	var market := MarketStoreSqlite.new(db)
+	var command_id: String = payload.get("command_id","")
+	match action:
+		"list": return market.list_item(character_id,command_id,payload.uid,int(payload.revision),int(payload.position),int(payload.price))
+		"cancel": return market.cancel_offer(character_id,command_id,payload.offer_id,int(payload.revision))
+		"claim": return market.claim_item(character_id,command_id,payload.uid,int(payload.revision))
+		"configure": return market.configure(character_id,command_id,int(payload.revision),payload.name,payload.status)
+		"edit": return market.edit_offer(character_id,command_id,payload.offer_id,int(payload.revision),int(payload.position),int(payload.price))
+		"receipt": return market.receipt(character_id,command_id)
+	return {"ok":false,"error":"request"}
+
 func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> Dictionary:
 	if db == null: return {"ok":false,"error":"storage"}
 	return AccountStorageSqlite.new(db).transfer(owner_id,uid,revision,source,destination,position)

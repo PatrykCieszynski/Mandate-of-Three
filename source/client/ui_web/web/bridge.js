@@ -99,3 +99,12 @@ export function reportInteractiveRegions(bridge, elements) {
     return { refresh: schedule, dispose() { disposed = true; if (frame)
             cancelAnimationFrame(frame); frame = 0; observer.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); } };
 }
+// A narrow presentation lease: text fields capture keyboard, clicks elsewhere do not.
+export function reportTextFocus(bridge) {
+    const report = () => bridge.event('ui.text_focus', { active: document.activeElement instanceof HTMLElement && document.activeElement.matches('[data-ui-text]') && document.activeElement.getClientRects().length > 0 });
+    const leave = () => bridge.event('ui.text_focus', { active: false });
+    document.addEventListener('focusin', report);
+    document.addEventListener('focusout', report);
+    window.addEventListener('blur', leave);
+    return { dispose() { document.removeEventListener('focusin', report); document.removeEventListener('focusout', report); window.removeEventListener('blur', leave); leave(); } };
+}

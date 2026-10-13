@@ -44,6 +44,15 @@ func _ready() -> void:
 	assert(listed.ok and market.list_item(first,"list_a",item.uid,item.revision,0,100)==listed,"retry returns same receipt, not another listing")
 	assert(market.list_item(first,"list_a",item.uid,item.revision,5,100).error=="command_conflict")
 	assert(items.inventory(first).items.is_empty() and market.mine(alt).offers.size()==1)
+	assert(market.configure(alt,"rename",0,"Bread Shop","paused").ok)
+	assert(market.configure(first,"stale_name",0,"Wrong","active").error=="stale")
+	assert(market.mine(first).name=="Bread Shop" and market.mine(first).status=="paused")
+	for fault: String in ["BEFORE DELETE ON shop_cells","BEFORE UPDATE ON item_custody","BEFORE UPDATE ON shop_offers","BEFORE INSERT ON shop_cells","BEFORE UPDATE ON item_instances","BEFORE INSERT ON market_commands"]:
+		assert(db.query("CREATE TEMP TRIGGER fail_edit %s BEGIN SELECT RAISE(ABORT,'edit stage fault'); END;" % fault))
+		assert(market.edit_offer(alt,"edit_fault",listed.offer_id,0,12,321).error=="storage")
+		assert(market.mine(first).offers[0].position==0 and market.mine(first).offers[0].price==100 and market.mine(first).offers[0].revision==0)
+		assert(db.query("DROP TRIGGER fail_edit;"))
+
 	assert(items.change_equipment(first,item.uid,item.revision,"equip").error=="owner","escrow cannot be equipped")
 	assert(storage.transfer(first,item.uid,item.revision,"inventory","storage").error=="owner","escrow cannot also enter Storage")
 	# Direct SQL bypass cannot introduce another location, nor commit an unplaced item.

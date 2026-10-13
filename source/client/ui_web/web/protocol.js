@@ -1,3 +1,4 @@
+import { isMarketSnapshot } from './screens/market/market-model.js';
 import { isItemTooltipDetails } from './game-ui/items/item-tooltip-model.js';
 import { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES, STORAGE_CAPACITY } from './screens/storage/storage-model.js';
 export const VERSION = 1;
@@ -41,10 +42,10 @@ export function isCommandResult(result) {
         (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message) {
-    return !message.id && ['ui.snapshot', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
+    return !message.id && ['ui.snapshot', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
 }
 export function isDomainName(value) {
-    return ['upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
+    return ['market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
 }
 export function isRawDomainState(value) {
     return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -62,7 +63,7 @@ function finiteRange(value, min, max) {
 function integerRange(value, min, max = Number.MAX_SAFE_INTEGER) {
     return finiteRange(value, min, max) && Number.isSafeInteger(value);
 }
-function isItem(value) {
+export function isItem(value) {
     return isObject(value) && typeof value.id === 'string' && integerRange(value.revision, 0) &&
         typeof value.name === 'string' && typeof value.icon_id === 'string' && integerRange(value.height, 1, MAX_ITEM_HEIGHT) &&
         integerRange(value.quantity, 1) && (!('description' in value) || typeof value.description === 'string') &&
@@ -163,6 +164,7 @@ export function isValidDomainValue(domain, value) {
     if (!isObject(value))
         return false;
     switch (domain) {
+        case 'market': return isMarketSnapshot(value);
         case 'upgrade': return isUpgrade(value);
         case 'npc_targets': return isNpcTargets(value);
         case 'shop': return isShop(value);
