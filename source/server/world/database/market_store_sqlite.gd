@@ -71,7 +71,10 @@ func _abort(error: String) -> Dictionary:
 	db.query("ROLLBACK;")
 	return {"ok":false,"error":error}
 
+var committed := false
+
 func _open_command(character_id: int, command_id: String, kind: String, args: Array) -> bool:
+	committed = false
 	_cached = {}
 	var valid_command := not command_id.is_empty() and command_id.length()<=96
 	for character: String in command_id:
@@ -104,6 +107,7 @@ func _open_command(character_id: int, command_id: String, kind: String, args: Ar
 func _finish(result: Dictionary) -> Dictionary:
 	if not db.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[_account,_command,_kind,_request,JSON.stringify(result)]): return _abort("storage")
 	if not db.query("COMMIT;"): return _abort("storage")
+	committed = true
 	return result
 
 func _shop(account_id: int) -> int:
@@ -242,3 +246,42 @@ func edit_offer(character_id: int, command_id: String, offer_id: String, revisio
 		if not db.query_with_bindings("INSERT INTO shop_cells(shop_id,position,item_uid) VALUES(?,?,?);",[offer.shop_id,cell,offer.item_uid]): return _abort("storage")
 	if position!=int(offer.position) and not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[offer.item_uid]): return _abort("storage")
 	return _finish({"ok":true,"revision":revision+1})
+
+
+## Same transaction owns both wallets, live offer removal and UID transfer.
+func purchase(character_id: int, command_id: String, shop_id: int, offer_id: String, revision: int, price: int, pending: Dictionary) -> Dictionary:
+	if not _open_command(character_id,command_id,"buy",[character_id,shop_id,offer_id,revision,price]): return _cached
+	if not db.query_with_bindings("SELECT o.*,s.status,i.definition_id FROM shop_offers o JOIN account_shops s ON s.shop_id=o.shop_id JOIN item_instances i ON i.uid=o.item_uid WHERE o.offer_id=? AND o.shop_id=?;",[offer_id,shop_id]): return _abort("storage")
+	if db.query_result.is_empty(): return _finish({"ok":false,"error":"unavailable"})
+	var offer: Dictionary = db.query_result[0].duplicate(true)
+	var seller := int(offer.account_id)
+	if seller==_account: return _finish({"ok":false,"error":"self_trade"})
+	if offer.status!="active": return _finish({"ok":false,"error":"paused"})
+	if int(offer.revision)!=revision or int(offer.price_yang)!=price: return _finish({"ok":false,"error":"stale"})
+	var definition := ItemDefinitions.get_definition(StringName(offer.definition_id))
+	if definition==null: return _finish({"ok":false,"error":"unknown_definition"})
+	var receiving := ItemStoreSqlite.new(db).resolve_inventory_position(character_id,definition.inventory_height,-1)
+	if not receiving.ok: return _finish({"ok":false,"error":receiving.error})
+	var wallets := WalletStoreSqlite.new(db)
+	var spent := wallets.spend_in_transaction(_account,int(pending.get(_account,0)),price)
+	if not spent.ok: return _abort(str(spent.error))
+	var credited := wallets.credit_in_transaction(seller,int(pending.get(seller,0)),price)
+	if not credited.ok: return _abort(str(credited.error))
+	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _abort("storage")
+	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id,offer.item_uid]): return _abort("storage")
+	if not db.query_with_bindings("UPDATE item_custody SET location='bag',owner_id=?,position=?,container_id=0,offer_id=NULL WHERE uid=?;",[character_id,receiving.position,offer.item_uid]): return _abort("storage")
+	if not db.query_with_bindings("DELETE FROM shop_offers WHERE offer_id=?;",[offer_id]): return _abort("storage")
+	return _finish({"ok":true,"uid":offer.item_uid,"buyer_account":_account,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_balance":int(credited.balance),"shop_id":int(offer.shop_id)})
+
+## Public read has no claims, credentials or offline player/session dependency.
+func visit(shop_id: int) -> Dictionary:
+	if not db.query_with_bindings("SELECT shop_id,display_name AS name,status,revision FROM account_shops WHERE shop_id=?;",[shop_id]): return {"ok":false,"error":"storage"}
+	if db.query_result.is_empty(): return {"ok":false,"error":"unavailable"}
+	var result: Dictionary = db.query_result[0].duplicate(true)
+	result.merge({"ok":true,"columns":COLUMNS,"rows":ROWS,"offers":[],"claims":[]})
+	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.position,o.price_yang,o.revision AS offer_revision FROM shop_offers o JOIN item_custody c ON c.uid=o.item_uid JOIN item_instances i ON i.uid=o.item_uid WHERE o.shop_id=? ORDER BY o.position;",[shop_id]): return {"ok":false,"error":"storage"}
+	for row: Dictionary in db.query_result.duplicate(true):
+		var view := _item_view(row)
+		if view.is_empty(): return {"ok":false,"error":"unknown_definition"}
+		result.offers.append({"offer_id":row.offer_id,"position":row.position,"price":row.price_yang,"revision":row.offer_revision,"item":view})
+	return result

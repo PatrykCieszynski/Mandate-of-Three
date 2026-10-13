@@ -17,6 +17,7 @@ static func valid(action: String, p: Dictionary) -> bool:
 	var fields: Array
 	match action:
 		"list": fields = ["command_id","uid","revision","position","price"]
+		"buy": fields = ["command_id","shop_id","offer_id","revision","price"]
 		"edit": fields = ["command_id","offer_id","revision","position","price"]
 		"cancel": fields = ["command_id","offer_id","revision"]
 		"claim": fields = ["command_id","uid","revision"]
@@ -24,6 +25,7 @@ static func valid(action: String, p: Dictionary) -> bool:
 		"receipt": fields = ["command_id"]
 		_: return false
 	if p.size()!=fields.size() or not p.has_all(fields): return false
+	if p.has("shop_id") and (not integer(p.shop_id) or p.shop_id<=0): return false
 	if p.has("uid") and (not p.uid is String or not ItemInstance.valid_uid(p.uid)): return false
 	if p.has("offer_id") and (not p.offer_id is String or not ItemInstance.valid_uid(p.offer_id)): return false
 	if p.has("revision") and not integer(p.revision): return false
@@ -42,8 +44,14 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	if owner<=0: return {"ok":false,"error":"owner"}
 	if action=="open": return {"ok":true}
 	var result := services.economy().market_command(owner,action,payload)
-	if result.ok and action in ["list","claim"]:
+	if result.ok and action in ["list","claim","buy"]:
 		_world.inventory_endpoint.accept_committed_change(peer_id)
+	if result.ok and action=="buy":
+		for observer: int in _world.characters:
+			var account := services.economy().wallet_account_id(_owner(observer))
+			if account in [int(result.buyer_account),int(result.seller_account)]:
+				_world.currency_endpoint.accept_committed_change(observer)
+				_publish(observer)
 	return result
 
 func _publish(peer_id: int) -> void:
