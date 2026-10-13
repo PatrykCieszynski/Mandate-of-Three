@@ -1,0 +1,48 @@
+[gd_resource type="Terrain3DMaterial" format=3 uid="uid://ce1n10j480eag"]
+
+[sub_resource type="Gradient" id="Gradient_x1356"]
+offsets = PackedFloat32Array(0.2, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_6ldxl"]
+noise_type = 2
+frequency = 0.03
+cellular_jitter = 3.0
+cellular_return_type = 0
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 50.0
+domain_warp_fractal_type = 2
+domain_warp_fractal_lacunarity = 1.5
+domain_warp_fractal_gain = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_f3xm0"]
+noise = SubResource("FastNoiseLite_6ldxl")
+color_ramp = SubResource("Gradient_x1356")
+seamless = true
+
+[resource]
+_shader_parameters = {
+&"auto_base_texture": 3,
+&"auto_height_reduction": null,
+&"auto_overlay_texture": 0,
+&"auto_slope": 4.0,
+&"bias_distance": null,
+&"blend_sharpness": 0.75,
+&"depth_blur": null,
+&"enable_macro_variation": null,
+&"enable_projection": null,
+&"flat_terrain_normals": null,
+&"macro_variation1": null,
+&"macro_variation2": null,
+&"macro_variation_slope": null,
+&"mipmap_bias": null,
+&"noise1_angle": null,
+&"noise1_offset": null,
+&"noise1_scale": null,
+&"noise2_scale": null,
+&"noise_texture": SubResource("NoiseTexture2D_f3xm0"),
+&"projection_threshold": null
+}
+world_background = 0
+auto_shader = true

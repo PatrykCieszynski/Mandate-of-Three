@@ -1,6 +1,6 @@
 # Accepted project direction
 
-Current policy as of 2026-10-11. This file describes accepted scope and next work;
+Current policy as of 2026-10-13. This file describes accepted scope and next work;
 [decision history](history/project-direction-2026-10-09.md) records prior stages.
 
 ## Keep the technical foundation small
@@ -92,6 +92,23 @@ and intersection foam. It follows V2 sky/sun/moon lighting; the coastline remain
 graybox and swimming is deferred.
 The existing First Region graybox and assets remain the basis for visual tuning.
 Server/headless composition omits the visual environment nodes.
+
+[Visual V4](visual-upgrade-v4-terrain3d.md) accepts Terrain3D 1.0.2 stable on
+Godot 4.7.2, Forward+/Vulkan. The persisted 64x64 prototype, collision/movement,
+navigation and editor workflow passed the adoption gate. Integrate the verified
+foundation locally; actual First Region terrain authoring remains manual work
+for the user and is deferred until they have time. Do not regenerate their saved
+terrain edits or treat the workflow spike as a finished map conversion.
+
+Remaining visual work, in the accepted order:
+
+1. V4 Terrain: manually author the intended map with Terrain3D, then integrate it.
+2. V5 Vegetation + world dressing.
+3. V7 Night dressing + local atmosphere.
+4. V8 Final color grading / polish.
+
+These are future stages; vegetation, night dressing and final grading do not
+start as part of the V4 foundation merge.
 
 ## Next gameplay milestones
 

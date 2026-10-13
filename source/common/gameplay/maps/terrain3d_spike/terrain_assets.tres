@@ -1,0 +1,71 @@
+[gd_resource type="Terrain3DAssets" format=3 uid="uid://d37dp6oyad86y"]
+
+[ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/grass_albedo_height.res" id="1_hxt5w"]
+[ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/grass_normal_roughness.res" id="2_102kr"]
+[ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/dirt_albedo_height.res" id="3_7cvqh"]
+[ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/dirt_normal_roughness.res" id="4_l5lah"]
+[ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/path_albedo_height.res" id="5_gk1et"]
+[ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/path_normal_roughness.res" id="6_bn1yk"]
+[ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/rock_albedo_height.res" id="7_f3ewi"]
+[ext_resource type="Texture2D" path="res://source/common/gameplay/maps/terrain3d_spike/materials/rock_normal_roughness.res" id="8_31rbu"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6wbf6"]
+transparency = 4
+cull_mode = 2
+vertex_color_use_as_albedo = true
+backlight_enabled = true
+backlight = Color(0.5, 0.5, 0.5, 1)
+distance_fade_mode = 1
+distance_fade_min_distance = 128.0
+distance_fade_max_distance = 96.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_kdtia"]
+generated_type = 1
+height_offset = 0.5
+material_override = SubResource("StandardMaterial3D_6wbf6")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 128.0
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_so56f"]
+name = "Grass"
+albedo_texture = ExtResource("1_hxt5w")
+normal_texture = ExtResource("2_102kr")
+normal_depth = 0.35
+uv_scale = 0.22
+detiling_rotation = 0.12
+detiling_shift = 0.15
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_txs0m"]
+name = "Dirt"
+id = 1
+albedo_texture = ExtResource("3_7cvqh")
+normal_texture = ExtResource("4_l5lah")
+normal_depth = 0.35
+uv_scale = 0.22
+detiling_rotation = 0.12
+detiling_shift = 0.15
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_hqihr"]
+name = "Path"
+id = 2
+albedo_texture = ExtResource("5_gk1et")
+normal_texture = ExtResource("6_bn1yk")
+normal_depth = 0.35
+uv_scale = 0.22
+detiling_rotation = 0.12
+detiling_shift = 0.15
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_at8q4"]
+name = "Rock"
+id = 3
+albedo_texture = ExtResource("7_f3ewi")
+normal_texture = ExtResource("8_31rbu")
+normal_depth = 0.35
+uv_scale = 0.22
+detiling_rotation = 0.12
+detiling_shift = 0.15
+
+[resource]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_kdtia")])
+texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_so56f"), SubResource("Terrain3DTextureAsset_txs0m"), SubResource("Terrain3DTextureAsset_hqihr"), SubResource("Terrain3DTextureAsset_at8q4")])

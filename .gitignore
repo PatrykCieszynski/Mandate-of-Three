@@ -48,6 +48,9 @@ __pycache__/
 # Pinned CEF release installed by tools/cef_client/setup.py (native payload, not source)
 /addons/godot_cef/
 
+# Official pinned Terrain3D payload installed by tools/terrain3d/setup.py
+/addons/terrain_3d/
+
 # TypeScript compiler/test dependencies and emitted declaration/test artifacts
 /source/client/ui_web/node_modules/
 /source/client/ui_web/web/**/*.d.ts
