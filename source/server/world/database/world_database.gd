@@ -21,6 +21,7 @@ const WALLET_SAVE_SECONDS: float = 30.0
 var runtime_wallets: Dictionary[int, Dictionary] = {}
 var _wallet_accounts: Dictionary[int, int] = {}
 var wallet_ready := false
+var market_rejected_commands := MarketRejectedCommands.new()
 
 func wallet_account_id(character_id: int) -> int:
 	if not _wallet_accounts.has(character_id) and store != null:
@@ -149,7 +150,7 @@ func storage_snapshot(owner_id: int) -> Dictionary:
 	return AccountStorageSqlite.new(db).snapshot(owner_id)
 
 func market_snapshot(character_id: int) -> Dictionary:
-	return MarketStoreSqlite.new(db).mine(character_id)
+	return MarketStoreSqlite.new(db,market_rejected_commands).mine(character_id)
 
 signal market_account_changed(account_id: int)
 func market_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
@@ -162,11 +163,11 @@ func market_command(character_id: int, action: String, payload: Dictionary) -> D
 	return result
 
 func _perform_market_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
-	var market := MarketStoreSqlite.new(db)
+	var market := MarketStoreSqlite.new(db,market_rejected_commands)
 	var command_id: String = payload.get("command_id","")
 	match action:
 		"order", "cancel_order":
-			var exchange:=ExchangeStoreSqlite.new(db)
+			var exchange:=ExchangeStoreSqlite.new(db,market_rejected_commands)
 			var pending: Dictionary={}
 			for account: int in runtime_wallets: pending[account]=int(runtime_wallets[account].pending_currency_delta)
 			var result:=exchange.place_order(character_id,payload,pending) if action=="order" else exchange.cancel_order(character_id,command_id,payload.order_id,int(payload.revision),pending)
@@ -176,8 +177,8 @@ func _perform_market_command(character_id: int, action: String, payload: Diction
 					if runtime_wallets.has(account):
 						runtime_wallets[account]={"wallet_balance":int(wallet.balance),"reserved_yang":int(wallet.reserved_yang),"pending_currency_delta":0};dirty_wallet.erase(account)
 			return result
-		"deposit": return ExchangeStoreSqlite.new(db).deposit(character_id,command_id,payload.uid,int(payload.revision),int(payload.amount),payload.source)
-		"withdraw": return ExchangeStoreSqlite.new(db).withdraw(character_id,command_id,payload.asset_id,int(payload.amount),payload.destination)
+		"deposit": return ExchangeStoreSqlite.new(db,market_rejected_commands).deposit(character_id,command_id,payload.uid,int(payload.revision),int(payload.amount),payload.source)
+		"withdraw": return ExchangeStoreSqlite.new(db,market_rejected_commands).withdraw(character_id,command_id,payload.asset_id,int(payload.amount),payload.destination)
 		"list": return market.list_item(character_id,command_id,payload.uid,int(payload.revision),int(payload.position),int(payload.price))
 		"cancel": return market.cancel_offer(character_id,command_id,payload.offer_id,int(payload.revision))
 		"claim": return market.claim_item(character_id,command_id,payload.uid,int(payload.revision))
@@ -275,7 +276,7 @@ func open_database() -> void:
 
 
 func close_database() -> void:
-	# Plugin doesn’t always expose close explicitly; if it does, call it.
+	# Plugin doesnâ€™t always expose close explicitly; if it does, call it.
 	# Otherwise let refcount drop; but prefer close if available.
 	flush_character()
 
@@ -314,7 +315,7 @@ func save_guild(g: Guild) -> void:
 
 
 ## Flush every still-connected player to disk. Called from the periodic save
-## tick AND from the console's `save` / `shutdown` commands — previously the
+## tick AND from the console's `save` / `shutdown` commands â€” previously the
 ## console called a method that didn't exist, so shutdowns silently lost
 ## anyone who hadn't disconnected yet. Returns the count actually saved.
 func save_all_connected(connected_players: Dictionary) -> int:
@@ -335,7 +336,7 @@ func save_all_connected(connected_players: Dictionary) -> int:
 ##
 ## CRITICAL: checkpoint the WAL into the main .db FIRST. In WAL mode recent writes
 ## live in the -wal sidecar until checkpointed, and this backup byte-copies ONLY the
-## .db — so without the checkpoint every backup silently omitted everything since the
+## .db â€” so without the checkpoint every backup silently omitted everything since the
 ## last auto-checkpoint (observed live: a 332 KB .db beside a 4 MB uncheckpointed
 ## -wal, i.e. hours of progress missing from every "successful" backup). TRUNCATE
 ## also folds the -wal back to ~0, so the live .db stays current and the -wal can't
@@ -397,9 +398,9 @@ func market_query(character_id: int, action: String, payload: Dictionary) -> Dic
 	match action:
 		"exchange":
 			var account:=wallet_account_id(character_id)
-			var snapshot:=ExchangeStoreSqlite.new(db).orders_snapshot(character_id,int(runtime_wallets.get(account,{}).get("pending_currency_delta",0)))
+			var snapshot:=ExchangeStoreSqlite.new(db,market_rejected_commands).orders_snapshot(character_id,int(runtime_wallets.get(account,{}).get("pending_currency_delta",0)))
 			return snapshot
 		"catalog": return MarketSearchSqlite.catalog(payload.query)
 		"search": return MarketSearchSqlite.new(db).search(payload)
-		"visit": return MarketStoreSqlite.new(db).visit(int(payload.shop_id))
+		"visit": return MarketStoreSqlite.new(db,market_rejected_commands).visit(int(payload.shop_id))
 	return {"ok":false,"error":"request"}

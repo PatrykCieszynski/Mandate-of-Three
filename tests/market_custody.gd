@@ -104,6 +104,18 @@ func _ready() -> void:
 		assert(market.cancel_offer(first,"reject_%d" % request,"%032x" % 999999,0).error=="unavailable")
 	assert(db.query("SELECT COUNT(*) AS n FROM market_commands;"));var rejected_receipts:=int(db.query_result[0].n)-before_receipts
 	print("MARKET_REJECT_BENCH requests=1024 durable_rows=",rejected_receipts," elapsed_ms=",(Time.get_ticks_usec()-spam_started)/1000.0)
+	assert(rejected_receipts==0,"rejected commands do not grow durable receipts")
+	assert(market.rejected.size(store.resolve_account_id(first))<=MarketRejectedCommands.MAX_PER_ACCOUNT,"one account cannot exhaust the negative-response cache")
+	assert(market.cancel_offer(first,"reject_1023","%032x" % 999999,0).error=="unavailable")
+	assert(market.cancel_offer(first,"reject_1023","%032x" % 999998,0).error=="command_conflict")
+	assert(MarketStoreSqlite.new(db,market.rejected).receipt(first,"reject_1023").error=="unavailable","shared cache supports fresh facade/store instances")
+	var negatives:=MarketRejectedCommands.new()
+	for account: int in 100:
+		for id: int in 100: negatives.remember(account+1,str(id),"cancel","[]",{"ok":false,"error":"unavailable"},0)
+	assert(negatives.size()==MarketRejectedCommands.MAX_ACCOUNTS*MarketRejectedCommands.MAX_PER_ACCOUNT,"global and per-account cache bounds")
+	assert(negatives.lookup(100,"99","cancel","[]",MarketRejectedCommands.TTL_MS).is_empty(),"negative response expires without deleting durable success")
+	assert(MarketStoreSqlite.new(db,negatives).claim_item(alt,"claim_a",item.uid,claim.revision)==received,"success replay survives negative-cache eviction/recreation")
+	assert(MarketStoreSqlite.new(db,negatives).claim_item(alt,"claim_a",item.uid,claim.revision+1).error=="command_conflict","durable fingerprint remains authoritative")
 	assert(db.close_db())
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path))
 	print("MARKET_CUSTODY_OK migration/retry/rollback, SQL single location, escrow/claims, alt ownership, durable receipts")

@@ -1,10 +1,10 @@
-# Marketplace refactor: R0–R2
+# Marketplace refactor: R0â€“R2
 
 Scope: economic safety and search load control only. R3/R4 service/composition,
 R6 claims UX and Gateway session expiry remain separate review packages. No
 migration, trade-model change, PostgreSQL or generic persistence interface.
 
-## R0 baseline — 2026-10-13, shop 440bc89
+## R0 baseline â€” 2026-10-13, shop 440bc89
 
 Marketplace custody/purchase/search, Exchange ledger/orders, two-client market
 race/Exchange retry, Yang and Web Inventory passed before runtime edits. Existing
@@ -38,3 +38,23 @@ Repeat: `tests/run-market.ps1 -Scene market_search -Marker MARKET_SEARCH_OK`,
 `tests/run-combat.ps1 -Scene market_load -MarkerPrefix MARKET_LOAD`, and
 `tests/run-market-recovery.ps1`. Network-derived runners sharing port 18098 run
 sequentially. Fixed logs live under ignored `.godot/verification`.
+
+## R1 — bounded rejected responses
+
+Only successful economic commands append market_commands, atomically with their
+mutation. Validation rejection rolls back all provisional writes before replying;
+SQL faults also roll back and remain immediately retryable. Existing historic
+receipts (including older negative rows) are not purged. No schema migration.
+
+WorldDatabase shares one negative-response cache across Shop/Exchange facades:
+64 accounts x 64 commands, maximum 4096 entries, 60-second TTL, FIFO eviction at
+both bounds. A retained command returns its same error and rejects changed
+fingerprints with command_conflict. After expiry/eviction/restart an unsuccessful
+command may be revalidated: it never committed value. Receipt lookup can report a
+retained rejection but it is not a durable acknowledgement. All successful receipt
+lookups happen in SQLite first; cache eviction cannot permit executing them again.
+
+1024 rejected requests now add **zero durable rows**, taking 86.844 ms locally.
+Custody, purchase, ledger/orders and WAL recovery passed. Added coverage protects
+negative-cache bounds/expiry/shared facades and durable success/conflict after
+cache recreation; previous suites covered successful replay but not rejection spam.
