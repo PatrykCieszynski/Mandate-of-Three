@@ -17,7 +17,9 @@ No First Region migration, vegetation/scatter or terrain abstraction is added.
 - Continuing topic: codex/visual-v4-terrain3d-spike; investigation HEAD was b8439ca.
   Earlier results and historical DLL fingerprints remain in Git history.
 - The pre-existing untracked docs/item-drag-runtime-system.pdf is preserved.
-- **No merge to main and no push** during this recheck, as explicitly requested.
+- **No merge to main and no push** during the recheck, as originally requested.
+  On 2026-10-13 the user authorized local integration of the verified foundation.
+  Manual Terrain3D map authoring is deferred; publication is not requested.
 - First Region geometry/gameplay and V3 shader remain unchanged.
 
 ## Previous false lead
@@ -224,7 +226,10 @@ only the Terrain3D plugin enablement is staged from the mixed project settings.
 Technical recommendation: **Godot 4.7.2 + Terrain3D 1.0.2 stable**, pinned by
 installer checksum. The previous incompatibility rejection is withdrawn.
 Technical gates and the user's functional editor test support adoption. Assess
-comfort during the first small authoring exercise. Keep the work on the V4 branch;
-do not merge or migrate First Region during this recheck.
+comfort during the first small authoring exercise. The 2026-10-13 follow-up
+authorizes a local no-ff merge of this foundation into main. First Region terrain
+authoring/migration remains deferred manual work. Next stages are V5 vegetation
+and world dressing, V7 night dressing/local atmosphere, then V8 color grading
+and polish, as recorded in project-direction.md.
 
 ADOPT TERRAIN3D WITH PINNED VERSION
