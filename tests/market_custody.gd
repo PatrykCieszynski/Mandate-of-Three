@@ -97,6 +97,13 @@ func _ready() -> void:
 	assert(db.query("SELECT COUNT(*) AS n FROM item_instances i JOIN item_custody c ON c.uid=i.uid;") and db.query_result[0].n==items.inventory(alt).items.size()+items.inventory(foreign).items.size()+storage.snapshot(first).items.size(),"every UID has one legal location")
 	assert(db.close_db() and db.open_db() and MarketStoreSqlite.ensure_schema(db))
 	assert(market.claim_item(alt,"claim_a",item.uid,claim.revision)==received,"receipt survives restart")
+	# R0/R1: distinct rejected IDs must not create durable economic history.
+	assert(db.query("SELECT COUNT(*) AS n FROM market_commands;"));var before_receipts:=int(db.query_result[0].n)
+	var spam_started:=Time.get_ticks_usec()
+	for request: int in 1024:
+		assert(market.cancel_offer(first,"reject_%d" % request,"%032x" % 999999,0).error=="unavailable")
+	assert(db.query("SELECT COUNT(*) AS n FROM market_commands;"));var rejected_receipts:=int(db.query_result[0].n)-before_receipts
+	print("MARKET_REJECT_BENCH requests=1024 durable_rows=",rejected_receipts," elapsed_ms=",(Time.get_ticks_usec()-spam_started)/1000.0)
 	assert(db.close_db())
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path))
 	print("MARKET_CUSTODY_OK migration/retry/rollback, SQL single location, escrow/claims, alt ownership, durable receipts")
