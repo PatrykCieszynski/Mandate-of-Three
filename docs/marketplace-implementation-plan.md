@@ -26,8 +26,8 @@ event bus, PostgreSQL, channels, reputation, favorite sellers or commission now.
 | S future | Offline resumable Seasonal-to-Classic transfer with manifests, ID mapping, receipts and conservation. |
 
 Dependency chain: E0a -> E0b -> E1a -> E1b -> E2. E3a/E3b and E4/E5 follow E2;
-avoid simultaneous changes to shared transactions/currency APIs. No automatic
-progression to the next package without its scope being authorized.
+avoid simultaneous changes to shared transactions/currency APIs. The user authorized sequential progression through E0-E5 on 2026-10-13.
+Integrate locally into shop; merging to main and publication remain explicit.
 
 Keep ItemInstance changes immediate and atomic. Grind Yang uses account RAM plus
 pending delta/checkpoints; critical spend/sale incorporates pending in the same
@@ -36,3 +36,5 @@ dirty checkpoints. Market mutations use command IDs/receipts and expected revisi
 Before public trading, measure SQLite NORMAL versus FULL durability, exercise
 WAL backup/restore, and test crashes/retries and two-client races. Native CEF
 verification begins when real market UI is introduced, not for E0a identity work.
+
+Completed locally: E0a, E0b, E1a, E1b. Native market input/GPU milestone remains pending.

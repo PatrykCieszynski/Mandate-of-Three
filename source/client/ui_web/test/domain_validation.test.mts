@@ -136,3 +136,17 @@ test('JSON overflow is rejected at the domain boundary and full snapshots replac
   bridge.receive(encode('ui.snapshot',{inventory:{...inventory,items:[]}}));
   assert.deepEqual(readDomainSnapshot(store.state),{inventory:{...inventory,items:[]}});
 });
+
+// New contract: own-shop snapshots are bounded before creating any slot/claim DOM.
+test('market rejects malformed offers atomically and survives snapshot reload',()=>{
+ const offer={id:'a'.repeat(32),revision:0,price:100,item:{...bagItem,height:2}};
+ const market={active:true,shopId:1,name:'My Shop',status:'active',revision:0,columns:5,rows:8,offers:[offer],claims:[bagItem]};
+ assert.ok(readDomainSnapshot({market}));
+ for(const patch of [{price:0},{revision:-1},{id:'bad'},{item:{...offer.item,y:7}}])rejects('market',{...market,offers:[{...offer,...patch}]});
+ rejects('market',{...market,offers:Array(41).fill(offer)});
+ rejects('market',{...market,claims:Array(21).fill(bagItem)});
+ const store=new DomainStore();
+ assert.ok(store.apply(update('market',market)));
+ assert.ok(store.apply(decodeAndValidate({v:1,type:'ui.snapshot',payload:{market}})));
+ assert.deepEqual(store.state.market,market);
+});

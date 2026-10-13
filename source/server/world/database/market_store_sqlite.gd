@@ -209,3 +209,36 @@ func receipt(character_id: int, command_id: String) -> Dictionary:
 	if not db.query_with_bindings("SELECT result_json FROM market_commands WHERE account_id=? AND command_id=?;",[account_id,command_id]): return {"ok":false,"error":"storage"}
 	if db.query_result.is_empty(): return {"ok":false,"error":"unknown_command"}
 	return JSON.parse_string(db.query_result[0].result_json)
+
+func configure(character_id: int, command_id: String, revision: int, name: String, status: String) -> Dictionary:
+	if not _open_command(character_id,command_id,"configure",[revision,name,status]): return _cached
+	if name.strip_edges().is_empty() or name.length()>40 or status not in ["active","paused"]: return _finish({"ok":false,"error":"request"})
+	for character: String in name:
+		if character.unicode_at(0)<32: return _finish({"ok":false,"error":"request"})
+	var shop_id := _shop(_account)
+	if shop_id<=0 or not db.query_with_bindings("SELECT revision FROM account_shops WHERE shop_id=?;",[shop_id]): return _abort("storage")
+	if int(db.query_result[0].revision)!=revision: return _finish({"ok":false,"error":"stale"})
+	if not db.query_with_bindings("UPDATE account_shops SET display_name=?,status=?,revision=revision+1 WHERE shop_id=?;",[name.strip_edges(),status,shop_id]): return _abort("storage")
+	return _finish({"ok":true,"revision":revision+1})
+
+func edit_offer(character_id: int, command_id: String, offer_id: String, revision: int, position: int, price: int) -> Dictionary:
+	if not _open_command(character_id,command_id,"edit",[offer_id,revision,position,price]): return _cached
+	if price<=0 or price>WalletStoreSqlite.MAX_YANG: return _finish({"ok":false,"error":"request"})
+	if not db.query_with_bindings("SELECT o.*,i.definition_id FROM shop_offers o JOIN item_instances i ON i.uid=o.item_uid WHERE o.offer_id=? AND o.account_id=?;",[offer_id,_account]): return _abort("storage")
+	if db.query_result.is_empty(): return _finish({"ok":false,"error":"unavailable"})
+	var offer: Dictionary = db.query_result[0].duplicate(true)
+	if int(offer.revision)!=revision: return _finish({"ok":false,"error":"stale"})
+	var definition := ItemDefinitions.get_definition(StringName(offer.definition_id))
+	if definition == null: return _finish({"ok":false,"error":"unknown_definition"})
+	var cells := _cells(position,definition.inventory_height)
+	if cells.is_empty(): return _finish({"ok":false,"error":"placement"})
+	for cell: int in cells:
+		if not db.query_with_bindings("SELECT 1 FROM shop_cells WHERE shop_id=? AND position=? AND item_uid<>?;",[offer.shop_id,cell,offer.item_uid]): return _abort("storage")
+		if not db.query_result.is_empty(): return _finish({"ok":false,"error":"occupied"})
+	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _abort("storage")
+	if not db.query_with_bindings("UPDATE item_custody SET position=? WHERE uid=?;",[position,offer.item_uid]): return _abort("storage")
+	if not db.query_with_bindings("UPDATE shop_offers SET position=?,price_yang=?,revision=revision+1 WHERE offer_id=?;",[position,price,offer_id]): return _abort("storage")
+	for cell: int in cells:
+		if not db.query_with_bindings("INSERT INTO shop_cells(shop_id,position,item_uid) VALUES(?,?,?);",[offer.shop_id,cell,offer.item_uid]): return _abort("storage")
+	if position!=int(offer.position) and not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[offer.item_uid]): return _abort("storage")
+	return _finish({"ok":true,"revision":revision+1})
