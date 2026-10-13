@@ -17,7 +17,7 @@ func _ready() -> void:
 	check(db.open_db(), "open isolated DB")
 	WorldSchema.ensure_schema(db)
 	var legacy := WorldStoreSqlite.new(db)
-	var owner: int = EconomyFixture.create_character(legacy,"grid_test", {"name":"Grid", "skin":1})
+	var owner: int = EconomyFixture.create_character(legacy,"grid_test", {"name":"Grid", "skin":1},false)
 	var store := ItemStoreSqlite.new(db)
 	check(store.initialize_character(owner).ok, "starter")
 	var before: Dictionary = store.inventory(owner)

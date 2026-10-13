@@ -122,7 +122,7 @@ func test_purchase_contract(db: SQLite, owner: int) -> void:
 	var before: Dictionary = items.inventory(owner)
 	check(before.items.size() == 1 and before.items[0].bag_position == 10 and persisted(db, owner) == 80, "exact purchase and wallet committed together")
 	check(purchase_fixture(db, owner, 30, 50, 10).error == "occupied" and persisted(db, owner) == 80 and items.inventory(owner) == before, "exact occupied never falls back or charges")
-	check(db.query("CREATE TEMP TRIGGER fail_purchase BEFORE INSERT ON item_placements BEGIN SELECT RAISE(ABORT,'purchase placement failure'); END;"), "fault after wallet deduction and item creation")
+	check(db.query("CREATE TEMP TRIGGER fail_purchase BEFORE INSERT ON item_custody BEGIN SELECT RAISE(ABORT,'purchase placement failure'); END;"), "fault after wallet deduction and item creation")
 	check(not purchase_fixture(db, owner, 30, 50).ok and persisted(db, owner) == 80 and items.inventory(owner) == before, "item write failure rolls back charge pending income and item")
 	check(db.query_with_bindings("SELECT COUNT(*) AS n FROM item_instances WHERE owner_character_id=?;", [owner]) and int(db.query_result[0].n) == 1, "failed purchase leaves no orphan item instance")
 	check(db.query("DROP TRIGGER fail_purchase;"), "remove purchase fault")

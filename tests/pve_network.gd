@@ -212,14 +212,13 @@ func run_server() -> void:
 	while server.database.item_store._free_bag_position(owner_id, ItemDefinitions.IRON_SWORD.inventory_height) >= 0:
 		var position: int = server.database.item_store._free_bag_position(owner_id, ItemDefinitions.IRON_SWORD.inventory_height)
 		var item: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD, owner_id, [])
-		check(server.database.item_store._insert_item(item, position), "full bag fixture")
+		check(EconomyFixture.insert_item(server.database.item_store,item, position), "full bag fixture")
 		filler.append(item.uid)
 	set_phase("PICKUP", owner_peer)
 	await wait_until(func() -> bool: return replies.has(owner_peer))
 	check(replies[owner_peer].get("error", "") == "bag_full" and world.ground_loot.drops.has(drop_uid), "full bag keeps ground loot")
 	for uid: String in filler:
-		db.query_with_bindings("DELETE FROM item_placements WHERE item_uid=?;", [uid])
-		db.query_with_bindings("DELETE FROM item_instances WHERE uid=?;", [uid])
+		check(EconomyFixture.destroy_item(db,uid),"destroy filler transaction")
 	world.characters[owner_peer].position = Vector3(-12, 0, 12)
 	await get_tree().create_timer(0.15).timeout
 	set_phase("PICKUP", owner_peer)

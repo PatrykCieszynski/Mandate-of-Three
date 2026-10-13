@@ -80,7 +80,7 @@ func run_server() -> void:
 	set_phase("COMPARE", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok, "weapon comparison, picked item and immutable snapshot")
-	check(db.query("CREATE TEMP TRIGGER fail_runtime_equip BEFORE INSERT ON item_placements BEGIN SELECT RAISE(ABORT,'intentional runtime equip failure'); END;"), "failed equip fixture")
+	check(db.query("CREATE TEMP TRIGGER fail_runtime_equip BEFORE INSERT ON item_custody BEGIN SELECT RAISE(ABORT,'intentional runtime equip failure'); END;"), "failed equip fixture")
 	var before_failed_notifications := committed_inventory_changes
 	set_phase("FAIL_EQUIP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))

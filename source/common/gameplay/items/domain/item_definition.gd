@@ -14,6 +14,7 @@ enum PrimaryAction {
 @export var icon_id: StringName
 @export var equipment_slot: StringName
 @export var stack_limit: int = 1
+@export var tradeable: bool = true
 @export var base_stats: Dictionary[StringName, float] = {}
 @export var stats_per_upgrade: Dictionary[StringName, float] = {}
 

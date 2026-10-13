@@ -236,3 +236,10 @@ accounts/four characters, exercising registration/login, guest flow, spoof
 rejection and real World token entry. Existing item-session regression remains
 `run-items.ps1 -WithSession`. These opt-in checks protect a previously uncovered
 authentication/ownership boundary; see [E0a identity](marketplace-e0a-identity.md).
+
+`run-market.ps1` starts the opt-in marketplace SQLite behavior suite: migration,
+canonical custody/claims and durable command receipts, including direct SQL
+constraint bypass attempts and fault injection. E1a coverage protects new
+economy contracts; it is not line coverage of a store extraction. See
+[E1a custody](marketplace-e1a-custody.md). Existing smoke/network item suites remain
+the regression baseline and seed complete transactions under custody constraints.
