@@ -11,7 +11,7 @@ func attach(endpoint: MarketEndpoint3D, dispatcher: UiCommandDispatcher, session
 	_dispatcher = dispatcher
 	_session = session
 	_tree = tree
-	for action: String in ["list","edit","cancel","claim","configure","receipt"]:
+	for action: String in ["list","edit","cancel","claim","configure","receipt","buy"]:
 		dispatcher.register_command("market."+action,_valid.bind(action),_submit.bind(action))
 	dispatcher.register_command("market.close",func(p: Dictionary) -> bool: return p.is_empty(),func(_p: Dictionary) -> Dictionary:
 		close()

@@ -33,6 +33,7 @@ export interface MoveItemCommand extends ItemCommand { x: number; y: number; pag
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'market.buy': MarketCommand;
   'market.list': MarketCommand;
   'market.edit': MarketCommand;
   'market.cancel': MarketCommand;

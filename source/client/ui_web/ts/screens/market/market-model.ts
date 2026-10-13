@@ -22,6 +22,7 @@ export type MarketSnapshot =
     };
 export interface MarketCommand {
   command_id: string;
+  shop_id?: number;
   uid?: string;
   offer_id?: string;
   revision?: number;

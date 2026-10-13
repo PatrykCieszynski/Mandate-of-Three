@@ -153,6 +153,18 @@ func market_command(character_id: int, action: String, payload: Dictionary) -> D
 		"claim": return market.claim_item(character_id,command_id,payload.uid,int(payload.revision))
 		"configure": return market.configure(character_id,command_id,int(payload.revision),payload.name,payload.status)
 		"edit": return market.edit_offer(character_id,command_id,payload.offer_id,int(payload.revision),int(payload.position),int(payload.price))
+		"buy":
+			if not wallet_ready or not load_wallet(character_id): return {"ok":false,"error":"wallet"}
+			var pending := {}
+			for account: int in runtime_wallets: pending[account] = int(runtime_wallets[account].pending_currency_delta)
+			var result := market.purchase(character_id,command_id,int(payload.shop_id),payload.offer_id,int(payload.revision),int(payload.price),pending)
+			if result.ok and market.committed:
+				for party: String in ["buyer","seller"]:
+					var account := int(result[party+"_account"])
+					if runtime_wallets.has(account):
+						runtime_wallets[account] = {"wallet_balance":int(result[party+"_balance"]),"pending_currency_delta":0}
+						dirty_wallet.erase(account)
+			return result
 		"receipt": return market.receipt(character_id,command_id)
 	return {"ok":false,"error":"request"}
 
