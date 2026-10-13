@@ -24,4 +24,4 @@ two clients, real bridge/RPC/SQLite, list/edit/configure/reload/retry/cancel/cla
 text focus. Existing smoke and 75 Web contracts pass. Optional market_browser.mts
 boots the production modules in headless Chrome and checks text focus, configure
 and all 10 contract viewport/scale cases. This browser check is not a native CEF/GPU
-playtest; the combined marketplace UI receives one native milestone check later.
+playtest. The combined native marketplace milestone subsequently passed in E5.

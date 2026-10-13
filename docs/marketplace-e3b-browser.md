@@ -20,11 +20,16 @@ cases, +7..+9 AND controls, result-to-shop highlight and explicit buy command.
 market_race now performs catalog/search/visit through actual native bridge/RPC
 before two buyers race. Server SQL rollback/retry tests remain separate.
 
-Native CEF verification is OPEN: the first Vulkan Mobile attempt initialized CEF
-accelerated OSR on RTX 4070 but did not reach UI_READY before the fixture timeout.
-No native PASS or GPU/input correctness is claimed. run-combat.ps1 supports the
-explicit optional -NativeClient1 milestone, not default headless checks. Test-only
-CefTexture.eval is the documented plugin method; no eval was added to production
-adapter or web command surface. API: https://godotcef.org/api/ and upstream
-https://github.com/dsh0416/godot-cef. Two inline PowerShell/Node debugger diagnostics
-were denied by antivirus; they are not retried and no protection was changed.
+Native CEF verification passed on Godot 4.7.2 / godot-cef v2.0.0 / Vulkan Mobile /
+RTX 4070: production module/legacy skin, result/full-shop/highlight, actual CEF Buy,
+resize, reload and focus/blur. The initial fixture timeout was a background native
+control-focus precondition, not a UI_READY startup failure. The optional fixture
+runs outside the visible desktop and primes native control focus before its DOM field
+focus check. Human keyboard/IME/gameplay feel remains a separate check.
+run-combat.ps1 -NativeClient1 is optional, not default smoke. Test-only eval uses the
+[documented plugin API](https://godotcef.org/api/methods); no eval is exposed to
+production web commands. Startup UI_READY has bounded retries until a valid full
+snapshot acknowledges it, then stops; teardown cancels it. Search criteria and
+catalog text survive reload together with results, preserving cursor context.
+Two inline PowerShell/Node debugger diagnostics were denied by antivirus; those
+are not retried and no protection was changed.

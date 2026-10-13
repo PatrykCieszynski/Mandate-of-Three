@@ -35,9 +35,19 @@ static func tooltip_details(item: Dictionary) -> Dictionary:
 	for affix: Dictionary in item.get("affixes", []):
 		var value_text: String = str(affix.value)
 		if affix.value >= 0: value_text = "+" + value_text
-		affixes.append({"lines": ["%s %s" % [value_text, str(affix.stat).capitalize()]]})
+		var metadata: Dictionary=ItemAffixLabels.STATS.get(str(affix.stat),{})
+		if metadata.get("unit","")=="percent": value_text+="%"
+		affixes.append({"lines": ["%s %s" % [value_text, metadata.get("label",str(affix.stat).capitalize())]]})
 	var properties: Array = []
-	for stat: Variant in item.get("stats",{}): properties.append("%s: %d" % [str(stat).capitalize(),int(item.stats[stat])])
+	for stat: Variant in item.get("stats",{}):
+		var metadata: Dictionary=ItemAffixLabels.STATS.get(str(stat),{})
+		var value: float=float(item.stats[stat])
+		var text:=str(int(value)) if value==floor(value) else str(value)
+		properties.append("%s: %s%s" % [metadata.get("label",str(stat).capitalize()),text,"%" if metadata.get("unit","")=="percent" else ""])
+	for index: int in mini(item.get("sockets",[]).size(),maxi(0,8-properties.size())):
+		var socket: Variant=item.sockets[index]
+		var label: String=str(socket.get("definition_id",JSON.stringify(socket))) if socket is Dictionary else str(socket)
+		properties.append("Socket %d: %s" % [index+1,label.left(240)])
 	return {"properties":properties,"affixes":affixes}
 
 static func item_model(item: Dictionary) -> Dictionary:

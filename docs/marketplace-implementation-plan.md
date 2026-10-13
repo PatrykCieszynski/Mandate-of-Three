@@ -37,6 +37,7 @@ Before public trading, measure SQLite NORMAL versus FULL durability, exercise
 WAL backup/restore, and test crashes/retries and two-client races. Native CEF
 verification begins when real market UI is introduced, not for E0a identity work.
 
-Completed locally: E0a, E0b, E1a, E1b, E2, E3a, E4. Native market input/GPU milestone remains pending.
-
-E3b is implemented and headless/browser verified; native CEF milestone remains open.
+Implemented and integrated locally on shop: E0a, E0b, E1a, E1b, E2, E3a, E3b, E4,
+E5. Native CEF market/Exchange milestone passed; human input/IME/gameplay feel is
+still a separate review. See [E5 verification and limits](marketplace-e5-exchange.md).
+No E6 stalls or Seasonal transfer implementation. Main/publication remain explicit.

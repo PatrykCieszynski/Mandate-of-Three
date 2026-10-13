@@ -5,6 +5,7 @@ var store: WorldStoreSqlite
 var market: MarketStoreSqlite
 var items: ItemStoreSqlite
 var persistence: WorldDatabase
+var observed_accounts: Array[int]=[]
 func balance(account: int) -> int:
 	assert(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;",[account]))
 	return int(db.query_result[0].yang)
@@ -39,14 +40,20 @@ func _ready() -> void:
 		assert(EconomyFixture.insert_item(items,ItemInstance.create(ItemDefinitions.IRON_SWORD,rival,[]),items._free_bag_position(rival,2)))
 	assert(market.purchase(rival,"full",listed.shop_id,listed.offer_id,0,100,{}).error=="inventory_full")
 	assert(balance(store.resolve_account_id(rival))==1500 and market.mine(seller).offers.size()==1,"full bag does not charge or consume offer")
+	var reader:=SQLite.new();reader.path=ProjectSettings.globalize_path(db.path);assert(reader.open_db())
+	persistence.market_account_changed.connect(func(account: int)->void:
+		assert(reader.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;",[account]) and not reader.query_result.is_empty(),"observer connection sees committed ledger")
+		observed_accounts.append(account))
 	var before:=items.inventory(buyer)
 	for fault: String in ["BEFORE UPDATE ON account_wallets","BEFORE DELETE ON shop_cells","BEFORE UPDATE ON item_instances","BEFORE UPDATE ON item_custody","BEFORE DELETE ON shop_offers","BEFORE INSERT ON market_commands"]:
 		assert(db.query("CREATE TEMP TRIGGER fail_sale %s BEGIN SELECT RAISE(ABORT,'purchase stage fault'); END;" % fault))
 		assert(persistence.market_command(buyer,"buy",payload).error=="storage")
 		assert(balance(seller_account)==1500 and balance(buyer_account)==1500 and items.inventory(buyer)==before and market.mine(seller).offers.size()==1)
+		assert(observed_accounts.is_empty(),"SQL rollback emits no success/account fact")
 		assert(persistence.wallet_balance(seller)==1533 and persistence.wallet_balance(buyer)==1590,"rollback retains both pending incomes")
 		assert(db.query("DROP TRIGGER fail_sale;"))
 	var result:=persistence.market_command(buyer,"buy",payload)
+	assert(seller_account in observed_accounts and buyer_account in observed_accounts,"World fact refreshes both accounts beyond current map")
 	assert(result.ok and balance(buyer_account)==1490 and balance(seller_account)==1633)
 	assert(persistence.wallet_balance(buyer)==1490 and persistence.wallet_balance(seller)==1633)
 	assert(items.inventory(buyer).items.any(func(i: Dictionary)->bool:return i.uid==item.uid and i.revision==2))
@@ -65,4 +72,4 @@ func _ready() -> void:
 	assert(balance(seller_account)==1852 and not persistence.runtime_wallets.has(seller_account))
 	assert(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty())
 	print("MARKET_PURCHASE_OK pending two-wallet commit, offline, fault rollback, self-account, stale, durable retry")
-	db.close_db();DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path));get_tree().quit()
+	reader.close_db();db.close_db();DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path));get_tree().quit()

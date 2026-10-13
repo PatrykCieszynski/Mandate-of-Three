@@ -33,6 +33,7 @@ func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
 	if result.ok and not MarketStoreSqlite.ensure_schema(db): result = {"ok":false,"error":"market_custody_migration"}
 	if result.ok and not MarketSearchSqlite.ensure_schema(db): result = {"ok":false,"error":"market_search_migration"}
 	if result.ok and not ExchangeStoreSqlite.ensure_ledger_schema(db): result = {"ok":false,"error":"exchange_ledger_migration"}
+	if result.ok and not ExchangeStoreSqlite.ensure_orders_schema(db): result = {"ok":false,"error":"exchange_orders_migration"}
 	wallet_ready = result.ok
 	return result
 
@@ -150,10 +151,31 @@ func storage_snapshot(owner_id: int) -> Dictionary:
 func market_snapshot(character_id: int) -> Dictionary:
 	return MarketStoreSqlite.new(db).mine(character_id)
 
+signal market_account_changed(account_id: int)
 func market_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
+	if db==null or not wallet_ready: return {"ok":false,"error":"storage"}
+	var result:=_perform_market_command(character_id,action,payload)
+	if result.ok and action!="receipt":
+		var affected: Array=result.get("affected_accounts",[wallet_account_id(character_id)])
+		if action=="buy": affected=[int(result.buyer_account),int(result.seller_account)]
+		for account: Variant in affected: market_account_changed.emit(int(account))
+	return result
+
+func _perform_market_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	var market := MarketStoreSqlite.new(db)
 	var command_id: String = payload.get("command_id","")
 	match action:
+		"order", "cancel_order":
+			var exchange:=ExchangeStoreSqlite.new(db)
+			var pending: Dictionary={}
+			for account: int in runtime_wallets: pending[account]=int(runtime_wallets[account].pending_currency_delta)
+			var result:=exchange.place_order(character_id,payload,pending) if action=="order" else exchange.cancel_order(character_id,command_id,payload.order_id,int(payload.revision),pending)
+			if result.ok and exchange.committed:
+				for wallet: Dictionary in result.wallet_states:
+					var account:=int(wallet.account_id)
+					if runtime_wallets.has(account):
+						runtime_wallets[account]={"wallet_balance":int(wallet.balance),"reserved_yang":int(wallet.reserved_yang),"pending_currency_delta":0};dirty_wallet.erase(account)
+			return result
 		"deposit": return ExchangeStoreSqlite.new(db).deposit(character_id,command_id,payload.uid,int(payload.revision),int(payload.amount),payload.source)
 		"withdraw": return ExchangeStoreSqlite.new(db).withdraw(character_id,command_id,payload.asset_id,int(payload.amount),payload.destination)
 		"list": return market.list_item(character_id,command_id,payload.uid,int(payload.revision),int(payload.position),int(payload.price))
@@ -243,12 +265,13 @@ func open_database() -> void:
 	# db.verbosity_level = SQLite.VerbosityLevel.NORMAL
 
 	db.open_db()
-	# Durability + concurrency. WAL lets the live backup byte-copy run alongside
-	# writes without tearing (backup_database assumes this) and survives a crash
-	# mid-write; NORMAL is the standard safe+fast sync level under WAL. PRAGMAs are
-	# connection settings, not schema — no migration / wipe.
+	# One authoritative writer. FULL is the default now that player trading exists;
+	# NORMAL remains an explicit development choice, with a larger power-loss window.
 	db.query("PRAGMA journal_mode=WAL;")
-	db.query("PRAGMA synchronous=NORMAL;")
+	var sync_mode: String=str(ProjectSettings.get_setting("mandate/persistence/sqlite_synchronous","FULL"))
+	if sync_mode not in ["FULL","NORMAL"]: sync_mode="FULL"
+	db.query("PRAGMA synchronous="+sync_mode+";")
+
 
 
 func close_database() -> void:
@@ -316,15 +339,15 @@ func save_all_connected(connected_players: Dictionary) -> int:
 ## last auto-checkpoint (observed live: a 332 KB .db beside a 4 MB uncheckpointed
 ## -wal, i.e. hours of progress missing from every "successful" backup). TRUNCATE
 ## also folds the -wal back to ~0, so the live .db stays current and the -wal can't
-## balloon. Runs on the server's own DB connection, so it always gets the lock.
+## balloon. A reader may prevent truncation; then fail instead of copying a stale DB.
 func backup_database(keep_last: int = 10) -> bool:
 	if database_path.is_empty():
 		return false
 	if not FileAccess.file_exists(database_path):
 		return false
 
-	if db != null:
-		db.query("PRAGMA wal_checkpoint(TRUNCATE);")
+	if db == null or not db.query("PRAGMA wal_checkpoint(TRUNCATE);") or db.query_result.is_empty() or int(db.query_result[0].get("busy",1))!=0:
+		return false
 
 	var backup_dir: String = "user://db_backups"
 	DirAccess.make_dir_recursive_absolute(backup_dir)
@@ -369,11 +392,12 @@ func _rotate_backups(backup_dir: String, name_prefix: String, keep_last: int) ->
 		DirAccess.remove_absolute(backup_dir + "/" + to_remove)
 
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
+	if db==null or not wallet_ready: return {"ok":false,"error":"storage"}
 	if wallet_account_id(character_id)<=0: return {"ok":false,"error":"owner"}
 	match action:
 		"exchange":
-			var snapshot:=ExchangeStoreSqlite.new(db).ledger(character_id)
-			if snapshot.ok and load_wallet(character_id): snapshot.yang=wallet_balance(character_id)
+			var account:=wallet_account_id(character_id)
+			var snapshot:=ExchangeStoreSqlite.new(db).orders_snapshot(character_id,int(runtime_wallets.get(account,{}).get("pending_currency_delta",0)))
 			return snapshot
 		"catalog": return MarketSearchSqlite.catalog(payload.query)
 		"search": return MarketSearchSqlite.new(db).search(payload)
