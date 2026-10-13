@@ -1,3 +1,4 @@
+import type {MarketBrowserSnapshot,MarketSearch} from '../screens/market/browser-model.js';
 import type {MarketSnapshot,MarketCommand} from '../screens/market/market-model.js';
 import type {UpgradeSnapshot,UpgradeCommand,NpcDropTargets} from '../screens/upgrade/upgrade-model.js';
 import type {ShopSnapshot,ShopBuyCommand} from '../screens/shop/shop-model.js';
@@ -14,10 +15,11 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
   market?: MarketSnapshot;
+  market_browser?: MarketBrowserSnapshot;
   upgrade?: UpgradeSnapshot; npc_targets?: NpcDropTargets; shop?: ShopSnapshot; npc?: NpcInteractionSnapshot; storage?: StorageSnapshot; inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
   player?: RawObject; hud?: HudSnapshot;
 }
@@ -33,6 +35,10 @@ export interface MoveItemCommand extends ItemCommand { x: number; y: number; pag
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'market.browser.catalog': {query:string};
+  'market.browser.search': MarketSearch;
+  'market.browser.visit': {shop_id:number;offer_id:string};
+  'market.browser.close': Record<string,never>;
   'market.buy': MarketCommand;
   'market.list': MarketCommand;
   'market.edit': MarketCommand;
