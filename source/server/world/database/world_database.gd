@@ -32,6 +32,7 @@ func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
 	var result := WorldSchema.migrate_account_wallets(db,master_ids)
 	if result.ok and not MarketStoreSqlite.ensure_schema(db): result = {"ok":false,"error":"market_custody_migration"}
 	if result.ok and not MarketSearchSqlite.ensure_schema(db): result = {"ok":false,"error":"market_search_migration"}
+	if result.ok and not ExchangeStoreSqlite.ensure_ledger_schema(db): result = {"ok":false,"error":"exchange_ledger_migration"}
 	wallet_ready = result.ok
 	return result
 
@@ -76,12 +77,16 @@ func load_wallet(character_id: int) -> bool:
 		wallet_store = WalletStoreSqlite.new(db)
 	var result: Dictionary = wallet_store.load_wallet(owner_id)
 	if not result.ok: return false
-	runtime_wallets[owner_id] = {"wallet_balance": int(result.balance), "pending_currency_delta": 0}
+	runtime_wallets[owner_id] = {"wallet_balance": int(result.balance), "pending_currency_delta": 0,"reserved_yang":int(result.get("reserved_yang",0))}
 	return true
 
 func wallet_balance(character_id: int) -> int:
 	var owner_id := wallet_account_id(character_id)
 	return int(runtime_wallets.get(owner_id, {}).get("wallet_balance", -1))
+
+func wallet_available(character_id: int) -> int:
+	var account:=wallet_account_id(character_id)
+	return wallet_balance(character_id)-int(runtime_wallets.get(account,{}).get("reserved_yang",0))
 
 func add_yang(character_id: int, amount: int) -> bool:
 	var owner_id := wallet_account_id(character_id)
@@ -115,7 +120,7 @@ func spend_yang(character_id: int, cost: int) -> Dictionary:
 	# Affordability is checked against authoritative RAM, including pending income.
 	if cost <= 0 or not runtime_wallets.has(owner_id): return {"ok": false, "error": "request"}
 	var wallet: Dictionary = runtime_wallets[owner_id]
-	if int(wallet.wallet_balance) < cost: return {"ok": false, "error": "funds"}
+	if wallet_available(character_id) < cost: return {"ok": false, "error": "funds"}
 	var result: Dictionary = wallet_store.spend(owner_id, int(wallet.pending_currency_delta), cost)
 	if result.ok: accept_committed_wallet_balance(character_id, int(result.balance))
 	return result
@@ -149,6 +154,8 @@ func market_command(character_id: int, action: String, payload: Dictionary) -> D
 	var market := MarketStoreSqlite.new(db)
 	var command_id: String = payload.get("command_id","")
 	match action:
+		"deposit": return ExchangeStoreSqlite.new(db).deposit(character_id,command_id,payload.uid,int(payload.revision),int(payload.amount),payload.source)
+		"withdraw": return ExchangeStoreSqlite.new(db).withdraw(character_id,command_id,payload.asset_id,int(payload.amount),payload.destination)
 		"list": return market.list_item(character_id,command_id,payload.uid,int(payload.revision),int(payload.position),int(payload.price))
 		"cancel": return market.cancel_offer(character_id,command_id,payload.offer_id,int(payload.revision))
 		"claim": return market.claim_item(character_id,command_id,payload.uid,int(payload.revision))
@@ -163,7 +170,8 @@ func market_command(character_id: int, action: String, payload: Dictionary) -> D
 				for party: String in ["buyer","seller"]:
 					var account := int(result[party+"_account"])
 					if runtime_wallets.has(account):
-						runtime_wallets[account] = {"wallet_balance":int(result[party+"_balance"]),"pending_currency_delta":0}
+						runtime_wallets[account].wallet_balance=int(result[party+"_balance"])
+						runtime_wallets[account].pending_currency_delta=0
 						dirty_wallet.erase(account)
 			return result
 		"receipt": return market.receipt(character_id,command_id)
@@ -177,7 +185,7 @@ func upgrade_item(owner_id: int, recipe: UpgradeDefinition, uid: String, revisio
 	var account_id := wallet_account_id(owner_id)
 	if db == null or not runtime_wallets.has(account_id): return {"ok":false, "error":"storage"}
 	if recipe == null or not recipe.validation_errors().is_empty(): return {"ok":false, "error":"invalid_definition"}
-	if wallet_balance(owner_id) < recipe.yang_cost: return {"ok":false, "error":"funds"}
+	if wallet_available(owner_id) < recipe.yang_cost: return {"ok":false, "error":"funds"}
 	var result: Dictionary = UpgradeStoreSqlite.new(db).upgrade(owner_id,int(runtime_wallets[account_id].pending_currency_delta),recipe,uid,revision)
 	if result.ok: accept_committed_wallet_balance(owner_id,int(result.balance))
 	return result
@@ -363,6 +371,10 @@ func _rotate_backups(backup_dir: String, name_prefix: String, keep_last: int) ->
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	if wallet_account_id(character_id)<=0: return {"ok":false,"error":"owner"}
 	match action:
+		"exchange":
+			var snapshot:=ExchangeStoreSqlite.new(db).ledger(character_id)
+			if snapshot.ok and load_wallet(character_id): snapshot.yang=wallet_balance(character_id)
+			return snapshot
 		"catalog": return MarketSearchSqlite.catalog(payload.query)
 		"search": return MarketSearchSqlite.new(db).search(payload)
 		"visit": return MarketStoreSqlite.new(db).visit(int(payload.shop_id))
