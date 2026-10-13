@@ -74,5 +74,11 @@ func _ready() -> void:
 	assert(db.close_db() and db.open_db() and ExchangeStoreSqlite.ensure_orders_schema(db))
 	assert(exchange.place_order(b,request("buy",60,12,1,"buy60"),{}).order_id==bought.order_id)
 	assert(exchange.orders_snapshot(a).orders.size()>0 and exchange.orders_snapshot(a).fills.size()>0)
+	assert(db.query("SELECT COUNT(*) AS n FROM market_commands;"));var receipts_before:=int(db.query_result[0].n)
+	for id: int in 256:
+		assert(persistence.market_command(a,"cancel_order",{"command_id":"denied_%d" % id,"order_id":"%032x" % 999999,"revision":0}).error=="owner")
+	assert(db.query("SELECT COUNT(*) AS n FROM market_commands;") and int(db.query_result[0].n)==receipts_before,"Exchange rejection spam cannot grow durable receipts")
+	assert(persistence.market_command(a,"receipt",{"command_id":"denied_255"}).error=="owner","Shop receipt lookup shares Exchange negative response cache")
+	assert(persistence.market_command(a,"cancel_order",{"command_id":"denied_255","order_id":"%032x" % 999998,"revision":0}).error=="command_conflict")
 	print("EXCHANGE_ORDERS_OK exact maker price/refund, 60+40, price-time, offline, cancel/fill revision, fault rollback, pending RAM, int64 bounds, reopen")
 	db.close_db();DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path));get_tree().quit()

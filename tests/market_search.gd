@@ -16,29 +16,7 @@ func _ready() -> void:
 	assert(MarketSearchSqlite.normalize("ŻELAZNY MIECZ")=="zelazny miecz")
 	var search:=MarketSearchSqlite.new(db)
 	var p: Dictionary={"definition_id":"iron_sword","upgrade_min":7,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[{"stat_id":"monster_damage","minimum":10},{"stat_id":"critical_chance","minimum":5}],"sort":"price_asc","cursor":"","limit":50}
-	# 500 account shops x 20 two-cell swords, inserted atomically in fixture batches.
-	assert(db.query("BEGIN IMMEDIATE;"))
-	for shop: int in 500:
-		var account:=2000+shop
-		assert(db.query_with_bindings("INSERT INTO accounts(account_name,master_account_id) VALUES(?,?);",["catalog%d" % shop,account]))
-		assert(db.query_with_bindings("INSERT INTO account_shops(shop_id,account_id) VALUES(?,?);",[shop+1,account]))
-		var instances: Array[String]=[];var custody: Array[String]=[];var offers: Array[String]=[];var cells: Array[String]=[]
-		for slot: int in 20:
-			var n:=shop*20+slot
-			var uid:="%032x" % (n+1);var offer:="%032x" % (n+20000)
-			var level:=int(n/10)%10
-			var rolls:=JSON.stringify([{"stat":"monster_damage","value":15 if n%3==0 else 5},{"stat":"critical_chance","value":7 if n%5==0 else 2}])
-			var definition:="iron_sword"
-			var position:=slot
-			instances.append("('%s',%d,'%s',1,%d,'%s','[]',0)" % [uid,owner,definition,level,rolls])
-			custody.append("('%s','shop_escrow',%d,%d,'',%d,'%s')" % [uid,account,position,shop+1,offer])
-			offers.append("('%s',%d,%d,'%s',%d,%d,0)" % [offer,shop+1,account,uid,position,n+1])
-			cells.append("(%d,%d,'%s'),(%d,%d,'%s')" % [shop+1,position,uid,shop+1,position+20,uid])
-		assert(db.query("INSERT INTO item_instances VALUES "+",".join(instances)+";"))
-		assert(db.query("INSERT INTO item_custody VALUES "+",".join(custody)+";"))
-		assert(db.query("INSERT INTO shop_offers VALUES "+",".join(offers)+";"))
-		assert(db.query("INSERT INTO shop_cells VALUES "+",".join(cells)+";"))
-	assert(db.query("COMMIT;"))
+	preload("res://tests/fixtures/market_search_fixture.gd").seed(db,owner)
 	p.definition_id="iron_sword"
 	var result:=search.search(p);assert(result.ok and result.results.size()==50 and not result.next_cursor.is_empty())
 	for row: Dictionary in result.results:
@@ -64,5 +42,16 @@ func _ready() -> void:
 	assert(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty())
 	assert(db.close_db() and db.open_db() and MarketSearchSqlite.ensure_schema(db))
 	assert(search.search(p).ok)
+	# R2 uncovered contract: one World budget, independent of account/instance facade.
+	var persistence:=WorldDatabase.new();add_child(persistence);persistence.db=db;persistence.store=store;persistence.wallet_ready=true
+	var other:=EconomyFixture.create_character(store,"other_search",{"name":"OtherSearch","skin":1})
+	assert(persistence.market_query(owner,"search",p).ok)
+	assert(persistence.market_query(other,"search",p).error=="rate_limited","another authenticated account shares World budget")
+	assert(persistence.market_query(other,"catalog",{"query":"sword"}).ok,"cheap catalog does not consume expensive budget")
+	assert(persistence.market_query(other,"visit",{"shop_id":1}).ok,"public shop read remains available")
+	var after:=Time.get_ticks_msec()+WorldDatabase.MARKET_SEARCH_INTERVAL_MS+20
+	while Time.get_ticks_msec()<after: await get_tree().physics_frame
+	assert(persistence.market_query(other,"search",p).ok,"budget refills without queued work")
+	assert(persistence.market_query(owner,"search",p).error=="rate_limited")
 	print("MARKET_SEARCH_OK catalog, AND, inclusive ranges, keyset, limits, projection update, restart, 10k")
 	db.close_db();DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path));get_tree().quit()
