@@ -134,7 +134,7 @@ func master_save() -> void:
 	if world_server == null or database == null:
 		return
 	var saved: int = database.save_all_connected(world_server.connected_players)
-	var ok: bool = database.backup_database()
+	var ok: bool = await database.coordinated_backup()
 	ServerLog.info("Dashboard 'save' triggered: %d player(s), backup %s." % [saved, "ok" if ok else "FAILED"])
 
 
@@ -147,7 +147,9 @@ func master_shutdown() -> void:
 	if database.save_all_connected(world_server.connected_players) < 0:
 		push_error("Graceful shutdown cancelled: character checkpoint failed.")
 		return
-	database.backup_database()
+	if not await database.shutdown_database():
+		push_error("Graceful shutdown cancelled: reader drain/backup failed.")
+		return
 	get_tree().quit.call_deferred()
 
 
@@ -175,8 +177,8 @@ func master_restart(seconds: int, message: String) -> void:
 	# Insurance save in case the deploy's stop is delayed or never lands.
 	if database != null:
 		var saved: int = database.save_all_connected(world_server.connected_players)
-		database.backup_database()
-		ServerLog.info("Restart countdown elapsed — final save (%d player(s)); awaiting stop." % saved)
+		var ok: bool=await database.coordinated_backup(10,false,true)
+		ServerLog.info("Restart countdown elapsed — final save (%d player(s)), reader drain/backup %s; awaiting stop." % [saved,"ok" if ok else "FAILED"])
 
 
 ## One restart-warning line to every connected player, phrased in minutes or seconds.
@@ -362,6 +364,7 @@ func account_identity_manifest(identities: Dictionary) -> void:
 		ServerLog.error("Account wallet migration refused: %s" % str(result))
 		return
 	ServerLog.info("Account wallet identity/migration ready.")
+	if not await database.start_auction_queries(): ServerLog.error("Auction reader unavailable; economy remains operational.")
 
 @rpc("authority")
 func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary, account_id: int) -> void:

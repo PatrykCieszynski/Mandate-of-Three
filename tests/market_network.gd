@@ -1,5 +1,45 @@
 extends "res://tests/web_inventory.gd"
 ## Existing real bridge/session harness, new marketplace ownership/reload contracts.
+var rpc_answers: Dictionary={}
+
+func verify_query_retries() -> void:
+	await wait_until(func()->bool:return phase_name=="RPC_RETRY")
+	world.market_endpoint.query_finished.connect(func(id: String, answer: Dictionary)->void:
+		if not id.begins_with("review_"): return
+		if not rpc_answers.has(id): rpc_answers[id]=[]
+		rpc_answers[id].append(answer))
+	var p: Dictionary={"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[],"sort":"price_asc","cursor":"","limit":50}
+	world.market_endpoint.request_query.rpc_id(1,"search",p,"review_pending")
+	var malformed:=p.duplicate(true);malformed.cursor="broken"
+	for attempt: int in 20:
+		world.market_endpoint.request_query.rpc_id(1,"search" if attempt%3!=0 else "catalog",malformed if attempt%2==0 else {},"review_pending")
+	# Pending duplicates must not consume the endpoint's eight distinct turns.
+	for number: int in 7: world.market_endpoint.request_query.rpc_id(1,"catalog",{"query":"sword"},"review_budget%d" % number)
+	world.market_endpoint.request_query.rpc_id(1,"catalog",{"query":"sword"},"review_over")
+	world.market_endpoint.request_query.rpc_id(1,"search",{},"review_over")
+	# Flood recent-history capacity, then retry the original accepted pending ID.
+	for number: int in 80: world.market_endpoint.request_query.rpc_id(1,"search",{},"review_noise%d" % number)
+	world.market_endpoint.request_query.rpc_id(1,"search",p,"review_pending")
+	world.market_endpoint.request_query.rpc_id(1,"search",malformed,"review_pending")
+	await wait_until(func()->bool:return rpc_answers.size()==88)
+	check(not rpc_answers.has("review_pending"),"held original receives no limiter or malformed-retry reply")
+	for number: int in 7: check(rpc_answers["review_budget%d" % number].size()==1 and rpc_answers["review_budget%d" % number][0].ok,"duplicate IDs do not consume peer budget")
+	check(rpc_answers.review_over.size()==1 and rpc_answers.review_over[0].error=="rate_limited","same rejected ID settles once while retained")
+	report.rpc_id(1,{"duplicates_waiting":true})
+	await wait_until(func()->bool:return rpc_answers.has("review_pending"))
+	await get_tree().create_timer(.05).timeout
+	check(rpc_answers.review_pending.size()==1 and rpc_answers.review_pending[0].ok,"accepted ID survives history pressure and receives one original success")
+	await get_tree().create_timer(1.1).timeout
+	world.market_endpoint.request_query.rpc_id(1,"search",{},"review_invalid_first")
+	world.market_endpoint.request_query.rpc_id(1,"search",p,"review_invalid_first")
+	world.market_endpoint.request_query.rpc_id(1,"search",malformed,"review_cursor_first")
+	world.market_endpoint.request_query.rpc_id(1,"search",p,"review_cursor_first")
+	await wait_until(func()->bool:return rpc_answers.has("review_invalid_first") and rpc_answers.has("review_cursor_first"))
+	await get_tree().create_timer(.05).timeout
+	check(rpc_answers.review_invalid_first.size()==1 and rpc_answers.review_invalid_first[0].error=="request","invalid-first ID cannot later start a valid search")
+	check(rpc_answers.review_cursor_first.size()==1 and rpc_answers.review_cursor_first[0].error=="cursor","service cursor rejection uses the same single-response boundary")
+	report.rpc_id(1,{"duplicates_ok":true})
+
 func run_client() -> void:
 	web = CoreUiController.new()
 	web.host = HeadlessUiHost.new()
@@ -10,7 +50,14 @@ func run_client() -> void:
 		if message.type=="command.result": web_results[str(message.id)] = message.payload)
 	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	register_ready.rpc_id(1)
+	await verify_query_retries()
 	await wait_until(func() -> bool: return phase_name=="GO")
+	await web.market_browser.open()
+	var params: Dictionary={"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[],"sort":"price_asc","cursor":"","limit":50}
+	check((await command("market.browser.search",params)).ok,"real bridge/RPC uses asynchronous readonly auction reader")
+	params.cursor="broken"
+	check((await command("market.browser.search",params)).error=="cursor","invalid cursor rejected before SQL")
+	web.market_browser.close()
 	check((await web.market.open()).ok,"open own account shop")
 	var original: Dictionary = world.inventory_endpoint.state.items[0].duplicate(true)
 	check((await command("market.list",{"command_id":"list_a","uid":original.uid,"revision":original.revision,"position":0,"price":100})).ok,"real bridge lists bag item")
@@ -42,7 +89,16 @@ func run_client() -> void:
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size()==2 and ready_peers.size()==2)
+	check(db.query("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;"),"network fixture uses production WAL/FULL configuration")
+	check(await server.database.start_auction_queries(),"native reader startup after account migration")
 	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled=false
+	# Hold only service polling so the accepted request stays pending while RPC
+	# duplicates, malformed payloads and the real peer limiter are exercised.
+	server.database.auction_queries.set_process(false)
+	for id: int in world.characters: phase.rpc_id(id,"RPC_RETRY","")
+	await wait_until(func()->bool:return replies.size()==2 and replies.values().all(func(r: Dictionary)->bool:return r.get("duplicates_waiting",false)))
+	server.database.auction_queries.set_process(true)
+	await wait_until(func()->bool:return replies.size()==2 and replies.values().all(func(r: Dictionary)->bool:return r.get("duplicates_ok",false)))
 	for id: int in world.characters: phase.rpc_id(id,"GO","")
 	await wait_until(func() -> bool: return done_peers.size()==2)
 	for id: int in world.characters:
@@ -51,6 +107,7 @@ func run_server() -> void:
 		check(snapshot.name=="Bread Shop" and snapshot.status=="paused" and snapshot.offers.is_empty() and snapshot.claims.is_empty(),"durable private shop state")
 		check(server.database.item_store.inventory(owner).items.size()==2,"no duplicate/lost items after full flow")
 	check(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty(),"network commands preserve global SQL custody")
-	print("MARKET_SERVER_OK native bridge/RPC, private shops, move/price/status, reload receipt, cancel/claim")
+	print("MARKET_SERVER_OK RPC duplicate/malformed/overload correlation, native bridge, private shops, move/price/status, reload receipt, cancel/claim")
+	check(await server.database.auction_queries.pause(),"network fixture drains native reader before quit")
 	await get_tree().create_timer(.5).timeout
 	get_tree().quit()

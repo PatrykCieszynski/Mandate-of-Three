@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-14",
+  "base": "7f274ab24fa5df4161c1e8daa5d812a5f2522aea",
+  "topic": "codex/auction-d2-load",
+  "pre_existing_user_resource_edits_preserved": true,
+  "checks": {
+    "auction_queries": {
+      "status": "PASS",
+      "marker": "AUCTION_QUERIES_OK"
+    },
+    "market_purchase": {
+      "status": "PASS",
+      "marker": "MARKET_PURCHASE_OK"
+    },
+    "exchange_orders": {
+      "status": "PASS",
+      "marker": "EXCHANGE_ORDERS_OK"
+    },
+    "market_search": {
+      "status": "PASS",
+      "marker": "MARKET_SEARCH_OK"
+    },
+    "crash_wal_restore": {
+      "status": "PASS",
+      "marker": "MARKET_RECOVERY_OK"
+    },
+    "load_server": {
+      "status": "PASS",
+      "marker": "MARKET_LOAD_SERVER_OK"
+    },
+    "load_client1": {
+      "status": "PASS",
+      "marker": "MARKET_LOAD_CLIENT_OK"
+    },
+    "load_client2": {
+      "status": "PASS",
+      "marker": "MARKET_LOAD_CLIENT_OK"
+    },
+    "market_network_server": {
+      "status": "PASS",
+      "marker": "MARKET_SERVER_OK"
+    },
+    "market_network_client1": {
+      "status": "PASS",
+      "marker": "MARKET_CLIENT_OK"
+    },
+    "market_network_client2": {
+      "status": "PASS",
+      "marker": "MARKET_CLIENT_OK"
+    },
+    "exchange_network_server": {
+      "status": "PASS",
+      "marker": "EXCHANGE_NETWORK_SERVER_OK"
+    },
+    "exchange_network_client1": {
+      "status": "PASS",
+      "marker": "EXCHANGE_NETWORK_CLIENT_OK"
+    },
+    "exchange_network_client2": {
+      "status": "PASS",
+      "marker": "EXCHANGE_NETWORK_CLIENT_OK"
+    },
+    "upgrade_transaction": {
+      "status": "PASS",
+      "marker": "UPGRADE_TRANSACTION_OK"
+    },
+    "shop_purchase": {
+      "status": "PASS",
+      "marker": "SHOP_PURCHASE_OK"
+    },
+    "npc_foundation": {
+      "status": "PASS",
+      "marker": "NPC_FOUNDATION_OK"
+    },
+    "item_instances": {
+      "status": "PASS",
+      "marker": "ITEM_INSTANCES_OK"
+    },
+    "inventory_grid": {
+      "status": "PASS",
+      "marker": "INVENTORY_GRID_OK"
+    },
+    "ground_items": {
+      "status": "PASS",
+      "marker": "GROUND_ITEMS_OK"
+    },
+    "progression_checkpoint": {
+      "status": "PASS",
+      "marker": "CHECKPOINT_OK"
+    },
+    "yang_wallet": {
+      "status": "PASS",
+      "marker": "WALLET_OK"
+    },
+    "mob_packs": {
+      "status": "PASS",
+      "marker": "MOB_PACKS_OK"
+    },
+    "hit_reactions": {
+      "status": "PASS",
+      "marker": "HIT_REACTIONS_OK"
+    }
+  },
+  "smoke_web_contracts": {
+    "status": "PASS",
+    "passed": 78,
+    "failed": 0
+  },
+  "architecture_boundaries": "PASS",
+  "soci_release_check": "v0.4.1 verified by tools/soci/setup.py --check",
+  "recovery_commit_timings": {
+    "FULL": {
+      "p50_ms": 0.481,
+      "p95_ms": 0.559
+    },
+    "NORMAL": {
+      "p50_ms": 0.134,
+      "p95_ms": 0.215
+    }
+  },
+  "linux_runtime": {
+    "status": "NOT_VERIFIED",
+    "attempt": "wsl -d Ubuntu -- sh -lc uname -a",
+    "error": "Wsl/Service/CreateInstance/CreateVm/HCS/HCS_E_HYPERV_NOT_INSTALLED"
+  },
+  "native_sql_timing": "UNAVAILABLE in public v0.4.1 API",
+  "performance_acceptance": "REVIEW_REQUIRED: write-related tick tails; measurements are observations, not an unconditional D2 gate pass"
+}

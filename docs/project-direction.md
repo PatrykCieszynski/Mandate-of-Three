@@ -10,7 +10,9 @@ transport/replication and persistence. Preserve these working systems. Open-MT2
 is a behavioral reference, not a dependency or runtime.
 
 Marketplace work follows the [v1.1 package sequence](marketplace-implementation-plan.md)
-on the `shop` integration branch. The first package is [E0a verified account
+on the `shop` integration branch. Auction D0–D2 and the PR review fixes are now
+integrated here; [D2 validation boundaries](marketplace-auction-d2.md) remain
+documented. R6 is the next separate stage. The first package is [E0a verified account
 identity](marketplace-e0a-identity.md); account-wide Yang starts only in E0b.
 
 Movement, combat and pickup are server-authoritative. Clients send intentions;

@@ -1,0 +1,33 @@
+{
+  "tag": "v0.4.1",
+  "commit": "b43e37e97b0c2321c678ab81809085f1863003ba",
+  "asset": "godot-soci-v0.4.1.zip",
+  "url": "https://github.com/PatrykCieszynski/godot-soci/releases/download/v0.4.1/godot-soci-v0.4.1.zip",
+  "sha256": "a93c7b4b3a51c16cac336f50dea35fa81df57d106ea557565e9f6f2d460bf0aa",
+  "files": {
+    "addons/godot_soci/LICENSE": "32c8a6004eaff10bdee9d230d781ddabce0c93e2a2b3fc92da9f979ad1c1d739",
+    "addons/godot_soci/README.md": "3411bc50184c303dd85cb8d071f89f3708305e0f3d0124402e197d37a2cf6439",
+    "addons/godot_soci/THIRD_PARTY_NOTICES.md": "4776b7c37099cc1bf3a9eb25870e50476d8c97fea51a3096ab9efe659cfda722",
+    "addons/godot_soci/async_database.gd": "86dba3efd0cd0a650b6cae55923c003fefb30ee80c0e18b897241e7929bcdfbf",
+    "addons/godot_soci/bin/linux/godot_soci.linux.template_debug.x86_64.so": "60692b8d3d731887f02f733f8ae40be8500fb36875857b1ee065bfddcbedc7ed",
+    "addons/godot_soci/bin/linux/godot_soci.linux.template_release.x86_64.so": "490e9315deac0982b5afd03072bd6a848b3684979304052da1bceee349856668",
+    "addons/godot_soci/bin/windows/godot_soci.windows.template_debug.x86_64.dll": "e0438a933d82415d199ddd2cfa25526b372d53616193ef7bf5999f7e0916bd78",
+    "addons/godot_soci/bin/windows/godot_soci.windows.template_release.x86_64.dll": "0c13fb5ec209ad16ae1f0038c23feb26ddb8fbb012468cebaf8caad7194ae20b",
+    "addons/godot_soci/binary.gd": "f81a2670634f67fe929b68d86ba1d56ace9a8c6d5407e77d9768bd05b0a51c9c",
+    "addons/godot_soci/database.gd": "861ae0c07e404d84e3354d22aae040527df667cd4170c697ba35f60ee158cbd1",
+    "addons/godot_soci/docs/API.md": "f367b141d0f782b2e040738f11a795f533b088b68e5e27d60783237fcb55744e",
+    "addons/godot_soci/docs/TESTING.md": "b487bffd9f20b3cb255828aca71c6a3489b71e6a9ad76d96634b8750af1fd370",
+    "addons/godot_soci/licenses/GODOT-CPP-LICENSE.txt": "26a5b210d90760156ce886267ce9df235787dcc6cebfd7ecd95ef5b6fdcc95bf",
+    "addons/godot_soci/licenses/SOCI-LICENSE.txt": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+    "addons/godot_soci/licenses/vcpkg/libpq.txt": "3d6af92ff8a4c2cdf69afb1cf44edea727922f5cd0cf8b5f72b11cdecac8fdfd",
+    "addons/godot_soci/licenses/vcpkg/lz4.txt": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c",
+    "addons/godot_soci/licenses/vcpkg/openssl.txt": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+    "addons/godot_soci/licenses/vcpkg/sqlite3.txt": "1472ec10e27c62157cebd95d9186e8912a75a1a829fe3a612611710da2992ed5",
+    "addons/godot_soci/licenses/vcpkg/vcpkg-cmake-config.txt": "04b60f99a43bfd7fefdc8364b24aac704a2160cef969b75ba6a38b62dc4c4b70",
+    "addons/godot_soci/licenses/vcpkg/vcpkg-cmake-get-vars.txt": "1ee376fc340e0aa6ad6a3581c94126e741468705096ac92263048a21daa86460",
+    "addons/godot_soci/licenses/vcpkg/vcpkg-cmake.txt": "1ee376fc340e0aa6ad6a3581c94126e741468705096ac92263048a21daa86460",
+    "addons/godot_soci/licenses/vcpkg/vcpkg-tool-meson.txt": "1ee376fc340e0aa6ad6a3581c94126e741468705096ac92263048a21daa86460",
+    "addons/godot_soci/licenses/vcpkg/zlib.txt": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2",
+    "addons/godot_soci/soci.gdextension": "40ea49f9be614c1cfa39f4af3621d5a21c901b4dd90640fd304f1ea11c533a06"
+  }
+}

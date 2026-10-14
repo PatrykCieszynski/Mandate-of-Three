@@ -21,6 +21,45 @@ const WALLET_SAVE_SECONDS: float = 30.0
 var runtime_wallets: Dictionary[int, Dictionary] = {}
 var _wallet_accounts: Dictionary[int, int] = {}
 var wallet_ready := false
+var auction_queries: AuctionQueryService
+var _auction_lifecycle_busy := false
+var _auction_quiesced := false
+
+func auction_binding_current() -> bool:
+	if db==null: return false
+	var wanted:=ProjectSettings.globalize_path(database_path if not database_path.is_empty() else db.path)
+	return auction_queries!=null and auction_queries.writer==db and auction_queries.path==wanted
+
+func start_auction_queries() -> bool:
+	if not wallet_ready or db==null: return false
+	if auction_queries==null:
+		auction_queries=AuctionQueryService.new();add_child(auction_queries)
+		auction_queries.recovery_allowed=func()->bool:return wallet_ready and not _auction_quiesced and auction_binding_current()
+	var wanted:=ProjectSettings.globalize_path(database_path if not database_path.is_empty() else db.path)
+	if auction_queries.admissions:
+		var current:=auction_binding_current()
+		if not current: auction_queries.admissions=false
+		return current
+	_auction_quiesced=false
+	return await auction_queries.start(db,wanted)
+
+func coordinated_backup(keep_last: int = 10, restart_reader: bool = true, final_flush: bool = false) -> bool:
+	if _auction_lifecycle_busy: return false
+	_auction_lifecycle_busy=true
+	var had_reader:=auction_queries!=null
+	if had_reader and not await auction_queries.pause():
+		_auction_lifecycle_busy=false;return false
+	var ok:=flush_character() if final_flush else true
+	if ok: ok=backup_database(keep_last)
+	if had_reader and restart_reader and not _auction_quiesced and not await start_auction_queries(): ok=false
+	if ok and not restart_reader: _auction_quiesced=true
+	_auction_lifecycle_busy=false
+	return ok
+
+func shutdown_database() -> bool:
+	if not await coordinated_backup(10,false,true): return false
+	wallet_ready=false
+	return db!=null and db.close_db()
 
 func wallet_account_id(character_id: int) -> int:
 	if not _wallet_accounts.has(character_id) and store != null:
@@ -34,6 +73,7 @@ func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
 	if result.ok and not MarketSearchSqlite.ensure_schema(db): result = {"ok":false,"error":"market_search_migration"}
 	if result.ok and not ExchangeStoreSqlite.ensure_ledger_schema(db): result = {"ok":false,"error":"exchange_ledger_migration"}
 	if result.ok and not ExchangeStoreSqlite.ensure_orders_schema(db): result = {"ok":false,"error":"exchange_orders_migration"}
+	if result.ok and not MarketSearchSqlite.ensure_lookup_schema(db): result = {"ok":false,"error":"market_lookup_migration"}
 	wallet_ready = result.ok
 	return result
 
@@ -201,6 +241,9 @@ func _process(delta: float) -> void:
 
 
 func start_database(world_info: Dictionary) -> void:
+	if auction_queries!=null and auction_queries.reader.dispatcher!=null:
+		push_error("Database reopen refused: pause/drain auction reader first.")
+		return
 	configure_database(world_info)
 	open_database()
 	WorldSchema.ensure_schema(db)
@@ -241,15 +284,13 @@ func open_database() -> void:
 
 
 
-func close_database() -> void:
-	# Plugin doesn’t always expose close explicitly; if it does, call it.
-	# Otherwise let refcount drop; but prefer close if available.
-	flush_character()
+func close_database() -> bool:
+	return await shutdown_database()
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		close_database()
+	# WorldServer coordinates graceful reader drain and writer close.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST: flush_character()
 
 
 func get_player_resource(id: int) -> PlayerResource:
@@ -308,6 +349,8 @@ func save_all_connected(connected_players: Dictionary) -> int:
 ## also folds the -wal back to ~0, so the live .db stays current and the -wal can't
 ## balloon. A reader may prevent truncation; then fail instead of copying a stale DB.
 func backup_database(keep_last: int = 10) -> bool:
+	# Direct callers may only checkpoint after the native reader has been closed.
+	if auction_queries!=null and auction_queries.reader.dispatcher!=null: return false
 	if database_path.is_empty():
 		return false
 	if not FileAccess.file_exists(database_path):
