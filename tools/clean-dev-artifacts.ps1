@@ -1,11 +1,22 @@
 [CmdletBinding(SupportsShouldProcess)]
-param()
+param([string[]]$VerificationPaths = @())
 $ErrorActionPreference = 'Stop'
 $taskRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $taskGodot = Join-Path $taskRoot '.godot'
 if (-not (Test-Path -LiteralPath $taskGodot)) { return }
 if ((Get-Item -LiteralPath $taskGodot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing cleanup through a redirected .godot directory' }
 $taskTargets = @('verification','cef-client/project','cef-spike','check-game-inventory.cjs','check-inventory-click.cjs','check-inventory.cjs','inventory-click-carry.png','inventory-preview-small.png','inventory-preview.png','optional-visual-import.log','optional-visual-test.log')
+if ($VerificationPaths.Count -gt 0) {
+    # Target only this task's diagnostics; keep other tasks and release caches.
+    $taskVerificationRoot=[IO.Path]::GetFullPath((Join-Path $taskGodot 'verification'))
+    $taskTargets=@()
+    foreach ($taskRequested in $VerificationPaths) {
+        if ([IO.Path]::IsPathRooted($taskRequested)) { throw 'Verification cleanup needs a relative child path' }
+        $taskResolved=[IO.Path]::GetFullPath((Join-Path $taskVerificationRoot $taskRequested))
+        if (-not $taskResolved.StartsWith($taskVerificationRoot+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe verification cleanup target: $taskResolved" }
+        $taskTargets += 'verification/'+$taskRequested
+    }
+}
 foreach ($taskRelative in $taskTargets) {
     $taskPath = [IO.Path]::GetFullPath((Join-Path $taskGodot $taskRelative))
     if (-not $taskPath.StartsWith($taskGodot + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe cleanup target: $taskPath" }

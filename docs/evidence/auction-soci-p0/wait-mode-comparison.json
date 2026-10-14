@@ -1,0 +1,112 @@
+[
+  {
+    "profile": "diag-353-o2-nodebug",
+    "wait_mode": "frame",
+    "samples": 30,
+    "metrics": {
+      "wall_us": {
+        "p50_ms": 33.2315,
+        "p95_ms": 40.272,
+        "max_ms": 40.567
+      },
+      "sql_us": {
+        "p50_ms": 24.1255,
+        "p95_ms": 27.44,
+        "max_ms": 30.98
+      },
+      "native_total_us": {
+        "p50_ms": 24.487,
+        "p95_ms": 27.805,
+        "max_ms": 31.398
+      },
+      "marshal_us": {
+        "p50_ms": 0.02,
+        "p95_ms": 0.027,
+        "max_ms": 0.031
+      },
+      "queue_us": {
+        "p50_ms": 0.007,
+        "p95_ms": 0.008,
+        "max_ms": 0.008
+      },
+      "completion_wait_us": {
+        "p50_ms": 1.146,
+        "p95_ms": 6.316,
+        "max_ms": 6.428
+      },
+      "conversion_us": {
+        "p50_ms": 0.23,
+        "p95_ms": 0.277,
+        "max_ms": 0.288
+      }
+    },
+    "residual_p50_ms": 7.5095
+  },
+  {
+    "profile": "diag-353-o2-nodebug",
+    "wait_mode": "signal",
+    "samples": 30,
+    "metrics": {
+      "wall_us": {
+        "p50_ms": 26.401,
+        "p95_ms": 33.255,
+        "max_ms": 33.418
+      },
+      "sql_us": {
+        "p50_ms": 23.564,
+        "p95_ms": 25.199,
+        "max_ms": 26.273
+      },
+      "native_total_us": {
+        "p50_ms": 23.892,
+        "p95_ms": 25.538,
+        "max_ms": 26.655
+      },
+      "marshal_us": {
+        "p50_ms": 0.014,
+        "p95_ms": 0.018,
+        "max_ms": 0.02
+      },
+      "queue_us": {
+        "p50_ms": 0.006,
+        "p95_ms": 0.007,
+        "max_ms": 0.007
+      },
+      "completion_wait_us": {
+        "p50_ms": 1.647,
+        "p95_ms": 6.617,
+        "max_ms": 6.732
+      },
+      "conversion_us": {
+        "p50_ms": 0.2125,
+        "p95_ms": 0.262,
+        "max_ms": 0.263
+      }
+    },
+    "residual_p50_ms": 0.777
+  },
+  {
+    "profile": "release041",
+    "wait_mode": "frame",
+    "samples": 30,
+    "metrics": {
+      "wall_us": {
+        "p50_ms": 33.249,
+        "p95_ms": 40.303,
+        "max_ms": 40.407
+      }
+    }
+  },
+  {
+    "profile": "release041",
+    "wait_mode": "signal",
+    "samples": 30,
+    "metrics": {
+      "wall_us": {
+        "p50_ms": 26.4025,
+        "p95_ms": 32.67,
+        "max_ms": 32.772
+      }
+    }
+  }
+]
