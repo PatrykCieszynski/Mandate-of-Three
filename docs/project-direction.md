@@ -129,10 +129,15 @@ One affix reroll and the party vertical slice remain planned after this focused
 world loop. Regional pressure (kills, threshold, event spawn and reset) remains the
 accepted direction for a later event cadence pass, not another framework now.
 
-World direction: one logical world, later transparent overflow layers, spawn
-regions/regional pressure, viable solo and party play, self-sufficient classes
-and basic QoL without a consumable tax. Numerical values are balance proposals;
-see [design decisions](Mandate_of_Three_Design_Decisions.md).
+World direction: one logical world/realm with dynamic, player-visible public channels
+provisioned per busy map as the preferred policy; hidden overflow layers stay an
+optional routing policy. Public DT-style and private party dungeons share the
+MapInstance lifecycle; later, instances may run across a pool of World Processes
+and machines while economy remains authoritative per realm. This is a deferred
+architecture, not a current refactor: see [world instance ADR](world-instance-architecture.md).
+Spawn regions/regional pressure, viable solo and party play, self-sufficient
+classes and basic QoL without a consumable tax remain gameplay direction.
+Numerical values are balance proposals; see [design decisions](Mandate_of_Three_Design_Decisions.md).
 
 Bosses, free base dungeons, keyed tiers, classes/auras, potions/lure, AOI, local
 prediction, layering and PostgreSQL remain later work. For AOI, consider reusing
