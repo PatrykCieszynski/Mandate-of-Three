@@ -17,6 +17,14 @@ Critical ItemInstance ownership/custody, trade, equipment, purchase, escrow, Yan
 - Claim limits, wallet overflow/max-balance policy, full versus partial claim, and whether Auction and other sale sources use the exact same pool remain open for C3 implementation design. This is **future-state design**: current Shop/Exchange settlement logic and local SQLite runtime are not changed by this document.
 - Local SQLite single-writer and existing `pending_currency_delta` behavior remain unchanged. This design does not approve a premature worker/process migration.
 
+## Accepted shop inventory, listing and escrow semantics (2026-10-14)
+
+- A player shop has a **shop-held item inventory/escrow** distinct from the character's regular Inventory. A shop item and its **listing terms** (fixed price, price-free/negotiable, later optional offers) are different conceptual concerns; they do **not** require distinct physical SQL tables.
+- **Withdraw from shop** means transfer the item back to the character's Inventory **and remove its listing atomically**. If Inventory has no valid target footprint/space, reject the whole withdrawal; the item, shop custody and listing/terms remain unchanged. Do not silently add an extra cancelled-offer vault.
+- **Remove fixed price** leaves the item in shop custody and keeps it visibly listed as **offer-only / negotiable**; it does not withdraw or destroy the listing. Price absent (`null`/explicit no-price mode) must **not** mean zero Yang or free instant purchase.
+- **Change fixed price** updates only listing terms, with no transfer between inventories and no regular Inventory capacity requirement. Price removal/change and instant purchase of the same item compete through atomic offer/item state and revision checks; only one conflicting transition can win.
+- Storage capacity, listing limits, offer-only proposal/acceptance flow, simultaneous buy-now-plus-offers policy and exact UI are separate design decisions. No implementation or schema change is authorized by this document.
+
 ## Accepted protected-loot direction — selected parameters remain open
 
 **Motivation:** keep the familiar physical ground-loot experience and avoid a second inventory full of uncollected trash. A persisted reward manifest is only for selected high-value encounters/reward categories, not every mob or every item. Exact selection/rarity threshold is open. The chosen gameplay rule is not an entitlement to collect everything that drops.
@@ -39,7 +47,7 @@ Critical ItemInstance ownership/custody, trade, equipment, purchase, escrow, Yan
 
 ## Topics to decide
 
-1. **Transaction groups:** seller/buyer wallet, offer revision, escrow, ItemInstance custody, inventory capacity, fee/revenue and receipt must not partially commit.
+1. **Transaction groups:** seller/buyer wallet, offer revision, escrow, ItemInstance custody, inventory capacity, fee/revenue and receipt must not partially commit. Shop withdrawal and price editing rules are accepted above; still define negotiated-offer execution, seller acceptance and funds reservation policies.
 2. **Ground item claim:** World reserves a transient drop; Economy durably grants its UID exactly once; lost reply and duplicate claim reconcile by stable identity. Define drop expiry while claim is pending and handling of orphaned reservations.
 3. **Ground Yang implementation:** batching/controlled loss, atomic spending and handoff reconciliation are accepted above. Still decide exact batching protocol (stable grant/batch IDs or equivalent lease), replay-safe acknowledgment, bound on pending deltas, crash and failed-handoff recovery, and how the UI represents spendable funds before settlement.
 4. **Shop sale income:** separately collectable account-level balance and atomic manual claim are accepted above. Still decide wallet maximum/overflow, partial vs full claim, aggregation across market surfaces, UI synchronization and receipt retention.
