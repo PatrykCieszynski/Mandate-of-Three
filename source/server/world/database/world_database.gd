@@ -34,6 +34,7 @@ func start_auction_queries() -> bool:
 	if not wallet_ready or db==null: return false
 	if auction_queries==null:
 		auction_queries=AuctionQueryService.new();add_child(auction_queries)
+		auction_queries.recovery_allowed=func()->bool:return wallet_ready and not _auction_quiesced and auction_binding_current()
 	var wanted:=ProjectSettings.globalize_path(database_path if not database_path.is_empty() else db.path)
 	if auction_queries.admissions:
 		var current:=auction_binding_current()

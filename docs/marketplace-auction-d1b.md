@@ -45,6 +45,13 @@ on the simulation thread. No fallback silently reintroduces synchronous search.
   currently executing account goes behind other waiting accounts.
 - Duplicate request keys already pending/active do not create another job or
   settle the original twice. Request keys include endpoint, peer and epoch.
+  This check precedes payload validation, admissions and account-budget updates.
+  RPC reserves IDs before validation or peer limiting and retains a bounded
+  64-entry session history. Pending IDs cannot be evicted by rejection spam;
+  native slots still suppress duplicate IDs after terminal timeouts. Changed
+  action/payload under the same retained ID cannot create another result. Old
+  completed IDs may be reused after history eviction; new query attempts should
+  use fresh transport IDs. This is not a durable economic command receipt.
 - One terminal result or explicit session cancellation per admitted job. Expired
   queued work never enters SQL. Queue overflow and admission spam are rejected.
 
@@ -74,6 +81,12 @@ native session, then calls the existing TRUNCATE checkpoint + file copy. Routine
 backup starts a new reader afterwards. Direct backup refuses an open reader.
 Timeout refuses backup/shutdown, leaves the native session alive and continues
 polling; no forced thread termination and no unsafe join on active SQL.
+An aborted drain that suspended a previously available reader enters explicit
+recovery. When its native slot becomes idle, it restores admissions on that
+healthy connection without another backup/start call. World authorizes resumption
+only for its current writer/path, ready wallet and non-quiesced lifecycle. A native
+query error remains fail-closed; a successful pause remains paused until explicit
+restart. Repeated failed drains preserve the original recovery intent.
 
 Master save, periodic backup, restart countdown and graceful shutdown use this
 coordination. Restart countdown leaves the reader closed while waiting for the
@@ -90,6 +103,19 @@ this graceful RPC/window path. Deployment must finish the coordinated shutdown/
 restart protocol first. No addon patches or cancellation workarounds were added.
 
 ## Installation and export
+
+PR #2 review regressions reuse `auction_queries` and the two-client
+`market_network` fixture. They cover recovery without a second lifecycle action,
+repeated failed drain intent, wrong-binding refusal and a successful pause that
+stays closed. RPC coverage holds accepted search work while sending duplicate
+IDs with different actions/malformed payloads, verifies that distinct IDs still
+have their peer budget, floods 80 rejected IDs without evicting the accepted
+request, and checks invalid-first/cursor-first IDs cannot later start valid SQL.
+Direct service coverage verifies duplicates do not consume the account budget.
+These cases protect the two concrete review defects; no new test suite or generic
+receipt framework was introduced. Post-fix async/network, D2 load, WAL recovery,
+10 Godot smoke cases and 78 Web UI contracts passed on Windows. Existing Linux
+and performance acceptance boundaries in the D2 report still apply.
 
 ```powershell
 python tools/soci/setup.py

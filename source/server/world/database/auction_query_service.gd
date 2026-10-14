@@ -10,6 +10,8 @@ var path := ""
 var admissions := false
 var starting := false
 var draining := false
+var recovering := false
+var recovery_allowed: Callable
 var active: Dictionary = {}
 var queued: Dictionary = {}
 var order: Array[int] = []
@@ -28,8 +30,17 @@ func start(database: SQLite, database_path: String) -> bool:
 		push_error("Auction readonly reader failed readiness; search unavailable.")
 	return ok
 
+func has_pending(request_key: String) -> bool:
+	if not active.is_empty() and active.key==request_key: return true
+	for account: int in queued:
+		if queued[account].key==request_key: return true
+	return false
+
 func submit(account: int, request_key: String, payload: Dictionary, deliver: Callable, valid_session: Callable) -> void:
 	if account<=0 or not valid_session.is_valid() or not valid_session.call(): return
+	# A retry cannot validate a different payload, consume budget or produce a
+	# storage/rate error while its original accepted request still owns the ID.
+	if has_pending(request_key): return
 	var built:=MarketSearchSqlite.build_query(payload)
 	if not built.ok:
 		if valid_session.is_valid() and valid_session.call(): deliver.call({"ok":false,"error":built.error})
@@ -40,8 +51,6 @@ func submit(account: int, request_key: String, payload: Dictionary, deliver: Cal
 	rate.count+=1;rates[account]=rate
 	var job: Dictionary={"account":account,"key":request_key,"payload":payload.duplicate(true),"query":built,"accepted":now,"accepted_us":Time.get_ticks_usec(),"deliver":deliver,"valid":valid_session,"terminal":false}
 	if not admissions: _finish(job,{"ok":false,"error":"storage"});return
-	# Duplicate transport IDs must not settle an already accepted request twice.
-	if (not active.is_empty() and active.key==request_key) or (queued.has(account) and queued[account].key==request_key): return
 	if int(rate.count)>ACCOUNT_PER_SECOND: _finish(job,{"ok":false,"error":"rate_limited"});return
 	if queued.has(account):
 		var old: Dictionary=queued[account];queued.erase(account)
@@ -69,6 +78,11 @@ func _finish(job: Dictionary, result: Dictionary) -> void:
 func _process(_delta: float) -> void:
 	var poll_started:=Time.get_ticks_usec()
 	reader.poll()
+	if recovering and active.is_empty() and reader.pending()==0:
+		recovering=false
+		# Never join/close active SQL. An aborted lifecycle operation may resume
+		# this healthy session only if its World still owns the same writer/path.
+		if reader.ready and recovery_allowed.is_valid() and recovery_allowed.call(): admissions=true
 	if observation.has_connections(): observation.emit({"kind":"poll","cost_us":Time.get_ticks_usec()-poll_started,"depth":queued.size()+(0 if active.is_empty() else 1)})
 	var now:=Time.get_ticks_msec()
 	for account: int in rates.keys():
@@ -100,18 +114,21 @@ func _run(job: Dictionary) -> void:
 		_finish(job,result)
 	active={}
 	if not answer.get("ok",false):
-		admissions=false
+		admissions=false;recovering=false
 		for account: int in queued.keys(): _finish(queued[account],{"ok":false,"error":"storage"})
 		queued.clear();order.clear()
 		reader.stop_if_idle()
 
 func pause(budget_ms: int = DEADLINE_MS) -> bool:
 	if draining or starting: return false
+	var resume_on_failure:=admissions or recovering
+	recovering=false
 	admissions=false;draining=true
 	var deadline:=Time.get_ticks_msec()+budget_ms
 	while not active.is_empty() or not queued.is_empty() or reader.pending()!=0:
 		if Time.get_ticks_msec()>=deadline:
 			draining=false # Refuse backup/shutdown; keep polling the live native read.
+			recovering=resume_on_failure
 			return false
 		await get_tree().process_frame
 	var ok:=reader.stop_if_idle()

@@ -71,9 +71,28 @@ func _ready() -> void:
 	for number: int in 9: send(2410,"account_limit%d" % number)
 	assert(results.account_limit8.error=="rate_limited","one account shares admission budget across callers")
 	await wait_for(func()->bool:return results.has("account_limit7"))
-	send(2411,"duplicate");send(2411,"duplicate")
+	send(2411,"duplicate")
+	for attempt: int in 20:
+		send(2411,"duplicate",invalid if attempt%2==0 else P)
 	await wait_for(func()->bool:return results.has("duplicate"))
-	assert(delivered.count("duplicate")==1)
+	assert(delivered.count("duplicate")==1 and results["duplicate"].ok,"valid/malformed retries produce only original success")
+	for number: int in 7:
+		var key:="duplicate_budget%d" % number
+		send(2411,key)
+		await wait_for(func()->bool:return results.has(key))
+		assert(results[key].ok,"duplicate IDs do not consume the account admission budget")
+	send(2411,"duplicate_budget_over")
+	assert(results.duplicate_budget_over.error=="rate_limited")
+	# Recovery must not reopen a session whose World database binding changed.
+	send(2412,"recovery_binding",P,func()->bool:return persistence.auction_binding_current())
+	await wait_for(func()->bool:return not service.active.is_empty())
+	assert(not await service.pause(0))
+	persistence.database_path=db.path+".changed"
+	await wait_for(func()->bool:return service.active.is_empty())
+	send(2413,"recovery_binding_denied")
+	assert(results.recovery_binding_denied.error=="storage" and not results.has("recovery_binding"),"binding mismatch suppresses late delivery and automatic resume")
+	persistence.database_path=db.path
+	assert(await service.pause() and await persistence.start_auction_queries())
 	var token: Dictionary={"live":true}
 	send(2103,"stale",P,func()->bool:return token.live);token.live=false
 	await wait_for(func()->bool:return service.queued.is_empty() and service.active.is_empty())
@@ -99,11 +118,21 @@ func _ready() -> void:
 	var tick_before:=ticks
 	assert(not await service.pause(1),"busy reader drain refuses rather than join an active query")
 	assert(not persistence.backup_database())
+	assert(not await persistence.coordinated_backup(),"failed coordinated drain refuses the backup")
 	await wait_for(func()->bool:return results.has("active_timeout"))
 	assert(results.active_timeout.error=="timeout" and ticks>tick_before,"deadline does not block physics")
-	await wait_for(func()->bool:return service.active.is_empty())
+	send(2401,"active_timeout",invalid)
+	assert(delivered.count("active_timeout")==1,"native slot still deduplicates terminal timeout retries")
+	# No second pause/start/backup repairs the service for this assertion.
+	await wait_for(func()->bool:return service.admissions)
 	assert(db.query("CREATE INDEX affix_item_lookup ON item_affix_index(uid,stat_id,value);"))
-	assert(await persistence.coordinated_backup(),"late SQL drains safely; restart reader")
+	send(2402,"automatic_recovery")
+	await wait_for(func()->bool:return results.has("automatic_recovery"))
+	assert(results.automatic_recovery.ok,"failed backup restores search automatically after late SQL completes")
+	assert(await service.pause(),"successful pause still keeps admissions closed")
+	await get_tree().create_timer(.05).timeout
+	assert(not service.admissions,"successful lifecycle pause must not auto-resume")
+	assert(await persistence.start_auction_queries())
 	for cycle: int in 3:
 		assert(await service.pause() and service.reader.dispatcher==null)
 		assert(await persistence.start_auction_queries())
@@ -112,5 +141,5 @@ func _ready() -> void:
 	assert(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty())
 	assert(await persistence.shutdown_database())
 	var renamed:=db.path+".closed";assert(DirAccess.rename_absolute(db.path,renamed)==OK and DirAccess.remove_absolute(renamed)==OK)
-	print("AUCTION_QUERIES_OK real native async, parity, correlation, bounded/fair admission, stale sessions, deadlines, busy drain refusal, backup/resume/restarts/FULL")
+	print("AUCTION_QUERIES_OK real native async, parity, malformed retry dedup/budget, stale sessions, deadlines, automatic failed-drain recovery/binding guard, successful pause/restarts/FULL")
 	get_tree().quit()
