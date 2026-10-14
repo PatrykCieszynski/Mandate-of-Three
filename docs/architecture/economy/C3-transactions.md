@@ -1,12 +1,12 @@
 # C3 — transactions, persistence and rewards
 
-**Status: Draft — not approved for implementation.**
+**Status: Accepted — architectural contract (2026-10-14).** Gameplay thresholds and storage/recovery implementation details remain open; this does not authorize a code or schema migration.
 
 ## Accepted constraints inherited from C1
 
 Critical ItemInstance ownership/custody, trade, equipment, purchase, escrow, Yang spending and receipt outcomes must be atomic and durable before success is acknowledged. Ordinary unclaimed ground drops may be transient World state. Account Yang is realm-wide, not character- or channel-local.
 
-## Accepted C3 decisions (2026-10-14) — partial acceptance only
+## Accepted C3 decisions (2026-10-14)
 
 - **Ordinary mob-ground Yang may use bounded, batched accrual**, as in the current prototype's positive `pending_currency_delta` and approximately 30-second checkpoints. A sudden World Process crash may lose only the still-uncommitted portion of this **soft grinding income**; this accepted risk does **not** apply to already committed balances or item/trade/Shop outcomes.
 - **Critical spending and economic mutations must settle atomically.** A purchase, upgrade, trade, Exchange order or other meaningful spend must include any relevant pending income in its authoritative transaction (or first safely reconcile it), check funds and commit the item/currency/receipt changes together. Uncommitted client-visible farming income cannot be used to bypass a durable balance check.
@@ -45,24 +45,24 @@ Critical ItemInstance ownership/custody, trade, equipment, purchase, escrow, Yan
 - A selected protected encounter must durably register its manifest/UIDs and claim policy **before exposing protected ground drops**. Claims, transition to a fallback stash and expiry are mutually exclusive durable state transitions: `on_ground -> claimed_by_character` **or** `on_ground -> stash_claimable -> claimed_by_character / expired`; never grant a second UID on recovery. A host crash with a committed manifest but no live instance can trigger fallback without silently consuming the rewards.
 - The *award allocation formula* (damage contribution, party contribution, random distribution), the scope of "eligible party", loot visualization, and detailed dungeon run lifecycle belong to gameplay/dungeon design, not this economic durability contract.
 
-**Status of this section:** accepted direction for selected valuable dungeon rewards: physical drops, solo-owner fallback, party loot becoming shareable after approximately one minute, unclaimed protected party rewards going to the designated leader, and a 12-hour stash expiry. The actual protected-item eligibility/caps, exact timer behavior and world-boss loot policy remain **open**. No change to current gameplay is authorized by this draft.
+**Status of this section:** accepted direction for selected valuable dungeon rewards: physical drops, solo-owner fallback, party loot becoming shareable after approximately one minute, unclaimed protected party rewards going to the designated leader, and a 12-hour stash expiry. The actual protected-item eligibility/caps, exact timer behavior and world-boss loot policy remain **open**. No change to current gameplay is authorized by this architecture document.
 
-## Proposed completion rules — recovery and accounting (pending final review)
+## Accepted transaction/recovery invariants — implementation choices deferred
 
-The following rules close architectural questions; **they are proposals until signed off**, not a rollout plan.
+The principles below are architectural requirements, not a rollout plan. Suggested numeric caps, UI behavior and claim-overflow policy remain explicitly unapproved implementation/gameplay options.
 
 - **Economic transaction boundary:** item pickup/ownership/placement, Shop purchase, exchange/escrow settlement, direct trade, upgrade, and seller-revenue collection each commit all affected monetary and item facts together with the idempotent outcome/receipt. Partial settlement is never exposed. Capacity, custody, prices, revisions and account balances are checked against authoritative state at commit, not inferred from World UI caches.
-- **Crash/timeout reconciliation:** after an ambiguous response, look up the original operation and/or reload authoritative state. Never debit/refund/grant a second time with a fresh ID to "fix" uncertainty. A new World may safely resume a session after snapshot reconciliation, even if the previous World never saw a confirmed response.
+- **Crash/timeout reconciliation:** after an ambiguous response, look up the original operation and/or reload authoritative state. Never debit/refund/grant a second time with a fresh ID to "fix" uncertainty. A new World may resume only after the C2/C4/C5 in-flight-operation discovery and state-reconciliation barrier ensures **no unresolved previously admitted command can silently invalidate gameplay being resumed**. A single snapshot alone is insufficient while an old admitted command may later commit.
 - **Durable versus transient rewards:** ordinary, unclaimed mob drops can disappear with their hosting process; a successfully claimed ItemInstance is committed. Selected protected dungeon loot uses the already-agreed manifest/stash state machine. A boss crash before the manifest commit does not imply the reward was durably promised; don't show the protected loot before that commit.
 - **Account-Yang batch correctness:** future cross-process batched income uses a single earning owner/epoch and replay-safe batch IDs (or an equivalent durable protocol). Force a successful settlement before normal process handoff and any spend dependent on that income. If source crashes with uncommitted grinding Yang, only that accepted soft-income window may be lost. No two processes may both flush the same delta.
 - **Service outages:** disable or show pending state for operations requiring Economy commit; World combat may continue with its last safe equipment view. Never deliver spendable money or item ownership optimistically in an outage.
-- **Claimable shop Yang:** keep the already-agreed separate account revenue ledger. A proposed overflow policy is to allow claiming the amount that fits the spendable wallet while leaving the rest claimable, rather than destroying income or blocking the sale. Specific wallet caps and partial-claim UX remain later balancing/product choices.
+- **Claimable shop Yang:** keep the already-agreed separate account revenue ledger. Overflow must **never lose seller earnings or silently exceed wallet bounds**. Allowing a partial claim while leaving the remainder claimable is **one possible later gameplay policy**, not an accepted requirement; specific wallet caps and claim UX remain open.
 
 ### Failure checks for later implementation
 
 Race a buyer purchase with seller withdrawal/price edit; fill buyer inventory between request and commit; race two purchases for one UID; lose the seller's claim response after commit; crash World with a claimed item but pending presentation; crash a dungeon host after a manifest commit; restart Economy with an unknown command; retry the same Yang batch after lost acknowledgment. Verify balances, ownership, receipts and revisions remain consistent.
 
-## Topics to decide
+## Implementation and gameplay decisions still open
 
 1. **Transaction groups:** seller/buyer wallet, offer revision, escrow, ItemInstance custody, inventory capacity, fee/revenue and receipt must not partially commit. Shop withdrawal and price editing rules are accepted above. Built-in offer acceptance, bidder funds reservation and negotiated-offer settlement are explicitly **deferred**; direct trade uses its own atomic contract when available.
 2. **Ground item claim:** World reserves a transient drop; Economy durably grants its UID exactly once; lost reply and duplicate claim reconcile by stable identity. Define drop expiry while claim is pending and handling of orphaned reservations.
