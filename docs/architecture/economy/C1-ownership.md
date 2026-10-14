@@ -21,7 +21,7 @@ This contract states the target authority boundaries for Economy V2. It does **n
 - All characters of one account in the **same realm** use the same Yang wallet. Different realms, such as Season and Classic, have disjoint economic identities and balances.
 - All channels, overflow layers, public dungeon copies and private party dungeons within a realm share that realm's economy. Instance/host identifiers must never select an independent wallet or shop ledger.
 - Item ownership, placement, inventory capacity and equipment are one transactional domain with trade and Auction. A World simulation cannot create a spendable/tradable item merely by changing its cache.
-- A normal world drop may be transient while unclaimed; only an authoritative, idempotently accepted Economy claim makes an item durable property of an account/character. High-value or guaranteed dungeon rewards may need a stronger durability point; decide in C3.
+- A normal world drop may be transient while unclaimed; only an authoritative, idempotently accepted Economy claim makes an item durable property of an account/character. Selected high-value dungeon rewards use the durable protected-manifest boundary defined in C3; ordinary drops remain transient.
 - World verifies gameplay predicates (distance, loot rights, combat context, NPC proximity) for its own events. Economy verifies economic invariants (UID uniqueness, current custody/revisions, balances, placement/capacity, transaction/receipt uniqueness) and requires authenticated/authorized server provenance for grants. Client-supplied authority is never sufficient.
 - World combat uses a **local snapshot** of equipment/derived stats; no SQL or Economy RPC on each hit. Successful equipment mutations update that cache only after the authoritative committed result. The snapshot cannot grant ownership.
 - Unique items and critical economic mutations retain immediate durable, atomic commit semantics. Soft progression remains a separate checkpointed state category.
@@ -43,4 +43,4 @@ This contract states the target authority boundaries for Economy V2. It does **n
 
 ## Still open — not part of C1 approval
 
-The specific command envelope/transport, exact moment of Yang accrual persistence, seller payout versus collectable income, cross-process handoff protocol, snapshot ordering, PostgreSQL concurrency strategy and deployment topology belong to C2–C5.
+Exact command envelope/transport, batching protocol for soft Yang (not the accepted durability distinction), seller-claim overflow/limits (not the accepted collectable revenue model), handoff messages, snapshot revision granularity, PostgreSQL concurrency strategy and deployment topology belong to C2–C5 and implementation design.
