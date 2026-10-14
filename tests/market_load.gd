@@ -1,5 +1,6 @@
 extends "res://tests/pve_network.gd"
-## R0/R2: production physics/combat/replication + legal 10k offers, two real clients.
+## Historical R0/R2 synchronous load fixture. Retarget to async RPC in D2;
+## this retired synchronous search path must not be reported as D1b acceptance.
 ## Six seconds per phase; emulate 16 query sources at <=8 requests/s/source.
 var measuring := false
 var searching := false

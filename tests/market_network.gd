@@ -11,6 +11,12 @@ func run_client() -> void:
 	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	register_ready.rpc_id(1)
 	await wait_until(func() -> bool: return phase_name=="GO")
+	await web.market_browser.open()
+	var params: Dictionary={"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[],"sort":"price_asc","cursor":"","limit":50}
+	check((await command("market.browser.search",params)).ok,"real bridge/RPC uses asynchronous readonly auction reader")
+	params.cursor="broken"
+	check((await command("market.browser.search",params)).error=="cursor","invalid cursor rejected before SQL")
+	web.market_browser.close()
 	check((await web.market.open()).ok,"open own account shop")
 	var original: Dictionary = world.inventory_endpoint.state.items[0].duplicate(true)
 	check((await command("market.list",{"command_id":"list_a","uid":original.uid,"revision":original.revision,"position":0,"price":100})).ok,"real bridge lists bag item")
@@ -42,6 +48,8 @@ func run_client() -> void:
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size()==2 and ready_peers.size()==2)
+	check(db.query("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;"),"network fixture uses production WAL/FULL configuration")
+	check(await server.database.start_auction_queries(),"native reader startup after account migration")
 	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled=false
 	for id: int in world.characters: phase.rpc_id(id,"GO","")
 	await wait_until(func() -> bool: return done_peers.size()==2)
@@ -52,5 +60,6 @@ func run_server() -> void:
 		check(server.database.item_store.inventory(owner).items.size()==2,"no duplicate/lost items after full flow")
 	check(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty(),"network commands preserve global SQL custody")
 	print("MARKET_SERVER_OK native bridge/RPC, private shops, move/price/status, reload receipt, cancel/claim")
+	check(await server.database.auction_queries.pause(),"network fixture drains native reader before quit")
 	await get_tree().create_timer(.5).timeout
 	get_tree().quit()
