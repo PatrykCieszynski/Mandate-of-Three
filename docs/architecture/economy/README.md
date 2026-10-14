@@ -15,7 +15,7 @@
 ## Accepted cross-cutting direction
 
 - A realm (e.g. Season or Classic) has one **logical economic authority** independent of its number of CH, layers, dungeons, World Processes or machines. Season and Classic economies are isolated, even if infrastructure is shared.
-- Account Yang is shared by all characters of that account **within one realm**. Critical currency/item/equipment/trade operations commit durably and atomically before success is acknowledged. Revenue pending collection in the Shop is a design option; it is **not** an accepted replacement for direct seller credit yet.
+- Account Yang is shared by all characters of that account **within one realm**. Critical currency/item/equipment/trade operations commit durably and atomically before success is acknowledged. Shop/Auction seller revenue is **accepted** as separate account-level `claimable_yang` to be manually claimed in the shop panel; direct credit is not the target future design.
 - The future Economy Service is a separate process, communicating asynchronously with World Processes. One logical authority need not mean a single SQL worker or one physical instance forever.
 - The current development environment remains **single-process World + local SQLite**. PostgreSQL and process extraction come later; do not replace working economy code or add threads just to conform to this design.
 - Simulated gameplay must not wait synchronously for database/network round trips. A particular economic operation may remain pending until its durable result is known.
