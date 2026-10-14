@@ -1,5 +1,7 @@
 # Active plans and work packages
 
+**Documentation cleanup:** [File-by-file audit of `main` and `shop`](documentation-file-audit.md) — separate approved deletion/consolidation pass after review. This is not an automatic deletion instruction.
+
 **Current technical priority:** [Pre-alpha architecture hardening and Auction integration](architecture-hardening.md) — ordered, testable PRs for authentication, RPC boundaries, Marketplace, persistence and World synchronization.
 
 **Gameplay / visuals:** [Project direction](../project-direction.md), [first region](../first-region-graybox.md), [Visual V4 Terrain3D](../visual-upgrade-v4-terrain3d.md), [Warrior feel](../warrior-action-polish.md).
