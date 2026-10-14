@@ -35,12 +35,12 @@
 
 ## Existing implementation and compatibility
 
-The current [persistence policy](../../persistence-policy.md) remains authoritative for the running prototype: RAM/dirty checkpoints for soft progression and some grinding Yang, immediate atomic item and critical Yang spending transactions. Current WorldDatabase, custody, Market, Exchange and auction integration are not changed by these design documents.
+The current [persistence policy](../persistence-policy.md) remains authoritative for the running prototype: RAM/dirty checkpoints for soft progression and some grinding Yang, immediate atomic item and critical Yang spending transactions. Current WorldDatabase, custody, Market, Exchange and auction integration are not changed by these design documents.
 
-The separate [world instance architecture](../../world-instance-architecture.md) covers dynamically created public channels, optional invisible layers, public DT-style and private dungeons, multi-process placement and remote hosts. Economy contracts reference it without duplicating the instance scheduler.
+The separate [world instance architecture](../world-instance-architecture.md) covers dynamically created public channels, optional invisible layers, public DT-style and private dungeons, multi-process placement and remote hosts. Economy contracts reference it without duplicating the instance scheduler.
 
 ## Contract review rules
 
 Each file separates **Accepted**, **Proposed / open**, **Failure contracts**, and **Current code / migration implications**. Do not infer a wire protocol, deployment topology or implementation task from examples. Update contract status only after a concrete decision; mark replaced designs superseded rather than silently rewriting history.
 
-**Next step:** review and merge this **documentation-only** PR separately from code. The existing single-World + SQLite prototype stays unchanged until an explicit migration milestone. A future documentation reorganization should preserve these links and historical test evidence.
+**Current status:** C1–C5 architectural docs have been merged to `main`. The [pre-alpha hardening plan](../../plans/architecture-hardening.md) improves internal World/Shop/session boundaries **now**, while preserving single-World + SQLite until a distinct process-extraction milestone. The [Marketplace decision delta](../../decisions/marketplace-v2-gaps.md) separates newer product decisions from still-open `shop` implementation. Any later documentation relocation must preserve links and historical evidence.
