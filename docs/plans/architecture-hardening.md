@@ -1,6 +1,6 @@
 # Pre-alpha architecture hardening — ordered integration plan
 
-**Status:** Proposed execution sequence, 2026-10-14, for review before implementing. **Scope:** harden current Godot/TinyMMO-based single-World architecture now, before new systems depend on it; future multi-World process extraction remains governed by accepted [Economy C1–C5](../architecture/economy/README.md) and [World topology ADR](../world-instance-architecture.md).
+**Status:** Proposed execution sequence, 2026-10-14, for review before implementing. **Scope:** harden current Godot/TinyMMO-based single-World architecture now, before new systems depend on it; future multi-World process extraction remains governed by accepted [Economy C1–C5](../architecture/economy/README.md) and [World topology ADR](../architecture/world-instance-architecture.md).
 
 **Branch baseline at review:** `main` `8d6230a`; open [Marketplace PR #1](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/1), head `shop` `fa20d77`, adds account-wide marketplace/Exchange/Auction to **shop**, not yet **main**. Auction PR #2 was merged **into `shop`**. Update hashes/status when integration happens.
 
@@ -28,7 +28,7 @@ Preserve currently tested gameplay and native CEF behavior. A code package owns 
 | **A4 — apply accepted Shop UX/payout deltas** | After A3 foundation | Implement Inventory-capacity-backed withdrawal, negotiated-price listings with no buy-now at zero, and account `claimable_yang` ledger + claim UI. Separate product/schema migration PRs when appropriate; use [decision delta](../decisions/marketplace-v2-gaps.md). **Do not** implement bidder offers now. |
 | **A5 — projection/versioning and tick budget** | Before dense combat + large player tests | Make committed facts/revisions drive inventory/equipment/Walet views; invalidate and recompute derived World stats once safely, not via synchronous SQL per hit. Measure costs of COMMIT vs snapshot construction vs fan-out in actual loaded combat. Improve main-thread tails with evidence; do not automatically move the SQLite writer to worker. |
 | **A6 — intra-World transfers and session state machine** | Before CH/multi-process work | Centralize 'can transfer?' and server countdown/cancel/interrupt rules; gate character mutations and flush pending progress/Yang; ensure single active session in current World. Model attempt/epoch IDs with clean abort boundaries, then test disconnect/cancel races. Multi-host registry and PostgreSQL stay future work. |
-| **D1 — documentation layout sweep** | After I0 | With `shop` docs integrated, physically sort old active/historical/evidence pages into [documentation areas](../README.md), repair links across repository and verify Markdown targets. Preserve historical results and do not delete evidence. |
+| **D1 — documentation layout sweep** | In progress independently | Active docs moved into domain folders and obsolete plans removed in the docs-only topic branch. After I0, review additional `shop` reports and evidence separately. |
 
 A1 and A2 may be reordered or combined only if tests and review stay focused. A3/A4 can use multiple small PRs; don't enforce artificial abstractions solely to match the future process topology.
 
@@ -56,5 +56,5 @@ These are distinct from the accepted future **C2 durable cross-process admission
 - The **integration merge gate** (CI, diff/review, existing behavior) differs from the **public alpha gate** (session security, final Marketplace UX/payout, native acceptance and platform needs).
 - The `shop` branch must absorb commits added to `main` after its base. Keep history; do not force-push or squash away already reviewed topic merges.
 - Do not refactor WorldDatabase and Shop schema in the same PR as a bugfix to HTTP sessions.
-- Use [current persistence policy](../persistence-policy.md) as runtime truth until an explicit implementation PR changes it. Accepted [C1–C5](../architecture/economy/README.md) specify the destination, not the current implementation.
+- Use [current persistence policy](../architecture/persistence-policy.md) as runtime truth until an explicit implementation PR changes it. Accepted [C1–C5](../architecture/economy/README.md) specify the destination, not the current implementation.
 - When we need two independent World Processes sharing one realm, plan the durable Economy Service, account-scoped admission/recovery and PostgreSQL as an explicit later milestone. Internal boundaries hardened now should reduce, not conceal, that migration.
