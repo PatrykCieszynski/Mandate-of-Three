@@ -2,7 +2,7 @@
 
 **Data:** 2026-10-14. **Status:** propozycja do review, a nie zrealizowane usunięcia. Sprawdzono zawartość/nagłówki i aktualność dokumentów tekstowych; dwa PDF-y oceniono na podstawie ich towarzyszących Markdown (zgodność PDF nie została porównana). Surowe pliki danych klasyfikowano według użycia i pochodzenia. Zanim usuniemy pliki, trzeba jeszcze sprawdzić wszystkie linki i odwołania z kodu.
 
-**Łącznie:** 66 istniejących plików `docs/` na `main` i 31 nowych na `shop` (razem 97). **Rekomendacje:** ZOSTAW: 30, SCAL → USUŃ: 38, USUŃ: 26, DOWÓD: 3.
+**Łącznie:** 66 istniejących plików `docs/` na `main` i 31 nowych na `shop` (razem 97). **Rekomendacje po przeglądzie:** ZOSTAW: 29, SCAL → USUŃ: 39, USUŃ: 26, DOWÓD: 3. Indeksy dodane w osobnym PR #5 są narzędziem nawigacyjnym, a nie częścią tej bazowej liczby.
 
 **Jak czytać:** *ZOSTAW* = aktywny kontrakt/decyzja/test; *SCAL → USUŃ* = przenieść istotną treść do kanonicznego przewodnika, następnie skasować oryginał; *USUŃ* = zakończone lub historyczne materiały, do skasowania po naprawieniu referencji; *DOWÓD* = raport danych, którego nie warto niszczyć tylko dla estetyki katalogu. Wszystko pozostaje w historii Gita.
 
@@ -39,7 +39,7 @@
 | `docs/legacy-asset-pipeline.md` | **USUŃ** | Wycofany konwerter; przed skasowaniem zachować atrybucję/licencje |
 | `docs/legacy-ui-cache.md` | **SCAL → USUŃ** | Nisza lokalnego exportu UI; przenieść krótką instrukcję do local-dev-visuals |
 | `docs/local-dev-visuals.md` | **ZOSTAW** | Aktywny kontrakt, instrukcja lub materialne decyzje — zachować po aktualizacji linków |
-| `docs/Mandate_of_Three_Design_Decisions.md` | **ZOSTAW** | Aktywny kontrakt, instrukcja lub materialne decyzje — zachować po aktualizacji linków |
+| `docs/Mandate_of_Three_Design_Decisions.md` | **SCAL → USUŃ** | Zawiera wyraźnie **zastąpione** założenie „bez ręcznych CH, tylko ukryte layery”. Zachować tylko nadal aktualne propozycje bossów, drużyn i progresji w nowym dokumencie gameplay; prymat ma ADR `world-instance-architecture.md` |
 | `docs/Mandate_of_Three_Design_Decisions.pdf` | **SCAL → USUŃ** | PDF prawdopodobnie dubluje Markdown; porównać treść przed usunięciem |
 | `docs/Mandate-of-Three_TinyMMO_Spike_Plan.md` | **USUŃ** | Zrealizowany pierwszy plan spike, zastąpiony aktualnymi kontraktami |
 | `docs/Mandate-of-Three_TinyMMO_Spike_Plan.pdf` | **USUŃ** | Historyczna wersja oryginalnego spike-plan, do odzyskania z Git |
@@ -50,7 +50,7 @@
 | `docs/npc-upgrade-ui.md` | **SCAL → USUŃ** | Z działającego Upgrade zachować kontrakt i testy w NPC services |
 | `docs/open-mt2-analysis.md` | **USUŃ** | Historyczna analiza obcego projektu, stare rekomendacje |
 | `docs/persistence-policy.md` | **ZOSTAW** | Aktywny kontrakt, instrukcja lub materialne decyzje — zachować po aktualizacji linków |
-| `docs/project-direction.md` | **SCAL → USUŃ** | Odchudzić ukończone kamienie milowe i stare priorytety, zachować jako aktualny kierunek |
+| `docs/project-direction.md` | **ZOSTAW (przepisać)** | Kanoniczny kierunek projektu używany m.in. przez `AGENTS.md`; skrócić do żywych zasad i najbliższych priorytetów, wyprowadzić kronikę zakończonych etapów |
 | `docs/pve-ground-loot.md` | **USUŃ** | Autor oznaczył pierwszą implementację PvE jako historyczną |
 | `docs/repository-cleanup.md` | **USUŃ** | Kronika porządkowania starego forka, nie bieżąca polityka |
 | `docs/spike-graduation-cleanup.md` | **USUŃ** | Wykonany i zmergowany cleanup pakietu spike |
@@ -60,13 +60,13 @@
 | `docs/spike3d.md` | **USUŃ** | Historyczny prototyp mapy, zastąpiony First Region |
 | `docs/testing.md` | **ZOSTAW** | Aktywny kontrakt, instrukcja lub materialne decyzje — zachować po aktualizacji linków |
 | `docs/third-party-credits.md` | **ZOSTAW** | Aktywny kontrakt, instrukcja lub materialne decyzje — zachować po aktualizacji linków |
-| `docs/TODO.md` | **ZOSTAW** | Aktywny kontrakt, instrukcja lub materialne decyzje — zachować po aktualizacji linków |
+| `docs/TODO.md` | **SCAL → USUŃ** | Nowy plan w `docs/plans/architecture-hardening.md` i indeks `docs/plans/README.md` zastępują osobny TODO. Zlikwidować drugi backlog, po przeniesieniu ewentualnych żywych zadań |
 | `docs/ui-contract.md` | **ZOSTAW** | Aktywny kontrakt, instrukcja lub materialne decyzje — zachować po aktualizacji linków |
 | `docs/visual-upgrade-v0.md` | **SCAL → USUŃ** | Kluczowe CEF/Vulkan gates przenieść do instrukcji renderingu |
 | `docs/visual-upgrade-v1.md` | **SCAL → USUŃ** | Włączyć ustawienia Sky3D do zbiorczej instrukcji visuals |
 | `docs/visual-upgrade-v2.md` | **SCAL → USUŃ** | Włączyć reguły zegara, nieba i dnia/nocy do visuals |
 | `docs/visual-upgrade-v3.md` | **SCAL → USUŃ** | Włączyć reguły wody i shadera do visuals |
-| `docs/visual-upgrade-v4-terrain3d.md` | **ZOSTAW** | Aktywny kontrakt, instrukcja lub materialne decyzje — zachować po aktualizacji linków |
+| `docs/visual-upgrade-v4-terrain3d.md` | **ZOSTAW (zaktualizować)** | Unikalne dowody zgodności Terrain3D, nie zapisywać ich od nowa z pamięci; usunąć historyczne stwierdzenia o statusie brancha i „nie zmergowano” z aktualnej części |
 | `docs/warrior-action-polish.md` | **SCAL → USUŃ** | Połączyć stan maszynowy akcji/impact z dokumentem Warrior |
 | `docs/warrior-basic-combo-v2.md` | **SCAL → USUŃ** | Połączyć aktualny timing kombosów w dokumencie Warrior |
 | `docs/warrior-body-collision.md` | **SCAL → USUŃ** | Połączyć mechanikę BODY i ruchu w dokumencie Warrior |
@@ -114,6 +114,17 @@
 | `docs/marketplace-implementation-plan.md` | **USUŃ** | Ukończony E0–E5; reguły produktu częściowo sprzeczne z C3 |
 | `docs/marketplace-refactor-r0-r2.md` | **SCAL → USUŃ** | Wyniki pomiarów i admission przenieść do Auction |
 | `docs/marketplace-refactor-r3-r4.md` | **SCAL → USUŃ** | Zachować obecny podział Store/Service w dokumencie architektury |
+
+## Wnioski po weryfikacji treści i zależności
+
+- **Nie jest to lista do automatycznego `git rm`.** Przeczytano nagłówki i fragmenty treści oryginalnych Markdown z `main` oraz dodatkowych raportów `shop`; sprawdzono też kluczowe kontrakty (Economy C1–C5, Shop/E0–E5, Terrain3D, aktualne UI, Warrior) oraz dokumenty, które są źródłami linków. Audyt nadal **nie zastępuje** pełnego skanu odnośników z kodu i testów. PDF-y nie były porównywane binarnie.
+- **Najważniejsza realna sprzeczność:** `Mandate_of_Three_Design_Decisions.md` mówi „avoid manually selectable CH”; zaakceptowany `world-instance-architecture.md` wybiera dynamiczne, widoczne CH jako preferowaną politykę. Nie używać starszego dokumentu jako instrukcji dla Codexa. Pozostałe pomysły gameplayowe odzyskać selektywnie, zamiast zachować dwie „aktualne” specyfikacje.
+- **Nie usuwać `project-direction.md`:** `AGENTS.md` wskazuje go jako źródło bieżących priorytetów. Utrzymać mały, aktualny dokument; nie dopisywać historii kolejnych milestone’ów.
+- **Dokumenty wyglądające na sprawozdania, ale zawierające wykonywalne kontrakty:** `warrior-combat-trace-v1.md` (konkretne ms okien ciosów i geometria), `visual-upgrade-v4-terrain3d.md` (dowód złej serializacji i persystencji Terrain3D), `core-ui.md`, `web-ui.md`, `inventory-ui-prototype.md`, `item-instances.md`, `persistence-policy.md` i `testing.md`. Zachować do czasu świadomego skrócenia; nie klasyfikować po słowach `spike`/`prototype` w nazwie.
+- **Licencje i przypisanie źródeł:** `third-party-credits.md` pozostaje. Przed usunięciem `legacy-asset-pipeline.md` sprawdzić, czy istotne ostrzeżenia licencyjne i workflow lokalnych assetów są w `local-dev-visuals.md`.
+- **Linki do usuwanych plików występują już teraz:** główny `README.md` linkuje do spike, starego PvE, Combat Feel, Open-MT2, PDF-ów itd.; `docs/project-direction.md`, `docs/plans/README.md`, `docs/implemented/README.md` i `docs/history/README.md` również wymagają poprawy. Bez aktualizacji linków mechaniczne kasowanie będzie regresją.
+- **Szacunek po konsolidacji:** około 29 oryginalnych dokumentów pozostanie samodzielnych, a około 65 plików tekstowych/historycznych można docelowo skasować z aktualnego drzewa (z tego 39 dopiero po przeniesieniu aktualnych fragmentów). Surowe dowody D2 zostają; duże diagnostyczne P0 dopiero po sprawdzeniu, czy dane nie są potrzebne do powtórzenia porównań.
+- **`shop` i `main` mają inne zestawy dokumentów:** Marketplace/Auction E0–E5 i D0–D2 nie wolno usuwać z bieżącej gałęzi `shop` przed zakończeniem integracji PR #1. W następnym etapie usunąć stary `marketplace-implementation-plan.md` i skonsolidować raporty, ale zachować granice UID custody, Exchange, D1b oraz D2 i powtarzalne testy.
 
 ## Sposób czyszczenia
 
