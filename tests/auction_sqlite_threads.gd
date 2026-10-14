@@ -102,7 +102,7 @@ func _ready() -> void:
 	assert(worker.start(uri(db.path))==OK and await wait_state("idle"))
 	var opening:=worker.status()
 	assert(opening.thread_id!=OS.get_main_thread_id() and opening.connection_instance!=db.get_instance_id())
-	assert(opening.schema==22 and opening.journal=="wal")
+	assert(opening.schema==MarketSearchSqlite.LOOKUP_SCHEMA_VERSION and opening.journal=="wal")
 	assert(opening.options.any(func(option: Dictionary)->bool:return option.values()[0]=="THREADSAFE=1" or option.values()[0]=="THREADSAFE=2"))
 	print("AUCTION_D0_CONNECTION ",JSON.stringify(opening)," main_thread=",OS.get_main_thread_id()," writer_instance=",db.get_instance_id())
 	var one_sql:="SELECT price_yang FROM shop_offers WHERE offer_id=?;"
@@ -166,7 +166,7 @@ func _ready() -> void:
 	assert(db.query("PRAGMA synchronous;") and int(db.query_result[0].synchronous)==2,"writer FULL unchanged")
 	assert(db.query("SELECT value FROM meta WHERE key='d0_forbidden';") and db.query_result.is_empty())
 	assert(db.query("SELECT name FROM sqlite_master WHERE name='d0_forbidden_table';") and db.query_result.is_empty())
-	assert(db.query("SELECT value FROM meta WHERE key='schema_version';") and db.query_result[0].value=="22")
+	assert(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value)==MarketSearchSqlite.LOOKUP_SCHEMA_VERSION)
 	assert(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty())
 	assert(db.query("PRAGMA integrity_check;") and db.query_result[0].values()[0]=="ok")
 	assert(db.query("PRAGMA wal_checkpoint(TRUNCATE);") and db.close_db())

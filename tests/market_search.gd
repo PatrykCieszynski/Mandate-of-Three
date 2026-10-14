@@ -17,6 +17,7 @@ func _ready() -> void:
 	var search:=MarketSearchSqlite.new(db)
 	var p: Dictionary={"definition_id":"iron_sword","upgrade_min":7,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[{"stat_id":"monster_damage","minimum":10},{"stat_id":"critical_chance","minimum":5}],"sort":"price_asc","cursor":"","limit":50}
 	preload("res://tests/fixtures/market_search_fixture.gd").seed(db,owner)
+	verify_lookup_migration(search,owner)
 	p.definition_id="iron_sword"
 	var result:=search.search(p);assert(result.ok and result.results.size()==50 and not result.next_cursor.is_empty())
 	for row: Dictionary in result.results:
@@ -55,3 +56,60 @@ func _ready() -> void:
 	assert(persistence.market_query(owner,"search",p).error=="rate_limited")
 	print("MARKET_SEARCH_OK catalog, AND, inclusive ranges, keyset, limits, projection update, restart, 10k")
 	db.close_db();DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path));get_tree().quit()
+
+func verify_lookup_migration(search: MarketSearchSqlite, owner: int) -> void:
+	# Existing v20 rollback/search coverage does not protect v22->23 atomic DDL,
+	# startup refusal, exact before/after cursors or the new index's write cost.
+	assert(ExchangeStoreSqlite.ensure_ledger_schema(db) and ExchangeStoreSqlite.ensure_orders_schema(db))
+	var controls: Array[Dictionary]=[]
+	for sort: String in ["price_asc","price_desc"]:
+		for filters: Array in [[],[{"stat_id":"monster_damage","minimum":0}],[{"stat_id":"monster_damage","minimum":15},{"stat_id":"critical_chance","minimum":7}]]:
+			var params: Dictionary={"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":WalletStoreSqlite.MAX_YANG,"affix_filters":filters,"sort":sort,"cursor":"","limit":50}
+			for page: int in 2:
+				var response:=search.search(params);assert(response.ok)
+				controls.append({"params":params.duplicate(true),"response":response})
+				params.cursor=response.next_cursor
+	var before:=mutation_cost(owner)
+	assert(db.query("CREATE TEMP TRIGGER fail_lookup BEFORE INSERT ON meta WHEN NEW.value='23' BEGIN SELECT RAISE(ABORT,'lookup migration fault'); END;"))
+	var persistence:=WorldDatabase.new();add_child(persistence);persistence.db=db;persistence.store=WorldStoreSqlite.new(db)
+	assert(db.query("SELECT account_name,master_account_id FROM accounts;"))
+	var manifest: Dictionary={}
+	for row: Dictionary in db.query_result: manifest[row.account_name]=row.master_account_id
+	var failed:=persistence.prepare_account_wallets(manifest)
+	assert(not failed.ok and failed.error=="market_lookup_migration" and not persistence.wallet_ready,"failed index migration prevents admissions readiness")
+	assert(db.query("SELECT value FROM meta WHERE key='schema_version';") and db.query_result[0].value=="22")
+	assert(db.query("SELECT name FROM sqlite_master WHERE name='affix_item_lookup';") and db.query_result.is_empty(),"failed version write rolls back CREATE INDEX")
+	assert(db.query("SELECT COUNT(*) AS n FROM item_instances;") and db.query_result[0].n==10000,"rollback retains all items")
+	assert(db.query("DROP TRIGGER fail_lookup;") and persistence.prepare_account_wallets(manifest).ok and persistence.wallet_ready)
+	assert(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value)==MarketSearchSqlite.LOOKUP_SCHEMA_VERSION)
+	assert(MarketSearchSqlite.ensure_lookup_schema(db),"idempotent repeat")
+	assert(db.query("PRAGMA index_info(affix_item_lookup);") and db.query_result.map(func(row: Dictionary)->String:return row.name)==["uid","stat_id","value"])
+	for control: Dictionary in controls: assert(search.search(control.params)==control.response,"exact content/order/cursor parity across migration")
+	var after:=mutation_cost(owner)
+	print("MARKET_LOOKUP_MUTATIONS ",JSON.stringify({"samples":30,"before":before,"after":after,"includes_atomic_commit":true}))
+	assert(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty())
+	assert(db.query("PRAGMA integrity_check;") and db.query_result[0].values()[0]=="ok")
+	assert(db.close_db() and db.open_db() and MarketSearchSqlite.ensure_lookup_schema(db),"restart preserves v23")
+	persistence.queue_free()
+
+func mutation_cost(owner: int) -> Dictionary:
+	var updates: Array[int]=[];var creates: Array[int]=[];var deletes: Array[int]=[]
+	var uid:="%032x" % 1
+	assert(db.query_with_bindings("SELECT affixes_json FROM item_instances WHERE uid=?;",[uid]))
+	var original: String=db.query_result[0].affixes_json
+	for iteration: int in 30:
+		var started:=Time.get_ticks_usec()
+		assert(db.query("BEGIN IMMEDIATE;") and db.query_with_bindings("UPDATE item_instances SET affixes_json=? WHERE uid=?;",['[{"stat":"monster_damage","value":99}]',uid]) and db.query("COMMIT;"))
+		updates.append(Time.get_ticks_usec()-started)
+		assert(db.query_with_bindings("SELECT stat_id,value FROM item_affix_index WHERE uid=?;",[uid]) and db.query_result.size()==1 and db.query_result[0].value==99)
+		assert(db.query_with_bindings("UPDATE item_instances SET affixes_json=? WHERE uid=?;",[original,uid]))
+		var item:=ItemInstance.create(ItemDefinitions.IRON_SWORD,owner,[{"stat":"monster_damage","value":7}])
+		started=Time.get_ticks_usec();assert(EconomyFixture.insert_item(ItemStoreSqlite.new(db),item,0));creates.append(Time.get_ticks_usec()-started)
+		assert(db.query_with_bindings("SELECT value FROM item_affix_index WHERE uid=?;",[item.uid]) and db.query_result[0].value==7)
+		started=Time.get_ticks_usec();assert(EconomyFixture.destroy_item(db,item.uid));deletes.append(Time.get_ticks_usec()-started)
+		assert(db.query_with_bindings("SELECT uid FROM item_affix_index WHERE uid=?;",[item.uid]) and db.query_result.is_empty(),"item deletion cascades index rows")
+	return {"update":distribution(updates),"create":distribution(creates),"delete":distribution(deletes)}
+
+func distribution(values: Array[int]) -> Dictionary:
+	values.sort()
+	return {"p50_ms":values[values.size()/2]/1000.0,"p95_ms":values[int(ceil(values.size()*0.95))-1]/1000.0,"max_ms":values.back()/1000.0}
