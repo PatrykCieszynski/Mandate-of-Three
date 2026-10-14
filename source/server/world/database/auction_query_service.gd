@@ -14,6 +14,9 @@ var active: Dictionary = {}
 var queued: Dictionary = {}
 var order: Array[int] = []
 var rates: Dictionary = {}
+# Local diagnostics only: no wire fields, retained samples or addon instrumentation.
+# Worker round-trip includes scheduling/poll delivery; it is NOT native SQL time.
+signal observation(sample: Dictionary)
 
 func start(database: SQLite, database_path: String) -> bool:
 	if starting or draining or reader.dispatcher!=null: return false
@@ -35,7 +38,7 @@ func submit(account: int, request_key: String, payload: Dictionary, deliver: Cal
 	var rate: Dictionary=rates.get(account,{"start":now,"count":0})
 	if now-int(rate.start)>=1000: rate={"start":now,"count":0}
 	rate.count+=1;rates[account]=rate
-	var job: Dictionary={"account":account,"key":request_key,"payload":payload.duplicate(true),"query":built,"accepted":now,"deliver":deliver,"valid":valid_session,"terminal":false}
+	var job: Dictionary={"account":account,"key":request_key,"payload":payload.duplicate(true),"query":built,"accepted":now,"accepted_us":Time.get_ticks_usec(),"deliver":deliver,"valid":valid_session,"terminal":false}
 	if not admissions: _finish(job,{"ok":false,"error":"storage"});return
 	# Duplicate transport IDs must not settle an already accepted request twice.
 	if (not active.is_empty() and active.key==request_key) or (queued.has(account) and queued[account].key==request_key): return
@@ -59,10 +62,14 @@ func _finish(job: Dictionary, result: Dictionary) -> void:
 	job.terminal=true
 	var valid: Callable=job.valid
 	var deliver: Callable=job.deliver
-	if valid.is_valid() and deliver.is_valid() and valid.call(): deliver.call(result)
+	if valid.is_valid() and deliver.is_valid() and valid.call():
+		if observation.has_connections(): observation.emit({"kind":"reply","key":job.key,"account":job.account,"ok":result.ok,"error":result.get("error",""),"e2e_us":Time.get_ticks_usec()-int(job.accepted_us)})
+		deliver.call(result)
 
 func _process(_delta: float) -> void:
+	var poll_started:=Time.get_ticks_usec()
 	reader.poll()
+	if observation.has_connections(): observation.emit({"kind":"poll","cost_us":Time.get_ticks_usec()-poll_started,"depth":queued.size()+(0 if active.is_empty() else 1)})
 	var now:=Time.get_ticks_msec()
 	for account: int in rates.keys():
 		if now-int(rates[account].start)>=1000: rates.erase(account)
@@ -80,10 +87,15 @@ func _process(_delta: float) -> void:
 	_run(active)
 
 func _run(job: Dictionary) -> void:
+	var started:=Time.get_ticks_usec()
+	if observation.has_connections(): observation.emit({"kind":"start","key":job.key,"queue_us":started-int(job.accepted_us)})
 	var answer: Dictionary=await reader.query(job.query.sql,job.query.params,int(job.payload.limit)+1)
+	if observation.has_connections(): observation.emit({"kind":"read","key":job.key,"worker_roundtrip_us":Time.get_ticks_usec()-started})
 	if Time.get_ticks_msec()-int(job.accepted)>=DEADLINE_MS: _finish(job,{"ok":false,"error":"timeout"})
 	elif not job.terminal and job.valid.is_valid() and job.valid.call():
+		var projection_started:=Time.get_ticks_usec()
 		var result:=MarketSearchSqlite.project_rows(answer.rows,job.payload,writer) if answer.get("ok",false) and not answer.get("truncated",false) else {"ok":false,"error":"storage"}
+		if observation.has_connections(): observation.emit({"kind":"projection","key":job.key,"cost_us":Time.get_ticks_usec()-projection_started})
 		if Time.get_ticks_msec()-int(job.accepted)>=DEADLINE_MS: result={"ok":false,"error":"timeout"}
 		_finish(job,result)
 	active={}

@@ -4,6 +4,8 @@ extends Node
 
 const PORT: int = 18098
 var map_scene_path: String = "res://tests/fixtures/world3d/test_arena.tscn"
+var database_directory: String = "res://.godot/verification"
+var fixture_connection_number := 0
 var peer := WebSocketMultiplayerPeer.new()
 var world: GameWorld3D
 var server: WorldServer
@@ -47,7 +49,7 @@ func _ready() -> void:
 		add_child(server)
 		ServerInstance.world_server = server
 		db = SQLite.new()
-		db.path = "res://.godot/verification/pve-network-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode()
+		db.path = "%s/pve-network-%s.db" % [database_directory,Crypto.new().generate_random_bytes(8).hex_encode()]
 		check(db.open_db(), "SQLite open")
 		WorldSchema.ensure_schema(db)
 		server.database = WorldDatabase.new()
@@ -65,7 +67,8 @@ func _ready() -> void:
 		# Opt in only in the fixture to retain natural-aggro/return coverage.
 		for dog: MobActor3D in world.mob_system.mobs.values(): dog.proximity_aggro = true
 		api.peer_connected.connect(func(id: int) -> void:
-			var number: int = server.connected_players.size() + 1
+			fixture_connection_number += 1
+			var number: int = fixture_connection_number
 			var owner: int = EconomyFixture.create_character(server.database.store,"pve%d" % number, {"name": "Pve%d" % number, "skin": 1})
 			check(db.query_with_bindings("UPDATE account_wallets SET yang=0 WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);", [owner]), "explicit zero wallet fixture")
 			EconomyFixture.prepare(server.database)

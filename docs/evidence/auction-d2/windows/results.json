@@ -1,0 +1,453 @@
+{
+  "economy": {
+    "added_income": 60,
+    "cycles": 12,
+    "material_total": 10,
+    "rollback_and_receipt_replay": true,
+    "unique_uid": true,
+    "yang_total": 974060
+  },
+  "godot": "4.7.2-stable (official)",
+  "lifecycle": {
+    "backup_ms": 365.738,
+    "backup_verified": true,
+    "capacity_burst": {
+      "accounts": 65,
+      "errors": 1,
+      "ok": 64
+    },
+    "max_pending": 64,
+    "reconnect": true,
+    "restart_ms": 46.13,
+    "traffic_errors": {
+      "rate_limited": 175,
+      "storage": 64
+    }
+  },
+  "native_sql_timing": "unavailable in public v0.4.1 API; worker round-trip is not SQL time",
+  "phases": [
+    {
+      "attacks": 6,
+      "completed_ok": 0,
+      "e2e": {
+        "samples": 0
+      },
+      "economy_cycles": 0,
+      "errors": {},
+      "max_fps": 60,
+      "max_pending": 0,
+      "measured_duration_ms": 5999.3,
+      "native_sql": null,
+      "network_clients": 2,
+      "offered_duration_ms": 6000,
+      "offers": 10000,
+      "per_account_ok": {},
+      "phase": "combat_only",
+      "physics_hz": 60,
+      "physics_work": {
+        "max_ms": 1.148,
+        "p50_ms": 0.454,
+        "p95_ms": 0.666,
+        "p99_ms": 0.889,
+        "samples": 359
+      },
+      "poll_including_callbacks": {
+        "max_ms": 0.017,
+        "p50_ms": 0.005,
+        "p95_ms": 0.011,
+        "p99_ms": 0.013,
+        "samples": 359
+      },
+      "projection": {
+        "samples": 0
+      },
+      "queue_wait": {
+        "samples": 0
+      },
+      "simulated_sources": 16,
+      "source_limit_per_second": 8,
+      "tick_interval": {
+        "max_ms": 16.698,
+        "p50_ms": 16.666,
+        "p95_ms": 16.677,
+        "p99_ms": 16.691,
+        "samples": 358
+      },
+      "worker_roundtrip": {
+        "samples": 0
+      },
+      "write_operations": {}
+    },
+    {
+      "attacks": 7,
+      "completed_ok": 223,
+      "e2e": {
+        "max_ms": 500.957,
+        "p50_ms": 101.312,
+        "p95_ms": 233.346,
+        "p99_ms": 451.303,
+        "samples": 223
+      },
+      "economy_cycles": 0,
+      "errors": {
+        "rate_limited": 545
+      },
+      "max_fps": 60,
+      "max_pending": 19,
+      "measured_duration_ms": 6396.566,
+      "native_sql": null,
+      "network_clients": 2,
+      "offered_duration_ms": 6000,
+      "offers": 10000,
+      "per_account_ok": {
+        "1000": 11,
+        "1001": 11,
+        "2500": 14,
+        "2501": 14,
+        "2502": 14,
+        "2503": 14,
+        "2504": 13,
+        "2505": 13,
+        "2506": 13,
+        "2507": 13,
+        "2508": 12,
+        "2509": 12,
+        "2510": 12,
+        "2511": 12,
+        "2512": 12,
+        "2513": 11,
+        "2514": 11,
+        "2515": 11
+      },
+      "phase": "combat_search",
+      "physics_hz": 60,
+      "physics_work": {
+        "max_ms": 2.309,
+        "p50_ms": 0.513,
+        "p95_ms": 1.432,
+        "p99_ms": 1.922,
+        "samples": 384
+      },
+      "poll_including_callbacks": {
+        "max_ms": 2.982,
+        "p50_ms": 1.203,
+        "p95_ms": 1.892,
+        "p99_ms": 2.187,
+        "samples": 383
+      },
+      "projection": {
+        "max_ms": 2.203,
+        "p50_ms": 1.071,
+        "p95_ms": 1.365,
+        "p99_ms": 1.744,
+        "samples": 223
+      },
+      "queue_wait": {
+        "max_ms": 484.503,
+        "p50_ms": 68.656,
+        "p95_ms": 216.894,
+        "p99_ms": 402.484,
+        "samples": 223
+      },
+      "simulated_sources": 16,
+      "source_limit_per_second": 8,
+      "tick_interval": {
+        "max_ms": 47.707,
+        "p50_ms": 16.666,
+        "p95_ms": 16.689,
+        "p99_ms": 16.96,
+        "samples": 383
+      },
+      "worker_roundtrip": {
+        "max_ms": 61.655,
+        "p50_ms": 31.555,
+        "p95_ms": 48.53,
+        "p99_ms": 49.936,
+        "samples": 223
+      },
+      "write_operations": {}
+    },
+    {
+      "attacks": 6,
+      "completed_ok": 215,
+      "e2e": {
+        "max_ms": 534.815,
+        "p50_ms": 101.251,
+        "p95_ms": 210.705,
+        "p99_ms": 451.76,
+        "samples": 215
+      },
+      "economy_cycles": 6,
+      "errors": {
+        "rate_limited": 569
+      },
+      "max_fps": 60,
+      "max_pending": 19,
+      "measured_duration_ms": 6547.564,
+      "native_sql": null,
+      "network_clients": 2,
+      "offered_duration_ms": 6000,
+      "offers": 10000,
+      "per_account_ok": {
+        "1000": 10,
+        "1001": 10,
+        "2500": 14,
+        "2501": 14,
+        "2502": 13,
+        "2503": 13,
+        "2504": 13,
+        "2505": 13,
+        "2506": 12,
+        "2507": 12,
+        "2508": 12,
+        "2509": 12,
+        "2510": 12,
+        "2511": 11,
+        "2512": 11,
+        "2513": 11,
+        "2514": 11,
+        "2515": 11
+      },
+      "phase": "combat_search_writes",
+      "physics_hz": 60,
+      "physics_work": {
+        "max_ms": 8.3,
+        "p50_ms": 0.53,
+        "p95_ms": 1.41,
+        "p99_ms": 7.84,
+        "samples": 393
+      },
+      "poll_including_callbacks": {
+        "max_ms": 2.479,
+        "p50_ms": 1.117,
+        "p95_ms": 1.838,
+        "p99_ms": 2.144,
+        "samples": 393
+      },
+      "projection": {
+        "max_ms": 1.822,
+        "p50_ms": 1.083,
+        "p95_ms": 1.322,
+        "p99_ms": 1.608,
+        "samples": 215
+      },
+      "queue_wait": {
+        "max_ms": 501.688,
+        "p50_ms": 68.274,
+        "p95_ms": 194.187,
+        "p99_ms": 418.462,
+        "samples": 215
+      },
+      "simulated_sources": 16,
+      "source_limit_per_second": 8,
+      "tick_interval": {
+        "max_ms": 25.017,
+        "p50_ms": 16.666,
+        "p95_ms": 16.704,
+        "p99_ms": 24.219,
+        "samples": 392
+      },
+      "worker_roundtrip": {
+        "max_ms": 49.458,
+        "p50_ms": 31.884,
+        "p95_ms": 48.56,
+        "p99_ms": 49.242,
+        "samples": 215
+      },
+      "write_operations": {
+        "buy": {
+          "max_ms": 12.924,
+          "p50_ms": 9.883,
+          "p95_ms": 12.924,
+          "p99_ms": 12.924,
+          "samples": 13
+        },
+        "cancel_order": {
+          "max_ms": 4.757,
+          "p50_ms": 4.757,
+          "p95_ms": 4.757,
+          "p99_ms": 4.757,
+          "samples": 1
+        },
+        "deposit": {
+          "max_ms": 5.329,
+          "p50_ms": 5.329,
+          "p95_ms": 5.329,
+          "p99_ms": 5.329,
+          "samples": 1
+        },
+        "edit": {
+          "max_ms": 7.91,
+          "p50_ms": 7.532,
+          "p95_ms": 7.91,
+          "p99_ms": 7.91,
+          "samples": 6
+        },
+        "list": {
+          "max_ms": 7.501,
+          "p50_ms": 7.328,
+          "p95_ms": 7.501,
+          "p99_ms": 7.501,
+          "samples": 6
+        },
+        "order": {
+          "max_ms": 10.277,
+          "p50_ms": 10.277,
+          "p95_ms": 10.277,
+          "p99_ms": 10.277,
+          "samples": 2
+        }
+      }
+    },
+    {
+      "attacks": 7,
+      "completed_ok": 196,
+      "e2e": {
+        "max_ms": 467.366,
+        "p50_ms": 101.893,
+        "p95_ms": 267.416,
+        "p99_ms": 434.421,
+        "samples": 196
+      },
+      "economy_cycles": 12,
+      "errors": {
+        "rate_limited": 572
+      },
+      "max_fps": 60,
+      "max_pending": 19,
+      "measured_duration_ms": 6374.065,
+      "native_sql": null,
+      "network_clients": 2,
+      "offered_duration_ms": 6000,
+      "offers": 10000,
+      "per_account_ok": {
+        "1000": 10,
+        "1001": 9,
+        "2500": 12,
+        "2501": 12,
+        "2502": 12,
+        "2503": 12,
+        "2504": 12,
+        "2505": 11,
+        "2506": 11,
+        "2507": 11,
+        "2508": 11,
+        "2509": 11,
+        "2510": 11,
+        "2511": 11,
+        "2512": 10,
+        "2513": 10,
+        "2514": 10,
+        "2515": 10
+      },
+      "phase": "combat_search_write_burst",
+      "physics_hz": 60,
+      "physics_work": {
+        "max_ms": 36.45,
+        "p50_ms": 0.451,
+        "p95_ms": 1.444,
+        "p99_ms": 34.53,
+        "samples": 383
+      },
+      "poll_including_callbacks": {
+        "max_ms": 7.875,
+        "p50_ms": 1.106,
+        "p95_ms": 1.984,
+        "p99_ms": 2.229,
+        "samples": 380
+      },
+      "projection": {
+        "max_ms": 6.429,
+        "p50_ms": 1.142,
+        "p95_ms": 1.373,
+        "p99_ms": 2.894,
+        "samples": 196
+      },
+      "queue_wait": {
+        "max_ms": 451.008,
+        "p50_ms": 68.711,
+        "p95_ms": 251.087,
+        "p99_ms": 400.992,
+        "samples": 196
+      },
+      "simulated_sources": 16,
+      "source_limit_per_second": 8,
+      "tick_interval": {
+        "max_ms": 57.587,
+        "p50_ms": 16.666,
+        "p95_ms": 16.687,
+        "p99_ms": 36.829,
+        "samples": 382
+      },
+      "worker_roundtrip": {
+        "max_ms": 80.58,
+        "p50_ms": 31.964,
+        "p95_ms": 49.292,
+        "p99_ms": 66.535,
+        "samples": 196
+      },
+      "write_operations": {
+        "buy": {
+          "max_ms": 11.738,
+          "p50_ms": 8.834,
+          "p95_ms": 11.738,
+          "p99_ms": 11.738,
+          "samples": 12
+        },
+        "edit": {
+          "max_ms": 7.2,
+          "p50_ms": 6.814,
+          "p95_ms": 7.2,
+          "p99_ms": 7.2,
+          "samples": 6
+        },
+        "list": {
+          "max_ms": 7.204,
+          "p50_ms": 6.962,
+          "p95_ms": 7.204,
+          "p99_ms": 7.204,
+          "samples": 6
+        }
+      }
+    }
+  ],
+  "platform": "Windows",
+  "soci": "0.4.1",
+  "host": {
+    "platform": "Windows-10-10.0.19045-SP0",
+    "processor": "AMD64 Family 25 Model 33 Stepping 0, AuthenticAMD",
+    "logical_cpus": 12
+  },
+  "rpc_clients": [
+    {
+      "client": 1,
+      "e2e": {
+        "max_ms": 484.007,
+        "p50_ms": 266.639,
+        "p95_ms": 283.58,
+        "p99_ms": 484.007,
+        "samples": 72
+      },
+      "errors": {
+        "rate_limited": 41
+      },
+      "ok": 31,
+      "reconnected": false
+    },
+    {
+      "client": 2,
+      "e2e": {
+        "max_ms": 283.617,
+        "p50_ms": 266.477,
+        "p95_ms": 282.526,
+        "p99_ms": 283.617,
+        "samples": 80
+      },
+      "errors": {
+        "rate_limited": 48
+      },
+      "ok": 32,
+      "reconnected": true
+    }
+  ]
+}
