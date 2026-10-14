@@ -413,3 +413,14 @@ bash tests/run-auction-soci-s0.sh /absolute/path/to/Godot_v4.7.2-stable_linux.x8
 Default smoke and both architecture checks passed on Windows: ten Godot cases
 and 78 Web contracts. No native client UI, PostgreSQL, Linux runtime or release
 engine executable acceptance is claimed. Stop after S0 and wait for review.
+
+## P0 follow-up and selected release
+
+[The P0 diagnosis](marketplace-auction-soci-p0.md) separates correlated affix-plan
+cost, SQLite build configuration and coroutine delivery latency. Published
+godot-soci **v0.4.1** is the selected next-stage release; the original v0.4.0 S0
+pin remains historical evidence. With the additional UID-first affix index,
+v0.4.1 passes all nine 10,000-offer fixture cases at the unchanged 2-second gate.
+P0 includes saved timing/EXPLAIN/build evidence and repeatable diagnostic sources,
+then stops for review. No production index migration or D1 reader is implemented
+by this follow-up.

@@ -1,0 +1,290 @@
+[
+  {
+    "profile": "diag-353-o2-nodebug",
+    "state": "baseline",
+    "adapter": "diagnostic_gdsqlite",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 3,
+      "p50_ms": 2962.027,
+      "p95_ms": 3023.526,
+      "max_ms": 3023.526
+    },
+    "sql": {
+      "n": 3,
+      "p50_ms": 2961.436,
+      "p95_ms": 3023.003,
+      "max_ms": 3023.003
+    },
+    "gate_failures": 3
+  },
+  {
+    "profile": "diag-353-o2-nodebug",
+    "state": "baseline",
+    "adapter": "installed_gdsqlite",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 3,
+      "p50_ms": 5404.024,
+      "p95_ms": 5546.973,
+      "max_ms": 5546.973
+    },
+    "sql": null,
+    "gate_failures": 3
+  },
+  {
+    "profile": "diag-353-o2-nodebug",
+    "state": "baseline",
+    "adapter": "soci",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 3,
+      "p50_ms": 2954.724,
+      "p95_ms": 3083.177,
+      "max_ms": 3083.177
+    },
+    "sql": {
+      "n": 3,
+      "p50_ms": 2940.553,
+      "p95_ms": 3069.207,
+      "max_ms": 3069.207
+    },
+    "gate_failures": 3
+  },
+  {
+    "profile": "diag-353-o2-nodebug",
+    "state": "lookup",
+    "adapter": "diagnostic_gdsqlite",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 30,
+      "p50_ms": 24.415,
+      "p95_ms": 28.844,
+      "max_ms": 31.674
+    },
+    "sql": {
+      "n": 30,
+      "p50_ms": 23.9305,
+      "p95_ms": 28.265,
+      "max_ms": 31.094
+    },
+    "gate_failures": 0
+  },
+  {
+    "profile": "diag-353-o2-nodebug",
+    "state": "lookup",
+    "adapter": "installed_gdsqlite",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 30,
+      "p50_ms": 23.516,
+      "p95_ms": 24.095,
+      "max_ms": 31.816
+    },
+    "sql": null,
+    "gate_failures": 0
+  },
+  {
+    "profile": "diag-353-o2-nodebug",
+    "state": "lookup",
+    "adapter": "soci",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 30,
+      "p50_ms": 33.2315,
+      "p95_ms": 40.272,
+      "max_ms": 40.567
+    },
+    "sql": {
+      "n": 30,
+      "p50_ms": 24.1255,
+      "p95_ms": 27.44,
+      "max_ms": 30.98
+    },
+    "gate_failures": 0
+  },
+  {
+    "profile": "release",
+    "state": "baseline",
+    "adapter": "installed_gdsqlite",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 3,
+      "p50_ms": 5207.516,
+      "p95_ms": 5734.996,
+      "max_ms": 5734.996
+    },
+    "sql": null,
+    "gate_failures": 3
+  },
+  {
+    "profile": "release",
+    "state": "baseline",
+    "adapter": "soci",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 3,
+      "p50_ms": 17324.944,
+      "p95_ms": 17365.675,
+      "max_ms": 17365.675
+    },
+    "sql": null,
+    "gate_failures": 3
+  },
+  {
+    "profile": "release",
+    "state": "lookup",
+    "adapter": "installed_gdsqlite",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 30,
+      "p50_ms": 24.3725,
+      "p95_ms": 30.726,
+      "max_ms": 33.571
+    },
+    "sql": null,
+    "gate_failures": 0
+  },
+  {
+    "profile": "release",
+    "state": "lookup",
+    "adapter": "soci",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 30,
+      "p50_ms": 108.9695,
+      "p95_ms": 123.127,
+      "max_ms": 129.928
+    },
+    "sql": null,
+    "gate_failures": 0
+  },
+  {
+    "profile": "release041",
+    "state": "baseline",
+    "adapter": "installed_gdsqlite",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 3,
+      "p50_ms": 5247.78,
+      "p95_ms": 5480.047,
+      "max_ms": 5480.047
+    },
+    "sql": null,
+    "gate_failures": 3
+  },
+  {
+    "profile": "release041",
+    "state": "baseline",
+    "adapter": "soci",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 3,
+      "p50_ms": 2875.459,
+      "p95_ms": 3009.58,
+      "max_ms": 3009.58
+    },
+    "sql": null,
+    "gate_failures": 3
+  },
+  {
+    "profile": "release041",
+    "state": "lookup",
+    "adapter": "installed_gdsqlite",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 30,
+      "p50_ms": 23.99,
+      "p95_ms": 40.542,
+      "max_ms": 47.42
+    },
+    "sql": null,
+    "gate_failures": 0
+  },
+  {
+    "profile": "release041",
+    "state": "lookup",
+    "adapter": "soci",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 30,
+      "p50_ms": 33.249,
+      "p95_ms": 40.303,
+      "max_ms": 40.407
+    },
+    "sql": null,
+    "gate_failures": 0
+  },
+  {
+    "profile": "standalone-353-o2-nodebug",
+    "state": "baseline",
+    "adapter": "pure_soci",
+    "version": "3.53.4",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 3,
+      "p50_ms": 2760.437,
+      "p95_ms": 3056.176,
+      "max_ms": 3056.176
+    },
+    "sql": {
+      "n": 3,
+      "p50_ms": 2760.131,
+      "p95_ms": 3055.827,
+      "max_ms": 3055.827
+    },
+    "gate_failures": 3
+  },
+  {
+    "profile": "standalone-353-o2-nodebug",
+    "state": "lookup",
+    "adapter": "pure_soci",
+    "version": "3.53.4",
+    "rows": [
+      51
+    ],
+    "wall": {
+      "n": 30,
+      "p50_ms": 23.875,
+      "p95_ms": 30.928,
+      "max_ms": 31.336
+    },
+    "sql": {
+      "n": 30,
+      "p50_ms": 23.6125,
+      "p95_ms": 30.626,
+      "max_ms": 31.009
+    },
+    "gate_failures": 0
+  }
+]
