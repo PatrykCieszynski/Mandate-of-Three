@@ -130,6 +130,8 @@ with `--no-ff`. See [AGENTS.md](AGENTS.md).
 
 ## Documentation
 
+**Start with the [documentation map](docs/README.md)**: architecture, accepted decisions, implemented systems, active plans, historical records and evidence. For pre-alpha refactors see the [architecture hardening plan](docs/plans/architecture-hardening.md); future realm-wide Economy contracts are [C1–C5](docs/architecture/economy/README.md).
+
 - [Project direction and priorities](docs/project-direction.md)
 - [Historical decisions and validation](docs/history/README.md)
 - [Persistence policy](docs/persistence-policy.md)
