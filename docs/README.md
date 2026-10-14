@@ -21,6 +21,10 @@
 - [Marketplace policy gaps](decisions/marketplace-v2-gaps.md) — approved UX changes that **are not implemented** by the existing `shop` branch.
 - [Marketplace/Auction PR #1](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/1) — open integration PR at the time this index was written. Auction PR #2 is merged **into `shop`**, not into `main`.
 
+## File-by-file retention review
+
+Before deleting legacy Markdown or collapsing reports, see the [complete documentation audit](plans/documentation-file-audit.md). It covers every file currently on `main` and the additional docs/evidence on the open `shop` branch, with an explicit keep/consolidate/delete recommendation per file. Proposed removals are **not yet applied**; preserve links and unique evidence when executing the cleanup.
+
 ## How to maintain this index
 
 1. Mark **implemented**, **accepted design**, **proposed**, or **historical** explicitly; never equate a merged design document with finished code.
