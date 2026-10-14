@@ -18,7 +18,9 @@
 - For player-initiated actions, the **client carries a stable intention identifier** through retries; an authenticated server binds it to the authorized realm/account, command type and immutable content. The client-provided identifier gives no authority to grant/spend anything. For server-originated rewards/loot, World derives the operation identity from the authoritative event/drop identity rather than creating a fresh ID on every retry. Exact ID allocation, durable retention, collision handling and recovery remain to be specified.
 - Accepted business operations have four **caller-visible outcome classes**: `committed` (successful durable transaction), `rejected` (definitive failure), `pending` (still being processed), and `unknown` (World cannot determine the outcome after a transport failure/timeout). `unknown` is **World's local knowledge state**, never a claim by Economy that no transaction occurred. `unavailable` can be a pre-admission transport/service error and must not be confused with an executed business result.
 - An admitted state-changing operation must have a durable, replayable terminal outcome/receipt for success **and definitive business rejection**, e.g. insufficient Yang. Clearly unadmitted unauthorized or malformed requests need not create durable business receipts; admission/commit atomicity and receipt retention remain open design points.
-- This does not yet settle exact wire schema, cancellation, retry/read-outcome API, receipt retention, admission criteria, or cross-World recovery. C2 remains **Draft** until those are agreed.
+- **Independent economic commands may execute concurrently**; there must not be a mandatory single global transaction queue per realm. Conflicting operations (the same UID, offer, wallet funds, or relevant revision) must be serialized/resolved at the *data invariant* boundary through atomic commits, database constraints, suitable row locking or optimistic revision validation. Their result may be success or a definitive conflict/rejection, but never partial settlement, double ownership or a negative wallet.
+- This does **not** require concurrent writers in the local SQLite implementation: its existing single writer is valid for development. The eventual PostgreSQL backend must preserve the business invariants under genuine concurrency; it cannot rely on SQLite's serialization to prove correctness.
+- This does not yet settle exact wire schema, cancellation, retry/read-outcome API, receipt retention, admission criteria, dependent-command ordering, or cross-World recovery. C2 remains **Draft** until those are agreed.
 
 ## Proposed command model — not yet approved
 
@@ -43,7 +45,7 @@ Candidate command groups: item claim/move/equip, Yang grant/spend, Shop list/buy
 - Exact request/result envelope, authenticated identity proof, realm ID and session epoch, optional expected item/wallet revisions.
 - Exact wire representation of the accepted outcome classes, reliable admission boundary and query-by-ID protocol.
 - Bounds: per-account and per-host concurrency, queue deadline, receipt retention/replay window.
-- Ordering: multiple independent commands per account vs one ordered per-account stream; commands depending on equipment/inventory revision.
+- Ordering and conflict UX for **dependent** commands: expected inventory/equipment/offer revisions, stale responses, and whether a caller explicitly queues a second dependent command. Do not impose one global realm queue.
 - How a new World obtains outcome of a command initiated on an old World.
 
 ## Current code / migration
