@@ -47,6 +47,21 @@ Critical ItemInstance ownership/custody, trade, equipment, purchase, escrow, Yan
 
 **Status of this section:** accepted direction for selected valuable dungeon rewards: physical drops, solo-owner fallback, party loot becoming shareable after approximately one minute, unclaimed protected party rewards going to the designated leader, and a 12-hour stash expiry. The actual protected-item eligibility/caps, exact timer behavior and world-boss loot policy remain **open**. No change to current gameplay is authorized by this draft.
 
+## Proposed completion rules — recovery and accounting (pending final review)
+
+The following rules close architectural questions; **they are proposals until signed off**, not a rollout plan.
+
+- **Economic transaction boundary:** item pickup/ownership/placement, Shop purchase, exchange/escrow settlement, direct trade, upgrade, and seller-revenue collection each commit all affected monetary and item facts together with the idempotent outcome/receipt. Partial settlement is never exposed. Capacity, custody, prices, revisions and account balances are checked against authoritative state at commit, not inferred from World UI caches.
+- **Crash/timeout reconciliation:** after an ambiguous response, look up the original operation and/or reload authoritative state. Never debit/refund/grant a second time with a fresh ID to "fix" uncertainty. A new World may safely resume a session after snapshot reconciliation, even if the previous World never saw a confirmed response.
+- **Durable versus transient rewards:** ordinary, unclaimed mob drops can disappear with their hosting process; a successfully claimed ItemInstance is committed. Selected protected dungeon loot uses the already-agreed manifest/stash state machine. A boss crash before the manifest commit does not imply the reward was durably promised; don't show the protected loot before that commit.
+- **Account-Yang batch correctness:** future cross-process batched income uses a single earning owner/epoch and replay-safe batch IDs (or an equivalent durable protocol). Force a successful settlement before normal process handoff and any spend dependent on that income. If source crashes with uncommitted grinding Yang, only that accepted soft-income window may be lost. No two processes may both flush the same delta.
+- **Service outages:** disable or show pending state for operations requiring Economy commit; World combat may continue with its last safe equipment view. Never deliver spendable money or item ownership optimistically in an outage.
+- **Claimable shop Yang:** keep the already-agreed separate account revenue ledger. A proposed overflow policy is to allow claiming the amount that fits the spendable wallet while leaving the rest claimable, rather than destroying income or blocking the sale. Specific wallet caps and partial-claim UX remain later balancing/product choices.
+
+### Failure checks for later implementation
+
+Race a buyer purchase with seller withdrawal/price edit; fill buyer inventory between request and commit; race two purchases for one UID; lose the seller's claim response after commit; crash World with a claimed item but pending presentation; crash a dungeon host after a manifest commit; restart Economy with an unknown command; retry the same Yang batch after lost acknowledgment. Verify balances, ownership, receipts and revisions remain consistent.
+
 ## Topics to decide
 
 1. **Transaction groups:** seller/buyer wallet, offer revision, escrow, ItemInstance custody, inventory capacity, fee/revenue and receipt must not partially commit. Shop withdrawal and price editing rules are accepted above. Built-in offer acceptance, bidder funds reservation and negotiated-offer settlement are explicitly **deferred**; direct trade uses its own atomic contract when available.
