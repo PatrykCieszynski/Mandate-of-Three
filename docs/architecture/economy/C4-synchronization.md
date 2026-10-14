@@ -14,6 +14,19 @@ World combat reads equipment stats from a local view; never call Economy or SQL 
 - **Dirty alone is insufficient across processes.** Reject older revisions, detect gaps/missing facts, and obtain a fresh authoritative snapshot when needed (including session transfers). An item that is no longer validly equipped must not continue affecting combat; reconcile/invalidate before applying subsequent combat steps that depend on it.
 - Keep the current local SQLite and `WorldServer.runtime_equipment` behavior until C4 and the service boundary are actually implemented. The specific event transport, revision granularity and resync protocol remain open; C4 remains **Draft**.
 
+## Proposed completion rules — snapshot consistency (pending final review)
+
+- **Full snapshot on session entry/transfer:** target World hydrates current inventory/equipment, relevant item revisions, derived combat inputs and account Yang display from Economy before enabling item-dependent gameplay. The snapshot belongs to the new authorized session epoch; it never confers write authority.
+- **Versioned updates:** a committed mutation returns new authoritative revision(s). Apply updates in version order; discard duplicates/older facts. If the World detects an unexplained revision gap or misses a notification, request a full authoritative refresh instead of trying to invent the missing state.
+- **Dirty, then recompute:** an affected equipment item/slot marks dependent stats and presentation as dirty. Consolidate updates and recompute derived combat state once at the next safe tick boundary from a valid snapshot. Do not perform blocking RPC/SQL in combat.
+- **Conflict while mutation is unresolved:** the previous equipment view may remain visible while an operation is pending, but actions that would exploit an item whose status could have changed (equip/unequip/trade/upgrade or an affected combat action) must be gated until reconciliation. Ordinary unrelated combat continues where a safe snapshot exists; when its equipment state cannot be trusted, safely suspend affected actions rather than using stale stats.
+- **Yang display:** account-wallet values shown in the UI may be cached, but Economy always validates actual spending. Account-level wallet/revenue mutations publish revised views or trigger refresh; stale visual balances cannot create credit.
+- **Bounded fan-out:** publish minimal committed facts and/or invalidations, coalesce bursts and build snapshots outside the hot combat path. No global event bus, SQL poll on each attack or immediate broad recomputation is required.
+
+### Tests for later implementation
+
+Reordered equip and upgrade replies; out-of-order revision notifications; missed publication on reconnect; stale combat snapshot after item removal; wallet update while changing CH; multiple invalidations in one tick; Economy outage during equip and normal combat.
+
 ## Topics to decide
 
 - Define independently versioned inventory/equipment snapshots and account Yang views, plus how a new World loads them.
