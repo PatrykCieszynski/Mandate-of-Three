@@ -2,7 +2,7 @@
 
 **Scope:** design contracts for a future realm-wide economy shared by World Processes on one or many hosts. These documents are **not** a request to implement a service, change the live SQLite schema, or start an infrastructure refactor.
 
-**State of decisions (2026-10-14):** C1 accepted; C2–C5 are drafts for review. An accepted contract defines desired future guarantees, not a claim that the current runtime already implements them.
+**State of decisions (2026-10-14):** C1 and C5 are accepted at the architectural level; C2–C4 remain drafts with many accepted individual decisions. Acceptance defines future behavior, not a claim the present runtime already implements it. Open protocol and migration details are explicitly deferred.
 
 | Contract | Status | Concern |
 | --- | --- | --- |
@@ -10,7 +10,7 @@
 | [C2 — commands](C2-commands.md) | **Draft** | Asynchronous command/result envelope, authentication, correlation, retry |
 | [C3 — transactions](C3-transactions.md) | **Draft** | Commit boundaries, loot, Yang accrual, receipts, recovery |
 | [C4 — synchronization](C4-synchronization.md) | **Draft** | Versioned snapshots and combat cache, publication |
-| [C5 — lifecycle](C5-lifecycle.md) | **Draft** | CH/dungeon handoff, session fencing, lost hosts |
+| [C5 — lifecycle](C5-lifecycle.md) | **Accepted (architecture)** | Server-controlled cancellable CH handoff, session fencing, lost hosts; implementation parameters deferred |
 
 ## Accepted cross-cutting direction
 
@@ -30,4 +30,4 @@ The separate [world instance architecture](../../world-instance-architecture.md)
 
 Each file separates **Accepted**, **Proposed / open**, **Failure contracts**, and **Current code / migration implications**. Do not infer a wire protocol, deployment topology or implementation task from examples. Update contract status only after a concrete decision; mark replaced designs superseded rather than silently rewriting history.
 
-**Suggested next discussion:** C2 commands, outcomes, unknown-state recovery and session identity. Then C3–C5. A future documentation reorganization should preserve these links and the historical test evidence.
+**Suggested next review:** reconcile C2–C4 open implementation parameters with the accepted C5 architecture, check cross-contract consistency and prepare the documentation PR for merge. A future documentation reorganization should preserve these links and the historical test evidence.
