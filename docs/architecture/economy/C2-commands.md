@@ -15,7 +15,10 @@
 - The same intended operation retains its `operation_id` across timeout, retry, reconnect, CH/dungeon transition and World Process transfer. Retrying cannot apply an already committed economic mutation twice; a known terminal result is retrievable by that identity.
 - A reused `operation_id` with a different immutable command payload or inconsistent authenticated context must be rejected, never treated as a legitimate repeat. The exact scoping/keying and hashing remain open.
 - An absent response is not evidence of failure or rollback. World must reconcile the original command's outcome rather than creating a *new operation* for a retry.
-- This does not yet settle who allocates/persists `operation_id`, receipt retention, response schema, cancellation, or cross-World recovery. C2 remains **Draft** until those are agreed.
+- For player-initiated actions, the **client carries a stable intention identifier** through retries; an authenticated server binds it to the authorized realm/account, command type and immutable content. The client-provided identifier gives no authority to grant/spend anything. For server-originated rewards/loot, World derives the operation identity from the authoritative event/drop identity rather than creating a fresh ID on every retry. Exact ID allocation, durable retention, collision handling and recovery remain to be specified.
+- Accepted business operations have four **caller-visible outcome classes**: `committed` (successful durable transaction), `rejected` (definitive failure), `pending` (still being processed), and `unknown` (World cannot determine the outcome after a transport failure/timeout). `unknown` is **World's local knowledge state**, never a claim by Economy that no transaction occurred. `unavailable` can be a pre-admission transport/service error and must not be confused with an executed business result.
+- An admitted state-changing operation must have a durable, replayable terminal outcome/receipt for success **and definitive business rejection**, e.g. insufficient Yang. Clearly unadmitted unauthorized or malformed requests need not create durable business receipts; admission/commit atomicity and receipt retention remain open design points.
+- This does not yet settle exact wire schema, cancellation, retry/read-outcome API, receipt retention, admission criteria, or cross-World recovery. C2 remains **Draft** until those are agreed.
 
 ## Proposed command model — not yet approved
 
@@ -23,14 +26,7 @@ Implement the accepted distinction between transport `request_id` and stable `op
 
 Candidate command groups: item claim/move/equip, Yang grant/spend, Shop list/buy/claim, Exchange order/place/cancel, and durable grant of a dungeon reward. World submits a bounded immutable payload and a trusted session/authority context; Economy validates its own invariants and returns the committed result plus relevant revision(s).
 
-**Candidate outcome classes:**
-
-- `committed`: durable outcome known, including a durable business rejection if the contract warrants one; no duplicate effects on retry.
-- `rejected`: definitive validation/auth/capacity/conflict failure (define per-command retry semantics).
-- `unknown`: World timed out or lost transport; it must query/retry with the **same economic command ID**, never create a fresh ID for the same intended mutation.
-- `unavailable`: service refuses admission before durable handling; whether safe to retry depends on the acknowledgment/command status rule.
-
-Do not treat network timeout as proof of rollback. Define explicit `GetCommandOutcome`/status reconciliation versus retry-by-ID semantics, receipt retention, replay authorization and payload hashes during C2 review.
+**Already accepted semantics:** see the accepted C2 decisions above. The concrete status fields and error codes remain a proposal. An admitted business rejection is terminal and idempotent; an unknown result must be reconciled using the original `operation_id`.
 
 ## Failure contracts to make precise
 
@@ -43,9 +39,9 @@ Do not treat network timeout as proof of rollback. Define explicit `GetCommandOu
 
 ## Decisions to confirm
 
-- Stable economic ID creation and recovery: server-generated vs client-intention-derived key; how a newly connected World recovers the **same ID** if the original World crashed before replying; collision/replay controls.
+- Stable ID implementation and recovery: how a newly connected World recovers the **same ID** if the original World crashed before replying, secure realm/account scoping, collision/replay controls and deterministic server-event IDs.
 - Exact request/result envelope, authenticated identity proof, realm ID and session epoch, optional expected item/wallet revisions.
-- Definitive versus ambiguous failure taxonomy and query-by-ID protocol.
+- Exact wire representation of the accepted outcome classes, reliable admission boundary and query-by-ID protocol.
 - Bounds: per-account and per-host concurrency, queue deadline, receipt retention/replay window.
 - Ordering: multiple independent commands per account vs one ordered per-account stream; commands depending on equipment/inventory revision.
 - How a new World obtains outcome of a command initiated on an old World.
