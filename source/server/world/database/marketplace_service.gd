@@ -60,12 +60,6 @@ func _perform_command(character_id: int, action: String, payload: Dictionary) ->
 		"receipt": return market.receipt(character_id,command_id)
 	return {"ok":false,"error":"request"}
 
-# Synchronous reads have no application queue. Shared across every instance/account.
-# One admission / 200 ms (5/s), burst one, and never twice in the same physics frame.
-const MARKET_SEARCH_INTERVAL_MS := 200
-var _market_search_after_ms := 0
-var _market_search_frame := -1
-
 func query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	if _runtime.db==null or not _runtime.wallet_ready: return {"ok":false,"error":"storage"}
 	if _runtime.wallet_account_id(character_id)<=0: return {"ok":false,"error":"owner"}
@@ -76,12 +70,7 @@ func query(character_id: int, action: String, payload: Dictionary) -> Dictionary
 			return snapshot
 		"catalog": return MarketSearchSqlite.catalog(payload.query)
 		"search":
-			if not MarketSearchSqlite.valid(payload): return {"ok":false,"error":"request"}
-			var now:=Time.get_ticks_msec()
-			var frame:=Engine.get_physics_frames()
-			if now<_market_search_after_ms or frame==_market_search_frame: return {"ok":false,"error":"rate_limited"}
-			_market_search_after_ms=now+MARKET_SEARCH_INTERVAL_MS
-			_market_search_frame=frame
-			return MarketSearchSqlite.new(_runtime.db).search(payload)
+			# Search is admitted through AuctionQueryService with asynchronous correlation.
+			return {"ok":false,"error":"request"}
 		"visit": return MarketStoreSqlite.new(_runtime.db,rejected_commands).visit(int(payload.shop_id))
 	return {"ok":false,"error":"request"}

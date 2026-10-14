@@ -116,6 +116,9 @@ func _ready() -> void:
 	var native_profile: String=args.get("s0-native-profile","debug")
 	assert(native_profile in ["debug","release"])
 	if native_profile=="release": extension="res://.godot/verification/soci-release/soci-release-library.gdextension"
+	if ClassDB.class_exists("SociQueryDispatcher"):
+		push_error("Historical S0 needs an isolated diagnostic checkout without the production SOCI addon; refusing mixed native registrations.")
+		get_tree().quit(1);return
 	assert(GDExtensionManager.load_extension(extension)==GDExtensionManager.LOAD_STATUS_OK)
 	dispatcher=ClassDB.instantiate("SociQueryDispatcher")
 	assert(dispatcher!=null)

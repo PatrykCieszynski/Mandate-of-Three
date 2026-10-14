@@ -431,3 +431,10 @@ After accepting the SOCI/P0 choice, [D1a](marketplace-auction-d1a.md) adds the
 atomic startup v22->23 UID-first index migration. It leaves production search
 synchronous and retains godot-sqlite as the economy writer. D1b reader/RPC
 integration waits for this stage's review.
+
+## D1b — production async search, pending review
+
+After D1a acceptance, [D1b](marketplace-auction-d1b.md) introduces the bounded
+World AuctionQueryService, pinned server-only SOCI reader, correlated async RPC
+and coordinated reader lifecycle. It retires the synchronous search gate and
+keeps all economic writers on godot-sqlite. Stop before D2 load acceptance.

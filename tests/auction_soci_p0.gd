@@ -47,6 +47,9 @@ func _ready() -> void:
 	assert(FileAccess.file_exists(base))
 	instrumented=profile.begins_with("diag-")
 	var extension: String=args.get("p0-extension","res://.godot/verification/soci-release/soci-release-library.gdextension")
+	if ClassDB.class_exists("SociQueryDispatcher"):
+		push_error("Pinned P0 benchmarks require an isolated diagnostic checkout without the production SOCI addon; refusing mixed native registrations.")
+		get_tree().quit(1);return
 	assert(GDExtensionManager.load_extension(extension)==GDExtensionManager.LOAD_STATUS_OK)
 	dispatcher=ClassDB.instantiate("SociQueryDispatcher")
 	var states: Array=["baseline","lookup","baseline_analyzed","lookup_analyzed"]

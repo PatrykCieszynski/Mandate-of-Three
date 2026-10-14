@@ -120,7 +120,7 @@ func _on_periodic_save() -> void:
 	if _periodic_save_count % BACKUP_EVERY_N_SAVES != 0:
 		ServerLog.info("Periodic save: %d player(s) flushed." % saved)
 		return
-	var ok: bool = database.backup_database()
+	var ok: bool = await database.coordinated_backup()
 	ServerLog.info("Periodic save: %d player(s) flushed, backup %s." % [saved, "ok" if ok else "FAILED"])
 
 
@@ -135,9 +135,11 @@ func _notification(what: int) -> void:
 		return
 	if database == null:
 		return
-	var saved: int = database.save_all_connected(connected_players)
-	var ok: bool = database.backup_database()
-	ServerLog.info("Shutdown save: %d player(s) flushed, backup %s." % [saved, "ok" if ok else "FAILED"])
+	get_tree().auto_accept_quit=false
+	if database.save_all_connected(connected_players)<0 or not await database.shutdown_database():
+		push_error("Window shutdown refused: checkpoint or auction reader drain failed.")
+		return
+	get_tree().quit()
 
 
 func _connect_multiplayer_api_signals(api: SceneMultiplayer) -> void:
@@ -246,6 +248,7 @@ var data_handlers: Dictionary[StringName, DataRequestHandler]
 
 
 func _ready() -> void:
+	if GameMode.is_world_server(): get_tree().auto_accept_quit=false
 	# Publish the live world-server singleton. Common-side code reaches it as the
 	# typed `WorldServer.curr` (the export plugin stubs this static, so naming the
 	# class in common/ stays client-export-safe).
