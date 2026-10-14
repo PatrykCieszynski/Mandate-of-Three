@@ -1,7 +1,12 @@
-param([ValidateSet('web_inventory','market_network','exchange_network')][string]$Scene='web_inventory')
+param([ValidateSet('web_inventory','market_network','exchange_network','market_load')][string]$Scene='web_inventory')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
+if ($Scene -eq 'market_load') {
+    & python (Join-Path $PSScriptRoot 'run-auction-load.py') --godot $taskExe
+    if ($LASTEXITCODE -ne 0) { throw 'Auction D2 load check failed' }
+    return
+}
 $taskLogs = Join-Path $taskRoot '.godot/verification'
 $taskPreviousAppData = $env:APPDATA
 $taskPreviousLocalAppData = $env:LOCALAPPDATA

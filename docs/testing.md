@@ -258,10 +258,16 @@ Run normal-role account/item session suites sequentially too: their avatars shar
 one live world. Full item relog validates its own public actor, so another fixture
 finishing earlier cannot hang it. Do not run native milestones for routine styles.
 
-Marketplace R0–R2 adds `run-combat.ps1 -Scene market_load -MarkerPrefix MARKET_LOAD`:
-production physics/combat/replication with two real clients plus 16 emulated search
-sources over 10k legal offers. It reports full-physics work and monotonic tick
-intervals, verifies actual impacts and bounds admitted requests; no exact-ms
-assertions. Existing custody/order suites now also protect rejection-spam row
-count, bounded negative cache, conflict, rollback and durable replay. See
-[baseline and measurements](marketplace-refactor-r0-r2.md).
+The historical R0–R2 synchronous `market_load` path is replaced by D2's production
+async reader fixture. Run `run-web-inventory.ps1 -Scene market_load`, or
+`python tests/run-auction-load.py --godot /absolute/path/to/godot` on Windows/Linux.
+It uses 60 Hz/60 FPS, two real RPC clients and sixteen explicitly simulated account
+sources over 10k offers, concurrent combat/AI and atomic mutations, saturation,
+active-traffic backup/reader restart and real reconnect. It reports queue-inclusive
+latency, worker round-trip (not native SQL), poll/projection costs and tick intervals.
+Numbers are review observations, not fragile exact-ms assertions. Existing
+`auction_queries` covers expiration/late results/fairness; `market_recovery` now
+covers an owned process crash during async traffic and reader restart against
+recovered WAL. See [D2 observations and gates](marketplace-auction-d2.md). Existing
+custody/order suites protect rejection-spam row count, bounded negative cache,
+conflict, rollback and durable replay.
