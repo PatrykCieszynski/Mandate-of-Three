@@ -1,5 +1,5 @@
 extends Node
-## P0 only: same SQL/snapshot, no production index/schema/service changes.
+## Historical P0 controls plus D1a production migration; same SQL/snapshot.
 const FIXTURE := preload("res://tests/economy_fixture.gd")
 const CATALOG := preload("res://tests/fixtures/market_search_fixture.gd")
 const SQL := preload("res://tests/fixtures/auction_soci_sql.gd")
@@ -58,6 +58,9 @@ func _ready() -> void:
 		assert(DirAccess.copy_absolute(base,path)==OK)
 		var db := SQLite.new();db.path=path;db.verbosity_level=0
 		assert(db.open_db() and db.query("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;"))
+		if state.begins_with("migrated"):
+			assert(ExchangeStoreSqlite.ensure_ledger_schema(db) and ExchangeStoreSqlite.ensure_orders_schema(db))
+			assert(MarketSearchSqlite.ensure_lookup_schema(db))
 		if state.begins_with("lookup"): assert(db.query("CREATE INDEX affix_item_lookup ON item_affix_index(uid,stat_id,value);"))
 		if state.ends_with("analyzed"): assert(db.query("ANALYZE;"))
 		assert(db.query("PRAGMA wal_checkpoint(TRUNCATE);"))

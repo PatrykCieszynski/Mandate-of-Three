@@ -424,3 +424,10 @@ v0.4.1 passes all nine 10,000-offer fixture cases at the unchanged 2-second gate
 P0 includes saved timing/EXPLAIN/build evidence and repeatable diagnostic sources,
 then stops for review. No production index migration or D1 reader is implemented
 by this follow-up.
+
+## D1a — production index, pending review
+
+After accepting the SOCI/P0 choice, [D1a](marketplace-auction-d1a.md) adds the
+atomic startup v22->23 UID-first index migration. It leaves production search
+synchronous and retains godot-sqlite as the economy writer. D1b reader/RPC
+integration waits for this stage's review.

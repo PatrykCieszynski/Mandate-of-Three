@@ -2,6 +2,7 @@ class_name MarketSearchSqlite
 extends RefCounted
 ## Bounded indexed reads. Rolled affixes are projected on mutation, never parsed per search.
 const STATS := ItemAffixLabels.STATS
+const LOOKUP_SCHEMA_VERSION := 23
 var db: SQLite
 var last_db_usec := 0
 func _init(database: SQLite) -> void: db=database
@@ -20,6 +21,20 @@ static func ensure_schema(database: SQLite) -> bool:
 		"INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version','20');","COMMIT;"
 	]
 	for statement: String in statements:
+		if not database.query(statement):
+			database.query("ROLLBACK;");return false
+	return true
+static func ensure_lookup_schema(database: SQLite) -> bool:
+	# Run after Exchange v22 and before World admits players/starts any reader.
+	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
+	if database.query_result.is_empty(): return false
+	var version := int(database.query_result[0].value)
+	if version >= LOOKUP_SCHEMA_VERSION: return true
+	if version != 22 or not database.query("BEGIN IMMEDIATE;"): return false
+	for statement: String in [
+		"CREATE INDEX IF NOT EXISTS affix_item_lookup ON item_affix_index(uid,stat_id,value);",
+		"INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version','23');", "COMMIT;"
+	]:
 		if not database.query(statement):
 			database.query("ROLLBACK;");return false
 	return true
