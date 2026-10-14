@@ -1,22 +1,53 @@
-import { decode, encode, isCommandResult, isStateMessage } from './protocol.js';
+import { decode, encode, isCommandResult, isStateMessage, isValidDomainState } from './protocol.js';
 export class WebBridge {
     pending = new Map();
+    readyTimer;
+    awaitingSnapshot = false;
+    readyRetryMs;
+    maxReadyAttempts;
+    onReadyTimeout;
     sequence = 0;
     epoch = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-    constructor({ send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => { }, onShortcut = () => { }, onTooltipDetails = () => { }, timeoutMs = 3000 } = {}) {
+    constructor({ send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => { }, onShortcut = () => { }, onTooltipDetails = () => { }, timeoutMs = 3000, readyRetryMs = 250, maxReadyAttempts = 20, onReadyTimeout = () => console.warn("Web UI snapshot handshake timed out") } = {}) {
         this.send = send;
         this.onState = onState;
         this.onShortcut = onShortcut;
         this.onTooltipDetails = onTooltipDetails;
         this.timeoutMs = timeoutMs;
+        this.readyRetryMs = readyRetryMs;
+        this.maxReadyAttempts = maxReadyAttempts;
+        this.onReadyTimeout = onReadyTimeout;
         subscribe(message => this.receive(message));
     }
     event(type, payload = {}) { this.send(encode(type, payload)); }
     ready() {
         this.clearPending('reload');
-        this.event('ui.ready');
+        this.awaitingSnapshot = true;
+        let attempts = 0;
+        const announce = () => {
+            if (!this.awaitingSnapshot)
+                return;
+            attempts++;
+            try {
+                this.event('ui.ready');
+            }
+            catch { /* A startup transport may not be bound yet. */ }
+            if (!this.awaitingSnapshot)
+                return;
+            if (attempts >= this.maxReadyAttempts) {
+                this.awaitingSnapshot = false;
+                this.onReadyTimeout();
+                return;
+            }
+            this.readyTimer = setTimeout(announce, this.readyRetryMs);
+        };
+        announce();
     }
     clearPending(reason) {
+        this.awaitingSnapshot = false;
+        if (this.readyTimer)
+            clearTimeout(this.readyTimer);
+        this.readyTimer = undefined;
         for (const request of this.pending.values()) {
             clearTimeout(request.timer);
             request.reject(Error(reason));
@@ -71,6 +102,12 @@ export class WebBridge {
         else {
             if (!isStateMessage(message))
                 return;
+            if (message.type === "ui.snapshot" && isValidDomainState(message.payload)) {
+                this.awaitingSnapshot = false;
+                if (this.readyTimer)
+                    clearTimeout(this.readyTimer);
+                this.readyTimer = undefined;
+            }
             this.onState(message);
         }
     }
@@ -98,4 +135,14 @@ export function reportInteractiveRegions(bridge, elements) {
     schedule();
     return { refresh: schedule, dispose() { disposed = true; if (frame)
             cancelAnimationFrame(frame); frame = 0; observer.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); } };
+}
+// A narrow presentation lease: text fields capture keyboard, clicks elsewhere do not.
+export function reportTextFocus(bridge) {
+    const report = () => bridge.event('ui.text_focus', { active: document.activeElement instanceof HTMLElement && document.activeElement.matches('[data-ui-text]') && document.activeElement.getClientRects().length > 0 });
+    const leave = () => bridge.event('ui.text_focus', { active: false });
+    document.addEventListener('focusin', report);
+    document.addEventListener('focusout', report);
+    window.addEventListener('blur', leave);
+    window.addEventListener('focus', report);
+    return { dispose() { document.removeEventListener('focusin', report); document.removeEventListener('focusout', report); window.removeEventListener('blur', leave); window.removeEventListener('focus', report); leave(); } };
 }

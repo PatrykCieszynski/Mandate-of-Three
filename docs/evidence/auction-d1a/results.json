@@ -1,0 +1,1272 @@
+{
+  "date": "2026-10-14",
+  "base": "e7ddaab",
+  "engine": "Godot 4.7.2 ed1daf0bf debug/editor",
+  "release": {
+    "tag": "v0.4.1",
+    "commit": "b43e37e97b0c2321c678ab81809085f1863003ba",
+    "asset": "godot-soci-v0.4.1.zip",
+    "url": "https://github.com/PatrykCieszynski/godot-soci/releases/download/v0.4.1/godot-soci-v0.4.1.zip",
+    "sha256": "a93c7b4b3a51c16cac336f50dea35fa81df57d106ea557565e9f6f2d460bf0aa",
+    "files": {
+      "addons/godot_soci/LICENSE": "32c8a6004eaff10bdee9d230d781ddabce0c93e2a2b3fc92da9f979ad1c1d739",
+      "addons/godot_soci/README.md": "3411bc50184c303dd85cb8d071f89f3708305e0f3d0124402e197d37a2cf6439",
+      "addons/godot_soci/THIRD_PARTY_NOTICES.md": "4776b7c37099cc1bf3a9eb25870e50476d8c97fea51a3096ab9efe659cfda722",
+      "addons/godot_soci/async_database.gd": "86dba3efd0cd0a650b6cae55923c003fefb30ee80c0e18b897241e7929bcdfbf",
+      "addons/godot_soci/bin/linux/godot_soci.linux.template_debug.x86_64.so": "60692b8d3d731887f02f733f8ae40be8500fb36875857b1ee065bfddcbedc7ed",
+      "addons/godot_soci/bin/linux/godot_soci.linux.template_release.x86_64.so": "490e9315deac0982b5afd03072bd6a848b3684979304052da1bceee349856668",
+      "addons/godot_soci/bin/windows/godot_soci.windows.template_debug.x86_64.dll": "e0438a933d82415d199ddd2cfa25526b372d53616193ef7bf5999f7e0916bd78",
+      "addons/godot_soci/bin/windows/godot_soci.windows.template_release.x86_64.dll": "0c13fb5ec209ad16ae1f0038c23feb26ddb8fbb012468cebaf8caad7194ae20b",
+      "addons/godot_soci/binary.gd": "f81a2670634f67fe929b68d86ba1d56ace9a8c6d5407e77d9768bd05b0a51c9c",
+      "addons/godot_soci/database.gd": "861ae0c07e404d84e3354d22aae040527df667cd4170c697ba35f60ee158cbd1",
+      "addons/godot_soci/docs/API.md": "f367b141d0f782b2e040738f11a795f533b088b68e5e27d60783237fcb55744e",
+      "addons/godot_soci/docs/TESTING.md": "b487bffd9f20b3cb255828aca71c6a3489b71e6a9ad76d96634b8750af1fd370",
+      "addons/godot_soci/licenses/GODOT-CPP-LICENSE.txt": "26a5b210d90760156ce886267ce9df235787dcc6cebfd7ecd95ef5b6fdcc95bf",
+      "addons/godot_soci/licenses/SOCI-LICENSE.txt": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "addons/godot_soci/licenses/vcpkg/libpq.txt": "3d6af92ff8a4c2cdf69afb1cf44edea727922f5cd0cf8b5f72b11cdecac8fdfd",
+      "addons/godot_soci/licenses/vcpkg/lz4.txt": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c",
+      "addons/godot_soci/licenses/vcpkg/openssl.txt": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+      "addons/godot_soci/licenses/vcpkg/sqlite3.txt": "1472ec10e27c62157cebd95d9186e8912a75a1a829fe3a612611710da2992ed5",
+      "addons/godot_soci/licenses/vcpkg/vcpkg-cmake-config.txt": "04b60f99a43bfd7fefdc8364b24aac704a2160cef969b75ba6a38b62dc4c4b70",
+      "addons/godot_soci/licenses/vcpkg/vcpkg-cmake-get-vars.txt": "1ee376fc340e0aa6ad6a3581c94126e741468705096ac92263048a21daa86460",
+      "addons/godot_soci/licenses/vcpkg/vcpkg-cmake.txt": "1ee376fc340e0aa6ad6a3581c94126e741468705096ac92263048a21daa86460",
+      "addons/godot_soci/licenses/vcpkg/vcpkg-tool-meson.txt": "1ee376fc340e0aa6ad6a3581c94126e741468705096ac92263048a21daa86460",
+      "addons/godot_soci/licenses/vcpkg/zlib.txt": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2",
+      "addons/godot_soci/soci.gdextension": "40ea49f9be614c1cfa39f4af3621d5a21c901b4dd90640fd304f1ea11c533a06"
+    }
+  },
+  "metric": "SOCI submit-to-completed-result including poll, excludes projection; writer wall query time; not inferred native SQL",
+  "profiles": [
+    {
+      "state": "migrated",
+      "raw_sha256": "4047dcb34dd9c591031adde2177c12bf25ef44972e17195b5b8217e9ef1b9ca2",
+      "failures": [],
+      "poll_max_us": 904959,
+      "groups": [
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "broad",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 23.634,
+          "p95_ms": 29.414,
+          "max_ms": 30.285,
+          "connection_cold_ms": 26.28
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "default",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 11.672,
+          "p95_ms": 12.913,
+          "max_ms": 13.853,
+          "connection_cold_ms": 13.915
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "descending",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 11.48,
+          "p95_ms": 15.666,
+          "max_ms": 16.767,
+          "connection_cold_ms": 17.471
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "empty",
+          "n": 30,
+          "matches": 0,
+          "rows": 0,
+          "p50_ms": 21.928,
+          "p95_ms": 27.207,
+          "max_ms": 27.48,
+          "connection_cold_ms": 29.341
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "medium",
+          "n": 30,
+          "matches": 3334,
+          "rows": 51,
+          "p50_ms": 23.846,
+          "p95_ms": 28.69,
+          "max_ms": 29.839,
+          "connection_cold_ms": 24.296
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "pagination",
+          "n": 30,
+          "matches": 9951,
+          "rows": 51,
+          "p50_ms": 8.755,
+          "p95_ms": 9.325,
+          "max_ms": 9.852,
+          "connection_cold_ms": 14.4
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "rare",
+          "n": 30,
+          "matches": 3,
+          "rows": 3,
+          "p50_ms": 0.486,
+          "p95_ms": 0.526,
+          "max_ms": 0.586,
+          "connection_cold_ms": 2.284
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "selective",
+          "n": 30,
+          "matches": 80,
+          "rows": 51,
+          "p50_ms": 3.532,
+          "p95_ms": 4.211,
+          "max_ms": 4.322,
+          "connection_cold_ms": 5.534
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "tie_pagination",
+          "n": 30,
+          "matches": 1,
+          "rows": 1,
+          "p50_ms": 4.995,
+          "p95_ms": 6.079,
+          "max_ms": 6.867,
+          "connection_cold_ms": 8.608
+        },
+        {
+          "adapter": "soci",
+          "case": "broad",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 26.353,
+          "p95_ms": 39.898,
+          "max_ms": 40.615,
+          "connection_cold_ms": 28.617
+        },
+        {
+          "adapter": "soci",
+          "case": "default",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 12.79,
+          "p95_ms": 19.214,
+          "max_ms": 19.271,
+          "connection_cold_ms": 15.165
+        },
+        {
+          "adapter": "soci",
+          "case": "descending",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 19.06,
+          "p95_ms": 19.683,
+          "max_ms": 19.876,
+          "connection_cold_ms": 21.992
+        },
+        {
+          "adapter": "soci",
+          "case": "empty",
+          "n": 30,
+          "matches": 0,
+          "rows": 0,
+          "p50_ms": 6.863,
+          "p95_ms": 6.925,
+          "max_ms": 13.722,
+          "connection_cold_ms": 13.836
+        },
+        {
+          "adapter": "soci",
+          "case": "medium",
+          "n": 30,
+          "matches": 3334,
+          "rows": 51,
+          "p50_ms": 26.369,
+          "p95_ms": 32.982,
+          "max_ms": 33.151,
+          "connection_cold_ms": 28.633
+        },
+        {
+          "adapter": "soci",
+          "case": "pagination",
+          "n": 30,
+          "matches": 9951,
+          "rows": 51,
+          "p50_ms": 19.178,
+          "p95_ms": 19.482,
+          "max_ms": 19.823,
+          "connection_cold_ms": 14.768
+        },
+        {
+          "adapter": "soci",
+          "case": "rare",
+          "n": 30,
+          "matches": 3,
+          "rows": 3,
+          "p50_ms": 6.743,
+          "p95_ms": 6.79,
+          "max_ms": 6.811,
+          "connection_cold_ms": 7.013
+        },
+        {
+          "adapter": "soci",
+          "case": "selective",
+          "n": 30,
+          "matches": 80,
+          "rows": 51,
+          "p50_ms": 5.857,
+          "p95_ms": 6.631,
+          "max_ms": 11.33,
+          "connection_cold_ms": 8.003
+        },
+        {
+          "adapter": "soci",
+          "case": "tie_pagination",
+          "n": 30,
+          "matches": 1,
+          "rows": 1,
+          "p50_ms": 6.8,
+          "p95_ms": 13.659,
+          "max_ms": 13.677,
+          "connection_cold_ms": 13.882
+        }
+      ],
+      "plans": [
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "broad",
+          "matches": 10000,
+          "plan": [
+            {
+              "detail": "SEARCH i USING INDEX market_item_search (definition_id=? AND upgrade_level>? AND upgrade_level<?)",
+              "id": 14,
+              "notused": 49,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH o USING INDEX sqlite_autoindex_shop_offers_2 (item_uid=?)",
+              "id": 26,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": 37,
+              "notused": 45,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_1 (uid=?)",
+              "id": 42,
+              "notused": 46,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 50,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "USE TEMP B-TREE FOR ORDER BY",
+              "id": 88,
+              "notused": 0,
+              "parent": 0
+            }
+          ],
+          "state": "migrated"
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "broad",
+          "matches": 10000,
+          "plan": [
+            {
+              "detail": "SEARCH i USING INDEX market_item_search (definition_id=? AND upgrade_level>? AND upgrade_level<?)",
+              "id": 14,
+              "notused": 49,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH o USING INDEX sqlite_autoindex_shop_offers_2 (item_uid=?)",
+              "id": 26,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": 37,
+              "notused": 45,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_1 (uid=?)",
+              "id": 42,
+              "notused": 46,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 50,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "USE TEMP B-TREE FOR ORDER BY",
+              "id": 88,
+              "notused": 0,
+              "parent": 0
+            }
+          ],
+          "state": "migrated"
+        },
+        {
+          "adapter": "soci",
+          "case": "broad",
+          "matches": 10000,
+          "plan": [
+            {
+              "detail": "SEARCH i USING INDEX market_item_search (definition_id=? AND upgrade_level>? AND upgrade_level<?)",
+              "id": "15",
+              "notused": "49",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": "27",
+              "notused": "47",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH o USING INDEX sqlite_autoindex_shop_offers_2 (item_uid=?)",
+              "id": "36",
+              "notused": "47",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": "47",
+              "notused": "45",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_1 (uid=?)",
+              "id": "52",
+              "notused": "46",
+              "parent": "0"
+            },
+            {
+              "detail": "USE TEMP B-TREE FOR ORDER BY",
+              "id": "86",
+              "notused": "0",
+              "parent": "0"
+            }
+          ],
+          "state": "migrated"
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "selective",
+          "matches": 80,
+          "plan": [
+            {
+              "detail": "SEARCH i USING INDEX market_item_search (definition_id=? AND upgrade_level>? AND upgrade_level<?)",
+              "id": 16,
+              "notused": 49,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH o USING INDEX sqlite_autoindex_shop_offers_2 (item_uid=?)",
+              "id": 28,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": 39,
+              "notused": 45,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_1 (uid=?)",
+              "id": 44,
+              "notused": 46,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 52,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 64,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "USE TEMP B-TREE FOR ORDER BY",
+              "id": 104,
+              "notused": 0,
+              "parent": 0
+            }
+          ],
+          "state": "migrated"
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "selective",
+          "matches": 80,
+          "plan": [
+            {
+              "detail": "SEARCH i USING INDEX market_item_search (definition_id=? AND upgrade_level>? AND upgrade_level<?)",
+              "id": 16,
+              "notused": 49,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH o USING INDEX sqlite_autoindex_shop_offers_2 (item_uid=?)",
+              "id": 28,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": 39,
+              "notused": 45,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_1 (uid=?)",
+              "id": 44,
+              "notused": 46,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 52,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 64,
+              "notused": 47,
+              "parent": 0
+            },
+            {
+              "detail": "USE TEMP B-TREE FOR ORDER BY",
+              "id": 104,
+              "notused": 0,
+              "parent": 0
+            }
+          ],
+          "state": "migrated"
+        },
+        {
+          "adapter": "soci",
+          "case": "selective",
+          "matches": 80,
+          "plan": [
+            {
+              "detail": "SEARCH i USING INDEX market_item_search (definition_id=? AND upgrade_level>? AND upgrade_level<?)",
+              "id": "17",
+              "notused": "49",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": "29",
+              "notused": "47",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": "38",
+              "notused": "47",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH o USING INDEX sqlite_autoindex_shop_offers_2 (item_uid=?)",
+              "id": "47",
+              "notused": "47",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": "58",
+              "notused": "45",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_1 (uid=?)",
+              "id": "63",
+              "notused": "46",
+              "parent": "0"
+            },
+            {
+              "detail": "USE TEMP B-TREE FOR ORDER BY",
+              "id": "99",
+              "notused": "0",
+              "parent": "0"
+            }
+          ],
+          "state": "migrated"
+        }
+      ],
+      "soci_version": [
+        {
+          "version": "3.53.4"
+        }
+      ],
+      "soci_compile_options": [
+        {
+          "compile_options": "ATOMIC_INTRINSICS=0"
+        },
+        {
+          "compile_options": "COMPILER=msvc-1944"
+        },
+        {
+          "compile_options": "DEFAULT_AUTOVACUUM"
+        },
+        {
+          "compile_options": "DEFAULT_CACHE_SIZE=-2000"
+        },
+        {
+          "compile_options": "DEFAULT_FILE_FORMAT=4"
+        },
+        {
+          "compile_options": "DEFAULT_JOURNAL_SIZE_LIMIT=-1"
+        },
+        {
+          "compile_options": "DEFAULT_MMAP_SIZE=0"
+        },
+        {
+          "compile_options": "DEFAULT_PAGE_SIZE=4096"
+        },
+        {
+          "compile_options": "DEFAULT_PCACHE_INITSZ=20"
+        },
+        {
+          "compile_options": "DEFAULT_RECURSIVE_TRIGGERS"
+        },
+        {
+          "compile_options": "DEFAULT_SECTOR_SIZE=4096"
+        },
+        {
+          "compile_options": "DEFAULT_SYNCHRONOUS=2"
+        },
+        {
+          "compile_options": "DEFAULT_WAL_AUTOCHECKPOINT=1000"
+        },
+        {
+          "compile_options": "DEFAULT_WAL_SYNCHRONOUS=2"
+        },
+        {
+          "compile_options": "DEFAULT_WORKER_THREADS=0"
+        },
+        {
+          "compile_options": "DIRECT_OVERFLOW_READ"
+        },
+        {
+          "compile_options": "ENABLE_COLUMN_METADATA"
+        },
+        {
+          "compile_options": "ENABLE_UNLOCK_NOTIFY"
+        },
+        {
+          "compile_options": "MALLOC_SOFT_LIMIT=1024"
+        },
+        {
+          "compile_options": "MAX_ATTACHED=10"
+        },
+        {
+          "compile_options": "MAX_COLUMN=2000"
+        },
+        {
+          "compile_options": "MAX_COMPOUND_SELECT=500"
+        },
+        {
+          "compile_options": "MAX_DEFAULT_PAGE_SIZE=8192"
+        },
+        {
+          "compile_options": "MAX_EXPR_DEPTH=1000"
+        },
+        {
+          "compile_options": "MAX_FUNCTION_ARG=1000"
+        },
+        {
+          "compile_options": "MAX_LENGTH=1000000000"
+        },
+        {
+          "compile_options": "MAX_LIKE_PATTERN_LENGTH=50000"
+        },
+        {
+          "compile_options": "MAX_MMAP_SIZE=0x7fff0000"
+        },
+        {
+          "compile_options": "MAX_PAGE_COUNT=0xfffffffe"
+        },
+        {
+          "compile_options": "MAX_PAGE_SIZE=65536"
+        },
+        {
+          "compile_options": "MAX_SQL_LENGTH=1000000000"
+        },
+        {
+          "compile_options": "MAX_TRIGGER_DEPTH=1000"
+        },
+        {
+          "compile_options": "MAX_VARIABLE_NUMBER=32766"
+        },
+        {
+          "compile_options": "MAX_VDBE_OP=250000000"
+        },
+        {
+          "compile_options": "MAX_WORKER_THREADS=8"
+        },
+        {
+          "compile_options": "MUTEX_W32"
+        },
+        {
+          "compile_options": "SYSTEM_MALLOC"
+        },
+        {
+          "compile_options": "TEMP_STORE=1"
+        },
+        {
+          "compile_options": "THREADSAFE=1"
+        }
+      ]
+    },
+    {
+      "state": "migrated_analyzed",
+      "raw_sha256": "543ce8f8abff83e46b61319d401b69e148c52396db13fc16f1e9c51818617872",
+      "failures": [],
+      "poll_max_us": 598661,
+      "groups": [
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "broad",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 0.647,
+          "p95_ms": 0.935,
+          "max_ms": 0.999,
+          "connection_cold_ms": 1.433
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "default",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 0.461,
+          "p95_ms": 0.502,
+          "max_ms": 0.527,
+          "connection_cold_ms": 1.134
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "descending",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 0.406,
+          "p95_ms": 0.53,
+          "max_ms": 0.563,
+          "connection_cold_ms": 1.21
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "empty",
+          "n": 30,
+          "matches": 0,
+          "rows": 0,
+          "p50_ms": 14.672,
+          "p95_ms": 20.568,
+          "max_ms": 20.712,
+          "connection_cold_ms": 31.145
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "medium",
+          "n": 30,
+          "matches": 3334,
+          "rows": 51,
+          "p50_ms": 0.734,
+          "p95_ms": 1.139,
+          "max_ms": 1.145,
+          "connection_cold_ms": 2.266
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "pagination",
+          "n": 30,
+          "matches": 9951,
+          "rows": 51,
+          "p50_ms": 0.426,
+          "p95_ms": 0.702,
+          "max_ms": 0.703,
+          "connection_cold_ms": 1.085
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "rare",
+          "n": 30,
+          "matches": 3,
+          "rows": 3,
+          "p50_ms": 0.165,
+          "p95_ms": 0.242,
+          "max_ms": 0.282,
+          "connection_cold_ms": 0.72
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "selective",
+          "n": 30,
+          "matches": 80,
+          "rows": 51,
+          "p50_ms": 1.823,
+          "p95_ms": 5.972,
+          "max_ms": 18.495,
+          "connection_cold_ms": 3.771
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "tie_pagination",
+          "n": 30,
+          "matches": 1,
+          "rows": 1,
+          "p50_ms": 0.127,
+          "p95_ms": 0.234,
+          "max_ms": 0.316,
+          "connection_cold_ms": 0.872
+        },
+        {
+          "adapter": "soci",
+          "case": "broad",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 5.522,
+          "p95_ms": 6.452,
+          "max_ms": 6.544,
+          "connection_cold_ms": 9.073
+        },
+        {
+          "adapter": "soci",
+          "case": "default",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 5.633,
+          "p95_ms": 5.994,
+          "max_ms": 5.997,
+          "connection_cold_ms": 7.862
+        },
+        {
+          "adapter": "soci",
+          "case": "descending",
+          "n": 30,
+          "matches": 10000,
+          "rows": 51,
+          "p50_ms": 5.377,
+          "p95_ms": 5.997,
+          "max_ms": 6.666,
+          "connection_cold_ms": 8.085
+        },
+        {
+          "adapter": "soci",
+          "case": "empty",
+          "n": 30,
+          "matches": 0,
+          "rows": 0,
+          "p50_ms": 13.73,
+          "p95_ms": 20.597,
+          "max_ms": 20.69,
+          "connection_cold_ms": 13.794
+        },
+        {
+          "adapter": "soci",
+          "case": "medium",
+          "n": 30,
+          "matches": 3334,
+          "rows": 51,
+          "p50_ms": 5.719,
+          "p95_ms": 6.707,
+          "max_ms": 9.177,
+          "connection_cold_ms": 8.038
+        },
+        {
+          "adapter": "soci",
+          "case": "pagination",
+          "n": 30,
+          "matches": 9951,
+          "rows": 51,
+          "p50_ms": 5.598,
+          "p95_ms": 6.116,
+          "max_ms": 6.363,
+          "connection_cold_ms": 8.064
+        },
+        {
+          "adapter": "soci",
+          "case": "rare",
+          "n": 30,
+          "matches": 3,
+          "rows": 3,
+          "p50_ms": 6.707,
+          "p95_ms": 6.821,
+          "max_ms": 6.852,
+          "connection_cold_ms": 7.007
+        },
+        {
+          "adapter": "soci",
+          "case": "selective",
+          "n": 30,
+          "matches": 80,
+          "rows": 51,
+          "p50_ms": 6.015,
+          "p95_ms": 31.668,
+          "max_ms": 54.122,
+          "connection_cold_ms": 15.685
+        },
+        {
+          "adapter": "soci",
+          "case": "tie_pagination",
+          "n": 30,
+          "matches": 1,
+          "rows": 1,
+          "p50_ms": 6.774,
+          "p95_ms": 6.842,
+          "max_ms": 6.85,
+          "connection_cold_ms": 6.973
+        }
+      ],
+      "plans": [
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "broad",
+          "matches": 10000,
+          "plan": [
+            {
+              "detail": "SEARCH o USING INDEX market_price_search (price_yang>? AND price_yang<?)",
+              "id": 14,
+              "notused": 97,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH i USING INDEX sqlite_autoindex_item_instances_1 (uid=?)",
+              "id": 24,
+              "notused": 42,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": 34,
+              "notused": 36,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_3 (uid=?)",
+              "id": 39,
+              "notused": 42,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 47,
+              "notused": 40,
+              "parent": 0
+            }
+          ],
+          "state": "migrated_analyzed"
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "broad",
+          "matches": 10000,
+          "plan": [
+            {
+              "detail": "SEARCH o USING INDEX market_price_search (price_yang>? AND price_yang<?)",
+              "id": 14,
+              "notused": 97,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH i USING INDEX sqlite_autoindex_item_instances_1 (uid=?)",
+              "id": 24,
+              "notused": 42,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": 34,
+              "notused": 36,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_3 (uid=?)",
+              "id": 39,
+              "notused": 42,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 47,
+              "notused": 40,
+              "parent": 0
+            }
+          ],
+          "state": "migrated_analyzed"
+        },
+        {
+          "adapter": "soci",
+          "case": "broad",
+          "matches": 10000,
+          "plan": [
+            {
+              "detail": "SEARCH o USING INDEX market_price_search (price_yang>? AND price_yang<?)",
+              "id": "14",
+              "notused": "97",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH i USING INDEX sqlite_autoindex_item_instances_1 (uid=?)",
+              "id": "24",
+              "notused": "42",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": "34",
+              "notused": "36",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": "39",
+              "notused": "40",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_3 (uid=?)",
+              "id": "48",
+              "notused": "42",
+              "parent": "0"
+            }
+          ],
+          "state": "migrated_analyzed"
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "selective",
+          "matches": 80,
+          "plan": [
+            {
+              "detail": "SEARCH o USING INDEX market_price_search (price_yang>? AND price_yang<?)",
+              "id": 16,
+              "notused": 97,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH i USING INDEX sqlite_autoindex_item_instances_1 (uid=?)",
+              "id": 26,
+              "notused": 42,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": 36,
+              "notused": 36,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_3 (uid=?)",
+              "id": 41,
+              "notused": 42,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 49,
+              "notused": 40,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 58,
+              "notused": 40,
+              "parent": 0
+            }
+          ],
+          "state": "migrated_analyzed"
+        },
+        {
+          "adapter": "installed_gdsqlite",
+          "case": "selective",
+          "matches": 80,
+          "plan": [
+            {
+              "detail": "SEARCH o USING INDEX market_price_search (price_yang>? AND price_yang<?)",
+              "id": 16,
+              "notused": 97,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH i USING INDEX sqlite_autoindex_item_instances_1 (uid=?)",
+              "id": 26,
+              "notused": 42,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": 36,
+              "notused": 36,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_3 (uid=?)",
+              "id": 41,
+              "notused": 42,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 49,
+              "notused": 40,
+              "parent": 0
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": 58,
+              "notused": 40,
+              "parent": 0
+            }
+          ],
+          "state": "migrated_analyzed"
+        },
+        {
+          "adapter": "soci",
+          "case": "selective",
+          "matches": 80,
+          "plan": [
+            {
+              "detail": "SEARCH o USING INDEX market_price_search (price_yang>? AND price_yang<?)",
+              "id": "16",
+              "notused": "97",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH i USING INDEX sqlite_autoindex_item_instances_1 (uid=?)",
+              "id": "26",
+              "notused": "42",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)",
+              "id": "36",
+              "notused": "36",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": "41",
+              "notused": "40",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH a EXISTS USING COVERING INDEX affix_item_lookup (uid=? AND stat_id=? AND value>?)",
+              "id": "50",
+              "notused": "40",
+              "parent": "0"
+            },
+            {
+              "detail": "SEARCH c USING INDEX sqlite_autoindex_item_custody_3 (uid=?)",
+              "id": "59",
+              "notused": "42",
+              "parent": "0"
+            }
+          ],
+          "state": "migrated_analyzed"
+        }
+      ],
+      "soci_version": [
+        {
+          "version": "3.53.4"
+        }
+      ],
+      "soci_compile_options": [
+        {
+          "compile_options": "ATOMIC_INTRINSICS=0"
+        },
+        {
+          "compile_options": "COMPILER=msvc-1944"
+        },
+        {
+          "compile_options": "DEFAULT_AUTOVACUUM"
+        },
+        {
+          "compile_options": "DEFAULT_CACHE_SIZE=-2000"
+        },
+        {
+          "compile_options": "DEFAULT_FILE_FORMAT=4"
+        },
+        {
+          "compile_options": "DEFAULT_JOURNAL_SIZE_LIMIT=-1"
+        },
+        {
+          "compile_options": "DEFAULT_MMAP_SIZE=0"
+        },
+        {
+          "compile_options": "DEFAULT_PAGE_SIZE=4096"
+        },
+        {
+          "compile_options": "DEFAULT_PCACHE_INITSZ=20"
+        },
+        {
+          "compile_options": "DEFAULT_RECURSIVE_TRIGGERS"
+        },
+        {
+          "compile_options": "DEFAULT_SECTOR_SIZE=4096"
+        },
+        {
+          "compile_options": "DEFAULT_SYNCHRONOUS=2"
+        },
+        {
+          "compile_options": "DEFAULT_WAL_AUTOCHECKPOINT=1000"
+        },
+        {
+          "compile_options": "DEFAULT_WAL_SYNCHRONOUS=2"
+        },
+        {
+          "compile_options": "DEFAULT_WORKER_THREADS=0"
+        },
+        {
+          "compile_options": "DIRECT_OVERFLOW_READ"
+        },
+        {
+          "compile_options": "ENABLE_COLUMN_METADATA"
+        },
+        {
+          "compile_options": "ENABLE_UNLOCK_NOTIFY"
+        },
+        {
+          "compile_options": "MALLOC_SOFT_LIMIT=1024"
+        },
+        {
+          "compile_options": "MAX_ATTACHED=10"
+        },
+        {
+          "compile_options": "MAX_COLUMN=2000"
+        },
+        {
+          "compile_options": "MAX_COMPOUND_SELECT=500"
+        },
+        {
+          "compile_options": "MAX_DEFAULT_PAGE_SIZE=8192"
+        },
+        {
+          "compile_options": "MAX_EXPR_DEPTH=1000"
+        },
+        {
+          "compile_options": "MAX_FUNCTION_ARG=1000"
+        },
+        {
+          "compile_options": "MAX_LENGTH=1000000000"
+        },
+        {
+          "compile_options": "MAX_LIKE_PATTERN_LENGTH=50000"
+        },
+        {
+          "compile_options": "MAX_MMAP_SIZE=0x7fff0000"
+        },
+        {
+          "compile_options": "MAX_PAGE_COUNT=0xfffffffe"
+        },
+        {
+          "compile_options": "MAX_PAGE_SIZE=65536"
+        },
+        {
+          "compile_options": "MAX_SQL_LENGTH=1000000000"
+        },
+        {
+          "compile_options": "MAX_TRIGGER_DEPTH=1000"
+        },
+        {
+          "compile_options": "MAX_VARIABLE_NUMBER=32766"
+        },
+        {
+          "compile_options": "MAX_VDBE_OP=250000000"
+        },
+        {
+          "compile_options": "MAX_WORKER_THREADS=8"
+        },
+        {
+          "compile_options": "MUTEX_W32"
+        },
+        {
+          "compile_options": "SYSTEM_MALLOC"
+        },
+        {
+          "compile_options": "TEMP_STORE=1"
+        },
+        {
+          "compile_options": "THREADSAFE=1"
+        }
+      ]
+    }
+  ],
+  "mutation_cost": {
+    "after": {
+      "create": {
+        "max_ms": 9.437,
+        "p50_ms": 3.205,
+        "p95_ms": 5.665
+      },
+      "delete": {
+        "max_ms": 7.763,
+        "p50_ms": 2.696,
+        "p95_ms": 5.019
+      },
+      "update": {
+        "max_ms": 16.461,
+        "p50_ms": 2.404,
+        "p95_ms": 4.617
+      }
+    },
+    "before": {
+      "create": {
+        "max_ms": 3.921,
+        "p50_ms": 2.766,
+        "p95_ms": 3.144
+      },
+      "delete": {
+        "max_ms": 3.324,
+        "p50_ms": 2.492,
+        "p95_ms": 3.229
+      },
+      "update": {
+        "max_ms": 3.814,
+        "p50_ms": 2.124,
+        "p95_ms": 3.394
+      }
+    },
+    "includes_atomic_commit": true,
+    "samples": 30
+  },
+  "scope": "Disposable 10k fixture, production v22->23 migration. No production reader/RPC migration. Linux not tested."
+}

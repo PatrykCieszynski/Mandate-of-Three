@@ -141,13 +141,13 @@ func run() -> void:
 	if world.inventory_endpoint.state != persisted:
 		fail("reconnect changed UID, rolls, revision or equipment")
 		return
-	while world.characters.size() < 2:
+	# The other fixture may already have completed and disconnected. Its remote
+	# equipment was verified before logout; relog must reconstruct this actor's
+	# public model, without requiring an unrelated peer to remain online.
+	while not world.characters.has(world.local_peer) or not world.inventory_endpoint.public_weapons.has(world.local_peer):
 		await get_tree().process_frame
-	await get_tree().create_timer(0.5).timeout
-	for peer_id: int in world.characters:
-		if world.characters[peer_id].weapon_definition_id != "iron_sword":
-			fail("reconnect public equipment")
-			return
+	if world.characters[world.local_peer].weapon_definition_id!="iron_sword":
+		fail("reconnect public equipment");return
 	print("ITEM_SESSION_OK: ", index, " exact UID, stats, stale RPC, public weapon, reconnect persistence")
 	Client.close_connection()
 	get_tree().quit()

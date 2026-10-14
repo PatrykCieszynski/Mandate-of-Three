@@ -1,3 +1,6 @@
+import {isExchangeSnapshot} from './screens/market/exchange-model.js';
+import {isBrowserSnapshot} from './screens/market/browser-model.js';
+import {isMarketSnapshot} from './screens/market/market-model.js';
 import { isItemTooltipDetails } from './game-ui/items/item-tooltip-model.js';
 import type {ShopSnapshot} from './screens/shop/shop-model.js';
 import type {NpcInteractionSnapshot} from './screens/npc/npc-model.js';
@@ -42,10 +45,10 @@ export function isCommandResult(result: unknown): result is CommandResult {
     (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message: Envelope): message is StateMessage {
-  return !message.id && ['ui.snapshot','upgrade.updated','npc_targets.updated','shop.updated','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
+  return !message.id && ['ui.snapshot','exchange.updated','market_browser.updated','market.updated','upgrade.updated','npc_targets.updated','shop.updated','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
 }
 export function isDomainName(value: string): value is DomainName {
-  return ['upgrade','npc_targets','shop','npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
+  return ['exchange','market_browser','market','upgrade','npc_targets','shop','npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
 }
 export function isRawDomainState(value: unknown): value is RawDomainState {
   return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -63,7 +66,7 @@ function finiteRange(value: unknown, min: number, max: number): value is number 
 function integerRange(value: unknown, min: number, max = Number.MAX_SAFE_INTEGER): value is number {
   return finiteRange(value, min, max) && Number.isSafeInteger(value);
 }
-function isItem(value: unknown): value is ItemPresentation {
+export function isItem(value: unknown): value is ItemPresentation {
   return isObject(value) && typeof value.id === 'string' && integerRange(value.revision, 0) &&
     typeof value.name === 'string' && typeof value.icon_id === 'string' && integerRange(value.height, 1, MAX_ITEM_HEIGHT) &&
     integerRange(value.quantity, 1) && (!('description' in value) || typeof value.description === 'string') &&
@@ -150,6 +153,9 @@ function isNpc(value: unknown): value is NpcInteractionSnapshot {
 export function isValidDomainValue(domain: DomainName, value: unknown): value is RawObject {
   if (!isObject(value)) return false;
   switch (domain) {
+    case 'exchange': return isExchangeSnapshot(value);
+    case 'market_browser': return isBrowserSnapshot(value);
+    case 'market': return isMarketSnapshot(value);
     case 'upgrade': return isUpgrade(value);
     case 'npc_targets': return isNpcTargets(value);
     case 'shop': return isShop(value);

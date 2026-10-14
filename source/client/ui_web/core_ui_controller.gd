@@ -13,6 +13,9 @@ var items := ItemUiAdapter.new()
 var npcs := NpcUiAdapter.new()
 var upgrades := UpgradeUiAdapter.new()
 var shop := ShopUiAdapter.new()
+var exchange := ExchangeUiAdapter.new()
+var market_browser := MarketBrowserUiAdapter.new()
+var market := MarketUiAdapter.new()
 const UI_SCALES: Array[float] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5]
 var ui_scale: float = 1.0
 var _scale_initialized: bool = false
@@ -46,12 +49,23 @@ func setup(game_world: GameWorld3D) -> void:
 	bridge.ui_ready.connect(_ui_ready)
 	bridge.outgoing.connect(host.send)
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
+	bridge.text_focus_received.connect(_text_focus)
 	dispatcher.attach(bridge)
 	npcs.context_updated.connect(_npc_state)
 	npcs.attach(world.npc_endpoint, dispatcher, session, get_tree())
 	upgrades.attach(world.upgrade_endpoint, dispatcher, session, get_tree())
 	shop.state_updated.connect(_shop_state)
 	shop.attach(world.shop_endpoint, dispatcher, session, get_tree())
+	world.market_endpoint.operation_finished.connect(session.finish)
+	world.market_endpoint.query_finished.connect(session.finish)
+	market.attach(world.market_endpoint,dispatcher,session,get_tree())
+	market_browser.attach(world.market_endpoint,dispatcher,session,get_tree())
+	exchange.attach(world.market_endpoint,dispatcher,session,get_tree())
+	exchange.state_updated.connect(func(_snapshot: Dictionary)->void:
+		opened=true;_layout())
+	market.state_updated.connect(func(_snapshot: Dictionary) -> void:
+		opened = true
+		_layout())
 	items.attach(world.inventory_endpoint, dispatcher, session, get_tree(), func() -> bool: return storage_opened)
 	dispatcher.register_command("npc.upgrade_item", UpgradeUiAdapter.valid_item, _drop_on_npc)
 	dispatcher.set_domain("npc_targets",{"width":0,"height":0,"targets":[]})
@@ -103,6 +117,7 @@ func interact_npc(instance_id: String, preselected_item: Dictionary = {}) -> Dic
 	return {"ok":false,"error":"unknown_service"}
 
 func _wallet(snapshot: Dictionary) -> void:
+	exchange.accept_wallet(snapshot)
 	dispatcher.set_domain("wallet", {"balance": int(snapshot.get("balance", 0)), "ready": snapshot.has("balance")})
 
 static func _valid_scale(payload: Dictionary) -> bool:
@@ -169,13 +184,29 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if storage_opened: opened = true
 		_layout()
 		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_ESCAPE and (opened or equipment_opened or storage_opened or npcs.state().get("active", false)):
+	elif event.physical_keycode == KEY_X:
+		if exchange.active: exchange.close()
+		else: exchange.open()
+		get_viewport().set_input_as_handled()
+	elif event.physical_keycode == KEY_T:
+		if market_browser.active: market_browser.close()
+		else: market_browser.open()
+		get_viewport().set_input_as_handled()
+	elif event.physical_keycode == KEY_M:
+		if market.active: market.close()
+		else: market.open()
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_ESCAPE and (exchange.active or market_browser.active or market.active or opened or equipment_opened or storage_opened or npcs.state().get("active", false)):
 		# Presentation shortcut only: web cancels carry first, otherwise requests close.
 		bridge.send("ui.shortcut", {"key": "Escape"})
 		get_viewport().set_input_as_handled()
 
 func _navigation_started() -> void:
 	_cancel_flows("ui_reload")
+	host.set_keyboard_owner("gameplay")
+
+func _text_focus(active: bool) -> void:
+	host.set_keyboard_owner("web" if active else "gameplay")
 
 func _connection_changed(connected: bool) -> void:
 	if not connected: _cancel_flows("disconnected")
@@ -208,9 +239,15 @@ func _stop(reason: String) -> void:
 	npcs.dispose()
 	upgrades.dispose()
 	shop.dispose()
+	market.dispose()
+	market_browser.dispose()
+	exchange.dispose()
 	if Client.connection_changed.is_connected(_connection_changed): Client.connection_changed.disconnect(_connection_changed)
 	if ClientState.settings.setting_changed.is_connected(_setting_changed): ClientState.settings.setting_changed.disconnect(_setting_changed)
 	if is_instance_valid(world):
+		if is_instance_valid(world.market_endpoint):
+			if world.market_endpoint.operation_finished.is_connected(session.finish): world.market_endpoint.operation_finished.disconnect(session.finish)
+			if world.market_endpoint.query_finished.is_connected(session.finish): world.market_endpoint.query_finished.disconnect(session.finish)
 		if is_instance_valid(world.currency_endpoint) and world.currency_endpoint.state_changed.is_connected(_wallet): world.currency_endpoint.state_changed.disconnect(_wallet)
 		if is_instance_valid(world.camera_controller) and is_instance_valid(host) and world.camera_controller.pointer_capture_changed.is_connected(host.set_world_pointer_capture):
 			world.camera_controller.pointer_capture_changed.disconnect(host.set_world_pointer_capture)
@@ -221,6 +258,7 @@ func _stop(reason: String) -> void:
 		if bridge.ui_ready.is_connected(_ui_ready): bridge.ui_ready.disconnect(_ui_ready)
 		if bridge.outgoing.is_connected(host.send): bridge.outgoing.disconnect(host.send)
 		if bridge.interactive_regions_received.is_connected(host.update_interactive_regions): bridge.interactive_regions_received.disconnect(host.update_interactive_regions)
+		if bridge.text_focus_received.is_connected(_text_focus): bridge.text_focus_received.disconnect(_text_focus)
 	opened = false
 	equipment_opened = false
 	storage_opened = false

@@ -1,0 +1,32 @@
+{
+  "addon": {
+    "repo": "PatrykCieszynski/godot-soci",
+    "commit": "a9229e4af0a5420f681c19211de25bf181467fae",
+    "archive_sha256": "0d6ec4e5220501b927798954989d269b23a8335c2a19a1556591c04366688725"
+  },
+  "godotcpp": {
+    "repo": "godotengine/godot-cpp",
+    "commit": "b8530af7546a3fcae80cef2477526569fd42ffc2",
+    "archive_sha256": "758d444a2855d960d32c6fc757c12e021d0ec27f0019d042876673679f1b0f5a"
+  },
+  "soci": {
+    "repo": "SOCI/soci",
+    "commit": "a9e51707d565baa6e02634453d5e81b84062c94a",
+    "archive_sha256": "e88d0a2cd56db1b96f1b0b77af377558b46daab29a81d48043bcc19f95f144fb"
+  },
+  "fmt": {
+    "repo": "fmtlib/fmt",
+    "commit": "407c905e45ad75fc29bf0f9bb7c5c2fd3475976f",
+    "archive_sha256": "882f71002bff720ca6d0dbebd0952684da8fb521b0b448277a36f3759518afcb"
+  },
+  "gdsqlite": {
+    "repo": "2shady4u/godot-sqlite",
+    "commit": "162ffbae0b0c8a933ba63bbb50da6cc0402950f8",
+    "archive_sha256": "27ec345c337f60229213e229d77586ad2f709614b88f70766ea676df258513f3"
+  },
+  "sqlite3534": {
+    "version": "3.53.4",
+    "vcpkg_commit": "e456309491fd875487bf02b8a0dca76c1b1b00cc",
+    "sha512": "c24374e9393a943157f533f96e89e6c5743e5f5aad169d8393cff3088ca5ccbe5cc0561681ace49c349d0fe402298ee2624d319f422967247ce0792e3b3aa01e"
+  }
+}

@@ -2,7 +2,7 @@ class_name WorldManagerClient
 extends BaseMultiplayerEndpoint
 
 
-signal token_received(auth_token: String, username: String, character_id: int)
+signal token_received(auth_token: String, username: String, character_id: int, account_id: int)
 
 @export var database: WorldDatabase
 @export var world_server: WorldServer
@@ -134,7 +134,7 @@ func master_save() -> void:
 	if world_server == null or database == null:
 		return
 	var saved: int = database.save_all_connected(world_server.connected_players)
-	var ok: bool = database.backup_database()
+	var ok: bool = await database.coordinated_backup()
 	ServerLog.info("Dashboard 'save' triggered: %d player(s), backup %s." % [saved, "ok" if ok else "FAILED"])
 
 
@@ -147,7 +147,9 @@ func master_shutdown() -> void:
 	if database.save_all_connected(world_server.connected_players) < 0:
 		push_error("Graceful shutdown cancelled: character checkpoint failed.")
 		return
-	database.backup_database()
+	if not await database.shutdown_database():
+		push_error("Graceful shutdown cancelled: reader drain/backup failed.")
+		return
 	get_tree().quit.call_deferred()
 
 
@@ -175,8 +177,8 @@ func master_restart(seconds: int, message: String) -> void:
 	# Insurance save in case the deploy's stop is delayed or never lands.
 	if database != null:
 		var saved: int = database.save_all_connected(world_server.connected_players)
-		database.backup_database()
-		ServerLog.info("Restart countdown elapsed — final save (%d player(s)); awaiting stop." % saved)
+		var ok: bool=await database.coordinated_backup(10,false,true)
+		ServerLog.info("Restart countdown elapsed — final save (%d player(s)), reader drain/backup %s; awaiting stop." % [saved,"ok" if ok else "FAILED"])
 
 
 ## One restart-warning line to every connected player, phrased in minutes or seconds.
@@ -346,8 +348,8 @@ func fetch_server_info(_info: Dictionary) -> void:
 
 
 @rpc("authority")
-func fetch_token(auth_token: String, username: String, character_id: int) -> void:
-	token_received.emit(auth_token, username, character_id)
+func fetch_token(auth_token: String, username: String, character_id: int, account_id: int) -> void:
+	token_received.emit(auth_token, username, character_id, account_id)
 
 
 @rpc("any_peer")
@@ -356,8 +358,19 @@ func player_disconnected(_username: String) -> void:
 
 
 @rpc("authority")
-func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary) -> void:
-	var character_id: int = database.create_player_character(username, character_data)
+func account_identity_manifest(identities: Dictionary) -> void:
+	var result := database.prepare_account_wallets(identities)
+	if not result.ok:
+		ServerLog.error("Account wallet migration refused: %s" % str(result))
+		return
+	ServerLog.info("Account wallet identity/migration ready.")
+	if not await database.start_auction_queries(): ServerLog.error("Auction reader unavailable; economy remains operational.")
+
+@rpc("authority")
+func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary, account_id: int) -> void:
+	var character_id := 0
+	if database.wallet_ready and database.store.bind_account_identity(username,account_id,true):
+		character_id = database.create_player_character(username, character_data)
 	
 	player_character_creation_result.rpc_id(
 		1,
@@ -398,10 +411,8 @@ func request_login(
 	character_id: int
 ) -> void:
 	var player: PlayerResource = database.get_player_resource(character_id)
-	if player == null:
-		return
-
-	if player.account_name != username:
+	if not database.wallet_ready or player == null or player.account_name != username:
+		result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id)
 		return
 	result_login.rpc_id(
 		1,

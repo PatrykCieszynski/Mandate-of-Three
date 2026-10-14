@@ -8,6 +8,7 @@ signal outgoing(message: String)
 signal ui_ready
 signal command_received(type: String, id: String, payload: Dictionary)
 signal interactive_regions_received(payload: Dictionary)
+signal text_focus_received(active: bool)
 signal rejected(reason: String)
 var is_ready: bool = false
 var _transport_generation: int = 0
@@ -64,6 +65,12 @@ func receive(message: String) -> void:
 			return
 		interactive_regions_received.emit(payload.duplicate(true))
 		return
+	if type == "ui.text_focus":
+		if envelope.has("id") or payload.size()!=1 or not payload.get("active") is bool:
+			rejected.emit("text_focus")
+			return
+		text_focus_received.emit(payload.active)
+		return
 	if not _commands.has(type) or not envelope.has("id"):
 		rejected.emit("command")
 		return
@@ -77,7 +84,7 @@ func send(type: String, payload: Dictionary, id: String = "") -> void:
 	var envelope: Dictionary = {"v": VERSION, "type": type, "payload": payload}
 	if not id.is_empty(): envelope.id = id
 	var encoded: String = JSON.stringify(envelope)
-	var limit: int = MAX_STATE_BYTES if type == "ui.snapshot" or type in ["shop.updated","npc.updated","inventory.updated","storage.updated","equipment.updated","wallet.updated","player.updated","hud.updated"] else MAX_BYTES
+	var limit: int = MAX_STATE_BYTES if type == "ui.snapshot" or type in ["exchange.updated", "market_browser.updated", "market.updated","shop.updated","npc.updated","inventory.updated","storage.updated","equipment.updated","wallet.updated","player.updated","hud.updated"] else MAX_BYTES
 	if encoded.to_utf8_buffer().size() > limit:
 		rejected.emit("outgoing_size")
 		return

@@ -1,0 +1,136 @@
+class_name AuctionQueryService
+extends Node
+## One main-thread World coordinator; one active native read and fair account queue.
+const MAX_PENDING := 64
+const ACCOUNT_PER_SECOND := 8
+const DEADLINE_MS := 2000
+var reader := AuctionSociReader.new()
+var writer: SQLite
+var path := ""
+var admissions := false
+var starting := false
+var draining := false
+var recovering := false
+var recovery_allowed: Callable
+var active: Dictionary = {}
+var queued: Dictionary = {}
+var order: Array[int] = []
+var rates: Dictionary = {}
+# Local diagnostics only: no wire fields, retained samples or addon instrumentation.
+# Worker round-trip includes scheduling/poll delivery; it is NOT native SQL time.
+signal observation(sample: Dictionary)
+
+func start(database: SQLite, database_path: String) -> bool:
+	if starting or draining or reader.dispatcher!=null: return false
+	writer=database; path=database_path; starting=true
+	var ok: bool=await reader.start(path)
+	starting=false; admissions=ok
+	if not ok:
+		reader.stop_if_idle()
+		push_error("Auction readonly reader failed readiness; search unavailable.")
+	return ok
+
+func has_pending(request_key: String) -> bool:
+	if not active.is_empty() and active.key==request_key: return true
+	for account: int in queued:
+		if queued[account].key==request_key: return true
+	return false
+
+func submit(account: int, request_key: String, payload: Dictionary, deliver: Callable, valid_session: Callable) -> void:
+	if account<=0 or not valid_session.is_valid() or not valid_session.call(): return
+	# A retry cannot validate a different payload, consume budget or produce a
+	# storage/rate error while its original accepted request still owns the ID.
+	if has_pending(request_key): return
+	var built:=MarketSearchSqlite.build_query(payload)
+	if not built.ok:
+		if valid_session.is_valid() and valid_session.call(): deliver.call({"ok":false,"error":built.error})
+		return
+	var now:=Time.get_ticks_msec()
+	var rate: Dictionary=rates.get(account,{"start":now,"count":0})
+	if now-int(rate.start)>=1000: rate={"start":now,"count":0}
+	rate.count+=1;rates[account]=rate
+	var job: Dictionary={"account":account,"key":request_key,"payload":payload.duplicate(true),"query":built,"accepted":now,"accepted_us":Time.get_ticks_usec(),"deliver":deliver,"valid":valid_session,"terminal":false}
+	if not admissions: _finish(job,{"ok":false,"error":"storage"});return
+	if int(rate.count)>ACCOUNT_PER_SECOND: _finish(job,{"ok":false,"error":"rate_limited"});return
+	if queued.has(account):
+		var old: Dictionary=queued[account];queued.erase(account)
+		_finish(old,{"ok":false,"error":"rate_limited"})
+	elif queued.size()+(0 if active.is_empty() else 1)>=MAX_PENDING:
+		_finish(job,{"ok":false,"error":"rate_limited"});return
+	else: order.append(account)
+	queued[account]=job
+
+func cancel_scope(prefix: String) -> void:
+	for account: int in queued.keys():
+		if str(queued[account].key).begins_with(prefix):
+			queued[account].terminal=true;queued.erase(account);order.erase(account)
+	if not active.is_empty() and str(active.key).begins_with(prefix): active.terminal=true
+
+func _finish(job: Dictionary, result: Dictionary) -> void:
+	if job.terminal: return
+	job.terminal=true
+	var valid: Callable=job.valid
+	var deliver: Callable=job.deliver
+	if valid.is_valid() and deliver.is_valid() and valid.call():
+		if observation.has_connections(): observation.emit({"kind":"reply","key":job.key,"account":job.account,"ok":result.ok,"error":result.get("error",""),"e2e_us":Time.get_ticks_usec()-int(job.accepted_us)})
+		deliver.call(result)
+
+func _process(_delta: float) -> void:
+	var poll_started:=Time.get_ticks_usec()
+	reader.poll()
+	if recovering and active.is_empty() and reader.pending()==0:
+		recovering=false
+		# Never join/close active SQL. An aborted lifecycle operation may resume
+		# this healthy session only if its World still owns the same writer/path.
+		if reader.ready and recovery_allowed.is_valid() and recovery_allowed.call(): admissions=true
+	if observation.has_connections(): observation.emit({"kind":"poll","cost_us":Time.get_ticks_usec()-poll_started,"depth":queued.size()+(0 if active.is_empty() else 1)})
+	var now:=Time.get_ticks_msec()
+	for account: int in rates.keys():
+		if now-int(rates[account].start)>=1000: rates.erase(account)
+	for account: int in queued.keys():
+		var job: Dictionary=queued[account]
+		if now-int(job.accepted)>=DEADLINE_MS or not job.valid.is_valid() or not job.valid.call():
+			queued.erase(account);order.erase(account)
+			_finish(job,{"ok":false,"error":"timeout"})
+	if not active.is_empty():
+		if now-int(active.accepted)>=DEADLINE_MS: _finish(active,{"ok":false,"error":"timeout"})
+		return # A timed-out SQL still owns the native slot until it actually finishes.
+	if (not admissions and not draining) or starting or not reader.ready or order.is_empty(): return
+	var account: int=order.pop_front()
+	active=queued[account];queued.erase(account)
+	_run(active)
+
+func _run(job: Dictionary) -> void:
+	var started:=Time.get_ticks_usec()
+	if observation.has_connections(): observation.emit({"kind":"start","key":job.key,"queue_us":started-int(job.accepted_us)})
+	var answer: Dictionary=await reader.query(job.query.sql,job.query.params,int(job.payload.limit)+1)
+	if observation.has_connections(): observation.emit({"kind":"read","key":job.key,"worker_roundtrip_us":Time.get_ticks_usec()-started})
+	if Time.get_ticks_msec()-int(job.accepted)>=DEADLINE_MS: _finish(job,{"ok":false,"error":"timeout"})
+	elif not job.terminal and job.valid.is_valid() and job.valid.call():
+		var projection_started:=Time.get_ticks_usec()
+		var result:=MarketSearchSqlite.project_rows(answer.rows,job.payload,writer) if answer.get("ok",false) and not answer.get("truncated",false) else {"ok":false,"error":"storage"}
+		if observation.has_connections(): observation.emit({"kind":"projection","key":job.key,"cost_us":Time.get_ticks_usec()-projection_started})
+		if Time.get_ticks_msec()-int(job.accepted)>=DEADLINE_MS: result={"ok":false,"error":"timeout"}
+		_finish(job,result)
+	active={}
+	if not answer.get("ok",false):
+		admissions=false;recovering=false
+		for account: int in queued.keys(): _finish(queued[account],{"ok":false,"error":"storage"})
+		queued.clear();order.clear()
+		reader.stop_if_idle()
+
+func pause(budget_ms: int = DEADLINE_MS) -> bool:
+	if draining or starting: return false
+	var resume_on_failure:=admissions or recovering
+	recovering=false
+	admissions=false;draining=true
+	var deadline:=Time.get_ticks_msec()+budget_ms
+	while not active.is_empty() or not queued.is_empty() or reader.pending()!=0:
+		if Time.get_ticks_msec()>=deadline:
+			draining=false # Refuse backup/shutdown; keep polling the live native read.
+			recovering=resume_on_failure
+			return false
+		await get_tree().process_frame
+	var ok:=reader.stop_if_idle()
+	draining=false
+	return ok

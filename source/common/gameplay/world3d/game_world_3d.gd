@@ -31,6 +31,7 @@ var inventory_endpoint: InventoryEndpoint3D
 var combat_endpoint: CombatEndpoint3D
 var upgrade_endpoint: Upgrade3D
 var shop_endpoint: Shop3D
+var market_endpoint: MarketEndpoint3D
 var npc_endpoint: NpcInteraction3D
 var metin_encounter: MetinEncounter
 var region: FirstRegionGraybox
@@ -70,6 +71,10 @@ func _ready() -> void:
 	shop_endpoint.name = "Shop"
 	shop_endpoint.services = services
 	add_child(shop_endpoint)
+	market_endpoint = MarketEndpoint3D.new()
+	market_endpoint.name = "Market"
+	market_endpoint.services = services
+	add_child(market_endpoint)
 	upgrade_endpoint = Upgrade3D.new()
 	upgrade_endpoint.name = "Upgrade"
 	upgrade_endpoint.services = services
@@ -299,6 +304,7 @@ func remove_peer(peer_id: int) -> void:
 			services.economy().flush_character(resource.player_id)
 	upgrade_endpoint.remove_peer(peer_id)
 	shop_endpoint.remove_peer(peer_id)
+	market_endpoint.remove_peer(peer_id)
 	npc_endpoint.remove_peer(peer_id)
 	combat_endpoint.remove_peer(peer_id)
 	currency_endpoint.remove_peer(peer_id)

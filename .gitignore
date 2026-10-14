@@ -51,6 +51,9 @@ __pycache__/
 # Official pinned Terrain3D payload installed by tools/terrain3d/setup.py
 /addons/terrain_3d/
 
+# Pinned server-only SOCI payload, installed by tools/soci/setup.py.
+/addons/godot_soci/
+
 # TypeScript compiler/test dependencies and emitted declaration/test artifacts
 /source/client/ui_web/node_modules/
 /source/client/ui_web/web/**/*.d.ts

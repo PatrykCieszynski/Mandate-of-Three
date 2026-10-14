@@ -6,13 +6,16 @@ interface BridgeOptions {
   onShortcut?: (key: 'Escape') => void;
   onTooltipDetails?: (alt: boolean) => void;
   timeoutMs?: number;
+  readyRetryMs?: number;
+  maxReadyAttempts?: number;
+  onReadyTimeout?: ()=>void;
 }
 interface PendingRequest {
   resolve: (result: CommandResult) => void;
   reject: (reason: unknown) => void;
   timer: ReturnType<typeof setTimeout>;
 }
-import {decode, encode, isCommandResult, isStateMessage} from './protocol.js';
+import {decode, encode, isCommandResult, isStateMessage,isValidDomainState} from './protocol.js';
 export class WebBridge {
   pending = new Map<string, PendingRequest>();
   declare send: (message: string) => void;
@@ -20,24 +23,42 @@ export class WebBridge {
   declare onShortcut: (key: 'Escape') => void;
   declare onTooltipDetails: (alt: boolean) => void;
   declare timeoutMs: number;
+  private readyTimer: ReturnType<typeof setTimeout>|undefined;
+  private awaitingSnapshot=false;
+  private readyRetryMs:number;
+  private maxReadyAttempts:number;
+  private onReadyTimeout:()=>void;
   sequence = 0;
   epoch = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-  constructor({send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => {}, onShortcut = () => {}, onTooltipDetails = () => {}, timeoutMs = 3000}: BridgeOptions = {}) {
+  constructor({send = message => window.sendIpcMessage(message), subscribe = callback => window.ipcMessage.addListener(callback), onState = () => {}, onShortcut = () => {}, onTooltipDetails = () => {}, timeoutMs = 3000,readyRetryMs=250,maxReadyAttempts=20,onReadyTimeout=()=>console.warn("Web UI snapshot handshake timed out")}: BridgeOptions = {}) {
     this.send = send;
     this.onState = onState;
     this.onShortcut = onShortcut;
     this.onTooltipDetails = onTooltipDetails;
     this.timeoutMs = timeoutMs;
+    this.readyRetryMs=readyRetryMs;this.maxReadyAttempts=maxReadyAttempts;this.onReadyTimeout=onReadyTimeout;
     subscribe(message => this.receive(message));
   }
+  event(type: 'ui.text_focus', payload: EventPayloads['ui.text_focus']): void;
   event(type: 'ui.ready', payload?: EventPayloads['ui.ready']): void;
   event(type: 'ui.interactive_regions', payload: EventPayloads['ui.interactive_regions']): void;
   event(type: keyof EventPayloads, payload: EventPayloads[keyof EventPayloads] = {}) { this.send(encode(type, payload)); }
   ready() {
     this.clearPending('reload');
-    this.event('ui.ready');
+    this.awaitingSnapshot=true;
+    let attempts=0;
+    const announce=()=>{
+      if(!this.awaitingSnapshot)return;
+      attempts++;
+      try{this.event('ui.ready');}catch{/* A startup transport may not be bound yet. */}
+      if(!this.awaitingSnapshot)return;
+      if(attempts>=this.maxReadyAttempts){this.awaitingSnapshot=false;this.onReadyTimeout();return;}
+      this.readyTimer=setTimeout(announce,this.readyRetryMs);
+    };
+    announce();
   }
   clearPending(reason: string) {
+    this.awaitingSnapshot=false;if(this.readyTimer)clearTimeout(this.readyTimer);this.readyTimer=undefined;
     for (const request of this.pending.values()) {
       clearTimeout(request.timer);
       request.reject(Error(reason));
@@ -73,6 +94,7 @@ export class WebBridge {
       request.resolve(result);
     } else {
       if (!isStateMessage(message)) return;
+      if(message.type==="ui.snapshot"&&isValidDomainState(message.payload)){this.awaitingSnapshot=false;if(this.readyTimer)clearTimeout(this.readyTimer);this.readyTimer=undefined;}
       this.onState(message);
     }
   }
@@ -97,4 +119,13 @@ export function reportInteractiveRegions(bridge: Pick<WebBridge, 'event'>, eleme
   window.addEventListener('scroll', schedule, true);
   schedule();
   return {refresh: schedule, dispose() { disposed = true; if (frame) cancelAnimationFrame(frame); frame = 0; observer.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); }};
+}
+
+// A narrow presentation lease: text fields capture keyboard, clicks elsewhere do not.
+export function reportTextFocus(bridge: Pick<WebBridge,'event'>) {
+  const report=()=>bridge.event('ui.text_focus',{active:document.activeElement instanceof HTMLElement && document.activeElement.matches('[data-ui-text]') && document.activeElement.getClientRects().length>0});
+  const leave=()=>bridge.event('ui.text_focus',{active:false});
+  document.addEventListener('focusin',report);document.addEventListener('focusout',report);
+  window.addEventListener('blur',leave);window.addEventListener('focus',report);
+  return {dispose(){document.removeEventListener('focusin',report);document.removeEventListener('focusout',report);window.removeEventListener('blur',leave);window.removeEventListener('focus',report);leave();}};
 }

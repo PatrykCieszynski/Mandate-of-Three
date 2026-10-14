@@ -1,4 +1,4 @@
-param([string]$Scene = "combat_feel", [string]$MarkerPrefix = "COMBAT", [switch]$LegacyMelee)
+param([string]$Scene = "combat_feel", [string]$MarkerPrefix = "COMBAT", [switch]$LegacyMelee, [switch]$NativeClient1)
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
@@ -14,6 +14,9 @@ try {
         $taskMode = if ($taskRole -eq 'server') { 'world-server' } else { 'client' }
         $taskIndex = if ($taskRole -eq 'client1') { 1 } else { 2 }
         $taskArgs = '--headless --path "' + $taskRoot + '" --mode=' + $taskMode + ' res://tests/' + $Scene + '.tscn --test-client=' + $taskIndex
+        if ($NativeClient1 -and $taskRole -eq 'server') { $taskArgs += ' --native-market-server' }
+        if ($NativeClient1 -and $taskRole -eq 'client1') { $taskArgs = $taskArgs.Replace('--headless ', '--rendering-method mobile --rendering-driver vulkan --resolution 1280x720 --position -2000,-2000 '); $taskArgs += ' --native-market-check' }
+        if ($NativeClient1 -and $taskRole -eq 'client2') { $taskArgs += ' --native-market-peer' }
         if ($LegacyMelee) { $taskArgs += ' -- --dev-legacy-melee' }
         $taskProcess = Start-Process -FilePath $taskExe -ArgumentList $taskArgs -WorkingDirectory $taskRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $taskLogs "combat-test-$taskRole.out.log") -RedirectStandardError (Join-Path $taskLogs "combat-test-$taskRole.err.log")
         $taskProcesses += [pscustomobject]@{ Role = $taskRole; Process = $taskProcess }

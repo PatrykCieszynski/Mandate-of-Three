@@ -17,7 +17,76 @@ var mail_store: MailStore
 var item_store: ItemStoreSqlite
 var wallet_store: WalletStoreSqlite
 const WALLET_SAVE_SECONDS: float = 30.0
+# Wallet RAM/dirty keys are global Master account IDs within this World.
 var runtime_wallets: Dictionary[int, Dictionary] = {}
+var _wallet_accounts: Dictionary[int, int] = {}
+var wallet_ready := false
+var auction_queries: AuctionQueryService
+var _auction_lifecycle_busy := false
+var _auction_quiesced := false
+
+func auction_binding_current() -> bool:
+	if db==null: return false
+	var wanted:=ProjectSettings.globalize_path(database_path if not database_path.is_empty() else db.path)
+	return auction_queries!=null and auction_queries.writer==db and auction_queries.path==wanted
+
+func start_auction_queries() -> bool:
+	if not wallet_ready or db==null: return false
+	if auction_queries==null:
+		auction_queries=AuctionQueryService.new();add_child(auction_queries)
+		auction_queries.recovery_allowed=func()->bool:return wallet_ready and not _auction_quiesced and auction_binding_current()
+	var wanted:=ProjectSettings.globalize_path(database_path if not database_path.is_empty() else db.path)
+	if auction_queries.admissions:
+		var current:=auction_binding_current()
+		if not current: auction_queries.admissions=false
+		return current
+	_auction_quiesced=false
+	return await auction_queries.start(db,wanted)
+
+func coordinated_backup(keep_last: int = 10, restart_reader: bool = true, final_flush: bool = false) -> bool:
+	if _auction_lifecycle_busy: return false
+	_auction_lifecycle_busy=true
+	var had_reader:=auction_queries!=null
+	if had_reader and not await auction_queries.pause():
+		_auction_lifecycle_busy=false;return false
+	var ok:=flush_character() if final_flush else true
+	if ok: ok=backup_database(keep_last)
+	if had_reader and restart_reader and not _auction_quiesced and not await start_auction_queries(): ok=false
+	if ok and not restart_reader: _auction_quiesced=true
+	_auction_lifecycle_busy=false
+	return ok
+
+func shutdown_database() -> bool:
+	if not await coordinated_backup(10,false,true): return false
+	wallet_ready=false
+	return db!=null and db.close_db()
+
+func wallet_account_id(character_id: int) -> int:
+	if not _wallet_accounts.has(character_id) and store != null:
+		var account_id := store.resolve_account_id(character_id)
+		if account_id > 0: _wallet_accounts[character_id] = account_id
+	return _wallet_accounts.get(character_id,0)
+
+func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
+	var result := WorldSchema.migrate_account_wallets(db,master_ids)
+	if result.ok and not MarketStoreSqlite.ensure_schema(db): result = {"ok":false,"error":"market_custody_migration"}
+	if result.ok and not MarketSearchSqlite.ensure_schema(db): result = {"ok":false,"error":"market_search_migration"}
+	if result.ok and not ExchangeStoreSqlite.ensure_ledger_schema(db): result = {"ok":false,"error":"exchange_ledger_migration"}
+	if result.ok and not ExchangeStoreSqlite.ensure_orders_schema(db): result = {"ok":false,"error":"exchange_orders_migration"}
+	if result.ok and not MarketSearchSqlite.ensure_lookup_schema(db): result = {"ok":false,"error":"market_lookup_migration"}
+	wallet_ready = result.ok
+	return result
+
+## Server-only durable credit; online pending income shares the same commit.
+func credit_account(account_id: int, amount: int) -> Dictionary:
+	if not wallet_ready or wallet_store == null: return {"ok":false,"error":"storage"}
+	var pending := int(runtime_wallets.get(account_id,{}).get("pending_currency_delta",0))
+	var result := wallet_store.credit(account_id,pending,amount)
+	if result.ok and runtime_wallets.has(account_id):
+		runtime_wallets[account_id].wallet_balance = int(result.balance)
+		runtime_wallets[account_id].pending_currency_delta = 0
+		dirty_wallet.erase(account_id)
+	return result
 var dirty_wallet: Dictionary[int, bool] = {}
 var _wallet_elapsed: float = 0.0
 const PROGRESSION_SAVE_SECONDS: float = 60.0
@@ -40,20 +109,28 @@ func flush_progression(owner_id: int = -1) -> bool:
 	for player: PlayerResource in players: dirty_progression.erase(player.player_id)
 	return true
 
-func load_wallet(owner_id: int) -> bool:
+func load_wallet(character_id: int) -> bool:
+	var owner_id := wallet_account_id(character_id)
+	if not wallet_ready or owner_id <= 0: return false
 	if runtime_wallets.has(owner_id): return true
 	if wallet_store == null:
 		if db == null: return false
 		wallet_store = WalletStoreSqlite.new(db)
 	var result: Dictionary = wallet_store.load_wallet(owner_id)
 	if not result.ok: return false
-	runtime_wallets[owner_id] = {"wallet_balance": int(result.balance), "pending_currency_delta": 0}
+	runtime_wallets[owner_id] = {"wallet_balance": int(result.balance), "pending_currency_delta": 0,"reserved_yang":int(result.get("reserved_yang",0))}
 	return true
 
-func wallet_balance(owner_id: int) -> int:
+func wallet_balance(character_id: int) -> int:
+	var owner_id := wallet_account_id(character_id)
 	return int(runtime_wallets.get(owner_id, {}).get("wallet_balance", -1))
 
-func add_yang(owner_id: int, amount: int) -> bool:
+func wallet_available(character_id: int) -> int:
+	var account:=wallet_account_id(character_id)
+	return wallet_balance(character_id)-int(runtime_wallets.get(account,{}).get("reserved_yang",0))
+
+func add_yang(character_id: int, amount: int) -> bool:
+	var owner_id := wallet_account_id(character_id)
 	if not runtime_wallets.has(owner_id) or amount <= 0: return false
 	var wallet: Dictionary = runtime_wallets[owner_id]
 	if amount > WalletStoreSqlite.MAX_YANG - int(wallet.wallet_balance): return false
@@ -62,7 +139,9 @@ func add_yang(owner_id: int, amount: int) -> bool:
 	dirty_wallet[owner_id] = true
 	return true
 
-func flush_wallet(owner_id: int = -1) -> bool:
+func flush_wallet(character_id: int = -1) -> bool:
+	var owner_id := wallet_account_id(character_id) if character_id >= 0 else -1
+	if character_id >= 0 and owner_id <= 0: return false
 	var deltas: Dictionary = {}
 	for id: int in dirty_wallet:
 		if owner_id < 0 or id == owner_id:
@@ -77,24 +156,27 @@ func flush_wallet(owner_id: int = -1) -> bool:
 		dirty_wallet.erase(id)
 	return true
 
-func spend_yang(owner_id: int, cost: int) -> Dictionary:
+func spend_yang(character_id: int, cost: int) -> Dictionary:
+	var owner_id := wallet_account_id(character_id)
 	# Affordability is checked against authoritative RAM, including pending income.
 	if cost <= 0 or not runtime_wallets.has(owner_id): return {"ok": false, "error": "request"}
 	var wallet: Dictionary = runtime_wallets[owner_id]
-	if int(wallet.wallet_balance) < cost: return {"ok": false, "error": "funds"}
+	if wallet_available(character_id) < cost: return {"ok": false, "error": "funds"}
 	var result: Dictionary = wallet_store.spend(owner_id, int(wallet.pending_currency_delta), cost)
-	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
+	if result.ok: accept_committed_wallet_balance(character_id, int(result.balance))
 	return result
 
-func accept_committed_wallet_balance(owner_id: int, balance: int) -> void:
+func accept_committed_wallet_balance(character_id: int, balance: int) -> void:
+	var owner_id := wallet_account_id(character_id)
 	assert(runtime_wallets.has(owner_id) and balance >= 0 and balance <= WalletStoreSqlite.MAX_YANG)
 	runtime_wallets[owner_id].wallet_balance = balance
 	runtime_wallets[owner_id].pending_currency_delta = 0
 	dirty_wallet.erase(owner_id)
 
 func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> Dictionary:
-	if db == null or not runtime_wallets.has(owner_id): return {"ok":false, "error":"storage"}
-	var result: Dictionary = ShopStoreSqlite.new(db).purchase(owner_id, int(runtime_wallets[owner_id].pending_currency_delta), shop, offer_id, requested_position)
+	var account_id := wallet_account_id(owner_id)
+	if db == null or not runtime_wallets.has(account_id): return {"ok":false, "error":"storage"}
+	var result: Dictionary = ShopStoreSqlite.new(db).purchase(owner_id, int(runtime_wallets[account_id].pending_currency_delta), shop, offer_id, requested_position)
 	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
 	return result
 
@@ -106,19 +188,39 @@ func storage_snapshot(owner_id: int) -> Dictionary:
 	if db == null: return {"ok":false,"error":"storage"}
 	return AccountStorageSqlite.new(db).snapshot(owner_id)
 
+func market_snapshot(character_id: int) -> Dictionary:
+	return _marketplace().snapshot(character_id)
+
+signal market_account_changed(account_id: int)
+var _marketplace_service: MarketplaceService
+
+func _marketplace() -> MarketplaceService:
+	if _marketplace_service==null:
+		_marketplace_service=MarketplaceService.new(self)
+		_marketplace_service.account_changed.connect(market_account_changed.emit)
+	return _marketplace_service
+
+func market_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
+	return _marketplace().command(character_id,action,payload)
+
+func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
+	return _marketplace().query(character_id,action,payload)
+
 func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> Dictionary:
 	if db == null: return {"ok":false,"error":"storage"}
 	return AccountStorageSqlite.new(db).transfer(owner_id,uid,revision,source,destination,position)
 
 func upgrade_item(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> Dictionary:
-	if db == null or not runtime_wallets.has(owner_id): return {"ok":false, "error":"storage"}
+	var account_id := wallet_account_id(owner_id)
+	if db == null or not runtime_wallets.has(account_id): return {"ok":false, "error":"storage"}
 	if recipe == null or not recipe.validation_errors().is_empty(): return {"ok":false, "error":"invalid_definition"}
-	if wallet_balance(owner_id) < recipe.yang_cost: return {"ok":false, "error":"funds"}
-	var result: Dictionary = UpgradeStoreSqlite.new(db).upgrade(owner_id,int(runtime_wallets[owner_id].pending_currency_delta),recipe,uid,revision)
+	if wallet_available(owner_id) < recipe.yang_cost: return {"ok":false, "error":"funds"}
+	var result: Dictionary = UpgradeStoreSqlite.new(db).upgrade(owner_id,int(runtime_wallets[account_id].pending_currency_delta),recipe,uid,revision)
 	if result.ok: accept_committed_wallet_balance(owner_id,int(result.balance))
 	return result
 
-func release_wallet(owner_id: int) -> void:
+func release_wallet(character_id: int) -> void:
+	var owner_id := wallet_account_id(character_id)
 	# Failed offline saves remain authoritative until a later successful retry.
 	if not dirty_wallet.has(owner_id): runtime_wallets.erase(owner_id)
 
@@ -139,6 +241,9 @@ func _process(delta: float) -> void:
 
 
 func start_database(world_info: Dictionary) -> void:
+	if auction_queries!=null and auction_queries.reader.dispatcher!=null:
+		push_error("Database reopen refused: pause/drain auction reader first.")
+		return
 	configure_database(world_info)
 	open_database()
 	WorldSchema.ensure_schema(db)
@@ -170,23 +275,22 @@ func open_database() -> void:
 	# db.verbosity_level = SQLite.VerbosityLevel.NORMAL
 
 	db.open_db()
-	# Durability + concurrency. WAL lets the live backup byte-copy run alongside
-	# writes without tearing (backup_database assumes this) and survives a crash
-	# mid-write; NORMAL is the standard safe+fast sync level under WAL. PRAGMAs are
-	# connection settings, not schema — no migration / wipe.
+	# One authoritative writer. FULL is the default now that player trading exists;
+	# NORMAL remains an explicit development choice, with a larger power-loss window.
 	db.query("PRAGMA journal_mode=WAL;")
-	db.query("PRAGMA synchronous=NORMAL;")
+	var sync_mode: String=str(ProjectSettings.get_setting("mandate/persistence/sqlite_synchronous","FULL"))
+	if sync_mode not in ["FULL","NORMAL"]: sync_mode="FULL"
+	db.query("PRAGMA synchronous="+sync_mode+";")
 
 
-func close_database() -> void:
-	# Plugin doesn’t always expose close explicitly; if it does, call it.
-	# Otherwise let refcount drop; but prefer close if available.
-	flush_character()
+
+func close_database() -> bool:
+	return await shutdown_database()
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		close_database()
+	# WorldServer coordinates graceful reader drain and writer close.
+	if what == NOTIFICATION_WM_CLOSE_REQUEST: flush_character()
 
 
 func get_player_resource(id: int) -> PlayerResource:
@@ -243,15 +347,17 @@ func save_all_connected(connected_players: Dictionary) -> int:
 ## last auto-checkpoint (observed live: a 332 KB .db beside a 4 MB uncheckpointed
 ## -wal, i.e. hours of progress missing from every "successful" backup). TRUNCATE
 ## also folds the -wal back to ~0, so the live .db stays current and the -wal can't
-## balloon. Runs on the server's own DB connection, so it always gets the lock.
+## balloon. A reader may prevent truncation; then fail instead of copying a stale DB.
 func backup_database(keep_last: int = 10) -> bool:
+	# Direct callers may only checkpoint after the native reader has been closed.
+	if auction_queries!=null and auction_queries.reader.dispatcher!=null: return false
 	if database_path.is_empty():
 		return false
 	if not FileAccess.file_exists(database_path):
 		return false
 
-	if db != null:
-		db.query("PRAGMA wal_checkpoint(TRUNCATE);")
+	if db == null or not db.query("PRAGMA wal_checkpoint(TRUNCATE);") or db.query_result.is_empty() or int(db.query_result[0].get("busy",1))!=0:
+		return false
 
 	var backup_dir: String = "user://db_backups"
 	DirAccess.make_dir_recursive_absolute(backup_dir)

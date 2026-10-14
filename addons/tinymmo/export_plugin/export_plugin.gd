@@ -27,6 +27,7 @@ extends EditorExportPlugin
 
 const SERVER_ROOT: String = "res://source/server/"
 const SQLITE_ADDON_ROOT: String = "res://addons/godot-sqlite/"
+const SOCI_ADDON_ROOT: String = "res://addons/godot_soci/"
 
 var _stub_count: int = 0
 var _client_export: bool = false
@@ -57,7 +58,7 @@ func _export_file(path: String, _type: String, features: PackedStringArray) -> v
 	if not features.has("client"):
 		return
 	# The sqlite GDExtension never ships to clients (server-only dependency).
-	if path.begins_with(SQLITE_ADDON_ROOT):
+	if path.begins_with(SQLITE_ADDON_ROOT) or path.begins_with(SOCI_ADDON_ROOT):
 		skip()
 		return
 	if not path.begins_with(SERVER_ROOT):

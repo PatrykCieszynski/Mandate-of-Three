@@ -35,8 +35,7 @@ func connect_to_server(
 	_port: int,
 	_authentication_token: String
 ) -> void:
-	print("connecting to: ", _address, "  (port: ", _port, " ignored if URL)  token=", _authentication_token)
-	print(_address, _port, _authentication_token)
+	print("Connecting to: ", _address, " (port: ", _port, ")")
 	authentication_token = _authentication_token
 	create(Role.CLIENT, _address, _port)
 

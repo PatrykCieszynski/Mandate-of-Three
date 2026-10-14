@@ -1,7 +1,7 @@
 class_name CurrencyEndpoint3D
 extends Node
 var services: MandateWorldServices
-## Ground currency is transient; only character wallet deltas reach SQLite.
+## Ground currency is transient; only account wallet deltas reach SQLite.
 const DOG_YANG: int = 30
 const AUTO_REACH: float = 1.25
 const PICKUP_REACH: float = 2.5
@@ -124,8 +124,9 @@ func _physics_process(delta: float) -> void:
 	_send_snapshot()
 
 func _wallet_changed(owner_id: int) -> void:
+	var account_id: int = _database().wallet_account_id(owner_id)
 	for peer_id: int in _world.characters:
-		if _owner(peer_id) == owner_id: _send_snapshot(peer_id)
+		if _database().wallet_account_id(_owner(peer_id)) == account_id: _send_snapshot(peer_id)
 
 func accept_committed_change(peer_id: int) -> void:
 	# Economy has already accepted the committed balance into authoritative RAM.

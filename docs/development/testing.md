@@ -228,3 +228,46 @@ Shader compilation errors fail the native runner. No pixel baselines are added:
 headless suites cannot establish screen/depth sampling or temporal appearance.
 The existing `run-first-region.ps1` protects shore blocking/navigation. See
 [Visual V3](../world/visuals/visual-upgrade-v3.md) for configuration, artifacts and limits.
+
+Marketplace E0a adds `run-account-identity.ps1`: real populated SQLite migration,
+rollback/reopen, unique account mapping and verified handoff/session ownership.
+`-WithSession` uses the normal local Classic Gateway/Master/World and creates two
+accounts/four characters, exercising registration/login, guest flow, spoof
+rejection and real World token entry. Existing item-session regression remains
+`run-items.ps1 -WithSession`. These opt-in checks protect a previously uncovered
+authentication/ownership boundary; see [E0a identity](../marketplace-e0a-identity.md).
+
+`run-market.ps1` starts the opt-in marketplace SQLite behavior suite: migration,
+canonical custody/claims and durable command receipts, including direct SQL
+constraint bypass attempts and fault injection. E1a coverage protects new
+economy contracts; it is not line coverage of a store extraction. See
+[E1a custody](../marketplace-e1a-custody.md). Existing smoke/network item suites remain
+the regression baseline and seed complete transactions under custody constraints.
+
+## Marketplace integration checks
+
+Use run-market.ps1 -Scene market_custody / market_purchase / market_search /
+exchange_ledger / exchange_orders with the corresponding *_OK marker. These isolate
+real SQLite. run-market-recovery.ps1 exercises a disposable process crash and WAL
+restore. Optional run-combat.ps1 -Scene market_race -MarkerPrefix MARKET_RACE and
+-Scene exchange_network -MarkerPrefix EXCHANGE_NETWORK share port 18098: sequential.
+-NativeClient1 opts into the offscreen Vulkan Mobile/CEF market milestone.
+The production Chrome milestone is source/client/ui_web/test/market_browser.mts
+(after build-web-ui.ps1 -Tests); it covers UI commands/reload and all 10 scales.
+Run normal-role account/item session suites sequentially too: their avatars share
+one live world. Full item relog validates its own public actor, so another fixture
+finishing earlier cannot hang it. Do not run native milestones for routine styles.
+
+The historical R0–R2 synchronous `market_load` path is replaced by D2's production
+async reader fixture. Run `run-web-inventory.ps1 -Scene market_load`, or
+`python tests/run-auction-load.py --godot /absolute/path/to/godot` on Windows/Linux.
+It uses 60 Hz/60 FPS, two real RPC clients and sixteen explicitly simulated account
+sources over 10k offers, concurrent combat/AI and atomic mutations, saturation,
+active-traffic backup/reader restart and real reconnect. It reports queue-inclusive
+latency, worker round-trip (not native SQL), poll/projection costs and tick intervals.
+Numbers are review observations, not fragile exact-ms assertions. Existing
+`auction_queries` covers expiration/late results/fairness; `market_recovery` now
+covers an owned process crash during async traffic and reader restart against
+recovered WAL. See [D2 observations and gates](../marketplace-auction-d2.md). Existing
+custody/order suites protect rejection-spam row count, bounded negative cache,
+conflict, rollback and durable replay.

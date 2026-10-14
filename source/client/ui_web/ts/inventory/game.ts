@@ -1,3 +1,6 @@
+import { mountExchange } from '../screens/market/exchange-view.js';
+import { mountMarketBrowser } from '../screens/market/browser-view.js';
+import { mountMarket } from '../screens/market/market-view.js';
 import { mountNpcWorldDrop } from '../screens/upgrade/npc-world-drop.js';
 import { mountUpgrade } from '../screens/upgrade/upgrade-view.js';
 import { setItemTooltipDetails } from '../game-ui/items/item-tooltip.js';
@@ -15,7 +18,11 @@ import { ItemIconResolver } from '../content/item-icons.js';
 import { applySkin } from '../core/assets/skin.js';
 import { loadLegacySkin } from '../skins/legacy.js';
 import { WindowManager } from '../core/window/window-manager.js';
-import { WebBridge, reportInteractiveRegions } from '../bridge.js';
+import {
+  WebBridge,
+  reportInteractiveRegions,
+  reportTextFocus,
+} from '../bridge.js';
 import { DomainStore } from '../store.js';
 import { mountInventory } from '../screens/inventory/inventory-view.js';
 import { mountEquipment } from '../screens/equipment/equipment-view.js';
@@ -33,6 +40,10 @@ const root = findElement(document, '#inventory', 'main'),
   storageRoot = findElement(document, '#storage', 'main'),
   equipmentRoot = findElement(document, '#equipment', 'main'),
   shopRoot = findElement(document, '#shop', 'main'),
+  exchangeRoot = findElement(document, '#exchange', 'main'),
+  marketBrowserRoot = findElement(document, '#market-browser', 'main'),
+  marketVisitorRoot = findElement(document, '#market-visitor', 'main'),
+  marketRoot = findElement(document, '#market', 'main'),
   upgradeRoot = findElement(document, '#upgrade', 'main'),
   npcRoot = findElement(document, '#npc-menu', 'main'),
   npcServiceRoot = findElement(document, '#npc-service', 'main'),
@@ -42,7 +53,14 @@ const bridge = new WebBridge({
   onTooltipDetails: (alt) => setItemTooltipDetails(document, alt, 'native'),
   onShortcut: () => {
     if (drag.cancel()) return;
-    if (upgrade.closeIfActive() || npc.closeIfActive()) return;
+    if (
+      exchange.closeIfActive() ||
+      marketBrowser.closeIfActive() ||
+      market.closeIfActive() ||
+      upgrade.closeIfActive() ||
+      npc.closeIfActive()
+    )
+      return;
     if (!storageRoot.hidden) {
       void bridge.request('storage.close', {}).catch(() => {});
       return;
@@ -81,6 +99,23 @@ const bridge = new WebBridge({
       }
       regions?.refresh();
     }
+    if (message.type === 'ui.snapshot' || message.type === 'exchange.updated')
+      exchange.setState(state.exchange ?? { active: false });
+    if (
+      message.type === 'ui.snapshot' ||
+      message.type === 'market_browser.updated'
+    )
+      marketBrowser.setState(state.market_browser ?? { active: false });
+    if (message.type === 'ui.snapshot' || message.type === 'market.updated')
+      market.setState(state.market ?? { active: false });
+    if (
+      (message.type === 'ui.snapshot' ||
+        message.type === 'inventory.updated') &&
+      state.inventory
+    )
+      market.setInventory(state.inventory);
+    if (message.type === 'ui.snapshot' || message.type === 'wallet.updated')
+      market.setWallet(state.wallet ?? {});
     updateGameViews(message.type, state, {
       inventory: view,
       equipment,
@@ -141,6 +176,7 @@ const view = mountInventory(root, {
   manager,
   resolveItemIcon,
   activateItem: (payload) => {
+    if (!marketRoot.hidden) return market.selectInventory(payload);
     if (!upgradeRoot.hidden) return upgrade.selectItem(payload);
     return bridge.request('item.activate', payload);
   },
@@ -179,6 +215,47 @@ const shop = mountShop(shopRoot, {
   },
   onRegionsChanged: () => regions?.refresh(),
 });
+const exchangeTypes = {
+  deposit: 'exchange.deposit',
+  withdraw: 'exchange.withdraw',
+  order: 'exchange.order',
+  cancel_order: 'exchange.cancel_order',
+} as const;
+const exchange = mountExchange(exchangeRoot, {
+  manager,
+  drag,
+  command: (action, p) => bridge.request(exchangeTypes[action], p),
+  retry: () => bridge.request('exchange.retry', {}),
+  close: () => {
+    void bridge.request('exchange.close', {});
+  },
+  regions: () => regions?.refresh(),
+});
+const marketBrowser = mountMarketBrowser(marketBrowserRoot, marketVisitorRoot, {
+  manager,
+  resolveItemIcon,
+  catalog: (query) => bridge.request('market.browser.catalog', { query }),
+  search: (p) => bridge.request('market.browser.search', p),
+  visit: (shop_id, offer_id) =>
+    bridge.request('market.browser.visit', { shop_id, offer_id }),
+  buy: (p) => bridge.request('market.buy', p),
+  close: () => {
+    void bridge.request('market.browser.close', {});
+  },
+  regions: () => regions?.refresh(),
+});
+const market = mountMarket(marketRoot, {
+  manager,
+  drag,
+  resolveItemIcon,
+  command: (action, payload) => bridge.request(`market.${action}`, payload),
+  onClose: () => {
+    drag.cancel();
+    void bridge.request('market.close', {}).catch(() => {});
+  },
+  onRegionsChanged: () => regions?.refresh(),
+});
+const textFocus = reportTextFocus(bridge);
 const upgrade = mountUpgrade(upgradeRoot, {
   select: (payload) => bridge.request('upgrade.select', payload),
   execute: (payload) => bridge.request('upgrade.execute', payload),
@@ -221,6 +298,9 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
 regions = reportInteractiveRegions(bridge, [
   ...worldDrop.regions,
   ...shop.regions,
+  ...exchange.regions,
+  ...marketBrowser.regions,
+  ...market.regions,
   ...upgrade.regions,
   ...npc.regions,
   ...view.regions,
@@ -232,6 +312,10 @@ window.addEventListener('pagehide', () => {
   worldDrop.dispose();
   upgrade.dispose();
   shop.dispose();
+  exchange.dispose();
+  marketBrowser.dispose();
+  market.dispose();
+  textFocus.dispose();
   npc.dispose();
   drag.dispose();
   storage.dispose();
@@ -245,7 +329,14 @@ document.addEventListener(
   'keydown',
   (event) => {
     if (event.key !== 'Escape' || event.repeat) return;
-    if (drag.cancel() || upgrade.closeIfActive() || npc.closeIfActive()) {
+    if (
+      drag.cancel() ||
+      exchange.closeIfActive() ||
+      marketBrowser.closeIfActive() ||
+      market.closeIfActive() ||
+      upgrade.closeIfActive() ||
+      npc.closeIfActive()
+    ) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }

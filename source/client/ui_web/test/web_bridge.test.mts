@@ -129,3 +129,13 @@ test('view snapshots validate fields and nested arrays without asserting raw dom
    {...valid,hud:{inventory_open:1}}, {...valid,hud:{viewport:{width:800}}}])assert.equal(protocol.readDomainSnapshot(bad),null);
  assert.deepEqual(protocol.readDomainSnapshot({wallet:{yang:90},player:{name:'Player'}}),{wallet:{yang:90},player:{name:'Player'}});
 });
+
+test('ready is acknowledged by a valid full snapshot, retries are bounded and teardown stops them',t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ let attempts=0,timeouts=0;
+ const bridge=new WebBridge({subscribe:()=>{},readyRetryMs:1,maxReadyAttempts:3,onReadyTimeout:()=>timeouts++,send:()=>{attempts++;if(attempts===2)bridge.receive(protocol.encode('ui.snapshot',{}));}});
+ bridge.ready();t.mock.timers.tick(1);t.mock.timers.tick(100);assert.equal(attempts,2);assert.equal(timeouts,0);
+ const missing=new WebBridge({subscribe:()=>{},readyRetryMs:1,maxReadyAttempts:3,onReadyTimeout:()=>timeouts++,send:()=>attempts++});
+ attempts=0;missing.ready();t.mock.timers.tick(1);t.mock.timers.tick(1);assert.equal(attempts,3);assert.equal(timeouts,1);
+ attempts=0;missing.ready();missing.clearPending('teardown');t.mock.timers.tick(100);assert.equal(attempts,1);
+});
