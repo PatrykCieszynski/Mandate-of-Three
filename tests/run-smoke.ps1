@@ -17,13 +17,17 @@ $taskCases = [ordered]@{
     progression_checkpoint = 'CHECKPOINT_OK'
     yang_wallet = 'WALLET_OK'
     mob_packs = 'MOB_PACKS_OK'
+    mob_hotpaths = 'MOB_HOTPATHS_OK'
     hit_reactions = 'HIT_REACTIONS_OK'
 }
 foreach ($taskCase in $taskCases.GetEnumerator()) {
     $taskLog = Join-Path $taskLogs "$($taskCase.Key).smoke.log"
     & $taskExe --headless --path $taskRoot --mode=world-server "res://tests/$($taskCase.Key).tscn" --quit-after 300 *> $taskLog
     $taskOutput = Get-Content -LiteralPath $taskLog -Raw
-    if ($LASTEXITCODE -ne 0 -or $taskOutput -notmatch $taskCase.Value -or $taskOutput -match 'SCRIPT ERROR|Parse Error') { throw "Smoke failed: $($taskCase.Key); $taskLog" }
+    if ($LASTEXITCODE -ne 0 -or $taskOutput -notmatch $taskCase.Value -or $taskOutput -match 'SCRIPT ERROR|Parse Error') {
+        Write-Output $taskOutput
+        throw "Smoke failed: $($taskCase.Key); $taskLog"
+    }
     Write-Output "$($taskCase.Key): PASS"
 }
 # Successful runs keep fixed-name logs, not a new database per invocation.

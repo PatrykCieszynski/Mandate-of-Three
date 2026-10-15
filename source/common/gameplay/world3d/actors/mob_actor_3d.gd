@@ -42,6 +42,11 @@ static var _bar_texture: Texture2D
 var name_label: Label3D
 var presentation: DogVisual3D
 var movement_collider: CollisionShape3D
+## Grounded, ordinary chase/wander uses two 60-Hz intent samples per physics
+## solve. Airborne, knockback and moving platforms retain per-tick physics.
+## Mob navigation has no obstacle mask; collisions are against the floor.
+const GROUNDED_MOTION_DIVISOR := 2
+var _pending_ground_motion := Vector2.ZERO
 
 func setup_mob(id: int, spawn: Vector3) -> void:
 	hp = max_hp
@@ -95,17 +100,60 @@ func _label(text: String, height: float, size: int) -> Label3D:
 	return label
 
 func simulate_mob(delta: float, direction: Vector2, now: int) -> void:
-	if now < stunned_until_ms or hit_reaction.locked(now) or knockback_active(): direction = Vector2.ZERO
 	var displaced := knockback_active()
+	var locked := now < stunned_until_ms or hit_reaction.locked(now)
+	if locked or displaced: direction = Vector2.ZERO
 	var displacement_velocity := damp_knockback(delta)
-	velocity.x = direction.x * move_speed + displacement_velocity.x
-	velocity.z = direction.y * move_speed + displacement_velocity.z
-	velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
+	var horizontal := Vector2(direction.x * move_speed + displacement_velocity.x, direction.y * move_speed + displacement_velocity.z)
 	if direction.length_squared() > 0.001: rotation.y = atan2(-direction.x, -direction.y)
+	var grounded := is_on_floor()
+	velocity.y = -0.5 if grounded else velocity.y - GRAVITY * delta
 	var regular_mask := collision_mask
-	if displaced: collision_mask |= 1 # Impulses respect scenery; normal pack AI stays unchanged.
+	if displaced: collision_mask |= 1 # Knockback still uses full-resolution physics.
+
+	# Static, grounded idle mobs do not need 60 identical floor solves/sec.
+	# Force a refresh periodically so moving/disappearing floor geometry is
+	# still noticed. Moving platforms always take the original full-rate path.
+	var moving_platform := get_platform_velocity().length_squared() > 0.0001
+	if grounded and not displaced and not moving_platform and horizontal.length_squared() < 0.000001 and _pending_ground_motion.length_squared() < 0.000001:
+		if (Engine.get_physics_frames() + mob_instance_id) % 6 != 0:
+			velocity = Vector3.ZERO
+			collision_mask = regular_mask
+			return
+
+	# Chase/wander is AI-updated each tick, but floor-only movement can be
+	# solved at 30 Hz. Aggregate the exact planar displacement of skipped
+	# ticks and stagger mob IDs so the work does not bunch into one frame.
+	# Do not batch airborne physics, stun, knockback or platform motion.
+	var regular_ground_motion := grounded and not displaced and not locked and not moving_platform
+	if regular_ground_motion:
+		_pending_ground_motion += horizontal * delta
+		if (Engine.get_physics_frames() + mob_instance_id) % GROUNDED_MOTION_DIVISOR != 0:
+			velocity.x = horizontal.x
+			velocity.z = horizontal.y
+			collision_mask = regular_mask
+			return
+		velocity.x = _pending_ground_motion.x / delta
+		velocity.z = _pending_ground_motion.y / delta
+		_pending_ground_motion = Vector2.ZERO
+	else:
+		# Don't discard ordinary movement that was queued immediately before
+		# a knockback or entering an airborne state. Hit locks deliberately
+		# cancel that sub-frame motion instead.
+		if locked:
+			_pending_ground_motion = Vector2.ZERO
+		else:
+			horizontal += _pending_ground_motion / maxf(delta, 0.000001)
+			_pending_ground_motion = Vector2.ZERO
+		velocity.x = horizontal.x
+		velocity.z = horizontal.y
 	move_and_slide()
 	collision_mask = regular_mask
+	if regular_ground_motion:
+		# Scaled solve velocity is only needed for one physics step. Keep
+		# runtime velocity at the ordinary server movement speed afterward.
+		velocity.x = horizontal.x
+		velocity.z = horizontal.y
 
 func die(now: int) -> void:
 	alive = false
