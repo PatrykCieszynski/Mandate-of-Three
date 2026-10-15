@@ -244,6 +244,89 @@ func is_valid_authentication_token(auth_token: String) -> bool:
 
 @export var instance_manager: InstanceManagerServer
 
+# Public operation names are a protocol allowlist, never arbitrary resource paths.
+# New handlers require explicit admission here; the base class is not an operation.
+const DATA_REQUEST_TYPES: Array[StringName] = [
+	"action.perform",
+	"attribute.get",
+	"attribute.reset",
+	"attribute.spend",
+	"channel.cancel",
+	"chat.bootstrap",
+	"chat.command.exec",
+	"chat.dm.history",
+	"chat.guild.history",
+	"chat.message.send",
+	"chat.typing.set",
+	"dungeon.info",
+	"dungeon.leave",
+	"dungeon.queue",
+	"dungeon.rooms",
+	"friend.accept",
+	"friend.list",
+	"friend.remove",
+	"friend.request",
+	"friend.search",
+	"guild.banner.color",
+	"guild.create",
+	"guild.disband",
+	"guild.edit",
+	"guild.get",
+	"guild.get.joined_guilds",
+	"guild.get.members",
+	"guild.hall.upgrade",
+	"guild.invite",
+	"guild.invite.accept",
+	"guild.kick",
+	"guild.log.get",
+	"guild.logo.buy",
+	"guild.perms",
+	"guild.quit",
+	"guild.rank",
+	"guild.search",
+	"guild.tag",
+	"guild.transfer",
+	"guild.treasury.deposit",
+	"guild.trophies.display",
+	"guild.trophies.get",
+	"inventory.get",
+	"item.equip",
+	"item.pin",
+	"item.unequip",
+	"mail.claim",
+	"mail.delete",
+	"mail.list",
+	"mail.read",
+	"mail.send",
+	"mail.unread_count",
+	"name.change",
+	"npc.interact",
+	"profile.get",
+	"profile.update",
+	"progression.get",
+	"quest.accept",
+	"quest.board.claim",
+	"quest.board.info",
+	"quest.list",
+	"quest.turn_in",
+	"recall.start",
+	"redeem.code",
+	"shop.buy.item",
+	"shop.open",
+	"shop.trade.item",
+	"social.block.add",
+	"social.block.list",
+	"social.block.remove",
+	"trade.accept",
+	"trade.join",
+	"trade.leave",
+	"trade.offer",
+	"trade.state",
+	"wardrobe.buy",
+	"wardrobe.equip",
+	"wardrobe.state",
+]
+
 var data_handlers: Dictionary[StringName, DataRequestHandler]
 
 
@@ -283,32 +366,56 @@ func _data_request(
 	args: Dictionary = {},
 	instance_id: String = ""
 ) -> void:
-	const DATA_REQUEST_HANDLERS_PATH: String = "res://source/server/world/components/data_request_handlers/"
+	if not GameMode.is_world_server():
+		return
 	var peer_id: int = multiplayer.get_remote_sender_id()
-	var instance: ServerInstance = instance_manager.get_instance_server_by_id(instance_id)
+	if peer_id <= 1:
+		return
+	_data_response.rpc_id(peer_id, request_id, type, dispatch_data_request(peer_id, type, args, instance_id))
 
-	if not instance:
-		instance = instance_manager.default_instance.charged_instances[0]
 
+## Shared admission for the generic World request protocol. Identity comes only
+## from authenticated server session maps; omitted instance means the peer's own
+## joined instance, never a configured default or client-selected path.
+func request_instance(peer_id: int, instance_id: String = "") -> ServerInstance:
+	var player: PlayerResource = connected_players.get(peer_id)
+	if peer_id <= 1 or player == null or player.player_id <= 0 or player.account_name.is_empty():
+		return null
+	if player.current_peer_id != peer_id or player_id_to_peer_id.get(player.player_id, 0) != peer_id:
+		return null
+	if instance_manager == null:
+		return null
+	var instance: ServerInstance = instance_manager.find_instance_for_peer(peer_id) if instance_id.is_empty() else instance_manager.get_instance_server_by_id(instance_id)
+	if instance == null or instance.instance_resource == null or not instance.connected_peers.has(peer_id):
+		return null
+	if instance.instance_resource.use_3d:
+		var world := instance.get_node_or_null("GameWorld") as GameWorld3D
+		if world == null or not world.characters.has(peer_id):
+			return null
+	else:
+		var actor: Player = instance.players_by_peer_id.get(peer_id)
+		if actor == null or actor.player_resource != player:
+			return null
+	return instance
+
+
+func dispatch_data_request(peer_id: int, type: StringName, args: Dictionary, instance_id: String = "") -> Dictionary:
+	var instance := request_instance(peer_id, instance_id)
+	if instance == null:
+		return {"ok": false, "error": ERR_UNAUTHORIZED}
+	if not DATA_REQUEST_TYPES.has(type):
+		return {"ok": false, "error": ERR_INVALID_PARAMETER}
 	if not data_handlers.has(type):
-		var path: String = DATA_REQUEST_HANDLERS_PATH + type + ".gd"
-		if not ResourceLoader.exists(path):
-			return
-		var script: GDScript = load(path)
-		if not script:
-			return
-
-		var handler = script.new() as DataRequestHandler
-		if not handler:
-			return
+		# `type` is now a member of the server-owned literal allowlist.
+		var script: GDScript = load("res://source/server/world/components/data_request_handlers/" + str(type) + ".gd")
+		if script == null:
+			return {"ok": false, "error": ERR_UNAVAILABLE}
+		var handler := script.new() as DataRequestHandler
+		if handler == null:
+			return {"ok": false, "error": ERR_UNAVAILABLE}
 		data_handlers[type] = handler
+	return data_handlers[type].data_request_handler(peer_id, instance, args)
 
-	_data_response.rpc_id(
-		peer_id,
-		request_id,
-		type,
-		data_handlers[type].data_request_handler(peer_id, instance, args)
-	)
 
 
 @rpc("authority", "call_remote", "reliable", 1)

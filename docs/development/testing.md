@@ -277,3 +277,9 @@ Gateway A1 adds the socket-free `gateway_lifecycle` case to
 `run-account-identity.ps1`: bounded pending work, stale reply/timeout cleanup,
 Master disconnect, Gateway credential expiry/replacement/revocation. See
 [Gateway lifecycle](gateway-lifecycle.md) for guarantees and live-test boundaries.
+
+
+World A2 adds an opt-in two-client ingress regression to the existing network
+runner: `run-combat.ps1 -Scene world_rpc_admission -MarkerPrefix WORLD_RPC`.
+It checks authenticated identity, literal operation admission and own-instance
+routing with real RPCs, no DB or windows. See [World RPC admission](world-rpc-admission.md).
