@@ -15,6 +15,7 @@ func state() -> Dictionary:
 	var balance: int = int(db.query_result[0].yang)
 	return {"items":persistence.item_store.inventory(character_id),"db_yang":balance,"ram":persistence.runtime_wallets[persistence.wallet_account_id(character_id)].duplicate(true),"dirty":persistence.dirty_wallet.has(persistence.wallet_account_id(character_id))}
 func _ready() -> void:
+	await _test_upgrade_journal()
 	assert(recipe.validation_errors().is_empty())
 	var bad: UpgradeDefinition = recipe.duplicate(true)
 	bad.to_level = 2
@@ -78,6 +79,12 @@ func _ready() -> void:
 	assert(persistence.upgrade_operation(character_id,recipe,sword,1,operation.operation_id).response().error == "command_conflict", "Changed expected revision cannot reuse an intention")
 	var alternate: int = EconomyFixture.create_character(persistence.store,"upgrade_fixture",{"name":"Alternate","skin":1})
 	assert(persistence.upgrade_operation(alternate,recipe,sword,0,operation.operation_id).response().error == "command_conflict", "Same-account alternate character cannot replay the upgrade")
+	var receipt := persistence.upgrade_receipt(character_id,operation.operation_id)
+	assert(receipt.response() == result and not receipt.new_commit and not receipt.receipt_replay and receipt.changed_accounts.is_empty(), "Receipt lookup is read only, not mutation replay")
+	assert(persistence.upgrade_receipt(alternate,operation.operation_id).response().error == "unknown_command", "Receipt lookup cannot cross receiving characters")
+	assert(persistence.upgrade_receipt(character_id,"missing").response().error == "unknown_command" and state() == after, "Unknown lookup never executes an upgrade")
+	assert(db.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[operation.account_id,"wrong-kind","npc_shop.buy","[]",JSON.stringify({"ok":true})]))
+	assert(persistence.upgrade_receipt(character_id,"wrong-kind").response().error == "unknown_command", "Upgrade lookup cannot expose another command kind")
 	var stale_operation := persistence.upgrade_operation(character_id, recipe, sword, 0, "upgrade-test-8")
 	assert(stale_operation.response().error == "stale" and not stale_operation.new_commit and not stale_operation.receipt_replay and stale_operation.changed_accounts.is_empty())
 	assert(persistence.upgrade_item(character_id,recipe,sword,1, "upgrade-test-9").error == "upgrade_level")
@@ -105,6 +112,7 @@ func _ready() -> void:
 	var other: int = EconomyFixture.create_character(persistence.store,"other",{"name":"Other","skin":1})
 	assert(persistence.load_wallet(other) and persistence.add_yang(other,1000))
 	assert(persistence.upgrade_item(other,recipe,poor_sword,0,operation.operation_id).error == "owner")
+	assert(persistence.upgrade_receipt(other,operation.operation_id).response().error == "unknown_command", "Receipt lookup cannot cross accounts")
 	assert(state() == before)
 	assert(persistence.add_yang(character_id,17))
 	before = state()
@@ -120,3 +128,30 @@ func _ready() -> void:
 	persistence.free()
 	print("UPGRADE_TRANSACTION_OK: UID/revision/ownership/Inventory, stack consumption, pending Yang, rollback, replay and durability")
 	get_tree().quit()
+
+func _test_upgrade_journal() -> void:
+	var script = preload("res://source/client/ui_web/local_economy_journal.gd")
+	var directory := "res://.godot/verification/upgrade-journal-unit-" + Crypto.new().generate_random_bytes(8).hex_encode()
+	var context := {"authority_id":"a".repeat(32),"account_id":1,"character_id":2}
+	var adapter := UpgradeUiAdapter.new()
+	adapter.journal.directory = directory
+	adapter.accept_context({"ok":true,"economic_context":context})
+	var folder := ProjectSettings.globalize_path(directory).path_join(("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text())
+	# A concrete failed I/O case: a file replaces only this owned fixture folder.
+	DirAccess.remove_absolute(folder)
+	var file := FileAccess.open(folder,FileAccess.WRITE)
+	file.close()
+	var payload := {"npc_instance_id":"smith","service_id":"upgrade","id":"b".repeat(32),"revision":0}
+	assert((await adapter._submit("upgrade",payload)).error == "journal_unavailable", "Disk failure blocks Upgrade before any endpoint/session use")
+	DirAccess.remove_absolute(folder)
+	var journal = script.new("upgrade-",directory)
+	assert(journal.configure(context).ok)
+	assert(not journal.save_pending("npc-buy-" + "c".repeat(32),payload), "Purchase ID cannot enter Upgrade journal")
+	var id := "upgrade-" + "d".repeat(32)
+	assert(journal.save_pending(id,payload))
+	var fresh = script.new("upgrade-",directory)
+	var loaded: Dictionary = fresh.configure(context)
+	assert(loaded.ok and loaded.entry.id == id and UpgradeUiAdapter.valid_item(loaded.entry.payload), "Upgrade intent restores exact ID and validated payload")
+	assert(fresh.clear_pending(id))
+	DirAccess.remove_absolute(folder)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(directory))

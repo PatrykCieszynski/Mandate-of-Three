@@ -3,12 +3,27 @@ var listening: bool = false
 var adapter := UpgradeUiAdapter.new()
 var session := UiCommandSession.new()
 var bridge: WebUiBridge
+var dispatcher: UiCommandDispatcher
+var journal_directory := ""
 var committed_inventory_changes: int = 0
 var committed_wallet_changes: int = 0
 var inventory_notifications: int = 0
 var wallet_notifications: int = 0
 var selection_counts: Vector2i
 const NPC_ID: String = "spike-blacksmith-01"
+func _ready() -> void:
+	var args := OS.get_cmdline_args()
+	var probe := args.find("--upgrade-journal-probe")
+	if probe >= 0:
+		var journal = preload("res://source/client/ui_web/local_economy_journal.gd").new("upgrade-",args[probe + 1])
+		var loaded: Dictionary = journal.configure({"authority_id":args[probe + 2],"account_id":int(args[probe + 3]),"character_id":int(args[probe + 4])})
+		if loaded.ok and loaded.entry.get("id", "") == args[probe + 5]:
+			print("UPGRADE_JOURNAL_PROCESS_OK")
+			get_tree().quit()
+		else: get_tree().quit(1)
+		return
+	super._ready()
+
 @rpc("authority", "call_remote", "reliable", 0)
 func phase(command: String, uid: String) -> void:
 	if GameMode.is_world_server(): return
@@ -20,6 +35,7 @@ func phase(command: String, uid: String) -> void:
 			print("UPGRADE_CLIENT_OK: ",client_number," private quote, selection, upgrade and rejection snapshots")
 			finished.rpc_id(1)
 			await get_tree().create_timer(0.3).timeout
+			_cleanup_journal()
 			world.process_mode = Node.PROCESS_MODE_DISABLED
 			peer.close()
 			get_tree().quit()
@@ -73,14 +89,32 @@ func run_server() -> void:
 	set_phase("STALE_SELECT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error == "stale" and replies[hero].inventoryUpdates == 1 and replies[hero].walletUpdates == 0,"stale selection repairs Inventory without wallet refresh")
-	set_phase("REPLAY",hero)
+	set_phase("CLOSE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(replies[hero].ok and items.inventory(player.player_id)==before and replies[hero].inventoryItem==upgraded and replies[hero].balance==1100,"stable intention replay confirms success with no second consumption")
 	world.characters[hero].position = Vector3(12,0,12)
 	await get_tree().create_timer(0.15).timeout
+	set_phase("RESTORE",hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(replies[hero].ok and items.inventory(player.player_id)==before and replies[hero].inventoryItem==upgraded and replies[hero].balance==1100,"fresh adapter confirms journal receipt outside NPC range without second consumption")
 	set_phase("RANGE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error in ["out_of_range","no_interaction"] and items.inventory(player.player_id)==before,"execution reauthorizes range")
+	await get_tree().create_timer(0.15).timeout
+	set_phase("RESTORE_ABSENT",hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(replies[hero].ok and items.inventory(player.player_id)==before,"absent receipt discovery never upgrades")
+	set_phase("REPLAY",hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(not replies[hero].ok and replies[hero].error == "upgrade_pending", "explicit retry with absent receipt must retain intent when NPC authorization fails")
+	world.characters[hero].position = npc.position + Vector3(0,0,2)
+	for command: String in ["INTERACT","SERVICE"]:
+		set_phase(command,hero)
+		await wait_until(func() -> bool: return replies.has(hero))
+		check(replies[hero].ok,"reopen original Upgrade service")
+	await get_tree().create_timer(0.15).timeout
+	set_phase("RETRY_STALE",hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(not replies[hero].ok and replies[hero].error == "stale" and items.inventory(player.player_id)==before,"explicit absent-receipt retry uses original revision through normal authorization")
 	check(committed_inventory_changes==1 and committed_wallet_changes==1,"selection, stale/replay and range repair never emit committed-change facts")
 	set_phase("DONE")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
@@ -106,12 +140,9 @@ func _process(delta: float) -> void:
 			reply["active"] = world.upgrade_endpoint.state.active
 			report.rpc_id(1,reply))
 		world.upgrade_endpoint.operation_finished.connect(_report_upgrade)
-		var dispatcher := UiCommandDispatcher.new()
-		add_child(dispatcher)
-		bridge = WebUiBridge.new()
-		add_child(bridge)
-		dispatcher.attach(bridge)
-		adapter.attach(world.upgrade_endpoint,dispatcher,session,get_tree())
+		var context: Dictionary = world.inventory_endpoint.state.economic_context
+		journal_directory = "res://.godot/verification/upgrade-journal-network-" + str(context.authority_id) + "-" + str(context.character_id)
+		_attach_adapter()
 		register_ready.rpc_id(1)
 	if phase_name in ["WAIT","DONE"] or attempted: return
 	attempted = true
@@ -122,7 +153,10 @@ func _process(delta: float) -> void:
 			selection_counts = Vector2i(inventory_notifications,wallet_notifications)
 			world.upgrade_endpoint.request_upgrade.rpc_id(1,"select",NPC_ID,"upgrade",drop_uid,0,"candidate")
 		"UPGRADE": _lost_upgrade()
-		"REPLAY": _retry_from_web()
+		"REPLAY", "RETRY_STALE": _retry_from_web()
+		"RESTORE": _restore_upgrade()
+		"RESTORE_ABSENT": _restore_absent_upgrade()
+		"CLOSE": world.npc_endpoint.request_interaction.rpc_id(1,"close","","","close")
 		_: world.upgrade_endpoint.request_upgrade.rpc_id(1,"upgrade",NPC_ID,"upgrade",drop_uid,1 if phase_name=="RANGE" else 0,"upgrade","upgrade-"+phase_name)
 
 func _report_upgrade(_id: String, result: Dictionary) -> void:
@@ -162,3 +196,65 @@ func _retry_from_web() -> void:
 	bridge.outgoing.disconnect(listener)
 	world.upgrade_endpoint.operation_finished.connect(_report_upgrade)
 	_report_upgrade("",received.result)
+
+func _attach_adapter() -> void:
+	dispatcher = UiCommandDispatcher.new()
+	add_child(dispatcher)
+	bridge = WebUiBridge.new()
+	add_child(bridge)
+	dispatcher.attach(bridge)
+	adapter.journal.directory = journal_directory
+	adapter.attach(world.upgrade_endpoint,dispatcher,session,get_tree())
+	world.inventory_endpoint.state_changed.connect(adapter.accept_context)
+	adapter.accept_context(world.inventory_endpoint.state)
+
+func _recreate_adapter() -> void:
+	world.inventory_endpoint.state_changed.disconnect(adapter.accept_context)
+	adapter.dispose()
+	session.close("disconnected")
+	dispatcher.queue_free()
+	bridge.queue_free()
+	adapter = UpgradeUiAdapter.new()
+	session = UiCommandSession.new()
+	_attach_adapter()
+
+func _restore_upgrade() -> void:
+	world.upgrade_endpoint.operation_finished.disconnect(_report_upgrade)
+	var context: Dictionary = world.inventory_endpoint.state.economic_context
+	var loaded: Dictionary = adapter.journal.load_pending()
+	check(loaded.ok and not loaded.entry.is_empty(),"uncertain Upgrade persisted before teardown")
+	var output: Array = []
+	var status := OS.execute(OS.get_executable_path(),["--headless","--path",ProjectSettings.globalize_path("res://"),"--mode=client","res://tests/upgrade_network.tscn","--upgrade-journal-probe",journal_directory,str(context.authority_id),str(context.account_id),str(context.character_id),loaded.entry.id],output)
+	check(status == 0 and str(output).contains("UPGRADE_JOURNAL_PROCESS_OK"),"independent process restores Upgrade ID")
+	var received := {}
+	var listener := func(_id: String,result: Dictionary) -> void: received.result = result
+	world.upgrade_endpoint.operation_finished.connect(listener)
+	_recreate_adapter()
+	await wait_until(func() -> bool: return received.has("result"))
+	await wait_until(func() -> bool: return adapter.journal.load_pending().entry.is_empty())
+	check((await adapter.retry_upgrade()).error == "no_pending_upgrade","successful discovery clears only the confirmed intention")
+	world.upgrade_endpoint.operation_finished.disconnect(listener)
+	world.upgrade_endpoint.operation_finished.connect(_report_upgrade)
+	_report_upgrade("",received.result)
+
+func _restore_absent_upgrade() -> void:
+	world.upgrade_endpoint.operation_finished.disconnect(_report_upgrade)
+	var intention := "upgrade-" + Crypto.new().generate_random_bytes(16).hex_encode()
+	check(adapter.journal.save_pending(intention,{"npc_instance_id":NPC_ID,"service_id":"upgrade","id":drop_uid,"revision":0}),"seed owned crash-before-RPC intention")
+	var results: Array[Dictionary] = []
+	var listener := func(_id: String,result: Dictionary) -> void: results.append(result)
+	world.upgrade_endpoint.operation_finished.connect(listener)
+	_recreate_adapter()
+	await wait_until(func() -> bool: return not results.is_empty())
+	await get_tree().create_timer(0.25).timeout
+	check(results.size() == 1 and results[0].get("error", "") == "unknown_command" and adapter.journal.load_pending().entry.get("id", "") == intention,"automatic restore reads once, retains absent receipt and never executes Upgrade")
+	world.upgrade_endpoint.operation_finished.disconnect(listener)
+	world.upgrade_endpoint.operation_finished.connect(_report_upgrade)
+	_report_upgrade("",{"ok":true})
+
+func _cleanup_journal() -> void:
+	if journal_directory.is_empty(): return
+	check(adapter.journal.load_pending().entry.is_empty(),"no unresolved fixture intent after definitive stale rejection")
+	var context: Dictionary = world.inventory_endpoint.state.economic_context
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory).path_join(("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text()))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory))

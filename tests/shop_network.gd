@@ -13,7 +13,7 @@ func _ready() -> void:
 	var args := OS.get_cmdline_args()
 	var probe := args.find("--journal-probe")
 	if probe >= 0:
-		var journal = preload("res://source/client/ui_web/npc_purchase_journal.gd").new()
+		var journal = preload("res://source/client/ui_web/local_economy_journal.gd").new()
 		journal.directory = args[probe + 1]
 		var loaded: Dictionary = journal.configure({"authority_id":args[probe + 2],"account_id":int(args[probe + 3]),"character_id":int(args[probe + 4])})
 		if loaded.ok and loaded.entry.get("id", "") == args[probe + 5]:

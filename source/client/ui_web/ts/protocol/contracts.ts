@@ -58,6 +58,7 @@ export interface CommandPayloads {
   'upgrade.select': UpgradeCommand;
   'upgrade.execute': UpgradeCommand;
   'upgrade.retry': Record<string,never>;
+  'upgrade.dismiss_recovery': Record<string,never>;
   'npc.upgrade_item': UpgradeCommand;
   'shop.open': {npc_instance_id:string;service_id:string};
   'shop.buy': ShopBuyCommand;

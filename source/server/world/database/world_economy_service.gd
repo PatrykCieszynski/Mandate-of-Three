@@ -110,3 +110,10 @@ func upgrade_operation(character_id: int, recipe: UpgradeDefinition, uid: String
 		_runtime.accept_committed_wallet_balance(character_id, int(response.balance))
 	return EconomyOperationResult.capture(character_id, account, "upgrade", operation_id,
 		response, committed, [account] if committed else [], bool(response.get("ok", false)) and not committed)
+
+func upgrade_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
+	var response: Dictionary = {"ok":false,"error":"storage"}
+	if _runtime.db != null:
+		response = UpgradeStoreSqlite.new(_runtime.db).upgrade_receipt(character_id,operation_id)
+	return EconomyOperationResult.capture(character_id,_runtime.wallet_account_id(character_id),
+		"upgrade.receipt",operation_id,response,false)

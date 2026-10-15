@@ -53,5 +53,20 @@ func upgrade(owner_id: int, pending_yang: int, recipe: UpgradeDefinition, uid: S
 	if not db.query("SELECT changes() AS n;") or int(db.query_result[0].n) != 1: return _rollback("stale")
 	return _transaction.commit({"ok":true,"balance":spent.balance})
 
+func upgrade_receipt(owner_id: int, operation_id: String) -> Dictionary:
+	if operation_id.is_empty() or operation_id.length() > 96: return {"ok":false,"error":"request"}
+	var account_id := WorldStoreSqlite.new(db).resolve_account_id(owner_id)
+	if account_id <= 0: return {"ok":false,"error":"owner"}
+	if not db.query_with_bindings("SELECT request_json,result_json FROM market_commands WHERE account_id=? AND command_id=? AND kind='upgrade';", [account_id,operation_id]): return {"ok":false,"error":"storage"}
+	if db.query_result.is_empty(): return {"ok":false,"error":"unknown_command"}
+	var row: Dictionary = db.query_result[0]
+	var args: Variant = JSON.parse_string(row.request_json)
+	if not args is Array or args.size() != 4: return {"ok":false,"error":"storage"}
+	if int(args[0]) != owner_id: return {"ok":false,"error":"unknown_command"}
+	var result: Variant = JSON.parse_string(row.result_json)
+	if not result is Dictionary or not result.get("ok", false): return {"ok":false,"error":"storage"}
+	if result.has("balance"): result.balance = int(result.balance)
+	return result
+
 func _rollback(error: String) -> Dictionary:
 	return _transaction.rollback(error)

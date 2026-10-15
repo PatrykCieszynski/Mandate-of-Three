@@ -459,10 +459,8 @@ is presentation state, not server authority. An uncertain response does not show
 a definite visual failure. Closing the NPC window keeps the RAM intention;
 reopen the original service to retry. No new frontend framework or SQL schema.
 
-This slice does **not** add Upgrade client disk journaling or out-of-range
-receipt-only recovery. Unlike NPC purchase, exiting the game loses this adapter's
-RAM intention; extending restart recovery to Upgrade is a separate bounded task.
-The durable server receipt can still replay a known operation after DB reopen.
+At the eleventh slice, Upgrade still lacked a client disk journal and out-of-range
+receipt-only recovery. The twelfth slice below closes those two limitations.
 
 Existing upgrade_transaction adds successful replay, payload/character conflicts,
 receipt-failure rollback and same-ID retry, later pending income preservation,
@@ -474,10 +472,61 @@ Retry after +1 without another execute or local affordability/material checks.
 Smoke (10 Godot fixtures, 81 Web contracts), two-client Upgrade and the configured
 Prettier check passed on 2026-10-15. No native window or manual relog was run.
 
+## Twelfth slice: Upgrade restart recovery
+
+Upgrade writes its original ID/payload before sending RPC to
+`user://pending_upgrades`, scoped by the same authenticated
+`economic_context` (SQLite economy identity, account and receiving character)
+as NPC purchases. A newly composed adapter loads that intention and performs
+one read-only receipt lookup. Unknown or temporarily unavailable results remain
+pending; restoration never executes an Upgrade. Only an explicit Retry may fall
+back from `unknown_command` to the original authorized mutation path.
+
+`UpgradeStoreSqlite.upgrade_receipt` filters account, receiving character and
+command kind. Lookup requires an authenticated World character, not an open NPC
+context, range or living-player mutation admission. It cannot spend, consume,
+create a receipt or mutate the item. Successful lookup repairs current private
+Inventory/wallet projections, without a new commit fact or historical RAM balance.
+The receipt action uses a separate bounded per-peer limiter; an explicit fallback
+still passes the existing NPC/service/range/alive and mutation-rate checks.
+
+The small file helper is shared by two concrete uses and renamed to
+`local_economy_journal.gd`. Its only added configuration is ID prefix and directory.
+Existing NPC purchase directory, record format, scope hash and default prefix
+remain unchanged; existing purchase records need no migration. Upgrade uses a
+separate directory and `upgrade-` IDs. The helper still flushes/closes/renames
+before send, removes only confirmed entries, and fails closed on I/O failure,
+corruption or multiple records. Files remain hints, not economic authority.
+This is process-restart recovery, without a power-loss/fsync guarantee.
+
+A pending-only Upgrade view can render without an NPC catalog or candidate.
+`upgrade.dismiss_recovery` hides it without discarding the intention; a fresh
+adapter restores it again. The view sends only explicit empty-payload Retry or
+dismiss commands; gameplay payloads stay in the native adapter. Definite success
+or post-receipt store rejection clears the matching file; timeout/disconnect/UI
+reload, authorization failure after an uncertain result, or failed removal retain it.
+
+Existing fixtures protect the new risk: upgrade_transaction checks read-only
+lookup flags, unknown-ID non-mutation and account/character/kind isolation, plus
+write failure before RPC and journal ID namespaces. The two-client Upgrade fixture
+reads the saved ID in an independent Godot process, then recreates the adapter
+and confirms the committed result outside NPC range. A crash-before-RPC entry
+returns one unknown receipt without executing anything; explicit retry outside
+range stays pending, and reopening the original service reaches the unchanged
+revision validation. Exactly one Inventory/wallet mutation fact remains.
+The Web fixture checks recovery without NPC state and explicit dismissal.
+
+Smoke (10 Godot fixtures), Web contracts (82), two-client Upgrade, two-client NPC
+Shop and full configured Prettier passed on 2026-10-15. The Shop regression also
+covers its independent-process journal read after the shared helper rename.
+No native window or full Gateway/Master relog was run; the headless process read
+and fresh-adapter RPC check do not claim that broader manual lifecycle test.
+No schema, purchase format or transaction policy changes.
+
 ## Remaining Stage 2 work
 
 Stable intention IDs and full durable result receipts for remaining non-market
-operations (Inventory/Storage), Upgrade and broader client-side operation journaling,
+operations (Inventory/Storage), broader client-side operation journaling,
 durable Economy/World revision reconciliation and broader cache invalidation
 remain later reviewable slices. The live presentation delivery versions above
 do not implement those distributed contracts. Startup/dev grants and checkpoint wallet flows still retain

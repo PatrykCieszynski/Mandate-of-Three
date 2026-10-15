@@ -38,6 +38,7 @@ export function mountUpgrade(
     select?: (command: UpgradeCommand) => Promise<CommandResult>;
     execute?: (command: UpgradeCommand) => Promise<CommandResult>;
     retry?: () => Promise<CommandResult>;
+    dismissRecovery?: () => void;
     devPreview?: boolean;
     onRegionsChanged?: () => void;
   },
@@ -160,14 +161,7 @@ export function mountUpgrade(
     onClick: () => void retryUpgrade(),
   });
   async function retryUpgrade() {
-    if (
-      disposed ||
-      pending ||
-      !recipe.active ||
-      !recipe.upgradePending ||
-      !options.retry
-    )
-      return;
+    if (disposed || pending || !recipe.upgradePending || !options.retry) return;
     const token = generation;
     pending = true;
     confirmed = false;
@@ -354,7 +348,9 @@ export function mountUpgrade(
     if (disposed || token !== generation) return result;
     if (action === 'execute') {
       clearEffect();
-      if (result.error !== 'upgrade_pending')
+      if (
+        !['upgrade_pending', 'journal_unavailable'].includes(result.error ?? '')
+      )
         root.dataset.upgradeEffect = result.ok ? 'success' : 'failure';
     }
     pending = false;
@@ -362,9 +358,11 @@ export function mountUpgrade(
       ? action === 'execute'
         ? 'Upgrade successful.'
         : ''
-      : result.error === 'upgrade_pending'
-        ? 'Upgrade not confirmed. Use Retry upgrade; keep the original service open.'
-        : `Rejected: ${result.error ?? 'request'}`;
+      : result.error === 'journal_unavailable'
+        ? 'Upgrade confirmation storage is unavailable. Further upgrades are blocked.'
+        : result.error === 'upgrade_pending'
+          ? 'Upgrade not confirmed. Use Retry upgrade; keep the original service open.'
+          : `Rejected: ${result.error ?? 'request'}`;
     render();
     return result;
   }
@@ -422,6 +420,8 @@ export function mountUpgrade(
   }
   function render() {
     if (disposed) return;
+    root.hidden = !key && !recipe.upgradePending;
+    find('.upgrade-body').hidden = !recipe.active && !!recipe.upgradePending;
     const preview = effectPreview ?? presentation();
     const shownLevel = effectPreview ? effectLevel : level;
     slot.style.height = `${(item?.height ?? 2) * 40 - 2}px`;
@@ -485,9 +485,11 @@ export function mountUpgrade(
           ? 'Forging…'
           : 'Waiting for server…'
         : notice ||
-          (recipe.active
-            ? 'The item stays in Inventory. Upgrade consumes material and Yang.'
-            : 'Waiting for upgrade service…');
+          (recipe.upgradePending
+            ? 'Upgrade not confirmed. Retry checks the result; if absent, return to the original service.'
+            : recipe.active
+              ? 'The item stays in Inventory. Upgrade consumes material and Yang.'
+              : 'Waiting for upgrade service…');
     if (devControls) {
       devControls.previous.setDisabled(!item || confirmed || level === 0);
       devControls.next.setDisabled(
@@ -499,10 +501,10 @@ export function mountUpgrade(
     confirmation.hidden = !confirmed;
     find('.upgrade-confirm-text').textContent =
       `Upgrade to ${preview?.next?.name ?? ''} for ${(preview?.cost ?? 0).toLocaleString('en-US')} Yang?`;
-    retry.element.hidden =
-      !recipe.active || !recipe.upgradePending || !options.retry;
+    retry.element.hidden = !recipe.upgradePending || !options.retry;
     retry.setDisabled(pending);
-    upgrade.element.hidden = confirmed;
+    upgrade.element.hidden =
+      confirmed || (!recipe.active && !!recipe.upgradePending);
     cancel.element.hidden = confirmed;
     upgrade.setDisabled(!canUpgrade());
     yes.setDisabled(!canUpgrade());
@@ -518,7 +520,13 @@ export function mountUpgrade(
       confirmed = false;
       render();
       upgrade.element.focus({ preventScroll: true });
-    } else options.onClose();
+    } else if (
+      !recipe.active &&
+      recipe.upgradePending &&
+      options.dismissRecovery
+    )
+      options.dismissRecovery();
+    else options.onClose();
     return true;
   }
   return {

@@ -54,6 +54,8 @@ func setup(game_world: GameWorld3D) -> void:
 	npcs.context_updated.connect(_npc_state)
 	npcs.attach(world.npc_endpoint, dispatcher, session, get_tree())
 	upgrades.attach(world.upgrade_endpoint, dispatcher, session, get_tree())
+	world.inventory_endpoint.state_changed.connect(upgrades.accept_context)
+	upgrades.accept_context(world.inventory_endpoint.state)
 	shop.state_updated.connect(_shop_state)
 	shop.attach(world.shop_endpoint, dispatcher, session, get_tree())
 	world.inventory_endpoint.state_changed.connect(shop.accept_context)

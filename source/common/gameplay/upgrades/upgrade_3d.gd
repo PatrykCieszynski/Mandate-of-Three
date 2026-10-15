@@ -7,6 +7,7 @@ var state: Dictionary = {"active":false}
 var _world: Node3D
 var _selected: Dictionary[int, String] = {}
 var _last_upgrade: Dictionary[int, int] = {}
+var _last_receipt: Dictionary[int, int] = {}
 var _published: Dictionary[int, Dictionary] = {}
 
 func _ready() -> void:
@@ -50,6 +51,18 @@ func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName,
 		_world.currency_endpoint.resynchronize(peer_id)
 	return operation.response()
 
+func receipt_for_peer(peer_id: int, operation_id: String, now: int) -> Dictionary:
+	if now - _last_receipt.get(peer_id,-1000) < 100: return {"ok":false,"error":"too_fast"}
+	_last_receipt[peer_id] = now
+	var player: PlayerResource = services.player_for_peer(peer_id)
+	if player == null: return {"ok":false,"error":"unknown_player"}
+	# Authenticated character only. Lookup cannot admit, spend or mutate an item.
+	var operation := services.economy().upgrade_receipt(player.player_id,operation_id)
+	if operation.response().get("ok",false):
+		_world.inventory_endpoint.resynchronize(peer_id)
+		_world.currency_endpoint.resynchronize(peer_id)
+	return operation.response()
+
 func snapshot_for_peer(peer_id: int) -> Dictionary:
 	var context: NpcInteractionContext = _world.npc_endpoint.contexts.get(peer_id)
 	if context == null:
@@ -83,11 +96,13 @@ func publish(peer_id: int) -> void:
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_upgrade(action: String, instance_id: String, service_id: String, uid: String, revision: int, command_id: String, operation_id: String = "") -> void:
-	if not GameMode.is_world_server() or command_id.length() > 80 or instance_id.length() > 80 or service_id.length() > 64 or not ItemInstance.valid_uid(uid) or revision < 0 or operation_id.length() > 96: return
+	if not GameMode.is_world_server() or command_id.length() > 80 or instance_id.length() > 80 or service_id.length() > 64 or operation_id.length() > 96: return
+	if action != "receipt" and (not ItemInstance.valid_uid(uid) or revision < 0): return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id): return
 	var result: Dictionary
 	match action:
+		"receipt": result = receipt_for_peer(peer_id,operation_id,Time.get_ticks_msec())
 		"select": result = select_for_peer(peer_id,instance_id,StringName(service_id),uid,revision)
 		"upgrade": result = upgrade_for_peer(peer_id,instance_id,StringName(service_id),uid,revision,Time.get_ticks_msec(),operation_id)
 		_: result = {"ok":false,"error":"request"}
@@ -104,6 +119,7 @@ func remove_peer(peer_id: int) -> void:
 	_selected.erase(peer_id)
 	_published.erase(peer_id)
 	_last_upgrade.erase(peer_id)
+	_last_receipt.erase(peer_id)
 
 @rpc("authority", "call_remote", "reliable", 1)
 func receive_state(snapshot: Dictionary) -> void:
