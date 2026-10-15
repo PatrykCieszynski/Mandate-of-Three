@@ -14,10 +14,18 @@ func snapshot(character_id: int) -> Dictionary:
 
 ## The application boundary validates untrusted shapes independently of RPC/CEF.
 ## Stores still authorize custody/revisions and own the atomic transaction/receipt.
-func command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
+func _operation(character_id: int, action: String, payload: Dictionary, result: Dictionary, committed: bool = false, affected: Array = []) -> EconomyOperationResult:
+	var id: String = payload.command_id if payload.get("command_id") is String else ""
+	var account := 0
+	if _runtime.db != null and _runtime.wallet_ready and result.get("error", "") not in ["request", "storage"]:
+		account = _runtime.wallet_account_id(character_id)
+	return EconomyOperationResult.capture(character_id, account, action, id, result, committed, affected)
+
+func execute(character_id: int, action: String, payload: Dictionary) -> EconomyOperationResult:
 	if action == "open" or not MarketRequestRules.valid_command(action, payload):
-		return {"ok": false, "error": "request"}
-	if _runtime.db == null or not _runtime.wallet_ready: return {"ok":false,"error":"storage"}
+		return _operation(character_id, action, payload, {"ok": false, "error": "request"})
+	if _runtime.db == null or not _runtime.wallet_ready:
+		return _operation(character_id, action, payload, {"ok":false,"error":"storage"})
 	var result: Dictionary
 	var committed := false
 	if action in ["order", "cancel_order", "deposit", "withdraw"]:
@@ -30,7 +38,7 @@ func command(character_id: int, action: String, payload: Dictionary) -> Dictiona
 		committed = market.committed
 	# A successful receipt replay is a successful response, not another commit.
 	# Do not consume newer pending income or publish another account change.
-	if not result.ok or not committed: return result
+	if not result.ok or not committed: return _operation(character_id, action, payload, result)
 	if action in ["order", "cancel_order"]:
 		_reconcile_wallets(result.wallet_states)
 	elif action == "buy":
@@ -40,13 +48,10 @@ func command(character_id: int, action: String, payload: Dictionary) -> Dictiona
 		])
 	var affected: Array = result.get("affected_accounts", [_runtime.wallet_account_id(character_id)])
 	if action == "buy": affected = [int(result.buyer_account), int(result.seller_account)]
-	var notified := {}
-	for account: Variant in affected:
-		var account_id := int(account)
-		if not notified.has(account_id):
-			notified[account_id] = true
-			account_changed.emit(account_id)
-	return result
+	var operation := _operation(character_id, action, payload, result, true, affected)
+	for account: int in operation.changed_accounts:
+		account_changed.emit(account)
+	return operation
 
 func _pending_wallet_deltas() -> Dictionary:
 	var pending := {}

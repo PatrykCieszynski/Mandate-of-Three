@@ -6,6 +6,7 @@ var native_focus_observed := false
 var native_peer := 0
 var native_command_ids: Dictionary={}
 var browsed_peers: Dictionary={}
+var inventory_commits := 0
 @rpc("any_peer","call_remote","reliable",0)
 func register_browsed() -> void:
 	if GameMode.is_world_server(): browsed_peers[multiplayer.get_remote_sender_id()]=true
@@ -108,6 +109,9 @@ func run_client() -> void:
 		await get_tree().create_timer(.12).timeout
 	else:
 		result=await command("market.buy",{"command_id":"race","shop_id":int(drop_uid.split(":")[0]),"offer_id":drop_uid.split(":")[1],"revision":0,"price":100})
+	if result.ok and not native:
+		var retried := await command("market.buy", {"command_id":"race","shop_id":int(drop_uid.split(":")[0]),"offer_id":drop_uid.split(":")[1],"revision":0,"price":100})
+		check(retried.ok and world.inventory_endpoint.state.items.size() == 3, "replay repairs current inventory without granting another item")
 	report.rpc_id(1,result)
 	check(result.ok or result.error=="unavailable","two buyers receive one committed outcome")
 	check(world.inventory_endpoint.state.items.size()==(3 if result.ok else 2),"winner alone receives UID")
@@ -117,6 +121,7 @@ func run_client() -> void:
 func run_server() -> void:
 	await wait_until(func()->bool:return world.characters.size()==2 and ready_peers.size()==2)
 	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled=false
+	world.inventory_endpoint.inventory_changed.connect(func(_owner: int) -> void: inventory_commits += 1)
 	var seller:=EconomyFixture.create_character(server.database.store,"offline_seller",{"name":"Offline","skin":1})
 	check(server.database.item_store.initialize_character(seller).ok,"offline fixture items")
 	var item: Dictionary=server.database.item_store.inventory(seller).items[0]
@@ -148,6 +153,8 @@ func run_server() -> void:
 	check(market.mine(seller).offers.is_empty(),"sold escrow removed")
 	check(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;",[server.database.wallet_account_id(seller)]) and db.query_result[0].yang==1600,"offline seller credited once")
 	check(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty(),"single custody after race")
+	if not CmdlineUtils.get_parsed_args().has("native-market-server"):
+		check(inventory_commits == 1, "one real inventory commit across successful buy and replay")
 	check(await server.database.auction_queries.pause(), "race reader drained before fixture DB teardown")
 	print("MARKET_RACE_SERVER_OK two buyers, one UID, one spend/credit, offline seller")
 	await get_tree().create_timer(.5).timeout;get_tree().quit(1 if failed else 0)

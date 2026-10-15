@@ -43,10 +43,20 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	var owner := _owner(peer_id)
 	if owner<=0: return {"ok":false,"error":"owner"}
 	if action=="open": return {"ok":true}
-	var result: Dictionary = services.economy().market_command(owner,action,payload)
-	if result.ok and action in ["list","claim","buy","deposit","withdraw"]:
-		_world.inventory_endpoint.accept_committed_change(peer_id)
-	return result
+	var operation := services.economy().market_operation(owner, action, payload)
+	var response := operation.response()
+	if response.get("ok", false) and action in ["list","claim","buy","deposit","withdraw"]:
+		if operation.new_commit:
+			_world.inventory_endpoint.accept_committed_change(peer_id)
+		else:
+			_world.inventory_endpoint.resynchronize(peer_id)
+	if operation.receipt_replay:
+		# Repair the caller's current views after a lost response/reconnect without
+		# republishing a mutation to every account peer/instance.
+		_publish(peer_id)
+		_publish_exchange(peer_id)
+		_world.currency_endpoint.resynchronize(peer_id)
+	return response
 
 func _publish(peer_id: int) -> void:
 	if _owner(peer_id)<=0: return
