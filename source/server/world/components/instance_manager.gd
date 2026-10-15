@@ -66,6 +66,9 @@ func charge_new_instance(_map_path: String, _instance_id: String) -> void:
 
 ## Every login uses the technical map; no Ekonia tutorial/hub routing.
 func _on_peer_connected(peer_id: int) -> void:
+	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
+	if admitted == null or admitted.current_peer_id != peer_id or world_server.player_id_to_peer_id.get(admitted.player_id, 0) != peer_id:
+		return
 	if default_instance == null:
 		push_error("No technical default instance configured.")
 		return

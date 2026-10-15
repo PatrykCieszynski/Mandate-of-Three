@@ -5,7 +5,7 @@ extends Node
 class Session extends WorldServer:
 	var answers: Dictionary = {}
 	var master_disconnects: Array[String] = []
-	func _notify_master_disconnected(account_name: String) -> void:
+	func _notify_master_disconnected(account_name: String, _session_token: String = "") -> void:
 		master_disconnects.append(account_name)
 	@rpc("authority", "call_remote", "reliable", 1)
 	func _data_response(id: int, _type: String, data: Dictionary) -> void:

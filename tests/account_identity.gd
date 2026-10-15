@@ -2,7 +2,7 @@ extends Node
 ## New risk: verified identity handoff and additive migration are not covered by item suites.
 class SessionServer extends WorldServer:
 	var master_disconnects: Array[String] = []
-	func _notify_master_disconnected(account_name: String) -> void:
+	func _notify_master_disconnected(account_name: String, _session_token: String = "") -> void:
 		master_disconnects.append(account_name)
 
 var db := SQLite.new()
