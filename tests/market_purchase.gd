@@ -32,7 +32,7 @@ func _ready() -> void:
 	for n: int in 2:
 		var extra_item := ItemInstance.create(ItemDefinitions.IRON_SWORD,seller,[])
 		assert(EconomyFixture.insert_item(items,extra_item,items._free_bag_position(seller,2)))
-		var offered := market.list_item(seller,"offer_only_list_%d" % n,extra_item.uid,0,n*5,0)
+		var offered := market.list_item(seller,"offer_only_list_%d" % n,extra_item.uid,0,n*10,0)
 		assert(offered.ok)
 		negotiating.append({"uid":extra_item.uid,"offer":offered})
 	var shop_view := market.mine(seller)
