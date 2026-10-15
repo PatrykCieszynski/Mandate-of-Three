@@ -245,6 +245,7 @@ export function mountInventory(
         status.textContent = `Activation failed: ${errorMessage(error)}`;
     } finally {
       pending = false;
+      if (!disposed) retryButton.setDisabled(false);
     }
   }
   async function move(item: ItemPresentation, preview: Placement) {
@@ -268,6 +269,7 @@ export function mountInventory(
       if (!disposed) status.textContent = `Move failed: ${errorMessage(error)}`;
     } finally {
       pending = false;
+      if (!disposed) retryButton.setDisabled(false);
     }
   }
   if (drag) {

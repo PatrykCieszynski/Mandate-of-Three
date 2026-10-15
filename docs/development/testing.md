@@ -297,3 +297,15 @@ and reused request IDs. This protects token issuance ordering, which a fixture
 calling only `register_world_session` cannot cover. For login/session changes,
 also run `run-items.ps1 -WithSession` against normal Gateway/Master/World roles;
 the 2026-10-15 isolated full-process result is recorded in the session admission doc.
+
+
+`run-web-inventory.ps1 -Scene storage_recovery` is the opt-in shared-account
+Storage regression. Two distinct fixture characters compete for one UID, while
+lost responses, fresh controller/independent-process journal recovery and
+crash-before-send discovery exercise receipt-only restart and explicit Retry.
+It checks current account fanout, a single receiving character, no extra mutation
+facts on replay, and DB reopen. It shares port 18098: run sequentially with other
+PvE-derived fixtures. No change to production simultaneous-login policy or native
+CEF/input coverage is implied. Existing item_instances adds atomic receipt/custody
+rollback and issuing-character isolation; Web contracts cover Retry after the
+original item left Storage, without placement-dependent UI gating.

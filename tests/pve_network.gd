@@ -6,6 +6,8 @@ const PORT: int = 18098
 var map_scene_path: String = "res://tests/fixtures/world3d/test_arena.tscn"
 var database_directory: String = "res://.godot/verification"
 var fixture_connection_number := 0
+# Fixture-only opt-in: exercise shared-account domain races without changing login policy.
+var fixture_shared_account := false
 var peer := WebSocketMultiplayerPeer.new()
 var world: GameWorld3D
 var server: WorldServer
@@ -70,7 +72,7 @@ func _ready() -> void:
 		api.peer_connected.connect(func(id: int) -> void:
 			fixture_connection_number += 1
 			var number: int = fixture_connection_number
-			var owner: int = EconomyFixture.create_character(server.database.store,"pve%d" % number, {"name": "Pve%d" % number, "skin": 1})
+			var owner: int = EconomyFixture.create_character(server.database.store,"pve_shared" if fixture_shared_account else "pve%d" % number, {"name": "Pve%d" % number, "skin": 1})
 			check(db.query_with_bindings("UPDATE account_wallets SET yang=0 WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);", [owner]), "explicit zero wallet fixture")
 			EconomyFixture.prepare(server.database)
 			server.connected_players[id] = server.database.store.get_player(owner)

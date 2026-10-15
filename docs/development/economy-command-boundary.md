@@ -141,6 +141,8 @@ claims still reject as `claimed` (or `gone` after despawn), including a differen
 claimant. They are not represented as successful receipt replay. Operation IDs
 remain empty rather than inventing a new client intention protocol.
 
+This historical slice predates the complete Storage receipt/recovery slice below.
+
 `WorldDatabase.storage_operation` routes through the same application boundary;
 `transfer_storage` remains a compatible dictionary facade. AccountStorageSqlite
 retains account membership, ownership/provenance, revision, receiving capacity,
@@ -596,13 +598,79 @@ independent-process file read plus fresh controller/RPC proves the scoped restar
 boundary, not the entire launcher/auth lifecycle. The existing items_session
 fixture is updated for explicit IDs but was not executed against live accounts.
 
+## Account Storage vertical slice: receipts through client recovery
+
+Deposit, Storage-to-Storage move and withdrawal now compose EconomyCommandSqlite
+with the existing custody rules. Successful receipts (including same-cell no-ops)
+and item custody/placement/revision writes commit together. A receipt failure
+rolls back every provisional write, including receiving-character provenance.
+The standalone store wrapper remains for trusted tooling/fixtures; production
+service commands require a bounded business ID. No schema migration is added.
+
+The account-scoped fingerprint binds the issuing/receiving character, UID,
+expected revision, source, destination and original requested position (-1 for
+first fit). Replay precedes mutable custody checks. Another character of the
+same account cannot retarget a withdrawal or discover the original character's
+receipt. A matching old receipt confirms success without restoring historical
+placement, ownership or revision after a later account operation.
+
+StorageUiAdapter owns Storage presentation/commands, separate from character-local
+Inventory. It uses the existing small local journal with `storage-` IDs under
+`user://pending_storage_commands`, scoped by authenticated economy/account/issuing
+character. The original payload is persisted before RPC. One unresolved transfer
+blocks replacement; disk failure blocks execution. Timeout/reload/disconnect keep
+the entry. Restart/recreation makes one read-only account/character/kind-filtered
+lookup. An unknown receipt never automatically executes. Explicit `storage.retry`
+may execute that same saved payload only after an unknown result, through normal
+server validation. Definitive rejection or success clears the saved entry.
+
+The Retry control needs neither the original item in Storage nor a free target
+cell. Close changes presentation only; recovery reopens Storage and Inventory.
+Web state carries a pending flag, not authority or economic IDs. Storage and
+Inventory share one native response session, with a single signal subscription.
+Matching client/World builds are required for the additional bounded Storage
+business ID and receipt RPC. Read lookup uses its own per-peer limiter.
+
+After a real mutation World refreshes runtime/private projections for all active
+characters of the account before publishing their change facts. Replay, no-op
+and successful receipt discovery resynchronize current account views without
+another mutation fact. Storage is still available everywhere in this MVP; the
+window-open check is a client UX guard, not NPC/range authorization. This is one
+authoritative SQLite writer and local World fanout, not cross-World cache coherence.
+
+Verification extends item_instances for all three receipt-failure rollbacks,
+same-ID retry, account/character/kind isolation, changed fingerprints, no-op,
+later-state preservation, unique custody, reopen and pre-RPC journal failure.
+The new optional `run-web-inventory.ps1 -Scene storage_recovery` fixture uses two
+distinct characters of one fixture account. It checks shared Storage fanout,
+competing withdrawal (one recipient), lost responses for both winner and loser,
+explicit recovery after the item left Storage, and old deposit discovery after
+the other character moved it. An independent Godot process reads the saved
+intention; fresh controller recreation resolves it. A seeded crash-before-send
+entry performs only discovery until explicit Retry executes it. Exactly four
+real mutations produce four facts per active character; reads/replays add none.
+This fixture does not alter or claim simultaneous-login support in production.
+Web coverage protects empty/current-state Retry without another drag/transfer.
+Both Storage and Inventory release their Retry button after a timeout even when
+the pending-state update arrived before the command result; the existing Web
+contracts now exercise that ordering.
+
+Smoke (10 Godot fixtures and 84 Web contracts), the two-client Storage recovery
+fixture, existing Web Inventory network regression, market custody, Exchange
+ledger and full configured Prettier passed on 2026-10-15. Generated Web JS matches
+TS. `git diff --check` passed.
+
+No native CEF window or normal Gateway/Master relog was run for this slice.
+The headless bridge/RPC and independent-process journal read establish the scoped
+recovery contract, not physical input, full launcher/session restart, power-loss
+filesystem durability or distributed fencing.
+
 ## Remaining Stage 2 work
 
-Stable intention IDs/full receipts and client recovery for account Storage,
-durable Economy/World revision reconciliation and broader cache invalidation
+Durable Economy/World revision reconciliation and broader cache invalidation
 remain later reviewable slices. The live presentation delivery versions above
-do not implement those distributed contracts. Startup/dev grants and checkpoint wallet flows still retain
-their existing entry points. Do not infer distributed C2 admission, durable business
-rejections, session fencing or pending-operation recovery from this change.
+do not implement those distributed contracts. Startup/dev grants and checkpoint
+wallet flows still retain their existing entry points. Do not infer distributed
+C2 admission, durable business rejections or session fencing from this change.
 Existing successful receipts remain durable; bounded rejected-command caching
 keeps its current semantics until an explicit persistence change is approved.

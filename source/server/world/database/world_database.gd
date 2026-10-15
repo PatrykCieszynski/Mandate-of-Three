@@ -232,11 +232,14 @@ func market_query(character_id: int, action: String, payload: Dictionary) -> Dic
 func claim_ground_item_operation(owner_id: int, drop_uid: String, item: ItemInstance) -> EconomyOperationResult:
 	return _economy().claim_ground_item_operation(owner_id, drop_uid, item)
 
-func storage_operation(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> EconomyOperationResult:
-	return _economy().storage_operation(owner_id, uid, revision, source, destination, position)
+func storage_receipt(owner_id: int, operation_id: String) -> EconomyOperationResult:
+	return _economy().storage_receipt(owner_id,operation_id)
 
-func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> Dictionary:
-	return storage_operation(owner_id, uid, revision, source, destination, position).response()
+func storage_operation(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int, operation_id: String = "") -> EconomyOperationResult:
+	return _economy().storage_operation(owner_id, uid, revision, source, destination, position, operation_id)
+
+func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int, operation_id: String = "") -> Dictionary:
+	return storage_operation(owner_id, uid, revision, source, destination, position, operation_id).response()
 
 func upgrade_receipt(owner_id: int, operation_id: String) -> EconomyOperationResult:
 	return _economy().upgrade_receipt(owner_id,operation_id)

@@ -10,6 +10,8 @@ var equipment_opened: bool = false
 var storage_opened: bool = false
 var session := UiCommandSession.new()
 var items := ItemUiAdapter.new()
+const StorageAdapter = preload("res://source/client/ui_web/storage_ui_adapter.gd")
+var storage = StorageAdapter.new()
 var npcs := NpcUiAdapter.new()
 var upgrades := UpgradeUiAdapter.new()
 var shop := ShopUiAdapter.new()
@@ -73,7 +75,12 @@ func setup(game_world: GameWorld3D) -> void:
 	items.recovery_needed.connect(func() -> void:
 		opened = true
 		_layout())
-	items.attach(world.inventory_endpoint, dispatcher, session, get_tree(), func() -> bool: return storage_opened)
+	items.attach(world.inventory_endpoint, dispatcher, session, get_tree())
+	storage.recovery_needed.connect(func() -> void:
+		opened = true
+		storage_opened = true
+		_layout())
+	storage.attach(world.inventory_endpoint,dispatcher,session,get_tree(),func() -> bool: return storage_opened)
 	dispatcher.register_command("npc.upgrade_item", UpgradeUiAdapter.valid_item, _drop_on_npc)
 	dispatcher.set_domain("npc_targets",{"width":0,"height":0,"targets":[]})
 	dispatcher.register_command("storage.close", func(p: Dictionary) -> bool: return p.is_empty(), _close_storage)
@@ -243,6 +250,7 @@ func _stop(reason: String) -> void:
 	session.close(reason)
 	if is_instance_valid(dispatcher): dispatcher.dispose()
 	items.dispose()
+	storage.dispose()
 	npcs.dispose()
 	upgrades.dispose()
 	shop.dispose()

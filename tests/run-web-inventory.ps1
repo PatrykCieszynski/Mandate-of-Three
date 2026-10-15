@@ -1,4 +1,4 @@
-param([ValidateSet('web_inventory','market_network','exchange_network','market_load')][string]$Scene='web_inventory')
+param([ValidateSet('web_inventory','storage_recovery','market_network','exchange_network','market_load')][string]$Scene='web_inventory')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
@@ -31,7 +31,7 @@ try {
         }
         $taskEntry.Process.Refresh()
         $taskOutput = Get-Content -LiteralPath (Join-Path $taskLogs "$taskPrefix-test-$($taskEntry.Role).out.log") -Raw
-        $taskDomain=switch ($Scene) { 'market_network' {'MARKET'} 'exchange_network' {'EXCHANGE_NETWORK'} default {'WEB_INVENTORY'} }
+        $taskDomain=switch ($Scene) { 'storage_recovery' {'STORAGE_RECOVERY'} 'market_network' {'MARKET'} 'exchange_network' {'EXCHANGE_NETWORK'} default {'WEB_INVENTORY'} }
         $taskMarker = if ($taskEntry.Role -eq 'server') { $taskDomain+'_SERVER_OK' } else { $taskDomain+'_CLIENT_OK' }
         $taskErrors = Get-Content -LiteralPath (Join-Path $taskLogs "$taskPrefix-test-$($taskEntry.Role).err.log") -Raw
         if ($taskEntry.Process.ExitCode -ne 0 -or $taskOutput -notmatch $taskMarker -or $taskErrors -match 'SCRIPT ERROR|Parse Error') {

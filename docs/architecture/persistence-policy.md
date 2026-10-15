@@ -201,5 +201,11 @@ payload before RPC and resolves restart uncertainty through receipt-only lookup;
 only explicit Retry may execute an absent intention. A successful no-op also has
 a durable receipt, without a mutation fact. See
 [the Inventory vertical slice](../development/economy-command-boundary.md#inventory-vertical-slice-durable-command-through-client-recovery).
-Account Storage recovery remains a separate milestone; its immediate transaction
-policy and current ownership/custody rules are unchanged.
+Account Storage deposit/move/withdrawal follows the same immediate receipt+item
+transaction policy, with the original issuing/receiving character in its
+account-scoped fingerprint. Its separate local journal preserves uncertainty;
+restart only queries the result, and explicit Retry alone may execute an absent
+intention. Old receipts never restore historical ownership/placement. Current
+account views refresh before local change publication, including repair without
+new mutation facts on replay. No cross-World coherence or session-fencing claim
+is implied. See [the Storage vertical slice](../development/economy-command-boundary.md#account-storage-vertical-slice-receipts-through-client-recovery).

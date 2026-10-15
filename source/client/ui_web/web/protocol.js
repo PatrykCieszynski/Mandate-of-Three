@@ -91,6 +91,8 @@ function isInventory(value) {
     return value.items.every(item => item.x < columns && item.y + item.height <= rows && item.page < pages);
 }
 function isStorage(value) {
+    if (isObject(value) && 'recoveryPending' in value && typeof value.recoveryPending !== 'boolean')
+        return false;
     if (!isObject(value) || value.columns !== STORAGE_COLUMNS || value.rows !== STORAGE_ROWS || value.pages !== STORAGE_PAGES || !Array.isArray(value.items) || value.items.length > STORAGE_CAPACITY)
         return false;
     return value.items.every(item => isItem(item) && isObject(item) && integerRange(item.x, 0, STORAGE_COLUMNS - 1) && integerRange(item.y, 0, STORAGE_ROWS - 1) && item.y + item.height <= STORAGE_ROWS && integerRange(item.page, 0, STORAGE_PAGES - 1));
