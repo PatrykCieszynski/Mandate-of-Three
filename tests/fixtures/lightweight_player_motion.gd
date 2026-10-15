@@ -17,7 +17,14 @@ func _sweep_axis(player: PlayerActor3D, movement: Vector3, collision_mask: int) 
 	var allowed: PackedFloat32Array = player.get_world_3d().direct_space_state.cast_motion(_sweep_query)
 	if allowed.size() != 2:
 		return
-	player.position += movement * clampf(allowed[0], 0.0, 1.0)
+	# Casts starting exactly at contact can report zero travel even when
+	# the following axis is tangential. Keep a tiny separation from the wall
+	# instead of sitting exactly on the contact plane.
+	var safe_fraction := clampf(allowed[0], 0.0, 1.0)
+	var step := movement * safe_fraction
+	if safe_fraction < 1.0:
+		step -= movement.normalized() * 0.01
+	player.position += step
 
 func simulate(player: PlayerActor3D, delta: float, direction: Vector2) -> void:
 	if not player.alive:

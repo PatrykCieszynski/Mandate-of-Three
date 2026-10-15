@@ -39,6 +39,7 @@ func _ready() -> void:
 	for tick: int in 25:
 		await get_tree().physics_frame
 		body.simulate(1.0 / 60.0, Vector2(1, -1).normalized())
+	print("LIGHT_PLAYER_WALL_SLIDE x=", body.position.x, " z=", body.position.z, " from=", z_before)
 	check(body.position.x < 1.52 and body.position.z < z_before - 0.9,
 		"blocked x permits tangential z travel")
 	# This experiment intentionally keeps an actor on its current Y plane.
