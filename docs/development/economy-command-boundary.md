@@ -1,6 +1,6 @@
-# Economy boundary — Stage 2, first slice
+# Economy boundary — Stage 2 local slices
 
-This is the first narrow part of the local Economy architecture work. It hardens
+These are narrow parts of the local Economy architecture work. They harden
 the existing `WorldDatabase.market_command` → `MarketplaceService` application
 boundary for Shop and Exchange. It does not complete Stage 2 or introduce a new
 service process, generic database interface, queue or database migration.
@@ -31,6 +31,31 @@ Public response dictionaries, command IDs, SQL schemas and current product rules
 are unchanged. In particular, this does not implement the accepted future
 claimable-Yang, withdrawal-capacity or Offer Only marketplace changes.
 
+## Second slice: explicit operation results and World effects
+
+`WorldDatabase.market_operation` now returns a small `EconomyOperationResult`.
+The existing dictionary API `market_command` delegates to it for compatibility.
+MarketplaceService has one execution path; there is no parallel transaction path.
+
+The result contains operation ID, character/account context, action, a copied
+business response, `new_commit`, `receipt_replay` and deduplicated changed account
+IDs. A malformed/storage-unavailable request may have account ID zero; this is not
+an authorization credential. The result holds no live World/player/store references.
+
+- A newly successful transaction has `new_commit=true` and changed accounts.
+- A successful mutation receipt replay has `receipt_replay=true`, no new commit
+  and no changed accounts. An explicit receipt lookup has both flags false.
+- Rejected/failed results have neither flag nor changed accounts. The result does
+  not claim that current rejected responses are durable admission receipts.
+- World uses this distinction for inventory too: only a new commit invokes
+  `accept_committed_change`. Replay resynchronizes current inventory, marketplace,
+  Exchange and wallet views for the caller without emitting another mutation.
+
+The class is local application data, not a new network envelope, stored receipt
+format, event bus or distributed operation state machine. RPC/CEF still receive
+the existing business dictionaries. No speculative `pending`/`unknown` statuses
+are inferred from the current synchronous SQLite path.
+
 ## Regression evidence
 
 Existing suites protect rollback, ownership and recovery. Their original wallet
@@ -43,6 +68,12 @@ Focused cases were therefore added to **existing** `market_purchase` and
 - a successful purchase replay and receipt lookup emit no new account changes;
 - Exchange rollback and replay emit no new account changes;
 - newer pending income survives receipt replay.
+
+The same suites now inspect operation identity, changed-account context and the
+commit/replay/lookup distinction. The two-client marketplace race retries the
+winning purchase with the same command ID and requires exactly one inventory
+mutation fact while the retried client's authoritative inventory remains correct.
+No separate class/implementation test suite was introduced.
 
 Relevant commands, run sequentially where they share port 18098:
 
@@ -66,12 +97,18 @@ The production search path was not changed to accommodate the fixture.
 No native CEF/input/rendering behavior changes in this slice; no native window
 check was run.
 
+During the second slice, refreshing the script-class registry through the local
+headless editor loaded a saved Terrain3D spike scene and reported a tool-script
+`navigation_map` null access. That import is not claimed as a clean editor check.
+The affected terrain code was unchanged; runtime economy/network/smoke checks
+are recorded separately. Incidental generated import/UID files were removed.
+
 ## Remaining Stage 2 work
 
 Pickup/equip/upgrade and other non-market economic operations have not been
-migrated into this application boundary. A common cross-domain operation result,
-versioned inventory/equipment snapshots and broader reconciliation remain later
-reviewable slices. Do not infer distributed C2 admission, durable business
+migrated into this application boundary. Applying the operation result to those
+domains, versioned inventory/equipment snapshots and broader reconciliation remain
+later reviewable slices. Do not infer distributed C2 admission, durable business
 rejections, session fencing or pending-operation recovery from this change.
 Existing successful receipts remain durable; bounded rejected-command caching
 keeps its current semantics until an explicit persistence change is approved.

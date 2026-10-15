@@ -200,8 +200,11 @@ func _marketplace() -> MarketplaceService:
 		_marketplace_service.account_changed.connect(market_account_changed.emit)
 	return _marketplace_service
 
+func market_operation(character_id: int, action: String, payload: Dictionary) -> EconomyOperationResult:
+	return _marketplace().execute(character_id, action, payload)
+
 func market_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
-	return _marketplace().command(character_id,action,payload)
+	return market_operation(character_id, action, payload).response()
 
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	return _marketplace().query(character_id,action,payload)
