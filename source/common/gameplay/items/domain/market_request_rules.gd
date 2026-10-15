@@ -50,7 +50,7 @@ static func valid_command(action: String, p: Dictionary) -> bool:
 	if p.has("offer_id") and (not p.offer_id is String or not ItemInstance.valid_uid(p.offer_id)): return false
 	if p.has("revision") and not integer(p.revision): return false
 	if p.has("position") and not integer(p.position,39): return false
-	if p.has("price") and (not integer(p.price) or p.price<=0): return false
+	if p.has("price") and (not integer(p.price) or (p.price<=0 and action not in ["list","edit"])): return false
 	if action=="configure" and (not p.name is String or p.name.length()>40 or p.name.strip_edges().is_empty() or p.status not in ["active","paused"]): return false
 	return true
 
