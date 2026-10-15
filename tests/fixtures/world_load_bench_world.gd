@@ -1,7 +1,52 @@
 extends GameWorld3D
-## Test-only World: production movement/simulation still run, but synthetic peer IDs
-## have no real sockets. Replace only RPC fan-out with an explicit encoding proxy.
-## This measures serialization CPU, NOT ENet/WebSocket delivery or real players.
+## Strictly benchmark-only overrides: same production actor code except in an
+## explicitly selected ablation. No synthetic peer ever receives an RPC.
+const BENCH_PLAYERS := preload("res://tests/fixtures/bench_player_actor.gd")
+const BENCH_MOBS := preload("res://tests/fixtures/bench_mob_actor.gd")
+const BENCH_SYSTEM := preload("res://tests/fixtures/bench_mob_system.gd")
+var skip_overlap := false
+var wide_arena := OS.get_environment("MANDATE_BENCH_WIDE") == "1"
+
+func _init() -> void:
+	mob_system = BENCH_SYSTEM.new()
+
+func _build_arena() -> void:
+	if wide_arena:
+		_box("Floor", Vector3(0, -0.25, 0), Vector3(512, 0.5, 512), Color("374957"))
+	else:
+		super._build_arena()
+
+func configure_profile(skip: bool, no_slide: bool, ai_period_ms: int) -> void:
+	skip_overlap = skip
+	mob_system.no_slide = no_slide
+	mob_system.ai_period_ms = ai_period_ms
+
+func _add_character(peer_id: int, display_name: String) -> PlayerActor3D:
+	var body := BENCH_PLAYERS.new()
+	body.name = "Character_%d" % peer_id
+	body.setup(display_name, Color.from_hsv(float(peer_id % 360) / 360.0, 0.55, 0.9))
+	body.skip_overlap = skip_overlap
+	add_child(body)
+	characters[peer_id] = body
+	return body
+
+func reset_profile_metrics() -> void:
+	BENCH_PLAYERS.reset_metrics()
+	BENCH_MOBS.reset_metrics()
+	mob_system.reset_metrics()
+
+func profile_metrics() -> Dictionary:
+	return {
+		"player_simulate_ms_total": float(BENCH_PLAYERS.simulate_us) / 1000.0,
+		"overlap_query_ms_total": float(BENCH_PLAYERS.overlap_us) / 1000.0,
+		"overlap_calls": BENCH_PLAYERS.overlap_calls,
+		"mob_tick_ms_total": float(mob_system.total_tick_us) / 1000.0,
+		"mob_decision_including_motion_ms_total": float(mob_system.decision_us) / 1000.0,
+		"mob_decision_calls": mob_system.decision_calls,
+		"mob_motion_ms_total": float(BENCH_MOBS.motion_us) / 1000.0,
+		"mob_motion_calls": BENCH_MOBS.motion_calls
+	}
+
 var encode_per_peer := false
 var snapshot_count := 0
 var snapshot_build_us := 0
