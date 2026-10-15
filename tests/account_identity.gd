@@ -64,9 +64,9 @@ func _ready() -> void:
 	assert(audit.ok and audit.unbound==["unbound"] and audit.mismatched==["beta"] and audit.orphaned.is_empty())
 	assert(store.audit_account_identities({"alpha":21}).orphaned.size()==2,"deleted Master accounts are reported without remapping")
 	var gateway := preload("res://source/server/gateway/http_server.gd").new()
-	gateway.sessions["session"] = {"name":"alpha","id":21}
-	assert(gateway.verified_session({"t-id":"session","a-u":"alpha","a-id":22}).id==21)
-	assert(gateway.verified_session({"t-id":"session","a-u":"beta"}).is_empty())
+	var token := gateway.create_session({"name":"alpha","id":21})
+	assert(gateway.verified_session({"t-id":token,"a-u":"alpha","a-id":22}).id==21)
+	assert(gateway.verified_session({"t-id":token,"a-u":"beta"}).is_empty())
 	assert(gateway.verified_session({"t-id":"fake","a-u":"alpha"}).is_empty())
 	gateway.free()
 	server.free()

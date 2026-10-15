@@ -4,6 +4,7 @@ extends BaseMultiplayerEndpoint
 
 signal account_creation_result_received(user_id: int, result_code: int, data: Dictionary)
 signal login_succeeded(account_info: Dictionary, _worlds_info: Dictionary)
+signal connection_lost()
 signal response_received(request_id: int, response: Dictionary)
 
 var worlds_info: Dictionary
@@ -36,6 +37,8 @@ func _on_connection_succeeded() -> void:
 
 func _on_connection_failed() -> void:
 	master_connected = false
+	worlds_info.clear()
+	connection_lost.emit()
 	print("Failed to connect to the Gateway Manager as Gateway.")
 	# Try to reconnect.
 	get_tree().create_timer(15.0).timeout.connect(_ready)
@@ -43,6 +46,8 @@ func _on_connection_failed() -> void:
 
 func _on_server_disconnected() -> void:
 	master_connected = false
+	worlds_info.clear()
+	connection_lost.emit()
 	print("Gateway Manager disconnected.")
 	# Try to reconnect.
 	get_tree().create_timer(15.0).timeout.connect(_ready)
@@ -55,10 +60,7 @@ func gateway_request(request_id: int, request: Dictionary) -> void:
 
 @rpc("authority", "call_remote")
 func gateway_response(request_id: int, response: Dictionary) -> void:
-	var gateway = $"../GatewayHTTPServer"
-	var request: NetRequest = gateway.pending_requests.get(request_id)
-	if request:
-		request.resolve(response)
+	response_received.emit(request_id, response)
 
 
 @rpc("authority")

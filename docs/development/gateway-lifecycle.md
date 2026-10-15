@@ -1,0 +1,131 @@
+# Gateway lifecycle — A1
+
+Implemented on `codex/gateway-lifecycle` (2026-10-15), based on the `shop`
+integration branch. This is the first Infrastructure Hardening slice. It does
+not implement World ingress authorization, active-character admission or C5
+cross-process session epochs.
+
+## Request contract
+
+Gateway retains at most 1024 pending Master requests (configurable through
+`max_pending_requests`). Overflow returns the existing `ERR_RATE_LIMITED` code
+without allocating/forwarding work. Master unavailable returns the existing
+retryable timeout; connection loss immediately fails already-pending callers.
+
+All RPC responses now use the same response signal and terminal path. Response,
+timeout and disconnect erase pending identity/deadline entries **before** resuming
+the caller. Late/duplicate replies are ignored; monotonically increasing request
+IDs are not reset at reconnect. Response admission rechecks its monotonic deadline,
+even before the next physics tick. There is no per-request timer retained after
+completion; the bounded pending set owns deadline state.
+
+A timeout or lost connection does not imply Master rolled back an operation.
+These transport request IDs are not durable economy operation IDs. Existing
+Marketplace receipts remain the source of economic retry/idempotency guarantees.
+
+## Gateway credentials
+
+- Tokens remain cryptographically random 256-bit values.
+- Default fixed TTL: eight hours, configurable as `session_ttl_seconds` (1–86400).
+  Uses monotonic process time; requests do not extend the lifetime.
+- Periodic pruning runs approximately once a second; access/result delivery also
+  checks expiration directly. Gateway restart loses all its in-memory tokens.
+- At most 10000 sessions (`max_sessions`); a new verified login for an account
+  replaces its earlier Gateway token. This is not active-World session fencing.
+- Retain only verified account ID/name, independently of the mutable login HTTP
+  response, never the guest password or generated response token.
+- `POST /v1/logout` accepts the same `t-id`/`a-u` credentials, revokes the token
+  and rejects pending authenticated callers. The menu Logout sends this using a
+  separate bounded HTTPRequest and immediately clears local credentials. If that
+  request cannot reach Gateway, server revocation is not guaranteed; TTL and new
+  login replacement still apply.
+- Master connection failure/disconnect clears cached world roster, fails pending
+  work and invalidates Gateway credentials. Reconnect requires credential login.
+
+An authenticated response is delivered only while its original token remains
+valid. Revocation cannot cancel a command already accepted by Master/World, undo
+a committed mutation, revoke an already-issued World handoff ticket, or kick an
+active World player. Those trust boundaries belong to A2 and session admission.
+The one-active-character-per-account-per-realm C1/C5 target remains future work.
+
+## Verification and limits
+
+`tests/run-account-identity.ps1` reuses the populated SQLite identity/ownership
+fixture and adds `gateway_lifecycle`. The latter uses the production Gateway
+request/session code and real GatewayManagerClient reply/disconnect signals with
+a controlled transport and no production accounts. The menu fixture additionally
+uses one ephemeral loopback listener for real HTTP transport cancellation. It protects:
+
+- repeated completion cleanup and one terminal result;
+- bounded pending admission and freed capacity;
+- timeout, stale reply, disconnect and reconnect isolation;
+- verified identity replacing a forged account ID without changing the caller;
+- logout, replacement, capacity, fixed TTL, pruning and expiry during a request;
+- independent stored credentials without retaining guest secrets.
+
+Existing identity coverage seeded a private sessions dictionary; it now uses
+`create_session` so it respects the public credential contract. The focused
+lifecycle coverage addresses failure behavior not covered by existing SQLite or
+Web UI suites. Default smoke remains unchanged.
+
+Headless identity/lifecycle and standard smoke passed (10 Godot cases and 78 Web
+contracts). The production Gateway menu also booted headlessly in an isolated
+profile without script errors. The live
+`run-account-identity.ps1 -WithSession` still needs Gateway/Master/World and creates
+fixture accounts. Native menu click/HTTP logout and live process reconnect are
+separate integration checks; controlled transport does not verify them.
+
+
+## Review follow-up
+
+Session capacity is now reserved **before** forwarding login/guest to Master.
+Reservations and issued tokens share one bounded slot set; replacement login can
+reserve its existing account slot even at capacity, and concurrent login attempts
+cannot reserve it twice. Logout/expiry during that login does not release its
+reserved capacity to another admission. Failed authentication, timeout or Master
+disconnect releases the reservation; wrong credentials preserve the old token.
+This prevents a capacity rejection after Master has kicked an old player or
+created a guest. It does not cancel already-admitted Master work after transport
+timeout, whose outcome can still be unknown.
+
+The client recognizes both `ERR_TIMEOUT` and `ERR_CONNECTION_ERROR` as retryable
+transport errors. Logout increments a menu auth generation. HTTP, popup, boot,
+auto-login, world refresh and timer continuations check that generation before
+changing screens, saving credentials or starting a World transition. Logout also
+dismisses an existing confirmation and resets local identity/menu controls.
+
+Token-to-request indexing makes pruning linear in session count plus affected
+requests, rather than scanning all pending requests separately for every expired
+token. Normal completion, timeout and revocation remove index entries.
+
+The identity runner also runs `gateway_menu_lifecycle` headlessly with an isolated
+profile. It instantiates the production menu scene and handlers, controlling HTTP
+responses/credential files, and covers delayed failure/success after logout,
+logout while an error popup awaits confirmation, and a subsequent valid login.
+Server coverage now verifies pre-Master capacity refusal, competing guests,
+replacement at capacity, bad credentials preserving the token, reserved capacity
+surviving logout and recovery after Master disconnect. This does not replace the
+unverified live three-process reconnect/physical input milestone.
+
+
+## HTTP transport cancellation follow-up
+
+Logout fences old menu continuations, calls the shared HTTPRequest's
+[`cancel_request()`](https://docs.godotengine.org/en/stable/classes/class_httprequest.html#class-httprequest-method-cancel-request)
+and explicitly resolves its per-call waiter with `request_cancelled`. Completion
+callbacks are disconnected and the transport slot is released before the caller
+resumes. Menu teardown does the same. A cancelled waiter cannot consume a later
+login's response; unrelated concurrent requests still receive a busy result.
+
+The production button handler passes credentials into the same login flow used
+by the behavior fixture. Assertions no longer depend on nested input paths,
+panel visibility or menu composition. They protect logged-out identity, no stale
+credential save/World connection and a subsequent valid login.
+
+The existing menu fixture now also opens an ephemeral loopback listener and uses
+the production HTTPRequest/do_request implementation. The listener receives an
+old request and deliberately withholds its response; Logout is followed by a new
+credential login in the same frame. Only the new login receives a response. The
+old waiter must complete once with cancellation, the new account must log in and
+only its credentials may be saved. No Gateway/Master/World services or player
+accounts are required. The isolated client profile is removed after success.

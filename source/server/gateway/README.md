@@ -1,7 +1,8 @@
-## Gateway
+# Gateway
 
-./master_gateway_client/  
-- Means to communicate with the master server, the orchestrator.  
+`http_server.gd` owns the local HTTP routes, bounded Master requests and expiring
+Gateway credentials. `master_gateway_client/` connects to Master and reports
+replies/disconnection through signals. Gameplay authority remains with World.
 
-./player_gateway_server/  
-- Means to communicate with the player with its 'gateway_client.gd'.  
+[A1 lifecycle contract and verification](../../../docs/development/gateway-lifecycle.md)
+describes limits, logout, expiry and the distinction from World session authority.
