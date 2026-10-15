@@ -193,3 +193,13 @@ for command identity/replay and atomic receipt+commit; Exchange does not inherit
 from Shop. Failed validation rolls back and uses the bounded RAM rejection cache;
 successful economic receipts remain durable. See
 [R3–R4 boundaries](../marketplace-refactor-r3-r4.md).
+
+
+Character-local Inventory move/equip/unequip/activate now commits its successful
+receipt with placement/revision writes. The client persists the original ID and
+payload before RPC and resolves restart uncertainty through receipt-only lookup;
+only explicit Retry may execute an absent intention. A successful no-op also has
+a durable receipt, without a mutation fact. See
+[the Inventory vertical slice](../development/economy-command-boundary.md#inventory-vertical-slice-durable-command-through-client-recovery).
+Account Storage recovery remains a separate milestone; its immediate transaction
+policy and current ownership/custody rules are unchanged.

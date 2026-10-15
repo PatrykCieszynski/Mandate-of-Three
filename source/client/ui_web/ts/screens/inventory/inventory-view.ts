@@ -43,11 +43,13 @@ interface InventoryOptions {
     position: Placement,
   ) => Promise<void>;
   resolveItemIcon?: ResolveItemIcon;
+  retry?: () => Promise<CommandResult>;
   moveItem: (command: MoveItemCommand) => Promise<CommandResult>;
   activateItem?: (command: ItemCommand) => Promise<CommandResult>;
   onClose?: () => void;
   onRegionsChanged?: () => void;
 }
+import { UiButton } from '../../core/primitives/ui-button.js';
 import { UiTab } from '../../core/primitives/ui-tab.js';
 import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
@@ -65,6 +67,7 @@ export function mountInventory(
     buyShopOffer,
     resolveItemIcon = () => null,
     moveItem,
+    retry,
     activateItem,
     onClose = () => {},
     onRegionsChanged = () => {},
@@ -121,6 +124,30 @@ export function mountInventory(
     page = 0,
     pending = false,
     disposed = false;
+  const retryButton = UiButton({
+    label: 'Retry inventory action',
+    onClick: () => void retryIntent(),
+  });
+  status.after(retryButton.element);
+  async function retryIntent() {
+    if (disposed || pending || !inventory.recoveryPending || !retry) return;
+    pending = true;
+    retryButton.setDisabled(true);
+    try {
+      const result = await retry();
+      if (!disposed)
+        status.textContent = result.ok
+          ? 'Inventory action confirmed.'
+          : 'Inventory action not confirmed. Retry to check its result.';
+    } catch {
+      if (!disposed)
+        status.textContent =
+          'Inventory action not confirmed. Retry to check its result.';
+    } finally {
+      pending = false;
+      if (!disposed) retryButton.setDisabled(false);
+    }
+  }
   const sourceBindings: DragRegistration[] = [];
   const bindings = itemWindowControls(drag, root);
   const cell = () =>
@@ -128,6 +155,11 @@ export function mountInventory(
   const positionWindow = () => shell.refresh();
   const gridView = UiItemGrid(grid, { slotSize: cell });
   function render() {
+    retryButton.element.hidden = !inventory.recoveryPending || !retry;
+    retryButton.setDisabled(pending);
+    if (inventory.recoveryPending)
+      status.textContent =
+        'Inventory action not confirmed. Use Retry; the original action is saved.';
     for (const binding of sourceBindings) binding.dispose();
     sourceBindings.length = 0;
     gridView.render(
@@ -144,7 +176,7 @@ export function mountInventory(
             drag.registerSource({
               element: node,
               payload: (event) => {
-                if (pending) return null;
+                if (pending || inventory.recoveryPending) return null;
                 shell.handle.activate();
                 tip.hide();
                 if (event.ctrlKey && quickDeposit) {
@@ -186,8 +218,15 @@ export function mountInventory(
     drag?.cancel();
     tip.hide();
   }
+  function unconfirmedMessage(result: CommandResult) {
+    return result.error === 'inventory_pending'
+      ? 'Inventory action not confirmed. Use Retry; the original action is saved.'
+      : result.error === 'journal_unavailable'
+        ? 'Inventory confirmation storage is unavailable. Further actions are blocked.'
+        : null;
+  }
   async function activate(item: InventoryItem) {
-    if (!activateItem) return;
+    if (!activateItem || inventory.recoveryPending) return;
     pending = true;
     tooltip.hidden = true;
     status.textContent = 'Activating…';
@@ -199,7 +238,8 @@ export function mountInventory(
       if (!disposed)
         status.textContent = result.ok
           ? ''
-          : `Activation rejected: ${result.error || 'request'}`;
+          : (unconfirmedMessage(result) ??
+            `Activation rejected: ${result.error || 'request'}`);
     } catch (error) {
       if (!disposed)
         status.textContent = `Activation failed: ${errorMessage(error)}`;
@@ -208,7 +248,7 @@ export function mountInventory(
     }
   }
   async function move(item: ItemPresentation, preview: Placement) {
-    if (pending) return;
+    if (pending || inventory.recoveryPending) return;
     pending = true;
     status.textContent = 'Moving…';
     try {
@@ -222,7 +262,8 @@ export function mountInventory(
       if (!disposed)
         status.textContent = result.ok
           ? ''
-          : `Move rejected: ${result.error || 'request'}`;
+          : (unconfirmedMessage(result) ??
+            `Move rejected: ${result.error || 'request'}`);
     } catch (error) {
       if (!disposed) status.textContent = `Move failed: ${errorMessage(error)}`;
     } finally {
@@ -230,6 +271,7 @@ export function mountInventory(
     }
   }
   if (drag) {
+    bindings.push(drag.registerControl(retryButton.element, 'cancel'));
     bindings.push(
       drag.registerControl(
         findElement(root, '.inventory-tabs', 'nav'),
@@ -261,7 +303,7 @@ export function mountInventory(
             payload,
             pointer,
           );
-          if (pending || !preview.data) {
+          if (pending || inventory.recoveryPending || !preview.data) {
             preview.visual?.element.classList.add('invalid');
             return { ...preview, valid: false };
           }
@@ -363,6 +405,7 @@ export function mountInventory(
       tabs.forEach((tab) => tab.dispose());
       tip.dispose();
       currency.dispose();
+      retryButton.dispose();
       gridView.dispose();
     },
   };

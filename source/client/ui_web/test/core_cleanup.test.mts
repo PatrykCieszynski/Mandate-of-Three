@@ -556,3 +556,77 @@ test('Inventory right-click activates only UID/revision and preserves items on r
     manager.dispose();
   }
 });
+
+test('Inventory retry confirms a saved action from current revision without dragging or executing again', async () => {
+  const { doc, host, manager } = environment(),
+    root = target();
+  doc.body.append(root);
+  let retries = 0,
+    mutations = 0,
+    closes = 0;
+  const current = { ...bagItem, revision: bagItem.revision + 1 };
+  const snapshot = {
+    columns: 5,
+    rows: 9,
+    pages: 4,
+    items: [current],
+    recoveryPending: true,
+  };
+  const view = mountInventory(root, {
+    manager,
+    onClose: () => closes++,
+    moveItem: async () => {
+      mutations++;
+      return { ok: true };
+    },
+    activateItem: async () => {
+      mutations++;
+      return { ok: true };
+    },
+    retry: async () => {
+      retries++;
+      return { ok: true };
+    },
+  });
+  view.setState({ inventory: snapshot });
+  findElement(root, '.inventory-item', 'div').dispatchEvent(
+    new host.MouseEvent('pointerdown', { button: 2, bubbles: true }),
+  );
+  assert.equal(
+    mutations,
+    0,
+    'New inventory activation waits for unresolved intent',
+  );
+  const retry = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('button'),
+  ).find((n) => n.textContent === 'Retry inventory action')!;
+  assert.equal(retry.hidden, false);
+  retry.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(retries, 1);
+  assert.equal(
+    mutations,
+    0,
+    'Retry uses no new item/revision/placement payload',
+  );
+  view.cancelOrClose();
+  assert.equal(closes, 1, 'Close remains presentation only');
+  view.setState({ inventory: { ...snapshot, recoveryPending: false } });
+  assert.equal(retry.hidden, true);
+  const store = new DomainStore();
+  assert.equal(
+    store.apply({ v: 1, type: 'inventory.updated', payload: snapshot }),
+    true,
+  );
+  assert.equal(
+    store.apply({
+      v: 1,
+      type: 'inventory.updated',
+      payload: { ...snapshot, recoveryPending: 'yes' },
+    }),
+    false,
+  );
+  view.dispose();
+  manager.dispose();
+  host.close();
+});

@@ -6,6 +6,14 @@ var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
 var _tree: SceneTree
 var _storage_open: Callable
+signal recovery_needed
+const LocalJournal = preload("res://source/client/ui_web/local_economy_journal.gd")
+var journal = LocalJournal.new("inventory-","user://pending_inventory_commands")
+var _context: Dictionary = {}
+var _journal_ready := false
+var _intent: Dictionary = {}
+var _in_flight := false
+var _disposed := false
 
 func attach(endpoint: InventoryEndpoint3D, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree, storage_open: Callable) -> void:
 	_endpoint = endpoint
@@ -18,11 +26,13 @@ func attach(endpoint: InventoryEndpoint3D, dispatcher: UiCommandDispatcher, sess
 	dispatcher.register_command("item.activate", valid_equipment, _activate)
 	dispatcher.register_command("equipment.equip", valid_equipment, _equip)
 	dispatcher.register_command("equipment.unequip", valid_unequip, _unequip)
+	dispatcher.register_command("inventory.retry", func(p: Dictionary) -> bool: return p.is_empty(), retry_inventory)
 	endpoint.state_changed.connect(publish)
 	endpoint.operation_finished.connect(session.finish)
 	publish(endpoint.state)
 
 func dispose() -> void:
+	_disposed = true
 	if is_instance_valid(_endpoint):
 		if _endpoint.state_changed.is_connected(publish): _endpoint.state_changed.disconnect(publish)
 		if _endpoint.operation_finished.is_connected(_session.finish): _endpoint.operation_finished.disconnect(_session.finish)
@@ -57,7 +67,8 @@ static func item_model(item: Dictionary) -> Dictionary:
 	return {"id":str(item.uid),"revision":int(item.revision),"definition_id":str(item.definition_id),"upgrade_level":int(item.upgrade_level),"name":name_text,"icon_id":str(item.get("icon_id","")),"height":int(item.inventory_height),"quantity":int(item.amount),"tooltip":tooltip_details(item)}
 
 func publish(snapshot: Dictionary) -> void:
-	if not snapshot.get("ok", false): return
+	if _disposed or not snapshot.get("ok", false): return
+	accept_context(snapshot)
 	var bag: Array = []
 	var equipped: Array = []
 	for item: Dictionary in snapshot.items:
@@ -76,7 +87,7 @@ func publish(snapshot: Dictionary) -> void:
 		display.merge({"x":position % 15,"y":(position % 135) / 15,"page":position / 135})
 		stored.append(display)
 	if snapshot.get("storage",{}).get("ok",false): _dispatcher.set_domain("storage",{"columns":15,"rows":9,"pages":2,"items":stored})
-	_dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag})
+	_dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag, "recoveryPending":not _intent.is_empty() and bool(_intent.uncertain)})
 	_dispatcher.set_domain("equipment", {"items":equipped, "stats":snapshot.get("stats", {})})
 
 static func valid_item_identity(payload: Dictionary) -> bool:
@@ -116,13 +127,97 @@ func _unequip(payload: Dictionary) -> Dictionary:
 func _move(payload: Dictionary) -> Dictionary:
 	return await _submit(payload)
 
+func accept_context(snapshot: Dictionary) -> void:
+	if _disposed or not snapshot.get("ok",false): return
+	var context: Dictionary = snapshot.get("economic_context",{})
+	if context.is_empty() or context == _context: return
+	if not _context.is_empty():
+		_journal_ready = false
+		return
+	_context = context.duplicate(true)
+	var restored: Dictionary = journal.configure(context)
+	if not restored.ok: return
+	if not restored.entry.is_empty() and not valid_intent(restored.entry.payload): return
+	_journal_ready = true
+	if restored.entry.is_empty(): return
+	_intent = restored.entry.duplicate(true)
+	_intent.uncertain = true
+	recovery_needed.emit()
+	_retry.call_deferred(false) # Discovery can read, never automatically mutate.
+
+static func valid_intent(p: Dictionary) -> bool:
+	if p.size() != 2 or not p.get("action") is String or not p.get("item") is Dictionary: return false
+	match p.action:
+		"move": return valid_move(p.item)
+		"activate", "equip": return valid_equipment(p.item)
+		"unequip": return valid_unequip(p.item)
+	return false
+
+func _retain_intent() -> void:
+	_intent.uncertain = true
+	publish(_endpoint.state)
+	recovery_needed.emit()
+
+func _release_intent() -> bool:
+	if not journal.clear_pending(_intent.id):
+		_retain_intent()
+		return false
+	_intent.clear()
+	return true
+
+func retry_inventory(_payload: Dictionary = {}) -> Dictionary:
+	return await _retry(true)
+
+func _retry(allow_execution: bool) -> Dictionary:
+	if _disposed: return _session.closed_result()
+	if not _journal_ready: return {"ok":false,"error":"journal_unavailable"}
+	if _intent.is_empty(): return {"ok":false,"error":"no_pending_inventory"}
+	if _in_flight: return {"ok":false,"error":"too_fast"}
+	var id := _session.begin()
+	if id.is_empty(): return _session.closed_result()
+	_in_flight = true
+	_endpoint.request_inventory_receipt.rpc_id(1,_intent.id,id)
+	var result := await _session.wait(id,_tree)
+	if _disposed: return result
+	_in_flight = false
+	if result.ok:
+		if not _release_intent(): return {"ok":false,"error":"journal_unavailable"}
+		publish(_endpoint.state)
+		return result
+	if result.get("error","") == "unknown_command" and allow_execution:
+		return await _submit(_intent.payload.item.duplicate(true),str(_intent.payload.action))
+	_retain_intent()
+	return {"ok":false,"error":"inventory_pending"}
+
 func _submit(payload: Dictionary, action: String = "move") -> Dictionary:
+	if _disposed: return _session.closed_result()
+	if not _journal_ready: return {"ok":false,"error":"journal_unavailable"}
+	if _in_flight: return {"ok":false,"error":"too_fast"}
+	var intention := {"action":action,"item":payload.duplicate(true)}
+	if not valid_intent(intention): return {"ok":false,"error":"request"}
+	if not _intent.is_empty() and _intent.payload != intention: return {"ok":false,"error":"inventory_pending"}
+	if _intent.is_empty():
+		var operation_id := "inventory-" + Crypto.new().generate_random_bytes(16).hex_encode()
+		if not journal.save_pending(operation_id,intention):
+			_journal_ready = false
+			return {"ok":false,"error":"journal_unavailable"}
+		_intent = {"id":operation_id,"payload":intention,"uncertain":false}
 	var id: String = _session.begin()
 	if id.is_empty(): return _session.closed_result()
+	_in_flight = true
 	if action == "move":
-		_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), id)
+		_endpoint.request_move_item.rpc_id(1, payload.id, int(payload.revision), int(payload.x), int(payload.y), int(payload.page), id, _intent.id)
 	elif action == "activate":
-		_endpoint.request_activate_item.rpc_id(1, payload.id, int(payload.revision), id)
+		_endpoint.request_activate_item.rpc_id(1, payload.id, int(payload.revision), id, _intent.id)
 	else:
-		_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id, int(payload.page) * InventoryGrid.PAGE_CELLS + int(payload.y) * InventoryGrid.COLUMNS + int(payload.x) if payload.has("x") else -1)
-	return await _session.wait(id, _tree)
+		_endpoint.request_equipment.rpc_id(1, action, payload.id, int(payload.revision), id, int(payload.page) * InventoryGrid.PAGE_CELLS + int(payload.y) * InventoryGrid.COLUMNS + int(payload.x) if payload.has("x") else -1, _intent.id)
+	var result := await _session.wait(id, _tree)
+	if _disposed: return result
+	_in_flight = false
+	if result.ok or result.get("error","") in ["stale","owner","placement","slot","request","occupied","bag_full","inventory_full","unsupported","no_action","invalid_item","unknown_definition"]:
+		if not _release_intent(): return {"ok":false,"error":"journal_unavailable"}
+	else:
+		_retain_intent()
+		return {"ok":false,"error":"inventory_pending"}
+	publish(_endpoint.state)
+	return result

@@ -125,7 +125,7 @@ func run_server() -> void:
 
 func equip_and_report(item: Dictionary) -> void:
 	var inventory: InventoryEndpoint3D = world.inventory_endpoint
-	inventory.request_equipment.rpc_id(1, "equip", str(item.uid), int(item.revision))
+	inventory.request_equipment.rpc_id(1, "equip", str(item.uid), int(item.revision), "", -1, "progression-"+Crypto.new().generate_random_bytes(8).hex_encode())
 	await inventory.state_changed
 	report.rpc_id(1, {"ok": not inventory.state.has("error") and inventory.state.equipment.get("weapon", "") == item.uid})
 

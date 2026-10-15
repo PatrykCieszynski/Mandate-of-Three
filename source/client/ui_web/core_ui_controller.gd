@@ -70,6 +70,9 @@ func setup(game_world: GameWorld3D) -> void:
 	market.state_updated.connect(func(_snapshot: Dictionary) -> void:
 		opened = true
 		_layout())
+	items.recovery_needed.connect(func() -> void:
+		opened = true
+		_layout())
 	items.attach(world.inventory_endpoint, dispatcher, session, get_tree(), func() -> bool: return storage_opened)
 	dispatcher.register_command("npc.upgrade_item", UpgradeUiAdapter.valid_item, _drop_on_npc)
 	dispatcher.set_domain("npc_targets",{"width":0,"height":0,"targets":[]})

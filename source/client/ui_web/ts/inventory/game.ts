@@ -168,6 +168,7 @@ const worldDrop = mountNpcWorldDrop(
   () => regions?.refresh(),
 );
 const view = mountInventory(root, {
+  retry: () => bridge.request('inventory.retry', {}),
   drag,
   quickDeposit: (item) => storage.tryQuickDeposit(item),
   withdrawItem: (item, position) => storage.withdrawToInventory(item, position),

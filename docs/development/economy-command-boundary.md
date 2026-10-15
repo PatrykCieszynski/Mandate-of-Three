@@ -104,6 +104,9 @@ That slice did not add retry/idempotency guarantees.
 
 ## Fifth slice: Inventory activation, equipment and bag moves
 
+Historical boundary extraction; the Inventory vertical slice below supersedes
+the empty-ID/no-receipt limitation while retaining the no-op/fact contract.
+
 `WorldDatabase.inventory_operation` delegates to WorldEconomyService, which
 routes activation, equip/unequip and bag moves to the existing ItemStoreSqlite
 transactions. Endpoint admission/rate limits and authoritative UID, ownership,
@@ -523,10 +526,79 @@ No native window or full Gateway/Master relog was run; the headless process read
 and fresh-adapter RPC check do not claim that broader manual lifecycle test.
 No schema, purchase format or transaction policy changes.
 
+## Inventory vertical slice: durable command through client recovery
+
+One reviewable guarantee now covers character-local bag move, equip (including
+swap), exact/automatic unequip and primary activation. Production commands carry
+a stable `inventory-...` ID, independent of RPC/CEF correlation. The fingerprint
+binds account (receipt key), receiving character, original action, UID, expected
+revision and requested position. Activation resolves its content action only
+after receipt lookup, inside the same transaction as the item mutation.
+
+ItemStoreSqlite shares its existing mutation rules through transaction-local
+helpers. The receipt-backed path composes EconomyCommandSqlite; the legacy
+standalone/tooling methods retain wrappers around the same rules, not another
+implementation. A successful receipt and all placement/revision writes commit
+atomically. Failure inserting the receipt rolls back both sides of an equipment
+swap as well. Empty business IDs cannot execute production Inventory commands.
+No schema, custody rules, item generation or Yang policy changes are introduced.
+
+The three outcomes stay distinct: a first real item mutation emits one fact;
+a first unchanged success persists its receipt but emits no mutation fact;
+a successful replay confirms its original outcome and emits no new fact.
+Current private Inventory/equipment/runtime stats and public weapon presentation
+are repaired on replay/no-op rather than restoring historical item state.
+Rejections roll back and do not add permanent receipt rows. Successful receipts,
+including no-ops, remain durable and are not pruned under the current policy.
+
+The existing Inventory RPCs gain a bounded business-ID argument. A separate
+read-only receipt RPC uses an independent limiter, authenticates the current
+World character and filters account/character/kind. Unknown IDs never admit or
+execute a mutation. Matching client/World builds are required. The service and
+endpoint preserve post-commit cache refresh before change publication; combat
+continues reading runtime state without database queries per attack.
+
+ItemUiAdapter writes the original action/payload to
+`user://pending_inventory_commands` before sending, using the shared small journal
+and authenticated economy/account/character scope. It retains one unresolved
+Inventory intent, blocks replacement by another payload, and fails closed on
+journal errors. Restart/recreation performs one read-only receipt lookup, never
+an automatic mutation. An explicit empty-payload `inventory.retry` can confirm
+the earlier result or, only when absent, retry that same saved action through
+normal server validation. Definitive post-receipt rejection/success clears only
+that entry; timeout/disconnect/reload and unknown outcome retain it.
+
+Pending recovery opens Inventory with a small Retry control and notice. Retry
+does not depend on a free target cell, the old revision still being visible,
+or the item still being in the bag. Closing Inventory only changes presentation;
+it cannot forget the saved intention. Browser state carries only a pending flag,
+not economic IDs or authority. Storage commands and pickup remain separate.
+
+Verification reuses existing fixtures, not a suite per implementation layer:
+item_instances covers receipt-failure rollback and same-ID retry for all four
+actions, swap rollback, changed fingerprints, account/character/kind isolation,
+new no-op versus receipt replay, later-state preservation and DB reopen. It also
+checks a concrete pre-RPC file failure and journal action validation.
+The two-client Web Inventory fixture discards accepted responses for move,
+activate, equip/no-op and exact unequip. It exercises explicit retry after CEF
+reload, an independent Godot-process journal read plus fresh CoreUiController
+recovery for move/unequip, and a crash-before-send entry that cannot auto-execute.
+The latter executes once only after explicit Retry; another Retry cannot repeat it.
+The original nine mutation facts stay nine across response-loss recovery; this
+last intentionally new move adds exactly one. Footprints, privacy, equipment
+stats and unchanged Storage scenarios remain covered. Web coverage verifies
+Retry from a current revised snapshot without another move/activate command.
+
+Smoke (10 Godot fixtures), Web contracts (83), two-client Web Inventory, item
+progression and full configured Prettier passed on 2026-10-15. Generated Web JS
+matches TS. No native window or normal Gateway/Master relog test was run; the
+independent-process file read plus fresh controller/RPC proves the scoped restart
+boundary, not the entire launcher/auth lifecycle. The existing items_session
+fixture is updated for explicit IDs but was not executed against live accounts.
+
 ## Remaining Stage 2 work
 
-Stable intention IDs and full durable result receipts for remaining non-market
-operations (Inventory/Storage), broader client-side operation journaling,
+Stable intention IDs/full receipts and client recovery for account Storage,
 durable Economy/World revision reconciliation and broader cache invalidation
 remain later reviewable slices. The live presentation delivery versions above
 do not implement those distributed contracts. Startup/dev grants and checkpoint wallet flows still retain
