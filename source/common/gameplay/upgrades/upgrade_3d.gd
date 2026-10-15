@@ -40,12 +40,12 @@ func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName,
 	if not auth.ok: return {"ok":false,"error":auth.error}
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
-	var result: Dictionary = services.economy().upgrade_item(player.player_id,auth.recipe,uid,revision)
-	if result.ok:
+	var operation := services.economy().upgrade_operation(player.player_id, auth.recipe, uid, revision)
+	if operation.new_commit:
 		# Commit + wallet RAM are complete; cache refresh precedes fan-out.
 		_world.inventory_endpoint.accept_committed_change(peer_id)
 		_world.currency_endpoint.accept_committed_change(peer_id)
-	return result
+	return operation.response()
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
 	var context: NpcInteractionContext = _world.npc_endpoint.contexts.get(peer_id)

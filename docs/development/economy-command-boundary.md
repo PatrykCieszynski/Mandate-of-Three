@@ -1,8 +1,9 @@
 # Economy boundary — Stage 2 local slices
 
 These are narrow parts of the local Economy architecture work. They harden
-the existing `WorldDatabase.market_command` → `MarketplaceService` application
-boundary for Shop and Exchange. It does not complete Stage 2 or introduce a new
+the existing WorldDatabase entry points through `WorldEconomyService`, which
+composes MarketplaceService for Shop/Exchange and handles upgrade orchestration.
+This does not complete Stage 2 or introduce a new
 service process, generic database interface, queue or database migration.
 
 ## Ownership and invariants
@@ -58,6 +59,31 @@ format, event bus or distributed operation state machine. RPC/CEF still receive
 the existing business dictionaries. No speculative `pending`/`unknown` statuses
 are inferred from the current synchronous SQLite path.
 
+## Third slice: Upgrade through the local Economy boundary
+
+WorldDatabase now lazily owns one `WorldEconomyService`. Marketplace operations,
+snapshots and queries delegate through it to the existing MarketplaceService;
+that component retains its command rules, receipts and post-commit reconciliation.
+
+Upgrade candidate lookup and execution also enter through this boundary.
+The service validates the definition and runtime affordability, passes pending
+Yang into the existing UpgradeStoreSqlite transaction, and updates wallet RAM
+only after success. The store still atomically consumes material, settles pending
+income/spend and increments the item upgrade/revision. There is no outer/nested
+transaction and no new SQL schema.
+
+`WorldDatabase.upgrade_operation` returns EconomyOperationResult; the dictionary
+`upgrade_item` API delegates to the same path. Upgrade3D reauthorizes the NPC,
+service, range and living player as before, then uses `new_commit` to refresh
+inventory/combat stats and publish the existing inventory/wallet facts. Quote,
+selection, rejection and stale retry do not claim a commit.
+
+Upgrade remains **revision-guarded**, not receipt-backed. Its operation ID is
+intentionally empty: the existing UI command ID is transport correlation and is
+not silently promoted to durable economic identity. A repeated stale upgrade
+still returns `stale`, unlike a Shop/Exchange successful receipt replay. Adding
+stable upgrade intention IDs and durable receipts is a later explicit change.
+
 ## Regression evidence
 
 Existing suites protect rollback, ownership and recovery. Their original wallet
@@ -79,6 +105,14 @@ It also clears the client's cached inventory/wallet and recovers both through a
 receipt-only request, still requiring exactly one real inventory mutation.
 No separate class/implementation test suite was introduced.
 
+The existing `upgrade_transaction` suite now inspects the common result for
+successful commit, SQL rollback and stale retry, including invalid recipe input.
+Its material/Yang/item rollback, ownership, placement and reopen cases remain.
+`run-upgrade.ps1` uses two real RPC clients and already requires one inventory and
+one wallet mutation fact, selection privacy and range reauthorization. The
+transaction suite passed as a baseline before moving orchestration, then these
+same contracts passed through the new boundary. No new suite was added.
+
 Relevant commands, run sequentially where they share port 18098:
 
 ```powershell
@@ -89,6 +123,7 @@ Relevant commands, run sequentially where they share port 18098:
 & .\tests\run-combat.ps1 -Scene market_race -MarkerPrefix MARKET_RACE
 & .\tests\run-combat.ps1 -Scene exchange_network -MarkerPrefix EXCHANGE_NETWORK
 & .\tests\run-market-recovery.ps1
+& .\tests\run-upgrade.ps1
 & .\tests\run-smoke.ps1
 ```
 
@@ -109,8 +144,8 @@ are recorded separately. Incidental generated import/UID files were removed.
 
 ## Remaining Stage 2 work
 
-Pickup/equip/upgrade and other non-market economic operations have not been
-migrated into this application boundary. Applying the operation result to those
+Pickup/equip, NPC Shop purchase and other remaining economic operations have not
+been migrated into this application boundary. Applying the operation result to those
 domains, versioned inventory/equipment snapshots and broader reconciliation remain
 later reviewable slices. Do not infer distributed C2 admission, durable business
 rejections, session fencing or pending-operation recovery from this change.
