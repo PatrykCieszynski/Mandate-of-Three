@@ -37,6 +37,13 @@ func initialize_peer(peer_id: int) -> void:
 	for other_id: int in public_weapons:
 		receive_weapon.rpc_id(peer_id, other_id, public_weapons[other_id], _weapon_versions[other_id])
 
+## Resend the current public projection when World AOI adds a player replica.
+## Keep version storage private to Inventory; never recalculate equipment from DB.
+func replay_weapon_to_observer(observer_id: int, actor_id: int) -> void:
+	if not public_weapons.has(actor_id) or not _weapon_versions.has(actor_id):
+		return
+	receive_weapon.rpc_id(observer_id, actor_id, public_weapons[actor_id], _weapon_versions[actor_id])
+
 func remove_peer(peer_id: int) -> void:
 	_authoritative_snapshots.erase(peer_id)
 	public_weapons.erase(peer_id)
