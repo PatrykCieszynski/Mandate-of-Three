@@ -45,12 +45,13 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	if action=="open": return {"ok":true}
 	var operation := services.economy().market_operation(owner, action, payload)
 	var response := operation.response()
-	if response.get("ok", false) and action in ["list","claim","buy","deposit","withdraw"]:
+	var recovered_receipt := action == "receipt" and bool(response.get("ok", false))
+	if response.get("ok", false) and (recovered_receipt or action in ["list","claim","buy","deposit","withdraw"]):
 		if operation.new_commit:
 			_world.inventory_endpoint.accept_committed_change(peer_id)
 		else:
 			_world.inventory_endpoint.resynchronize(peer_id)
-	if operation.receipt_replay:
+	if operation.receipt_replay or recovered_receipt:
 		# Repair the caller's current views after a lost response/reconnect without
 		# republishing a mutation to every account peer/instance.
 		_publish(peer_id)
@@ -76,7 +77,7 @@ func request_market(action: String, payload: Dictionary, request_id: String) -> 
 	rate.count += 1
 	_rate[account_id] = rate
 	var result := {"ok":false,"error":"rate_limited"} if int(rate.count)>15 else perform_for_peer(peer_id,action,payload)
-	if not result.ok or action in ["open","receipt"]:
+	if not result.ok or action == "open":
 		for observer: int in _world.characters:
 			if services.economy().wallet_account_id(_owner(observer))==account_id: _publish(observer)
 	receive_operation.rpc_id(peer_id,request_id,{"ok":true} if result.ok else {"ok":false,"error":result.error})

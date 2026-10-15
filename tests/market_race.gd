@@ -112,6 +112,16 @@ func run_client() -> void:
 	if result.ok and not native:
 		var retried := await command("market.buy", {"command_id":"race","shop_id":int(drop_uid.split(":")[0]),"offer_id":drop_uid.split(":")[1],"revision":0,"price":100})
 		check(retried.ok and world.inventory_endpoint.state.items.size() == 3, "replay repairs current inventory without granting another item")
+	if result.ok and not native:
+		# Recovery by receipt lookup alone must restore current views, without
+		# re-executing the purchase or announcing another inventory mutation.
+		var receipts := {}
+		world.market_endpoint.operation_finished.connect(func(id: String, reply: Dictionary) -> void: receipts[id] = reply)
+		world.inventory_endpoint.state = {}
+		world.currency_endpoint.state = {}
+		world.market_endpoint.request_market.rpc_id(1, "receipt", {"command_id":"race"}, "recover-receipt")
+		await wait_until(func() -> bool: return receipts.has("recover-receipt") and world.inventory_endpoint.state.get("ok", false) and not world.currency_endpoint.state.is_empty())
+		check(receipts["recover-receipt"].ok and world.inventory_endpoint.state.items.size() == 3, "receipt-only recovery restores current inventory and wallet")
 	report.rpc_id(1,result)
 	check(result.ok or result.error=="unavailable","two buyers receive one committed outcome")
 	check(world.inventory_endpoint.state.items.size()==(3 if result.ok else 2),"winner alone receives UID")

@@ -50,6 +50,8 @@ an authorization credential. The result holds no live World/player/store referen
 - World uses this distinction for inventory too: only a new commit invokes
   `accept_committed_change`. Replay resynchronizes current inventory, marketplace,
   Exchange and wallet views for the caller without emitting another mutation.
+  A successful explicit receipt lookup performs the same read-only repair, so
+  outcome recovery does not require resubmitting the original mutation.
 
 The class is local application data, not a new network envelope, stored receipt
 format, event bus or distributed operation state machine. RPC/CEF still receive
@@ -73,6 +75,8 @@ The same suites now inspect operation identity, changed-account context and the
 commit/replay/lookup distinction. The two-client marketplace race retries the
 winning purchase with the same command ID and requires exactly one inventory
 mutation fact while the retried client's authoritative inventory remains correct.
+It also clears the client's cached inventory/wallet and recovers both through a
+receipt-only request, still requiring exactly one real inventory mutation.
 No separate class/implementation test suite was introduced.
 
 Relevant commands, run sequentially where they share port 18098:
