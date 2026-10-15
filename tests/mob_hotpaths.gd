@@ -9,6 +9,9 @@ func check(condition: bool, message: String) -> void:
 		push_error("MOB_HOTPATHS_FAILED: " + message)
 
 func _ready() -> void:
+	# Headless smoke uses --quit-after measured in rendered/process frames;
+	# cap idle FPS so 158 awaited physics frames can complete before the guard.
+	Engine.max_fps = 60
 	check(MobBodyOverlapIndex.capsule_overlap(Vector3.ZERO, 0.35, 1.8, Vector3(0.8, 0, 0), 0.6, 1.2), "horizontal overlap")
 	check(not MobBodyOverlapIndex.capsule_overlap(Vector3.ZERO, 0.35, 1.8, Vector3(1.1, 0, 0), 0.6, 1.2), "horizontal separation")
 	check(not MobBodyOverlapIndex.capsule_overlap(Vector3.ZERO, 0.35, 1.8, Vector3(0, 4, 0), 0.6, 1.2), "vertical separation")
