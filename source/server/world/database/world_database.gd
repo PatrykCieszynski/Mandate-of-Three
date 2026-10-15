@@ -235,6 +235,9 @@ func storage_operation(owner_id: int, uid: String, revision: int, source: String
 func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> Dictionary:
 	return storage_operation(owner_id, uid, revision, source, destination, position).response()
 
+func upgrade_receipt(owner_id: int, operation_id: String) -> EconomyOperationResult:
+	return _economy().upgrade_receipt(owner_id,operation_id)
+
 func upgrade_operation(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String = "") -> EconomyOperationResult:
 	return _economy().upgrade_operation(owner_id, recipe, uid, revision, operation_id)
 

@@ -1,6 +1,6 @@
 import type { ItemCommand } from '../../protocol/contracts.js';
 export type UpgradeSnapshot =
-  | { active: false }
+  | { active: false; upgradePending?: boolean }
   | {
       active: true;
       upgradePending?: boolean;

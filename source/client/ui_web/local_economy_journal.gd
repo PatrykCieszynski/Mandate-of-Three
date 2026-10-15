@@ -1,10 +1,15 @@
 extends RefCounted
 ## Client hints only. Server receipts/authorization remain the economic authority.
 ## Immutable per-intention files avoid replacing another running client's entry.
-var directory := "user://pending_npc_purchases"
+var directory: String
+var _id_prefix: String
 var _scope := ""
 var _folder := ""
 const MAX_BYTES := 4096
+
+func _init(id_prefix: String = "npc-buy-", location: String = "user://pending_npc_purchases") -> void:
+	_id_prefix = id_prefix
+	directory = location
 
 func configure(context: Dictionary) -> Dictionary:
 	_scope = ""
@@ -58,5 +63,5 @@ func clear_pending(id: String) -> bool:
 	var target := _folder.path_join(id + ".json")
 	return not FileAccess.file_exists(target) or DirAccess.remove_absolute(target) == OK
 
-static func valid_id(id: String) -> bool:
-	return id.begins_with("npc-buy-") and ItemInstance.valid_uid(id.trim_prefix("npc-buy-"))
+func valid_id(id: String) -> bool:
+	return not _id_prefix.is_empty() and id.begins_with(_id_prefix) and ItemInstance.valid_uid(id.trim_prefix(_id_prefix))

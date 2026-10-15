@@ -231,6 +231,9 @@ const upgrade = mountUpgrade(upgradeRoot, {
     select: (payload) => bridge.request('upgrade.select', payload),
     execute: (payload) => bridge.request('upgrade.execute', payload),
     retry: () => bridge.request('upgrade.retry', {}),
+    dismissRecovery: () => {
+        void bridge.request('upgrade.dismiss_recovery', {}).catch(() => { });
+    },
     manager,
     drag,
     resolveItemIcon,

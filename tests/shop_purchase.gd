@@ -123,7 +123,7 @@ func _ready() -> void:
 
 # Disk journal contract: no scene layout or private adapter state assertions.
 func _test_journal() -> void:
-	var script = preload("res://source/client/ui_web/npc_purchase_journal.gd")
+	var script = preload("res://source/client/ui_web/local_economy_journal.gd")
 	var journal = script.new()
 	journal.directory = "res://.godot/verification/npc-journal-fixture-" + Crypto.new().generate_random_bytes(8).hex_encode()
 	var context := {"authority_id":"a".repeat(32),"account_id":1,"character_id":2}

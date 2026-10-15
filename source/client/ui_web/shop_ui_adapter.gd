@@ -8,7 +8,7 @@ var _session: UiCommandSession
 var _tree: SceneTree
 # One unresolved purchase per economy/account/character, journaled before send.
 # Business identity is independent of the native/browser RPC correlation IDs.
-const PurchaseJournal = preload("res://source/client/ui_web/npc_purchase_journal.gd")
+const PurchaseJournal = preload("res://source/client/ui_web/local_economy_journal.gd")
 var journal = PurchaseJournal.new()
 var _context: Dictionary = {}
 var _journal_ready := false

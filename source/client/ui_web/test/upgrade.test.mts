@@ -524,3 +524,78 @@ test('Unresolved Upgrade can retry after authoritative +1 without a new executio
   manager.dispose();
   host.close();
 });
+
+test('Upgrade journal recovery works without an NPC catalog and dismiss does not execute or discard an intent', async () => {
+  const { manager, host } = environment(),
+    root = target();
+  document.body.append(root);
+  const drag = new ItemDragRuntime({
+    scale: () => 1,
+    onRegionsChanged: () => {},
+  });
+  let retries = 0,
+    dismisses = 0,
+    closes = 0,
+    executions = 0;
+  const view = mountUpgrade(root, {
+    manager,
+    drag,
+    resolveItemIcon: () => null,
+    onClose: () => closes++,
+    execute: async () => {
+      executions++;
+      return { ok: true };
+    },
+    retry: async () => {
+      retries++;
+      return { ok: false, error: 'upgrade_pending' };
+    },
+    dismissRecovery: () => dismisses++,
+  });
+  view.setNpcState({ active: false });
+  view.setState({ active: false, upgradePending: true });
+  const button = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('button'),
+  ).find((n) => n.textContent === 'Retry upgrade')!;
+  assert.equal(
+    root.hidden,
+    false,
+    'Pending-only state opens a recoverable view',
+  );
+  assert.equal(button.hidden, false);
+  button.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(retries, 1);
+  assert.equal(executions, 0);
+  assert.equal(view.closeIfActive(), true);
+  assert.equal(dismisses, 1);
+  assert.equal(
+    closes,
+    0,
+    'Recovery dismissal uses an explicit command, not stale NPC context',
+  );
+  view.setState({ active: false });
+  assert.equal(root.hidden, true);
+  const store = new DomainStore();
+  assert.equal(
+    store.apply({
+      v: 1,
+      type: 'upgrade.updated',
+      payload: { active: false, upgradePending: true },
+    }),
+    true,
+  );
+  for (const payload of [
+    { active: false, upgradePending: 'yes' },
+    { active: false, upgradePending: true, candidate: sword },
+  ]) {
+    assert.equal(
+      store.apply({ v: 1, type: 'upgrade.updated', payload }),
+      false,
+    );
+  }
+  view.dispose();
+  drag.dispose();
+  manager.dispose();
+  host.close();
+});
