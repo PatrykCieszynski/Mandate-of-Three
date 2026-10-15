@@ -104,3 +104,51 @@ replaced. If the simulation itself collapses, profile the specific physics/AI
 hotspot and test a narrow native rewrite.
 
 This is an **opt-in experiment**, not CI regression gate or production benchmark.
+
+## Profiling/ablation matrix (experimental PR #18 extension)
+
+Runs use test-only `BenchPlayerActor3D` / `BenchMobActor3D` derivatives
+and a test-only MobSystem subclass. The baseline still delegates movement
+and AI to the production implementations; per-actor timestamps add overhead.
+Compare **profiled baseline to profiled variants**, not directly to the
+original uninstrumented measurements.
+
+Recommended focused runs (use the **same** Godot binary and machine):
+
+```sh
+python3 tests/run-world-capacity.py --godot /path/to/godot --scenarios 100:200,250:500 --repeats 3
+python3 tests/run-world-capacity.py --godot /path/to/godot --scenarios 100:200,250:500 --repeats 3 --no-overlap
+python3 tests/run-world-capacity.py --godot /path/to/godot --scenarios 100:200,250:500 --repeats 3 --no-mob-slide
+python3 tests/run-world-capacity.py --godot /path/to/godot --scenarios 100:200,250:500 --repeats 3 --ai-ms 200
+python3 tests/run-world-capacity.py --godot /path/to/godot --scenarios 100:200,250:500 --repeats 3 --pack-size 5
+python3 tests/run-world-capacity.py --godot /path/to/godot --scenarios 100:200,250:500 --repeats 3 --wide
+```
+
+Every cohort uses distinct `results-<mode>.json` and
+`results-<mode>.csv` output names; scenarios and repeats within a mode have
+distinct logs. The same population/clock/time budget must be compared.
+
+- `profile.player_simulate_ms_total` includes the full production
+  `PlayerActor3D.simulate` implementation.
+- `profile.overlap_query_ms_total` is nested **inside** the above and
+  isolates `intersect_shape` plus conversion/iteration. Do not add both.
+- `profile.mob_tick_ms_total` includes real `MobSystem.tick` work, its
+  per-mob decisions and its physics, **plus** pack replacement bookkeeping.
+- `profile.mob_decision_including_motion_ms_total` is nested inside mob
+  tick time; `profile.mob_motion_ms_total` is nested inside decisions for
+  baseline. These sums overlap and cannot be added together.
+- `--no-overlap` skips the overlap query, which changes player/body
+  collision behavior; `--no-mob-slide` skips native physics movement;
+  `--ai-ms 200` reuses a prior direction between AI decisions.
+  **These are invalid as proposed production fixes** until gameplay parity
+  has been tested. They only diagnose a cost ceiling.
+- `--pack-size 5` creates packs of five instead of one pack per mob;
+  `--wide` uses a 512m floor and spreads actors instead of squeezing all
+  of them into the 32m fixture. Both change workload geometry and must
+  be labeled.
+- Snapshot encoding measurements are still only proxies; the experiment
+  does not create real socket clients.
+
+Even if a variant recovers 60Hz, do **not** conclude the proposed ablation
+is safe. Validate collision, hit/knockback, attack reach and replication
+behavior separately before any production optimization.
