@@ -90,7 +90,8 @@ export function mountShop(
     no_interaction: 'Reopen the NPC interaction.',
     service_disabled: 'Shop is unavailable.',
     too_fast: 'Wait before buying again.',
-    storage: 'Purchase failed. Try again.',
+    storage: 'Purchase could not be confirmed. Retry the same purchase.',
+    purchase_pending: 'Purchase not confirmed. Reopen this shop and retry the same offer and placement.',
     request: 'Invalid placement.',
   };
   function setStatus(text: string) {

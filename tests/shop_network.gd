@@ -1,6 +1,8 @@
 extends "res://tests/pve_network.gd"
 ## Production Shop RPC on an isolated two-client world, never actual accounts.
 var listening: bool = false
+var shop_adapter := ShopUiAdapter.new()
+var shop_session := UiCommandSession.new()
 var committed_inventory_changes: int = 0
 var committed_wallet_changes: int = 0
 
@@ -71,7 +73,11 @@ func run_server() -> void:
 	var before: Dictionary = server.database.item_store.inventory(owner)
 	set_phase("BUY_EXACT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(replies[hero].ok and replies[hero].has_purchase and replies[hero].wallet==1500, "exact purchase publishes private inventory and committed wallet")
+	check(not replies[hero].ok and replies[hero].error == "purchase_pending" and replies[hero].has_purchase and replies[hero].wallet == 1500, "lost purchase response leaves a committed item and unresolved client intention")
+	await get_tree().create_timer(0.12).timeout
+	set_phase("RETRY_EXACT", hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(replies[hero].ok and replies[hero].has_purchase and replies[hero].wallet == 1500, "adapter retries the same purchase after lost response without a second charge")
 	check(server.database.runtime_wallets[server.database.wallet_account_id(owner)].pending_currency_delta==0 and not server.database.dirty_wallet.has(server.database.wallet_account_id(owner)), "RPC commit clears pending income")
 	await get_tree().create_timer(0.12).timeout
 	set_phase("OCCUPIED",hero)
@@ -114,8 +120,8 @@ func run_server() -> void:
 		get_tree().quit()
 
 func _report_operation(_id: String, result: Dictionary) -> void:
-	if phase_name in ["BUY_EXACT","BUY_AUTO"] and result.ok:
-		var expected_balance: int = 1500 if phase_name=="BUY_EXACT" else 500
+	if phase_name in ["BUY_EXACT","RETRY_EXACT","BUY_AUTO"] and result.ok:
+		var expected_balance: int = 1500 if phase_name in ["BUY_EXACT","RETRY_EXACT"] else 500
 		await wait_until(func() -> bool: return world.currency_endpoint.state.get("balance",-1)==expected_balance)
 	var shop_state: Dictionary = world.shop_endpoint.state
 	var npc_state: Dictionary = world.npc_endpoint.state
@@ -136,6 +142,12 @@ func _process(delta: float) -> void:
 		listening=true
 		world.npc_endpoint.operation_finished.connect(_report_operation)
 		world.shop_endpoint.operation_finished.connect(_report_operation)
+		var dispatcher := UiCommandDispatcher.new()
+		add_child(dispatcher)
+		var bridge := WebUiBridge.new()
+		add_child(bridge)
+		dispatcher.attach(bridge)
+		shop_adapter.attach(world.shop_endpoint, dispatcher, shop_session, get_tree())
 		register_ready.rpc_id(1)
 	if phase_name in ["WAIT","DONE"] or attempted: return
 	attempted=true
@@ -143,7 +155,27 @@ func _process(delta: float) -> void:
 		"INTERACT": world.npc_endpoint.request_interaction.rpc_id(1,"interact",drop_uid,"","shop-interact")
 		"SELECT": world.npc_endpoint.request_interaction.rpc_id(1,"select",drop_uid,"weapon_shop","shop-select")
 		"OPEN": world.shop_endpoint.request_shop.rpc_id(1,"open",drop_uid,"weapon_shop","",-1,"shop-open")
-		"BUY_EXACT","OCCUPIED": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",10,"shop-exact")
-		"BUY_AUTO","FUNDS","FOREIGN","STALE": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",-1,"shop-auto")
+		"BUY_EXACT", "RETRY_EXACT": _adapter_purchase(phase_name == "BUY_EXACT")
+		"OCCUPIED": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",10,"shop-exact", "occupied-intention")
+		"BUY_AUTO": _adapter_purchase(false, false)
+		"FUNDS","FOREIGN","STALE": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",-1,"shop-auto", "npc-" + phase_name)
 		"BACK": world.npc_endpoint.request_interaction.rpc_id(1,"clear_service","","","shop-back")
 		"CLOSE": world.npc_endpoint.request_interaction.rpc_id(1,"close","","","shop-close")
+
+# Exercise real busy RPC correlation with the first accepted response discarded.
+# A new transport request must reuse the adapter's business intention on retry.
+func _adapter_purchase(lose_response: bool, exact: bool = true) -> void:
+	world.shop_endpoint.operation_finished.disconnect(_report_operation)
+	if lose_response: world.shop_endpoint.operation_finished.disconnect(shop_session.finish)
+	var payload := {"npc_instance_id":drop_uid,"service_id":"weapon_shop","offer_id":"iron_sword"}
+	if exact: payload.merge({"x":0,"y":2,"page":0})
+	var result := await shop_adapter._submit("buy", payload)
+	if lose_response:
+		world.shop_endpoint.operation_finished.connect(shop_session.finish)
+		shop_session.cancel("ui_reload")
+		var changed := payload.duplicate(true)
+		changed.x = 1
+		var blocked := await shop_adapter._submit("buy", changed)
+		check(not blocked.ok and blocked.error == "purchase_pending", "uncertain purchase prevents another placement/intention until resolved")
+	world.shop_endpoint.operation_finished.connect(_report_operation)
+	await _report_operation("", result)

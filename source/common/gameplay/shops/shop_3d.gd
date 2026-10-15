@@ -28,7 +28,7 @@ func open_for_peer(peer_id: int, instance_id: String, service_id: StringName) ->
 	_open[peer_id] = {"instance":instance_id, "service":service_id}
 	return {"ok":true}
 
-func buy_for_peer(peer_id: int, instance_id: String, service_id: StringName, offer_id: StringName, position: int, now: int) -> Dictionary:
+func buy_for_peer(peer_id: int, instance_id: String, service_id: StringName, offer_id: StringName, position: int, now: int, operation_id: String = "") -> Dictionary:
 	if now - _last_buy.get(peer_id, -1000) < 100: return {"ok":false, "error":"too_fast"}
 	_last_buy[peer_id] = now
 	var authorization: Dictionary = _authorization(peer_id, instance_id, service_id)
@@ -36,12 +36,15 @@ func buy_for_peer(peer_id: int, instance_id: String, service_id: StringName, off
 	if not services.available() or services.economy() == null: return {"ok":false, "error":"storage"}
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false, "error":"unknown_player"}
-	var operation := services.economy().purchase_shop_operation(player.player_id, authorization.shop, offer_id, position)
+	var operation := services.economy().purchase_shop_operation(player.player_id, authorization.shop, offer_id, position, operation_id)
 	if operation.new_commit:
 		# The database operation has committed and accepted wallet RAM.
 		# Prepare equipment/cache before either endpoint sees a change fact.
 		_world.inventory_endpoint.accept_committed_change(peer_id)
 		_world.currency_endpoint.accept_committed_change(peer_id)
+	elif operation.receipt_replay:
+		_world.inventory_endpoint.resynchronize(peer_id)
+		_world.currency_endpoint.resynchronize(peer_id)
 	return operation.response()
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
@@ -68,14 +71,14 @@ func _publish(peer_id: int) -> void:
 		receive_shop.rpc_id(peer_id, snapshot)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
-func request_shop(action: String, instance_id: String, service_id: String, offer_id: String, position: int, command_id: String) -> void:
-	if not GameMode.is_world_server() or command_id.length() > 80 or instance_id.length() > 80 or service_id.length() > 64 or offer_id.length() > 64: return
+func request_shop(action: String, instance_id: String, service_id: String, offer_id: String, position: int, command_id: String, operation_id: String = "") -> void:
+	if not GameMode.is_world_server() or command_id.length() > 80 or instance_id.length() > 80 or service_id.length() > 64 or offer_id.length() > 64 or operation_id.length() > 96: return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id): return
 	var result: Dictionary
 	match action:
 		"open": result = open_for_peer(peer_id, instance_id, StringName(service_id))
-		"buy": result = buy_for_peer(peer_id, instance_id, StringName(service_id), StringName(offer_id), position, Time.get_ticks_msec())
+		"buy": result = buy_for_peer(peer_id, instance_id, StringName(service_id), StringName(offer_id), position, Time.get_ticks_msec(), operation_id)
 		_: result = {"ok":false, "error":"request"}
 	_publish(peer_id)
 	# Browser command results use the existing narrow ok/error contract.

@@ -6,6 +6,10 @@ var _endpoint: Shop3D
 var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
 var _tree: SceneTree
+# One unresolved purchase per adapter. Survives browser reload, not client exit.
+# Business identity is independent of the native/browser RPC correlation IDs.
+var _purchase: Dictionary = {}
+var _buy_in_flight := false
 
 func attach(endpoint: Shop3D, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree) -> void:
 	_endpoint = endpoint
@@ -34,8 +38,31 @@ static func valid_buy(p: Dictionary) -> bool:
 	return p.has_all(["x", "y", "page"]) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and p.page >= 0 and p.page < InventoryGrid.PAGES
 
 func _submit(action: String, p: Dictionary) -> Dictionary:
+	if action == "buy":
+		if _buy_in_flight: return {"ok":false,"error":"too_fast"}
+		if not _purchase.is_empty() and _purchase.payload != p: return {"ok":false,"error":"purchase_pending"}
 	var id: String = _session.begin()
 	if id.is_empty(): return _session.closed_result()
+	var operation_id := ""
+	if action == "buy":
+		if _purchase.is_empty():
+			_purchase = {"id":"npc-buy-" + Crypto.new().generate_random_bytes(16).hex_encode(), "payload":p.duplicate(true), "uncertain":false}
+		operation_id = _purchase.id
+		_buy_in_flight = true
 	var position: int = int(p.page) * InventoryGrid.PAGE_CELLS + int(p.y) * InventoryGrid.COLUMNS + int(p.x) if p.has("x") else -1
-	_endpoint.request_shop.rpc_id(1, action, p.npc_instance_id, p.service_id, p.get("offer_id", ""), position, id)
-	return await _session.wait(id, _tree)
+	_endpoint.request_shop.rpc_id(1, action, p.npc_instance_id, p.service_id, p.get("offer_id", ""), position, id, operation_id)
+	var result := await _session.wait(id, _tree)
+	if action == "buy":
+		_buy_in_flight = false
+		if result.ok or result.get("error", "") in ["funds", "occupied", "inventory_full", "unknown_offer", "request"]:
+			# These store rejections follow receipt lookup. A prior committed purchase
+			# would have replayed success, so a definitive rejection can be released.
+			_purchase.clear()
+		elif bool(_purchase.uncertain) or result.get("error", "") in ["timeout", "ui_reload", "disconnected", "storage"]:
+			# An authorization/transport failure on retry is not proof that the
+			# earlier purchase failed. Reopen that service and retry the same item.
+			_purchase.uncertain = true
+			return {"ok":false,"error":"purchase_pending"}
+		else:
+			_purchase.clear()
+	return result

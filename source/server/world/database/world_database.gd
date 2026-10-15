@@ -176,11 +176,11 @@ func accept_committed_wallet_balance(character_id: int, balance: int) -> void:
 func inventory_operation(owner_id: int, action: String, uid: String, revision: int, position: int = -1) -> EconomyOperationResult:
 	return _economy().inventory_operation(owner_id, action, uid, revision, position)
 
-func purchase_shop_operation(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> EconomyOperationResult:
-	return _economy().purchase_shop_operation(owner_id, shop, offer_id, requested_position)
+func purchase_shop_operation(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1, operation_id: String = "") -> EconomyOperationResult:
+	return _economy().purchase_shop_operation(owner_id, shop, offer_id, requested_position, operation_id)
 
-func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> Dictionary:
-	return purchase_shop_operation(owner_id, shop, offer_id, requested_position).response()
+func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1, operation_id: String = "") -> Dictionary:
+	return purchase_shop_operation(owner_id, shop, offer_id, requested_position, operation_id).response()
 
 func upgrade_candidate(owner_id: int, uid: String, revision: int, recipe: UpgradeDefinition) -> Dictionary:
 	return _economy().upgrade_candidate(owner_id, uid, revision, recipe)
