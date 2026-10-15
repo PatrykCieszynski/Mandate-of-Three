@@ -23,6 +23,9 @@ func _ready() -> void:
 	var legacy := WorldStoreSqlite.new(db)
 	var first: int = EconomyFixture.create_character(legacy,"ground_alpha", {"name": "Alpha", "skin": 1})
 	var second: int = EconomyFixture.create_character(legacy,"ground_beta", {"name": "Beta", "skin": 1})
+	var persistence := WorldDatabase.new()
+	persistence.db = db
+	persistence.store = legacy
 	var store := ItemStoreSqlite.new(db)
 	check(store.initialize_character(first).ok and store.initialize_character(second).ok, "starter")
 	var uid: String = Crypto.new().generate_random_bytes(16).hex_encode()
@@ -37,13 +40,17 @@ func _ready() -> void:
 	check(EconomyFixture.destroy_item(db,filler[0]),"free slot")
 	check(db.query_with_bindings("DELETE FROM item_instances WHERE uid=?;", [filler[0]]), "remove fixture")
 	check(db.query("CREATE TEMP TRIGGER fail_ground BEFORE INSERT ON item_custody BEGIN SELECT RAISE(ABORT,'intentional ground placement failure'); END;"), "fault injection")
-	check(store.claim_ground_item(first, uid, rolled_item(first,uid,5)).get("error", "") == "storage", "partial write fails")
+	var operation := persistence.claim_ground_item_operation(first, uid, rolled_item(first,uid,5))
+	check(operation.response().get("error", "") == "storage" and not operation.new_commit and operation.changed_accounts.is_empty(), "partial write fails without a mutation fact")
 	check(db.query_with_bindings("SELECT COUNT(*) AS n FROM item_instances WHERE uid=?;", [uid]) and db.query_result[0].n == 0, "rollback item")
 	check(db.query("SELECT COUNT(*) AS n FROM ground_item_claims;") and db.query_result[0].n == 0, "rollback receipt")
 	check(db.query("DROP TRIGGER fail_ground;"), "end fault")
-	var claimed: Dictionary = store.claim_ground_item(first, uid, rolled_item(first,uid,5))
+	operation = persistence.claim_ground_item_operation(first, uid, rolled_item(first,uid,5))
+	var claimed := operation.response()
+	check(operation.new_commit and not operation.receipt_replay and operation.character_id == first and operation.changed_accounts == PackedInt64Array([legacy.resolve_account_id(first)]), "pickup result identifies one newly committed account")
 	check(claimed.ok and claimed.uid == uid, "pickup identity")
-	check(store.claim_ground_item(second, uid, rolled_item(second,uid,9)).get("error", "") == "claimed", "second owner replay denied")
+	operation = persistence.claim_ground_item_operation(second, uid, rolled_item(second,uid,9))
+	check(operation.response().get("error", "") == "claimed" and not operation.new_commit and not operation.receipt_replay and operation.changed_accounts.is_empty(), "second owner claim denied without replay success or mutation")
 	var persisted: Dictionary = store.inventory(first)
 	var found: bool = false
 	for item: Dictionary in persisted.items:
@@ -64,6 +71,7 @@ func _ready() -> void:
 	for item: Dictionary in store.inventory(second).items:
 		if item.uid==generic_uid: generic_found = item.definition_id==str(ItemDefinitions.UPGRADE_ORE.definition_id) and item.amount==2 and item.affixes.is_empty()
 	check(generic_found,"SQL claim preserves definition/quantity instead of generating legacy sword loot")
+	persistence.free()
 	db.close_db()
 	if not failed:
 		print("GROUND_ITEMS_OK: full bag, partial write rollback, exact UID, replay and reopen")

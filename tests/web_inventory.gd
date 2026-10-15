@@ -107,6 +107,11 @@ func run_client() -> void:
 	result = await command("storage.transfer",transfer_payload)
 	check(result.ok and endpoint.state.storage.items.size()==1,"Web deposit commits and publishes Storage")
 	check(not endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid==item.uid),"deposit removes Inventory item")
+	var stored_before: Array = endpoint.state.storage.items.duplicate(true)
+	var stored_revision: int = current.revision + 1
+	transfer_payload.merge({"from":"storage","revision":stored_revision}, true)
+	result = await command("storage.transfer", transfer_payload)
+	check(result.ok and endpoint.state.storage.items == stored_before, "same-cell Storage success resynchronizes without another revision or mutation fact")
 	transfer_payload.merge({"from":"storage","to":"inventory","quick":true,"revision":current.revision+1},true)
 	transfer_payload.x=0
 	transfer_payload.page=0

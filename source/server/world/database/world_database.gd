@@ -210,9 +210,14 @@ func market_command(character_id: int, action: String, payload: Dictionary) -> D
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	return _economy().market_query(character_id,action,payload)
 
+func claim_ground_item_operation(owner_id: int, drop_uid: String, item: ItemInstance) -> EconomyOperationResult:
+	return _economy().claim_ground_item_operation(owner_id, drop_uid, item)
+
+func storage_operation(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> EconomyOperationResult:
+	return _economy().storage_operation(owner_id, uid, revision, source, destination, position)
+
 func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> Dictionary:
-	if db == null: return {"ok":false,"error":"storage"}
-	return AccountStorageSqlite.new(db).transfer(owner_id,uid,revision,source,destination,position)
+	return storage_operation(owner_id, uid, revision, source, destination, position).response()
 
 func upgrade_operation(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> EconomyOperationResult:
 	return _economy().upgrade_operation(owner_id, recipe, uid, revision)

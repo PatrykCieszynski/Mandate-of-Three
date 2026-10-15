@@ -20,6 +20,31 @@ func market_operation(character_id: int, action: String, payload: Dictionary) ->
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	return _marketplace.query(character_id, action, payload)
 
+func claim_ground_item_operation(character_id: int, drop_uid: String, item: ItemInstance) -> EconomyOperationResult:
+	var account := _runtime.wallet_account_id(character_id)
+	var response: Dictionary = {"ok":false, "error":"storage"}
+	var committed := false
+	if _runtime.db != null:
+		var items := ItemStoreSqlite.new(_runtime.db)
+		response = items.claim_ground_item(character_id, drop_uid, item)
+		committed = items.committed
+	# The existing drop claim prevents duplicate item creation. A repeated claim
+	# is still rejected as claimed, not returned as successful receipt replay.
+	return EconomyOperationResult.capture(character_id, account, "ground.pickup", "",
+		response, committed, [account] if committed else [])
+
+func storage_operation(character_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> EconomyOperationResult:
+	var account := _runtime.wallet_account_id(character_id)
+	var response: Dictionary = {"ok":false, "error":"storage"}
+	var committed := false
+	if _runtime.db != null:
+		var storage := AccountStorageSqlite.new(_runtime.db)
+		response = storage.transfer(character_id, uid, revision, source, destination, position)
+		committed = storage.committed
+	# Account membership/ownership and capacity remain transactional store rules.
+	return EconomyOperationResult.capture(character_id, account, "storage.transfer", "",
+		response, committed, [account] if committed else [])
+
 func inventory_operation(character_id: int, action: String, uid: String, revision: int, position: int = -1) -> EconomyOperationResult:
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary = {"ok":false, "error":"storage"}

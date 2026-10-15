@@ -60,6 +60,7 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 	if not _world.characters.has(peer_id) or _store() == null: return
 	var now: int = Time.get_ticks_msec()
 	var result: Dictionary = {"ok":false,"error":"too_fast"}
+	var committed := false
 	if now - _last_action_ms.get(peer_id,-1000) >= 100:
 		_last_action_ms[peer_id] = now
 		var resource: PlayerResource = services.player_for_peer(peer_id)
@@ -69,7 +70,9 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 		if (source == "inventory" and destination == "inventory") or (not quick and (x < 0 or x >= columns or y < 0 or y >= 9 or page < 0 or page >= pages)):
 			result = {"ok":false,"error":"request"}
 		else:
-			result = services.economy().transfer_storage(resource.player_id,uid,revision,source,destination,-1 if quick else position)
+			var operation := services.economy().storage_operation(resource.player_id, uid, revision, source, destination, -1 if quick else position)
+			result = operation.response()
+			committed = operation.new_commit
 	# Prepare every affected character before the first notification/publication.
 	var actor: PlayerResource = services.player_for_peer(peer_id)
 	var affected: Array[int] = []
@@ -79,7 +82,7 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 			refresh_authoritative_state(other_peer)
 			affected.append(other_peer)
 	for other_peer: int in affected:
-		if result.ok:
+		if committed:
 			inventory_changed.emit(services.player_for_peer(other_peer).player_id)
 		else:
 			_send_state(other_peer) # Explicit repair; no committed-change fact.

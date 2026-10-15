@@ -8,6 +8,8 @@ const PAGE_CELLS: int = COLUMNS * ROWS
 const CAPACITY: int = PAGE_CELLS * PAGES
 const SELECT: String = "SELECT i.*, 'storage' AS location,s.position AS bag_position,'' AS equipment_slot FROM item_instances i JOIN account_storage s ON s.item_uid=i.uid "
 var db: SQLite
+# Last transfer mutated durable custody/placement, excluding same-cell success.
+var committed := false
 func _init(database: SQLite) -> void:
 	db = database
 static func ensure_schema(database: SQLite) -> bool:
@@ -42,6 +44,7 @@ func snapshot(character_id: int) -> Dictionary:
 		items.append(display)
 	return {"ok":true,"items":items}
 func transfer(character_id: int, uid: String, revision: int, source: String, destination: String, position: int = -1) -> Dictionary:
+	committed = false
 	if (source == "inventory" and destination == "inventory") or source not in ["inventory","storage"] or destination not in ["inventory","storage"] or not ItemInstance.valid_uid(uid) or revision < 0 or position < -1: return {"ok":false,"error":"request"}
 	if not db.query("BEGIN IMMEDIATE;"): return {"ok":false,"error":"storage"}
 	var name: String = account(character_id)
@@ -81,7 +84,7 @@ func transfer(character_id: int, uid: String, revision: int, source: String, des
 					break
 			if position == -1: return _finish(false,"full")
 		if not _fits(position,definition.inventory_height,occupied): return _finish(false,"occupied")
-	if source == destination and position == item.bag_position: return _finish(true)
+	if source == destination and position == item.bag_position: return _finish(true, "", false)
 	query = "DELETE FROM account_storage WHERE item_uid=?;" if source == "storage" else "DELETE FROM item_placements WHERE item_uid=?;"
 	if not db.query_with_bindings(query,[uid]): return _finish(false,"storage")
 	# Prepare provenance before inserting a character placement; custody validates it.
@@ -96,7 +99,9 @@ func transfer(character_id: int, uid: String, revision: int, source: String, des
 func _fits(position: int,height: int,occupied: Dictionary) -> bool:
 	var footprint: Array[int] = cells(position,height)
 	return not footprint.is_empty() and not footprint.any(func(cell: int) -> bool: return occupied.has(cell))
-func _finish(ok: bool,error: String = "") -> Dictionary:
-	if ok and db.query("COMMIT;"): return {"ok":true}
+func _finish(ok: bool,error: String = "", mutated: bool = true) -> Dictionary:
+	if ok and db.query("COMMIT;"):
+		committed = mutated
+		return {"ok":true}
 	db.query("ROLLBACK;")
 	return {"ok":false,"error":error if error != "" else "storage"}

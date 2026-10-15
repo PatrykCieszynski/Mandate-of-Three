@@ -59,9 +59,10 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 	if definition==null or bonus<1 or bonus>9: return {"ok":false,"error":"request"}
 	var item := ItemInstance.create(definition,owner_id,[{"stat":"attack","value":bonus}])
 	item.uid = uid
-	var result: Dictionary = _services.item_store().claim_ground_item(owner_id,uid,item)
+	var operation := _services.economy().claim_ground_item_operation(owner_id, uid, item)
+	var result := operation.response()
 	if result.ok or result.get("error","")=="claimed": drops.erase(uid)
-	if result.ok:
+	if operation.new_commit:
 		result["item_name"] = definition.item_name
 		result["weapon_attack"] = int(definition.base_stats.get(&"attack",0))+bonus
 		# Commit and ground erase precede cache and notification/publication.
