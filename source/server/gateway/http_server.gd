@@ -11,6 +11,11 @@ var _session_expiry: Dictionary[String, int] = {}
 var _request_sessions: Dictionary[int, String] = {}
 var _request_deadlines: Dictionary[int, int] = {}
 var _next_prune_ms: int = 0
+# Reservations count against the same capacity as issued tokens. A replacement
+# reserves its existing account slot; guests reserve a new unique slot.
+var _session_reservations: Dictionary[String, bool] = {}
+var _next_reservation_id: int = 0
+var _token_requests: Dictionary[String, Dictionary] = {}
 
 var next_request_id: int
 var sessions: Dictionary[String, Dictionary]
@@ -80,16 +85,44 @@ func _physics_process(delta: float) -> void:
 		prune_sessions()
 
 
-func create_session(account: Dictionary) -> String:
+func _session_slots() -> Dictionary:
+	var slots := _session_reservations.duplicate()
+	for account: Dictionary in sessions.values():
+		slots["account:" + str(account.name).strip_edges().to_lower()] = true
+	return slots
+
+
+func _reserve_session(username: String = "") -> String:
+	prune_sessions()
+	var key := "account:" + username.strip_edges().to_lower()
+	if username.is_empty():
+		key = "guest:%d" % _next_reservation_id
+		_next_reservation_id += 1
+	if _session_reservations.has(key):
+		return ""
+	var slots := _session_slots()
+	if not slots.has(key) and slots.size() >= max_sessions:
+		return ""
+	_session_reservations[key] = true
+	return key
+
+
+func create_session(account: Dictionary, reservation: String = "") -> String:
 	prune_sessions()
 	if int(account.get("id", 0)) <= 0 or str(account.get("name", "")).is_empty():
+		return ""
+	var slots := _session_slots()
+	if not reservation.is_empty():
+		if not _session_reservations.has(reservation):
+			return ""
+		slots.erase(reservation)
+	var account_key := "account:" + str(account.name).strip_edges().to_lower()
+	if not slots.has(account_key) and slots.size() >= max_sessions:
 		return ""
 	# New credential verification replaces previous Gateway credentials for this account.
 	for token: String in sessions.keys():
 		if sessions[token].get("id") == account.id:
 			revoke_session(token)
-	if sessions.size() >= max_sessions:
-		return ""
 	var session_id := Marshalls.raw_to_base64(Crypto.new().generate_random_bytes(32))
 	# Never retain the mutable HTTP response (including guest password or session_id).
 	sessions[session_id] = {"name": str(account.name), "id": int(account.id)}
@@ -107,9 +140,10 @@ func prune_sessions() -> void:
 func revoke_session(token: String) -> void:
 	sessions.erase(token)
 	_session_expiry.erase(token)
-	for request_id: int in _request_sessions.keys():
-		if _request_sessions.get(request_id, "") == token:
-			_finish_request(request_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS})
+	var requests: Dictionary = _token_requests.get(token, {}).duplicate()
+	_token_requests.erase(token)
+	for request_id: int in requests:
+		_finish_request(request_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS})
 
 
 func handle_logout(payload: Dictionary) -> Dictionary:
@@ -142,7 +176,11 @@ func send_request(action: String, data: Dictionary, timeout_sec: float = 5.0) ->
 	pending_requests[request_id] = request
 	_request_deadlines[request_id] = Time.get_ticks_msec() + maxi(1, int(timeout_sec * 1000))
 	if action in ["create_character", "get_characters", "enter_world"]:
-		_request_sessions[request_id] = data[GatewayAPI.KEY_TOKEN_ID]
+		var token: String = data[GatewayAPI.KEY_TOKEN_ID]
+		_request_sessions[request_id] = token
+		if not _token_requests.has(token):
+			_token_requests[token] = {}
+		_token_requests[token][request_id] = true
 	
 	data.merge({GatewayAPI.KEY_REQUEST_ID: request_id, "action": action}, true)
 	
@@ -178,6 +216,10 @@ func _finish_request(request_id: int, response: Dictionary) -> void:
 	pending_requests.erase(request_id)
 	_request_deadlines.erase(request_id)
 	_request_sessions.erase(request_id)
+	if _token_requests.has(token):
+		_token_requests[token].erase(request_id)
+		if _token_requests[token].is_empty():
+			_token_requests.erase(token)
 	if not token.is_empty() and (not sessions.has(token) or Time.get_ticks_msec() >= _session_expiry.get(token, 0)):
 		response = {"error": GatewayAPI.ERR_BAD_CREDENTIALS}
 	request.resolve(response)
@@ -260,12 +302,21 @@ func handle_login(payload: Dictionary) -> Dictionary:
 	var version_check: Dictionary = _check_version(payload)
 	if not version_check.is_empty():
 		return version_check
-	var result: Dictionary = await send_request("login", payload)
+	return await _authenticate("login", payload, str(payload[GatewayAPI.KEY_ACCOUNT_USERNAME]))
+
+
+func _authenticate(action: String, payload: Dictionary, username: String = "") -> Dictionary:
+	var reservation := _reserve_session(username)
+	if reservation.is_empty():
+		return {"error": GatewayAPI.ERR_RATE_LIMITED, "msg": "gateway session capacity"}
+	var result: Dictionary = await send_request(action, payload)
 	var error: Error = result.get("error", 0)
 	if error != OK:
+		_session_reservations.erase(reservation)
 		return result
 	
-	var token := create_session(result)
+	var token := create_session(result, reservation)
+	_session_reservations.erase(reservation)
 	if token.is_empty():
 		return {"error": GatewayAPI.ERR_RATE_LIMITED, "msg": "gateway session capacity"}
 	result["session_id"] = token
@@ -275,16 +326,7 @@ func handle_login(payload: Dictionary) -> Dictionary:
 func handle_guest(payload: Dictionary) -> Dictionary:
 	if not _rate_ok(payload, &"guest", 5, 60000):
 		return {"error": GatewayAPI.ERR_RATE_LIMITED}
-	var result: Dictionary = await send_request("guest", payload)
-	var error: Error = result.get("error", 0)
-	if error != OK:
-		return {"error": error}
-	
-	var token := create_session(result)
-	if token.is_empty():
-		return {"error": GatewayAPI.ERR_RATE_LIMITED, "msg": "gateway session capacity"}
-	result["session_id"] = token
-	return result
+	return await _authenticate("guest", payload)
 
 
 func handle_character_create(payload: Dictionary) -> Dictionary:

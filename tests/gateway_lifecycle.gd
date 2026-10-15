@@ -39,6 +39,13 @@ func wait_monotonic(duration_ms: int) -> void:
 	while Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
 
+func authenticate(label: String, action: String, username: String = "alpha") -> void:
+	var payload := {"a-u": username, "a-p": "test", "c-v": GatewayAPI.game_version()}
+	if action == "guest":
+		results[label] = await gateway.handle_guest({})
+	else:
+		results[label] = await gateway.handle_login(payload)
+
 func run() -> void:
 	# Repeated completion must release retained work, never resolve a caller twice.
 	for index: int in 32:
@@ -118,5 +125,63 @@ func run() -> void:
 	gateway.prune_sessions()
 	assert(gateway.sessions.is_empty())
 	assert(gateway.verified_session({"t-id": prune_token, "a-u": "alpha"}).is_empty())
+	# Session admission precedes side effects in Master, including concurrent auth.
+	gateway.session_ttl_seconds = 28800
+	gateway.max_sessions = 1
+	var active := gateway.create_session({"name": "alpha", "id": 21})
+	var before_id := gateway.next_request_id
+	authenticate("full_guest", "guest")
+	authenticate("full_other", "login", "beta")
+	assert(results.full_guest.error == GatewayAPI.ERR_RATE_LIMITED)
+	assert(results.full_other.error == GatewayAPI.ERR_RATE_LIMITED)
+	assert(gateway.next_request_id == before_id, "no Master guest/account/kick side effects at capacity")
+	# Replacement reserves the existing slot and wrong credentials do not revoke it.
+	authenticate("bad_replace", "login", " ALPHA ")
+	var replacement_id := gateway.next_request_id - 1
+	manager.gateway_response(replacement_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS})
+	assert(not gateway.verified_session({"t-id": active, "a-u": "alpha"}).is_empty())
+	authenticate("replace", "login", "alpha")
+	authenticate("concurrent_replace", "login", "alpha")
+	assert(results.concurrent_replace.error == GatewayAPI.ERR_RATE_LIMITED)
+	# Logging out while replacement waits cannot free its reserved capacity.
+	gateway.handle_logout({"t-id": active, "a-u": "alpha"})
+	before_id = gateway.next_request_id
+	authenticate("reserved_guest", "guest")
+	assert(results.reserved_guest.error == GatewayAPI.ERR_RATE_LIMITED and gateway.next_request_id == before_id)
+	manager.gateway_response(before_id - 1, {"name": "alpha", "id": 21})
+	assert(results.replace.has("session_id"))
+	gateway.handle_logout({"t-id": results.replace.session_id, "a-u": "alpha"})
+	authenticate("guest1", "guest")
+	var guest_id := gateway.next_request_id - 1
+	before_id = gateway.next_request_id
+	authenticate("guest_overflow", "guest")
+	assert(results.guest_overflow.error == GatewayAPI.ERR_RATE_LIMITED and gateway.next_request_id == before_id)
+	manager.gateway_response(guest_id, {"name": "guest22", "id": 22})
+	assert(results.guest1.has("session_id"))
+	gateway.handle_logout({"t-id": results.guest1.session_id, "a-u": "guest22"})
+	# Disconnect releases held reservations; a subsequent authentication can proceed.
+	authenticate("interrupted_auth", "guest")
+	manager._on_server_disconnected()
+	assert(results.interrupted_auth.error == ERR_CONNECTION_ERROR)
+	manager.master_connected = true
+	authenticate("recovered_guest", "guest")
+	manager.gateway_response(gateway.next_request_id - 1, {"name": "guest23", "id": 23})
+	assert(results.recovered_guest.has("session_id"))
+	gateway.handle_logout({"t-id": results.recovered_guest.session_id, "a-u": "guest23"})
+	gateway.max_sessions = 3
+	gateway.max_pending_requests = 8
+	gateway.session_ttl_seconds = 1
+	for index: int in 3:
+		var name := "batch%d" % index
+		var batch_token := gateway.create_session({"name": name, "id": index + 100})
+		for query: int in 2:
+			capture("%s_%d" % [name, query], "get_characters", {"t-id": batch_token, "a-u": name})
+	await wait_monotonic(1050)
+	gateway.prune_sessions()
+	for index: int in 3:
+		for query: int in 2:
+			var label := "batch%d_%d" % [index, query]
+			assert(results[label].error == GatewayAPI.ERR_BAD_CREDENTIALS and completions[label] == 1)
+	assert(gateway.pending_requests.is_empty() and gateway.sessions.is_empty())
 	print("GATEWAY_LIFECYCLE_OK bounded requests, single completion, expiry/logout/reconnect and stale reply rejection")
 	get_tree().quit()

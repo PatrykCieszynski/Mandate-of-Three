@@ -42,7 +42,7 @@ static func humanize(response: Dictionary) -> String:
 				return TranslationServer.translate("ERR_ACCOUNT_CREATE_FAILED")
 			GatewayAPI.ERR_OUTDATED_VERSION:
 				return TranslationServer.translate("ERR_OUTDATED")
-			Error.ERR_TIMEOUT:
+			Error.ERR_TIMEOUT, Error.ERR_CONNECTION_ERROR:
 				return TranslationServer.translate("ERR_CONNECTION")
 			_:
 				return TranslationServer.translate("ERR_GENERIC")
@@ -58,5 +58,5 @@ static func is_connection_error(response: Dictionary) -> bool:
 	if code is String:
 		return code == "connection_failed" or code == "request_error"
 	if code is int or code is float:
-		return int(code) == Error.ERR_TIMEOUT
+		return int(code) in [Error.ERR_TIMEOUT, Error.ERR_CONNECTION_ERROR]
 	return false

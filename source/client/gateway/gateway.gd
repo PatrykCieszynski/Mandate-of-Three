@@ -6,6 +6,7 @@ const CredentialsUtils: GDScript = preload("res://source/common/utils/credential
 var account_id: int
 var account_name: String
 var session_id: String
+var _auth_generation: int = 0
 var local_id: String
 
 # True once the boot handshake confirms the gateway is reachable — drives the
@@ -92,6 +93,7 @@ var _skin_name_label: Label
 
 
 func _ready() -> void:
+	var auth_generation := _auth_generation
 	# During boot, show only a centered "Connecting…" over the backdrop — the menu and
 	# the corner chrome (More / ConnectionInfo) stay hidden until the handshake passes,
 	# so nothing flashes before we know the gateway's reachable + our build matches.
@@ -122,13 +124,21 @@ func _ready() -> void:
 	local_id = CmdlineUtils.get_parsed_args().get("id", "")
 
 	await get_tree().create_timer(1.5).timeout
+	if auth_generation != _auth_generation:
+		return
 
 	# Boot gate: confirm the gateway is reachable + our build matches before any menu
 	# shows. Blocks (update) or retries on failure; else resumes or reveals the menu.
-	if not await _boot_handshake():
+	var handshake_ok := await _boot_handshake()
+	if auth_generation != _auth_generation:
+		return
+	if not handshake_ok:
 		return
 	# Keep "Connecting…" up through sign-in; the reveal (menu or resume) ends boot.
-	if not await try_auto_login():
+	var auto_login_ok := await try_auto_login()
+	if auth_generation != _auth_generation:
+		return
+	if not auto_login_ok:
 		_reveal_main_menu()
 
 
@@ -136,16 +146,23 @@ func _ready() -> void:
 ## any menu. Loops on "can't reach" (Retry); on a version mismatch it shows a hard
 ## "update required" block and returns false. Returns true once the gateway's good.
 func _boot_handshake() -> bool:
+	var auth_generation := _auth_generation
 	while true:
 		_show_connecting()
 		var response: Dictionary = await _request_handshake()
+		if auth_generation != _auth_generation:
+			return false
 		# Editor "Run Multiple Instances": gateway/master may still be booting, so ride
 		# out pure connection / not-ready errors. Exported clients skip this.
 		var attempts: int = 0
 		while OS.has_feature("editor") and GatewayError.is_connection_error(response) and attempts < 20:
 			attempts += 1
 			await get_tree().create_timer(0.25).timeout
+			if auth_generation != _auth_generation:
+				return false
 			response = await _request_handshake()
+			if auth_generation != _auth_generation:
+				return false
 
 		if response.get("ok") == true:
 			_server_online = true  # gateway reachable + build OK
@@ -158,6 +175,8 @@ func _boot_handshake() -> bool:
 			return false
 		# Gateway / master unreachable → message + Retry; the press loops us around.
 		await popup_panel.confirm_message(tr("ERR_CANT_REACH"), &"CANT_REACH_TITLE", &"RETRY")
+		if auth_generation != _auth_generation:
+			return false
 	return false  # unreachable — the loop only exits via the returns above
 
 
@@ -253,9 +272,12 @@ func _wire_button_audio(button: Button, is_back: bool = false) -> void:
 ## Hard block for an outdated client: nothing's playable on a mismatched build, so
 ## loop a non-dismissable "please update" (each press opens the download page).
 func _block_outdated(detail: String) -> void:
+	var auth_generation := _auth_generation
 	var message: String = detail if not detail.is_empty() else tr("ERR_OUTDATED")
 	while true:
 		await popup_panel.confirm_message(message, &"UPDATE_TITLE", &"UPDATE")
+		if auth_generation != _auth_generation:
+			return
 		if not LINK_WEBSITE.is_empty():
 			OS.shell_open(LINK_WEBSITE)
 
@@ -476,6 +498,7 @@ func _on_login_button_pressed() -> void:
 
 
 func _on_login_login_button_pressed() -> void:
+	var auth_generation := _auth_generation
 	var account_name_edit: LineEdit = $LoginPanel/VBoxContainer/VBoxContainer/VBoxContainer/LineEdit
 	var password_edit: LineEdit = $LoginPanel/VBoxContainer/VBoxContainer/VBoxContainer2/LineEdit
 
@@ -495,9 +518,13 @@ func _on_login_login_button_pressed() -> void:
 	login_panel.hide()  # hide the form so the label sits over the backdrop, not the menu
 	_show_connecting()
 	var response: Dictionary = await request_login(username, password)
+	if auth_generation != _auth_generation:
+		return
 	if response.has("error"):
 		_hide_connecting()
 		await popup_panel.confirm_message(GatewayError.humanize(response))
+		if auth_generation != _auth_generation:
+			return
 		login_panel.show()
 		login_button.disabled = false
 		return
@@ -514,6 +541,7 @@ func _on_login_login_button_pressed() -> void:
 
 
 func _on_guest_button_pressed() -> void:
+	var auth_generation := _auth_generation
 	main_panel.hide()  # hide the menu so the label sits over the backdrop, not the menu
 	_show_connecting()
 
@@ -522,9 +550,13 @@ func _on_guest_button_pressed() -> void:
 		GatewayAPI.guest(),
 		{}
 	)
+	if auth_generation != _auth_generation:
+		return
 	if d.has("error"):
 		_hide_connecting()
 		await popup_panel.confirm_message(GatewayError.humanize(d))
+		if auth_generation != _auth_generation:
+			return
 		main_panel.show()
 		return
 
@@ -537,6 +569,7 @@ func _on_guest_button_pressed() -> void:
 
 
 func _on_world_selected(world_id: int) -> void:
+	var auth_generation := _auth_generation
 	$WorldSelection.hide()
 	_show_connecting()
 	var d: Dictionary = await do_request(
@@ -549,9 +582,13 @@ func _on_world_selected(world_id: int) -> void:
 			GatewayAPI.KEY_TOKEN_ID: session_id
 		}
 	)
+	if auth_generation != _auth_generation:
+		return
 	if d.has("error"):
 		_hide_connecting()
 		await popup_panel.confirm_message(GatewayError.humanize(d))
+		if auth_generation != _auth_generation:
+			return
 		$WorldSelection.show()
 		return
 
@@ -587,6 +624,7 @@ func _on_world_selected(world_id: int) -> void:
 
 
 func _on_character_selected(world_id: int, character_id: int) -> void:
+	var auth_generation := _auth_generation
 	current_world_id = world_id
 	if character_id == -1:
 		_show($CharacterCreation)
@@ -606,9 +644,13 @@ func _on_character_selected(world_id: int, character_id: int) -> void:
 			GatewayAPI.KEY_CHAR_ID: character_id
 		}
 	)
+	if auth_generation != _auth_generation:
+		return
 	if d.has("error"):
 		_hide_connecting()
 		await popup_panel.confirm_message(GatewayError.humanize(d))
+		if auth_generation != _auth_generation:
+			return
 		$CharacterSelection.show()
 		$BackButton.show()
 		return
@@ -656,6 +698,7 @@ func _card_anim(frames: SpriteFrames) -> StringName:
 
 
 func _on_create_character_button_pressed() -> void:
+	var auth_generation := _auth_generation
 	var username_edit: LineEdit = $CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer2/LineEdit
 
 	var create_button: Button = $CharacterCreation/VBoxContainer/VBoxContainer/CreateButton
@@ -667,6 +710,8 @@ func _on_create_character_button_pressed() -> void:
 	result = CredentialsUtils.validate_username(username_edit.text)
 	if result.code != CredentialsUtils.UsernameError.OK:
 		await popup_panel.confirm_message(tr("USERNAME") + result.message)
+		if auth_generation != _auth_generation:
+			return
 		create_button.disabled = false
 		$BackButton.show()
 		$CharacterCreation.show()
@@ -686,9 +731,13 @@ func _on_create_character_button_pressed() -> void:
 			GatewayAPI.KEY_WORLD_ID: current_world_id
 		}
 	)
+	if auth_generation != _auth_generation:
+		return
 	if d.has("error"):
 		_hide_connecting()
 		await popup_panel.confirm_message(GatewayError.humanize(d))
+		if auth_generation != _auth_generation:
+			return
 		create_button.disabled = false
 		$CharacterCreation.show()
 		return
@@ -698,22 +747,29 @@ func _on_create_character_button_pressed() -> void:
 
 
 func create_account() -> void:
+	var auth_generation := _auth_generation
 	var name_edit: LineEdit = $CreateAccountPanel/VBoxContainer/VBoxContainer/VBoxContainer/LineEdit
 	var password_edit: LineEdit = $CreateAccountPanel/VBoxContainer/VBoxContainer/VBoxContainer2/LineEdit
 	var password_repeat_edit: LineEdit = $CreateAccountPanel/VBoxContainer/VBoxContainer/VBoxContainer3/LineEdit
 
 	if password_edit.text != password_repeat_edit.text:
 		await popup_panel.confirm_message(tr("PASSWORDS_DONT_MATCH"))
+		if auth_generation != _auth_generation:
+			return
 		return
 	
 	var result: Dictionary
 	result = CredentialsUtils.validate_username(name_edit.text)
 	if result.code != CredentialsUtils.UsernameError.OK:
 		await popup_panel.confirm_message(tr("USERNAME") + result.message)
+		if auth_generation != _auth_generation:
+			return
 		return
 	result = CredentialsUtils.validate_password(password_edit.text)
 	if result.code != CredentialsUtils.UsernameError.OK:
 		await popup_panel.confirm_message(tr("PASSWORD") + ":\n" + result.message)
+		if auth_generation != _auth_generation:
+			return
 		return
 	
 	$CreateAccountPanel.hide()
@@ -727,9 +783,13 @@ func create_account() -> void:
 			GatewayAPI.KEY_ACCOUNT_PASSWORD: password_edit.text,
 		}
 	)
+	if auth_generation != _auth_generation:
+		return
 	if d.has("error"):
 		_hide_connecting()
 		await popup_panel.confirm_message(GatewayError.humanize(d))
+		if auth_generation != _auth_generation:
+			return
 		$CreateAccountPanel.show()
 		return
 	
@@ -780,6 +840,7 @@ func _on_world_update_button_pressed() -> void:
 ## Re-fetch the live world list from the gateway without re-logging-in. Cheap —
 ## the gateway serves it from its cached roster (GatewayAPI.worlds()).
 func refresh_worlds() -> void:
+	var auth_generation := _auth_generation
 	var update_button: Button = $WorldSelection/VBoxContainer/Button
 	update_button.disabled = true
 	var d: Dictionary = await do_request(
@@ -787,6 +848,8 @@ func refresh_worlds() -> void:
 		GatewayAPI.worlds(),
 		{}
 	)
+	if auth_generation != _auth_generation:
+		return
 	if d.has("error"):
 		update_button.disabled = false  # request failed — allow an immediate retry
 		return
@@ -795,9 +858,12 @@ func refresh_worlds() -> void:
 
 ## Lock the Update button for 5s after a refresh so it can't be hammered.
 func _start_update_cooldown() -> void:
+	var auth_generation := _auth_generation
 	var update_button: Button = $WorldSelection/VBoxContainer/Button
 	update_button.disabled = true
 	await get_tree().create_timer(5.0).timeout
+	if auth_generation != _auth_generation:
+		return
 	if is_instance_valid(update_button):
 		update_button.disabled = false
 
@@ -806,14 +872,19 @@ func _start_update_cooldown() -> void:
 ## quietly re-poll so a world coming online appears without a manual refresh.
 ## Guarded by _world_poll_active so only one loop ever runs.
 func _poll_worlds_while_empty() -> void:
+	var auth_generation := _auth_generation
 	if _world_poll_active:
 		return
 	_world_poll_active = true
 	# populate_worlds() runs just before the caller shows WorldSelection, so let
 	# that happen before we gate the loop on the panel's visibility.
 	await get_tree().process_frame
+	if auth_generation != _auth_generation:
+		return
 	while $WorldSelection.visible:
 		await get_tree().create_timer(5.0).timeout
+		if auth_generation != _auth_generation:
+			return
 		if not $WorldSelection.visible:
 			break
 		var d: Dictionary = await do_request(
@@ -821,6 +892,8 @@ func _poll_worlds_while_empty() -> void:
 			GatewayAPI.worlds(),
 			{}
 		)
+		if auth_generation != _auth_generation:
+			return
 		if d.has("error"):
 			continue
 		var w: Dictionary = d.get("w", {})
@@ -883,6 +956,7 @@ func add_world_card(world_info: Dictionary, world_id: int) -> Button:
 
 
 func _on_continue_button_pressed() -> void:
+	var auth_generation := _auth_generation
 	$AlreadyConnectedPanel.hide()
 	_show_connecting()  # plain label, not a panel — the Transition cover takes over
 	var d: Dictionary = await do_request(
@@ -895,9 +969,13 @@ func _on_continue_button_pressed() -> void:
 			GatewayAPI.KEY_CHAR_ID: current_character_id
 		}
 	)
+	if auth_generation != _auth_generation:
+		return
 	if d.has("error"):
 		_hide_connecting()
 		await popup_panel.confirm_message(GatewayError.humanize(d))
+		if auth_generation != _auth_generation:
+			return
 		$AlreadyConnectedPanel.show()
 		return
 
@@ -966,6 +1044,18 @@ func _wire_link(button: Button, url: String) -> void:
 ## Forget the saved session and return to the main menu so another account can log
 ## in. The auto-login token lives in session.dat (see save_refresh_token).
 func _logout() -> void:
+	_auth_generation += 1
+	_world_poll_active = false
+	# Resume a waiting confirmation only after fencing its continuation.
+	if popup_panel.visible:
+		popup_panel.confirm_button.pressed.emit()
+	_hide_connecting()
+	$LoginPanel/VBoxContainer/VBoxContainer/LoginButton.disabled = false
+	$CharacterCreation/VBoxContainer/VBoxContainer/CreateButton.disabled = false
+	$WorldSelection/VBoxContainer/Button.disabled = false
+	account_id = 0
+	current_world_id = 0
+	current_character_id = 0
 	_revoke_gateway_session(session_id, account_name)
 	var file_path: String = "user://%ssession.dat" % local_id
 	if FileAccess.file_exists(file_path):
@@ -1271,6 +1361,7 @@ func _apply_skin(index: int) -> void:
 # Ideally we must not save credentials locally even if crypted,
 # saving a temporary token given by the server is the way. 
 func try_auto_login() -> bool:
+	var auth_generation := _auth_generation
 	# Load the saved session FIRST. A first-time player (no token) goes straight
 	# to the main menu — no spinner, no boot delay, nothing to wait on.
 	var file_path: String = "user://%ssession.dat" % local_id
@@ -1283,6 +1374,8 @@ func try_auto_login() -> bool:
 
 	# The "Connecting…" label from boot stays up through sign-in — no panel flicker.
 	var response: Dictionary = await request_login(username, password)
+	if auth_generation != _auth_generation:
+		return false
 
 	# In the editor, "Run Multiple Instances" boots gateway/master/world AND the
 	# client all at once, so the gateway may not be listening yet on the first
@@ -1293,7 +1386,11 @@ func try_auto_login() -> bool:
 	while OS.has_feature("editor") and GatewayError.is_connection_error(response) and attempts < 20:
 		attempts += 1
 		await get_tree().create_timer(0.25).timeout
+		if auth_generation != _auth_generation:
+			return false
 		response = await request_login(username, password)
+		if auth_generation != _auth_generation:
+			return false
 
 	if response.has("error"):
 		# Stale or failed auto-login (saved password no longer valid, server

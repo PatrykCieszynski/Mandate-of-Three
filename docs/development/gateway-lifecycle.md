@@ -73,3 +73,35 @@ profile without script errors. The live
 `run-account-identity.ps1 -WithSession` still needs Gateway/Master/World and creates
 fixture accounts. Native menu click/HTTP logout and live process reconnect are
 separate integration checks; controlled transport does not verify them.
+
+
+## Review follow-up
+
+Session capacity is now reserved **before** forwarding login/guest to Master.
+Reservations and issued tokens share one bounded slot set; replacement login can
+reserve its existing account slot even at capacity, and concurrent login attempts
+cannot reserve it twice. Logout/expiry during that login does not release its
+reserved capacity to another admission. Failed authentication, timeout or Master
+disconnect releases the reservation; wrong credentials preserve the old token.
+This prevents a capacity rejection after Master has kicked an old player or
+created a guest. It does not cancel already-admitted Master work after transport
+timeout, whose outcome can still be unknown.
+
+The client recognizes both `ERR_TIMEOUT` and `ERR_CONNECTION_ERROR` as retryable
+transport errors. Logout increments a menu auth generation. HTTP, popup, boot,
+auto-login, world refresh and timer continuations check that generation before
+changing screens, saving credentials or starting a World transition. Logout also
+dismisses an existing confirmation and resets local identity/menu controls.
+
+Token-to-request indexing makes pruning linear in session count plus affected
+requests, rather than scanning all pending requests separately for every expired
+token. Normal completion, timeout and revocation remove index entries.
+
+The identity runner also runs `gateway_menu_lifecycle` headlessly with an isolated
+profile. It instantiates the production menu scene and handlers, controlling HTTP
+responses/credential files, and covers delayed failure/success after logout,
+logout while an error popup awaits confirmation, and a subsequent valid login.
+Server coverage now verifies pre-Master capacity refusal, competing guests,
+replacement at capacity, bad credentials preserving the token, reserved capacity
+surviving logout and recovery after Master disconnect. This does not replace the
+unverified live three-process reconnect/physical input milestone.
