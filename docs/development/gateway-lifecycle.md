@@ -53,7 +53,8 @@ The one-active-character-per-account-per-realm C1/C5 target remains future work.
 `tests/run-account-identity.ps1` reuses the populated SQLite identity/ownership
 fixture and adds `gateway_lifecycle`. The latter uses the production Gateway
 request/session code and real GatewayManagerClient reply/disconnect signals with
-a controlled transport, no sockets or production accounts. It protects:
+a controlled transport and no production accounts. The menu fixture additionally
+uses one ephemeral loopback listener for real HTTP transport cancellation. It protects:
 
 - repeated completion cleanup and one terminal result;
 - bounded pending admission and freed capacity;
@@ -105,3 +106,26 @@ Server coverage now verifies pre-Master capacity refusal, competing guests,
 replacement at capacity, bad credentials preserving the token, reserved capacity
 surviving logout and recovery after Master disconnect. This does not replace the
 unverified live three-process reconnect/physical input milestone.
+
+
+## HTTP transport cancellation follow-up
+
+Logout fences old menu continuations, calls the shared HTTPRequest's
+[`cancel_request()`](https://docs.godotengine.org/en/stable/classes/class_httprequest.html#class-httprequest-method-cancel-request)
+and explicitly resolves its per-call waiter with `request_cancelled`. Completion
+callbacks are disconnected and the transport slot is released before the caller
+resumes. Menu teardown does the same. A cancelled waiter cannot consume a later
+login's response; unrelated concurrent requests still receive a busy result.
+
+The production button handler passes credentials into the same login flow used
+by the behavior fixture. Assertions no longer depend on nested input paths,
+panel visibility or menu composition. They protect logged-out identity, no stale
+credential save/World connection and a subsequent valid login.
+
+The existing menu fixture now also opens an ephemeral loopback listener and uses
+the production HTTPRequest/do_request implementation. The listener receives an
+old request and deliberately withholds its response; Logout is followed by a new
+credential login in the same frame. Only the new login receives a response. The
+old waiter must complete once with cancellation, the new account must log in and
+only its credentials may be saved. No Gateway/Master/World services or player
+accounts are required. The isolated client profile is removed after success.

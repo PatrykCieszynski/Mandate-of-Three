@@ -7,6 +7,8 @@ var account_id: int
 var account_name: String
 var session_id: String
 var _auth_generation: int = 0
+var _http_pending: NetRequest
+var _http_completion: Callable
 var local_id: String
 
 # True once the boot handshake confirms the gateway is reachable — drives the
@@ -334,36 +336,52 @@ func do_request(
 	path: String,
 	payload: Dictionary,
 ) -> Dictionary:
-	if http_request.get_http_client_status() == HTTPClient.Status.STATUS_CONNECTED:
-		return {"error": "request_error"}
-
-	var custom_headers: PackedStringArray
-	custom_headers.append("Content-Type: application/json")
-	
-	var error: Error = http_request.request(
-		path,
-		custom_headers,
-		method,
-		JSON.stringify(payload)
-	)
-
+	if _http_pending != null:
+		return {"error": "request_error", "code": ERR_BUSY}
+	var request := NetRequest.new()
+	_http_pending = request
+	_http_completion = _on_http_completed.bind(request)
+	http_request.request_completed.connect(_http_completion, CONNECT_ONE_SHOT)
+	var error: Error = http_request.request(path, ["Content-Type: application/json"], method, JSON.stringify(payload))
 	if error != OK:
-		push_error("An error occurred in the HTTP request.")
-		return {ok=false, error="request_error", code=error}
+		_finish_http_request(request, {"error": "request_error", "code": error})
+	if request.is_done:
+		return request.response
+	return await request.completed
 
-	var args: Array = await http_request.request_completed
-	var result: int = args[0]
-	if result != OK:
-		return {"error": "connection_failed", "code": result}
 
-	var response_code: int = args[1]
-	var headers: PackedStringArray = args[2]
-	var body: PackedByteArray = args[3]
+func _on_http_completed(result: int, _code: int, _headers: PackedStringArray, body: PackedByteArray, request: NetRequest) -> void:
+	if request != _http_pending:
+		return
+	if result != HTTPRequest.RESULT_SUCCESS:
+		_finish_http_request(request, {"error": "connection_failed", "code": result})
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	_finish_http_request(request, data if data is Dictionary else {"error": "bad_response"})
 
-	var data: Variant = JSON.parse_string(body.get_string_from_ascii())
-	if data is Dictionary:
-		return data
-	return {"error": "bad_response"}
+
+func _finish_http_request(request: NetRequest, response: Dictionary) -> void:
+	if request != _http_pending:
+		return
+	if http_request.request_completed.is_connected(_http_completion):
+		http_request.request_completed.disconnect(_http_completion)
+	_http_pending = null
+	_http_completion = Callable()
+	# Free the transport slot before resuming a caller that may start new work.
+	request.resolve(response)
+
+
+func _cancel_http_request() -> void:
+	if _http_pending == null:
+		return
+	var request := _http_pending
+	http_request.cancel_request()
+	_finish_http_request(request, {"error": "request_cancelled"})
+
+
+func _exit_tree() -> void:
+	_auth_generation += 1
+	_cancel_http_request()
 
 
 func _show(next: Control, can_back: bool = true) -> void:
@@ -498,13 +516,13 @@ func _on_login_button_pressed() -> void:
 
 
 func _on_login_login_button_pressed() -> void:
-	var auth_generation := _auth_generation
 	var account_name_edit: LineEdit = $LoginPanel/VBoxContainer/VBoxContainer/VBoxContainer/LineEdit
 	var password_edit: LineEdit = $LoginPanel/VBoxContainer/VBoxContainer/VBoxContainer2/LineEdit
+	_login_with_credentials(account_name_edit.text, password_edit.text)
 
-	var username: String = account_name_edit.text
-	var password: String = password_edit.text
 
+func _login_with_credentials(username: String, password: String) -> void:
+	var auth_generation := _auth_generation
 	var login_button: Button = $LoginPanel/VBoxContainer/VBoxContainer/LoginButton
 	login_button.disabled = true
 	if (
@@ -1045,6 +1063,7 @@ func _wire_link(button: Button, url: String) -> void:
 ## in. The auto-login token lives in session.dat (see save_refresh_token).
 func _logout() -> void:
 	_auth_generation += 1
+	_cancel_http_request()
 	_world_poll_active = false
 	# Resume a waiting confirmation only after fencing its continuation.
 	if popup_panel.visible:
