@@ -351,14 +351,8 @@ func _refresh_interest() -> void:
 			for actor_id: int in players:
 				if old_players.has(actor_id) or not inventory_endpoint.public_weapons.has(actor_id):
 					continue
-				receive_equipped_weapon_for_interest(viewer_id, actor_id)
+				inventory_endpoint.replay_weapon_to_observer(viewer_id, actor_id)
 	_visible_by_peer = next_visible
-
-func receive_equipped_weapon_for_interest(viewer_id: int, actor_id: int) -> void:
-	inventory_endpoint.receive_weapon.rpc_id(
-		viewer_id, actor_id, inventory_endpoint.public_weapons[actor_id],
-		inventory_endpoint._weapon_versions.get(actor_id, 0)
-	)
 
 func interest_players_for(viewer_id: int) -> Dictionary:
 	return _visible_by_peer.get(viewer_id, {}).get("players", {})
