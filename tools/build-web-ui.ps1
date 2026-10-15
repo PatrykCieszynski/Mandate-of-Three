@@ -12,6 +12,4 @@ if ($Tests) {
     & $NodeExecutable $taskCompiler -p (Join-Path $taskUi 'tsconfig.tests.json')
     if ($LASTEXITCODE -ne 0) { throw 'Web UI TypeScript test build failed' }
 }
-# Temporary CI diagnostic: show exact production JS output differences.
-& git diff -- source/client/ui_web/web/screens/market/browser-view.js source/client/ui_web/web/screens/market/market-view.js
 Write-Output 'Web UI TypeScript build: PASS (static ES modules)'

@@ -113,10 +113,15 @@ export function mountMarket(root, options) {
         candidate = null;
         selected = offer.id;
         negotiable.checked = offer.price === null;
-    price.disabled = negotiable.checked;
-    if (offer.price !== null) price.value = String(offer.price);
+        price.disabled = negotiable.checked;
+        if (offer.price !== null)
+            price.value = String(offer.price);
         selection.textContent =
-            offer.item.name + ' · ' + (offer.price === null ? 'Do negocjacji' : offer.price.toLocaleString('en-US') + ' Yang');
+            offer.item.name +
+                ' · ' +
+                (offer.price === null
+                    ? 'Do negocjacji'
+                    : offer.price.toLocaleString('en-US') + ' Yang');
         confirm.textContent = 'Set price';
         cancel.disabled = false;
     }
@@ -136,7 +141,8 @@ export function mountMarket(root, options) {
         selection.textContent = item.name + ' → slot ' + (position + 1);
         confirm.textContent = 'List item';
         cancel.disabled = true;
-        if (!negotiable.checked) price.focus();
+        if (!negotiable.checked)
+            price.focus();
     }
     async function submit(action, payload) {
         if (pending || disposed)

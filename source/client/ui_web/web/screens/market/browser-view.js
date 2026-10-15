@@ -101,6 +101,7 @@ export function mountMarketBrowser(root, shopRoot, o) {
     buy.disabled = true;
     const retry = button('Retry same purchase', () => void purchase(true));
     retry.hidden = true;
+    // Placeholder only: private messages have no server command yet.
     const whisper = button('Whisper seller (soon)', () => { });
     whisper.disabled = true;
     whisper.title = 'Private messages are not implemented yet.';
@@ -226,11 +227,15 @@ export function mountMarketBrowser(root, shopRoot, o) {
     function choose(offer) {
         selected = offer;
         offerInfo.textContent =
-            offer.item.name + ' · ' + (offer.price === null ? 'Do negocjacji' : offer.price.toLocaleString('en-US') + ' Yang');
+            offer.item.name +
+                ' · ' +
+                (offer.price === null
+                    ? 'Do negocjacji'
+                    : offer.price.toLocaleString('en-US') + ' Yang');
         whisper.hidden = offer.price !== null;
         buy.disabled =
             offer.price === null ||
-            pending ||
+                pending ||
                 !state.active ||
                 !('status' in state.shop) ||
                 state.shop.status !== 'active';
@@ -285,7 +290,9 @@ export function mountMarketBrowser(root, shopRoot, o) {
             row.append(cell);
             for (const text of [
                 String(result.item.quantity),
-                result.price === null ? 'Do negocjacji' : result.price.toLocaleString('en-US'),
+                result.price === null
+                    ? 'Do negocjacji'
+                    : result.price.toLocaleString('en-US'),
                 result.shopName,
             ]) {
                 const c = document.createElement('td');
