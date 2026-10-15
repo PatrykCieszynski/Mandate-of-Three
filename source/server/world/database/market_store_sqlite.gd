@@ -120,7 +120,7 @@ func mine(character_id: int) -> Dictionary:
 	result.columns = COLUMNS
 	result.rows = ROWS
 	result.offers = []
-	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.position,o.price_yang,o.revision AS offer_revision FROM shop_offers o JOIN item_custody c ON c.uid=o.item_uid JOIN item_instances i ON i.uid=o.item_uid WHERE o.shop_id=? ORDER BY o.position;",[shop_id]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.position,o.price_yang,o.offer_only,o.revision AS offer_revision FROM shop_offers o JOIN item_custody c ON c.uid=o.item_uid JOIN item_instances i ON i.uid=o.item_uid WHERE o.shop_id=? ORDER BY o.position;",[shop_id]): return _transaction.rollback("storage")
 	for row: Dictionary in db.query_result.duplicate(true):
 		var view := _item_view(row)
 		if view.is_empty(): return _transaction.rollback("unknown_definition")
@@ -269,7 +269,7 @@ func visit(shop_id: int) -> Dictionary:
 	if db.query_result.is_empty(): return {"ok":false,"error":"unavailable"}
 	var result: Dictionary = db.query_result[0].duplicate(true)
 	result.merge({"ok":true,"columns":COLUMNS,"rows":ROWS,"offers":[],"claims":[]})
-	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.position,o.price_yang,o.revision AS offer_revision FROM shop_offers o JOIN item_custody c ON c.uid=o.item_uid JOIN item_instances i ON i.uid=o.item_uid WHERE o.shop_id=? ORDER BY o.position;",[shop_id]): return {"ok":false,"error":"storage"}
+	if not db.query_with_bindings("SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.position,o.price_yang,o.offer_only,o.revision AS offer_revision FROM shop_offers o JOIN item_custody c ON c.uid=o.item_uid JOIN item_instances i ON i.uid=o.item_uid WHERE o.shop_id=? ORDER BY o.position;",[shop_id]): return {"ok":false,"error":"storage"}
 	for row: Dictionary in db.query_result.duplicate(true):
 		var view := _item_view(row)
 		if view.is_empty(): return {"ok":false,"error":"unknown_definition"}

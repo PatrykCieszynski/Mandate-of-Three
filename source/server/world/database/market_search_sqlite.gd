@@ -8,7 +8,7 @@ var last_db_usec := 0
 func _init(database: SQLite) -> void: db=database
 static func ensure_schema(database: SQLite) -> bool:
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
-	if int(database.query_result[0].value)>=20: return true
+	if int(database.query_result[0].value)>=20: return MarketStoreSqlite._ensure_offer_only_column(database)
 	if int(database.query_result[0].value)!=19 or not database.query("BEGIN IMMEDIATE;"): return false
 	var statements: Array[String]=[
 		"CREATE TABLE item_affix_index(uid TEXT NOT NULL REFERENCES item_instances(uid) ON DELETE CASCADE,ordinal INTEGER NOT NULL,stat_id TEXT NOT NULL,value REAL NOT NULL,PRIMARY KEY(uid,ordinal));",
@@ -23,7 +23,7 @@ static func ensure_schema(database: SQLite) -> bool:
 	for statement: String in statements:
 		if not database.query(statement):
 			database.query("ROLLBACK;");return false
-	return true
+	return MarketStoreSqlite._ensure_offer_only_column(database)
 static func ensure_lookup_schema(database: SQLite) -> bool:
 	# Run after Exchange v22 and before World admits players/starts any reader.
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
@@ -79,7 +79,7 @@ static func build_query(p: Dictionary) -> Dictionary:
 			where += " AND ((o.offer_only=0 AND (o.price_yang %s :cursor_price OR (o.price_yang=:cursor_equal AND o.offer_id>:cursor_id))) OR o.offer_only=1)" % ("<" if descending else ">")
 			params.merge({"cursor_price":int(cursor[0]),"cursor_equal":int(cursor[0]),"cursor_id":cursor[1]})
 	params["row_limit"] = int(p.limit)+1
-	return {"ok":true,"sql":"SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.shop_id,o.price_yang,o.revision AS offer_revision,s.display_name AS shop_name FROM shop_offers o JOIN account_shops s ON s.shop_id=o.shop_id JOIN item_instances i ON i.uid=o.item_uid JOIN item_custody c ON c.uid=i.uid WHERE "+where+" ORDER BY o.offer_only ASC, CASE WHEN o.offer_only=1 THEN 0 ELSE o.price_yang END "+("DESC" if descending else "ASC")+",o.offer_id ASC LIMIT :row_limit;","params":params}
+	return {"ok":true,"sql":"SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.shop_id,o.price_yang,o.offer_only,o.revision AS offer_revision,s.display_name AS shop_name FROM shop_offers o JOIN account_shops s ON s.shop_id=o.shop_id JOIN item_instances i ON i.uid=o.item_uid JOIN item_custody c ON c.uid=i.uid WHERE "+where+" ORDER BY o.offer_only ASC, CASE WHEN o.offer_only=1 THEN 0 ELSE o.price_yang END "+("DESC" if descending else "ASC")+",o.offer_id ASC LIMIT :row_limit;","params":params}
 
 
 static func project_rows(rows: Array, p: Dictionary, database: SQLite) -> Dictionary:
