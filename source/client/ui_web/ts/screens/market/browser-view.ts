@@ -258,7 +258,7 @@ export function mountMarketBrowser(
         shop_id: state.shop.shopId,
         offer_id: selected.id,
         revision: selected.revision,
-        price: selected.price,
+        price: selected.price!, // The offer-only path returned above.
       };
     if (!buyIntent) return;
     pending = true;
