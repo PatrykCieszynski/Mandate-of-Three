@@ -11,7 +11,7 @@ import type {ItemPresentation} from '../game-ui/item-types.js';
 export interface InventoryItem extends ItemPresentation { x: number; y: number; page: number }
 export interface EquipmentItem extends ItemPresentation { slot: string }
 export interface InventorySnapshot { recoveryPending?: boolean; columns: number; rows: number; pages: number; items: InventoryItem[] }
-export interface StorageSnapshot { columns:typeof STORAGE_COLUMNS; rows:typeof STORAGE_ROWS; pages:typeof STORAGE_PAGES; items:InventoryItem[] }
+export interface StorageSnapshot { recoveryPending?: boolean; columns:typeof STORAGE_COLUMNS; rows:typeof STORAGE_ROWS; pages:typeof STORAGE_PAGES; items:InventoryItem[] }
 export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?: number } }
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
@@ -55,6 +55,7 @@ export interface CommandPayloads {
   'market.configure': MarketCommand;
   'market.receipt': MarketCommand;
   'market.close': Record<string,never>;
+  'storage.retry': Record<string,never>;
   'inventory.retry': Record<string,never>;
   'upgrade.select': UpgradeCommand;
   'upgrade.execute': UpgradeCommand;

@@ -130,6 +130,10 @@ func run() -> void:
 	check(store.change_equipment(dev_owner,granted.uid,1,"unequip").ok and store.inventory(dev_owner).stats.attack == 10,"unequip restores base attack")
 	_check_inventory_boundary(db, legacy)
 	_check_inventory_receipts(db, legacy)
+	_check_item_state_versions(db,legacy)
+	_check_revision_migration()
+	_check_storage_receipts(db, legacy)
+	await _check_storage_client_journal()
 	await _check_inventory_client_journal()
 	db.close_db()
 	if not failed:
@@ -153,32 +157,32 @@ func _check_storage(database: SQLite, legacy: WorldStoreSqlite, store: ItemStore
 	var bag_snapshot: Dictionary = store.inventory(first)
 	var candidate: Dictionary = bag_snapshot.items[0]
 	for combination: Array in [["inventory","inventory"],["equipment","storage"],["storage","equipment"],["unknown","storage"]]:
-		check(persistence.transfer_storage(first,candidate.uid,0,combination[0],combination[1],5).error=="request","Storage rejects unrelated container route")
+		check(persistence.transfer_storage(first,candidate.uid,0,combination[0],combination[1],5, "storage-fixture-1").error=="request","Storage rejects unrelated container route")
 	check(store.inventory(first)==bag_snapshot,"invalid Storage routes preserve Inventory")
 	var item: Dictionary = store.inventory(first).items[0]
-	var operation := persistence.storage_operation(first, item.uid, 0, "inventory", "storage", 0)
+	var operation := persistence.storage_operation(first, item.uid, 0, "inventory", "storage", 0, "storage-fixture-2")
 	check(operation.response().ok and operation.new_commit and not operation.receipt_replay and operation.changed_accounts == PackedInt64Array([legacy.resolve_account_id(first)]), "deposit commits one account change")
 	check(store.inventory(first).items.size()==1,"deposit removes bag placement")
 	check(storage.snapshot(second).items[0].uid==item.uid,"same account sees Storage")
 	check(storage.snapshot(foreign).items.is_empty(),"foreign account cannot see Storage")
 	var before: Dictionary = storage.snapshot(first)
 	# State-only assertions previously missed duplicate facts for a successful no-op.
-	operation = persistence.storage_operation(second, item.uid, 1, "storage", "storage", 0)
+	operation = persistence.storage_operation(second, item.uid, 1, "storage", "storage", 0, "storage-fixture-3")
 	check(operation.response().ok and not operation.new_commit and not operation.receipt_replay and operation.changed_accounts.is_empty() and storage.snapshot(first) == before, "same-cell Storage move preserves revision without mutation or receipt replay")
-	check(persistence.transfer_storage(foreign,item.uid,1,"storage","inventory",-1).error=="owner","foreign withdrawal rejected")
-	check(persistence.transfer_storage(second,item.uid,0,"storage","inventory",-1).error=="stale","stale withdrawal rejected")
-	check(persistence.transfer_storage(second,item.uid,1,"storage","storage",269).error=="occupied","footprint crosses page bottom")
+	check(persistence.transfer_storage(foreign,item.uid,1,"storage","inventory",-1, "storage-fixture-4").error=="owner","foreign withdrawal rejected")
+	check(persistence.transfer_storage(second,item.uid,0,"storage","inventory",-1, "storage-fixture-5").error=="stale","stale withdrawal rejected")
+	check(persistence.transfer_storage(second,item.uid,1,"storage","storage",269, "storage-fixture-6").error=="occupied","footprint crosses page bottom")
 	check(storage.snapshot(first)==before,"rejections preserve stored item")
 	check(database.query("CREATE TEMP TRIGGER storage_revision_failure BEFORE UPDATE ON item_instances BEGIN SELECT RAISE(ABORT,'test Storage rollback'); END;"),"inject Storage failure")
 	var bag_before: Dictionary = store.inventory(second)
-	operation = persistence.storage_operation(second, item.uid, 1, "storage", "inventory", -1)
+	operation = persistence.storage_operation(second, item.uid, 1, "storage", "inventory", -1, "storage-fixture-7")
 	check(operation.response().error == "storage" and not operation.new_commit and operation.changed_accounts.is_empty(), "withdrawal failure reports no new mutation")
 	check(store.inventory(second)==bag_before and storage.snapshot(first)==before,"withdrawal rolls back ownership and both placements")
 	check(database.query("DROP TRIGGER storage_revision_failure;"),"remove Storage failure")
 	check(database.close_db() and database.open_db(),"Storage database reopen")
 	check(storage.snapshot(second)==before,"account Storage survives reopen")
-	check(persistence.transfer_storage(second,item.uid,1,"storage","storage",135).ok,"move stored item to page II")
-	check(persistence.transfer_storage(second,item.uid,2,"storage","inventory",-1).ok,"other character withdraws")
+	check(persistence.transfer_storage(second,item.uid,1,"storage","storage",135, "storage-fixture-8").ok,"move stored item to page II")
+	check(persistence.transfer_storage(second,item.uid,2,"storage","inventory",-1, "storage-fixture-9").ok,"other character withdraws")
 	var withdrawn: Dictionary = _find(store.inventory(second),item.uid)
 	check(withdrawn.owner_character_id==second and withdrawn.revision==3 and withdrawn.affixes==item.affixes,"withdrawal preserves content and transfers owner")
 	check(storage.snapshot(first).items.is_empty(),"withdrawal removes account placement")
@@ -187,12 +191,12 @@ func _check_storage(database: SQLite, legacy: WorldStoreSqlite, store: ItemStore
 	for index: int in AccountStorageSqlite.COLUMNS * AccountStorageSqlite.PAGES * (AccountStorageSqlite.ROWS / ItemDefinitions.IRON_SWORD.inventory_height):
 		var filler: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD,first,[])
 		check(EconomyFixture.insert_item(store,filler,2),"insert Storage filler")
-		check(persistence.transfer_storage(first,filler.uid,0,"inventory","storage",-1).ok,"fill Storage footprint")
+		check(persistence.transfer_storage(first,filler.uid,0,"inventory","storage",-1, "storage-fixture-10" + "-" + str(index)).ok,"fill Storage footprint")
 	var excess: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD,first,[])
 	check(EconomyFixture.insert_item(store,excess,2),"insert overflow candidate")
 	bag_before=store.inventory(first)
 	before=storage.snapshot(first)
-	check(persistence.transfer_storage(first,excess.uid,0,"inventory","storage",-1).error=="full","full account Storage rejects quick deposit")
+	check(persistence.transfer_storage(first,excess.uid,0,"inventory","storage",-1, "storage-fixture-11").error=="full","full account Storage rejects quick deposit")
 	check(store.inventory(first)==bag_before and storage.snapshot(first)==before,"full transfer preserves last valid states")
 	persistence.free()
 
@@ -256,6 +260,7 @@ func _check_inventory_receipts(database: SQLite, legacy: WorldStoreSqlite) -> vo
 		check(database.query("DROP TRIGGER fail_inventory_receipt;"),"remove receipt fault")
 		operation = persistence.inventory_operation(owner,action,uid,revision,position,id)
 		check(operation.response().ok and operation.new_commit and not operation.receipt_replay,"same-ID retry commits "+action)
+		check(operation.response().item_state == items.inventory(owner).item_state,"receipt captures transaction item watermark: "+action)
 		var after := items.inventory(owner)
 		operation = persistence.inventory_operation(owner,action,uid,revision,position,id)
 		check(operation.response().ok and not operation.new_commit and operation.receipt_replay and operation.changed_accounts.is_empty() and items.inventory(owner)==after,"durable replay confirms without another mutation: "+action)
@@ -312,3 +317,154 @@ func _check_inventory_client_journal() -> void:
 	check(fresh.clear_pending(id),"clear owned fixture intention")
 	DirAccess.remove_absolute(folder)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(directory))
+
+# Shared-account custody plus durable receipts is not covered by the character-local tests.
+func _check_storage_receipts(database: SQLite, legacy: WorldStoreSqlite) -> void:
+	var persistence := WorldDatabase.new()
+	persistence.db = database
+	persistence.store = legacy
+	var first := EconomyFixture.create_character(legacy,"storage_receipts",{"name":"StoreA","skin":1})
+	var second := EconomyFixture.create_character(legacy,"storage_receipts",{"name":"StoreB","skin":1})
+	var foreign := EconomyFixture.create_character(legacy,"storage_foreign",{"name":"StoreC","skin":1})
+	var items := ItemStoreSqlite.new(database)
+	for owner: int in [first,second,foreign]: check(items.initialize_character(owner).ok,"Storage receipt starter kit")
+	var storage := AccountStorageSqlite.new(database)
+	var uid: String = items.inventory(first).items[0].uid
+	check(persistence.storage_operation(first,uid,0,"inventory","storage",0).response().error == "request","missing Storage intention cannot mutate custody")
+	var revision := 0
+	# Deposit A, move B, withdraw B: every operation commits receipt and custody together.
+	for entry: Array in [[first,"inventory","storage",0],[second,"storage","storage",2],[second,"storage","inventory",20]]:
+		var owner: int = entry[0]
+		var id := "storage-contract-"+str(revision)
+		var before := [items.inventory(first),items.inventory(second),storage.snapshot(first)]
+		check(database.query("CREATE TEMP TRIGGER fail_storage_receipt BEFORE INSERT ON market_commands WHEN NEW.kind='storage' BEGIN SELECT RAISE(ABORT,'storage receipt fault'); END;"),"inject Storage receipt failure")
+		var operation := persistence.storage_operation(owner,uid,revision,entry[1],entry[2],entry[3],id)
+		check(operation.response().error == "storage" and not operation.new_commit and [items.inventory(first),items.inventory(second),storage.snapshot(first)] == before,"receipt failure rolls back placement/provenance/revision: "+str(entry))
+		check(persistence.storage_receipt(owner,id).response().error == "unknown_command","failed Storage write leaves no success receipt")
+		check(database.query("DROP TRIGGER fail_storage_receipt;"),"remove Storage fault")
+		operation = persistence.storage_operation(owner,uid,revision,entry[1],entry[2],entry[3],id)
+		check(operation.response().ok and operation.new_commit and not operation.receipt_replay,"same-ID Storage retry commits")
+		var after := [items.inventory(first),items.inventory(second),storage.snapshot(first)]
+		operation = persistence.storage_operation(owner,uid,revision,entry[1],entry[2],entry[3],id)
+		check(operation.response().ok and operation.receipt_replay and not operation.new_commit and operation.changed_accounts.is_empty() and [items.inventory(first),items.inventory(second),storage.snapshot(first)] == after,"Storage replay bypasses stale custody without another mutation")
+		check(persistence.storage_operation(owner,uid,revision+1,entry[1],entry[2],entry[3],id).response().error == "command_conflict","Storage fingerprint binds revision")
+		check(persistence.storage_operation(owner,uid,revision,entry[1],entry[2],entry[3]+1,id).response().error == "command_conflict","Storage fingerprint binds target")
+		revision += 1
+	var final := [items.inventory(first),items.inventory(second),storage.snapshot(first)]
+	check(persistence.storage_operation(first,uid,0,"inventory","storage",0,"storage-contract-0").receipt_replay and [items.inventory(first),items.inventory(second),storage.snapshot(first)] == final,"old deposit receipt cannot take item back from later recipient")
+	check(_find(items.inventory(second),uid).owner_character_id == second,"withdrawal assigns provenance to receiving character")
+	check(persistence.storage_receipt(first,"storage-contract-2").response().error == "unknown_command" and persistence.storage_receipt(foreign,"storage-contract-2").response().error == "unknown_command","receipt result isolated to issuing character and account")
+	check(persistence.storage_operation(first,uid,2,"storage","inventory",20,"storage-contract-2").response().error == "command_conflict","same account cannot retarget withdrawal receipt to another character")
+	check(persistence.storage_operation(foreign,uid,0,"inventory","storage",0,"storage-contract-0").response().error == "owner","foreign account cannot use deposit receipt")
+	check(persistence.storage_receipt(first,"missing-storage").response().error == "unknown_command","unknown Storage discovery never executes")
+	check(database.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[legacy.resolve_account_id(first),"other-storage-kind","inventory","[]",JSON.stringify({"ok":true})]),"seed unrelated receipt")
+	check(persistence.storage_receipt(first,"other-storage-kind").response().error == "unknown_command","Storage lookup cannot return unrelated receipt kind")
+	check(persistence.storage_operation(second,uid,3,"inventory","storage",4,"storage-redeposit").new_commit,"later recipient redeposits")
+	var current := storage.snapshot(first)
+	check(persistence.storage_operation(second,uid,2,"storage","inventory",20,"storage-contract-2").receipt_replay and storage.snapshot(first)==current and not items.inventory(second).items.any(func(i: Dictionary) -> bool: return i.uid==uid),"old withdrawal cannot undo a subsequent redeposit")
+	var noop := persistence.storage_operation(first,uid,4,"storage","storage",4,"storage-noop")
+	check(noop.response().ok and not noop.new_commit and not noop.receipt_replay,"first same-cell receipt has no mutation fact")
+	check(persistence.storage_operation(first,uid,4,"storage","storage",4,"storage-noop").receipt_replay,"same-cell replay is durable")
+	check(database.close_db() and database.open_db(),"Storage receipt database reopen")
+	var lookup := persistence.storage_receipt(second,"storage-contract-2")
+	check(lookup.response().ok and not lookup.new_commit and not lookup.receipt_replay and lookup.changed_accounts.is_empty() and storage.snapshot(first)==current,"read-only discovery survives reopen and preserves latest custody")
+	check(database.query_with_bindings("SELECT (SELECT COUNT(*) FROM item_placements WHERE item_uid=?) + (SELECT COUNT(*) FROM account_storage WHERE item_uid=?) AS count;",[uid,uid]) and int(database.query_result[0].count)==1,"replays preserve exactly one custody location per UID")
+	persistence.free()
+
+func _check_storage_client_journal() -> void:
+	var adapter = preload("res://source/client/ui_web/storage_ui_adapter.gd").new()
+	var endpoint := InventoryEndpoint3D.new()
+	var dispatcher := UiCommandDispatcher.new()
+	var bridge := WebUiBridge.new()
+	dispatcher.attach(bridge)
+	adapter.attach(endpoint,dispatcher,UiCommandSession.new(),get_tree(),func() -> bool: return true)
+	var directory := "res://.godot/verification/storage-journal-unit-"+Crypto.new().generate_random_bytes(8).hex_encode()
+	adapter.journal.directory = directory
+	var context := {"authority_id":"d".repeat(32),"account_id":1,"character_id":2}
+	adapter.accept_context({"ok":true,"economic_context":context})
+	var folder := ProjectSettings.globalize_path(directory).path_join(("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text())
+	DirAccess.remove_absolute(folder)
+	var file := FileAccess.open(folder,FileAccess.WRITE)
+	file.close()
+	var payload := {"id":"b".repeat(32),"revision":0,"from":"inventory","to":"storage","x":0,"y":0,"page":0,"quick":false}
+	check((await adapter.transfer(payload)).error == "journal_unavailable","Storage journal write failure blocks before RPC")
+	adapter.dispose()
+	endpoint.free()
+	dispatcher.free()
+	bridge.free()
+	DirAccess.remove_absolute(folder)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(directory))
+
+# A durable account watermark must survive rollback/restart and include both sides
+# of custody. Existing UID revisions cannot express removal or shared Storage.
+func _check_item_state_versions(database: SQLite, legacy: WorldStoreSqlite) -> void:
+	var first := EconomyFixture.create_character(legacy,"revision_account",{"name":"RevisionA","skin":1})
+	var second := EconomyFixture.create_character(legacy,"revision_account",{"name":"RevisionB","skin":1})
+	var foreign := EconomyFixture.create_character(legacy,"revision_foreign",{"name":"RevisionC","skin":1})
+	var items := ItemStoreSqlite.new(database)
+	for owner: int in [first,second,foreign]: check(items.initialize_character(owner).ok,"revision starter fixture")
+	var a := items.inventory(first)
+	var b := items.inventory(second)
+	var unrelated := items.inventory(foreign)
+	check(a.item_state.revision==b.item_state.revision and a.item_state.account_id==b.item_state.account_id and a.item_state.character_id!=b.item_state.character_id,"shared-account watermark retains character identity")
+	var uid: String = a.items[0].uid
+	var result := items.inventory_command(first,"move",uid,0,15,"revision-move")
+	check(result.ok and result.item_state==items.inventory(first).item_state and result.item_state.revision>a.item_state.revision,"move commits revised snapshot and receipt together")
+	check(items.inventory(second).item_state.revision==result.item_state.revision and items.inventory(foreign)==unrelated,"account invalidation scope excludes unrelated accounts")
+	var moved := items.inventory(first)
+	check(database.query_with_bindings("UPDATE item_custody SET position=position WHERE uid=?;",[uid]) and items.inventory(first)==moved,"identical SQL row update does not invent a state revision")
+	check(items.inventory_command(first,"move",uid,1,15,"revision-noop").ok and items.inventory(first)==moved,"no-op does not advance durable item watermark")
+	check(items.inventory_command(first,"move",uid,1,20,"revision-later").ok,"later move commits")
+	check(items.inventory_command(first,"move",uid,0,15,"revision-move")==result and items.inventory_receipt(first,"revision-move").item_state==result.item_state,"replay/lookup preserve original committed watermark, not latest state")
+	var current := items.inventory(first)
+	check(database.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[a.item_state.account_id,"legacy-item-receipt","inventory",JSON.stringify([first,"move",uid,0,15]),JSON.stringify({"ok":true})]),"seed pre-watermark success receipt")
+	check(items.inventory_command(first,"move",uid,0,15,"legacy-item-receipt")=={"ok":true} and items.receipt_replay and items.inventory_receipt(first,"legacy-item-receipt")=={"ok":true} and items.inventory(first)==current,"old receipts remain replayable without fabricating revision metadata or repeating mutation")
+	# Full int64 watermark must not be rounded by durable JSON receipt encoding.
+	check(database.query_with_bindings("UPDATE account_item_revisions SET revision=? WHERE account_name=?;",[9007199254741011,"revision_account"]),"large integer watermark fixture")
+	result = items.inventory_command(first,"move",uid,2,25,"revision-int64")
+	check(result.ok and result.item_state.revision>9007199254741011,"large revision advances")
+	check(database.close_db() and database.open_db(),"reopen durable watermark")
+	check(items.inventory_command(first,"move",uid,2,25,"revision-int64")==result and items.inventory_receipt(first,"revision-int64").item_state==result.item_state,"receipt replay/discovery preserves int64 after reopen")
+	var storage := AccountStorageSqlite.new(database)
+	check(storage.transfer_command(first,uid,3,"inventory","storage",0,"revision-deposit").ok,"deposit changes shared scope")
+	var before: Dictionary = items.inventory(first).item_state
+	check(storage.transfer_command(second,uid,4,"storage","inventory",15,"revision-withdraw").ok and items.inventory(first).item_state.revision>before.revision,"withdrawal invalidates original and receiving character views")
+	# A cross-account ownership change invalidates both scopes atomically too.
+	var sender_before: Dictionary = items.inventory(second).item_state
+	var other_before: Dictionary = items.inventory(foreign).item_state
+	check(database.query("BEGIN IMMEDIATE;") and database.query_with_bindings("DELETE FROM item_placements WHERE item_uid=?;",[uid]) and database.query_with_bindings("UPDATE item_instances SET owner_character_id=? WHERE uid=?;",[foreign,uid]),"provisional owner mutation")
+	check(items.inventory(foreign).item_state.revision>other_before.revision and items.inventory(second).item_state.revision>sender_before.revision,"both accounts participate in ownership watermark")
+	check(database.query("ROLLBACK;") and items.inventory(foreign).item_state==other_before and items.inventory(second).item_state==sender_before,"rollback restores both ownership revision scopes")
+
+func _check_revision_migration() -> void:
+	var database := SQLite.new()
+	database.path="res://.godot/verification/item-revision-migration-"+Crypto.new().generate_random_bytes(8).hex_encode()+".db"
+	check(database.open_db(),"revision migration fixture open")
+	WorldSchema.ensure_schema(database)
+	var legacy := WorldStoreSqlite.new(database)
+	var owner := EconomyFixture.create_character(legacy,"revision_migrate",{"name":"Migration","skin":1},false)
+	var items := ItemStoreSqlite.new(database)
+	check(items.initialize_character(owner).ok,"populated migration fixture")
+	var initial := items.inventory(owner)
+	check(MarketStoreSqlite.ensure_schema(database) and items.inventory(owner)==initial,"populated legacy-to-canonical custody migration preserves watermark and items")
+	check(items.move_bag_item(owner,initial.items[0].uid,0,15).ok and items.inventory(owner).item_state.revision>initial.item_state.revision,"canonical migration reinstalls watermark triggers on real custody table")
+	initial = items.inventory(owner)
+	initial.erase("item_state")
+	check(database.query("SELECT value FROM meta WHERE key='schema_version';"),"existing schema version")
+	var version: String = database.query_result[0].value
+	for table: String in ["item_instances","item_placements","account_storage","item_custody"]:
+		for event: String in ["insert","update","delete"]: check(database.query("DROP TRIGGER IF EXISTS item_revision_%s_%s;" % [table,event]),"remove fixture-only revision trigger")
+	check(database.query("DROP TABLE account_item_revisions;") and database.query("DELETE FROM meta WHERE key='item_state_revision_schema';"),"simulate existing pre-feature database")
+	check(database.query("CREATE TEMP TRIGGER fail_revision_install BEFORE INSERT ON meta WHEN NEW.key='item_state_revision_schema' BEGIN SELECT RAISE(ABORT,'revision install fault'); END;"),"inject migration failure")
+	var migration = preload("res://source/server/world/database/item_state_revision_sqlite.gd")
+	check(not migration.ensure_schema(database),"failed additive migration rejected")
+	check(database.query("SELECT name FROM sqlite_master WHERE name='account_item_revisions';") and database.query_result.is_empty(),"failed migration leaves no partially installed revision state")
+	check(database.query("DROP TRIGGER fail_revision_install;"),"remove migration fault")
+	check(migration.ensure_schema(database) and migration.ensure_schema(database),"populated migration retry/idempotent startup")
+	var after := items.inventory(owner)
+	check(after.item_state.revision==0,"pre-feature state gets baseline zero without invented history")
+	after.erase("item_state")
+	check(after==initial,"migration preserves exact existing UID/item/equipment state")
+	check(database.query("SELECT value FROM meta WHERE key='schema_version';") and database.query_result[0].value==version,"revision feature does not skip identity-gated v18-v23 migrations")
+	check(database.close_db(),"migration fixture close")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(database.path))

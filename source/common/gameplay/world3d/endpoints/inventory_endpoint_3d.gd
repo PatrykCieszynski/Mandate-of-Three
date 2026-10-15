@@ -12,6 +12,9 @@ var state: Dictionary = {}
 var public_weapons: Dictionary[int, String] = {}
 var _last_action_ms: Dictionary[int, int] = {}
 var _last_receipt_ms: Dictionary[int, int] = {}
+const ItemStateVersion = preload("res://source/common/gameplay/items/domain/item_state_version.gd")
+var _item_watermark: Dictionary = {}
+var _last_storage_receipt_ms: Dictionary[int, int] = {}
 # Delivery versions belong to this live map endpoint, not durable item revisions.
 # Full snapshots may skip versions (including updates for other characters).
 var _next_projection_version := 0
@@ -44,6 +47,7 @@ func remove_peer(peer_id: int) -> void:
 	_weapon_versions.erase(peer_id)
 	_last_action_ms.erase(peer_id)
 	_last_receipt_ms.erase(peer_id)
+	_last_storage_receipt_ms.erase(peer_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_equipment(action: String, uid: String, revision: int, command_id: String = "", requested_position: int = -1, operation_id: String = "") -> void:
@@ -62,8 +66,8 @@ func request_move_item(uid: String, revision: int, x: int, y: int, page: int, co
 # Storage is intentionally available everywhere in this MVP. Authentication,
 # account membership and placement are enforced here/in SQL. Client window state
 # is presentation only; future NPC/range authorization belongs at this RPC.
-func request_storage(uid: String, revision: int, source: String, destination: String, x: int, y: int, page: int, quick: bool, command_id: String) -> void:
-	if not GameMode.is_world_server() or command_id.length() > 80: return
+func request_storage(uid: String, revision: int, source: String, destination: String, x: int, y: int, page: int, quick: bool, command_id: String, operation_id: String = "") -> void:
+	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96: return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id) or _store() == null: return
 	var now: int = Time.get_ticks_msec()
@@ -72,17 +76,38 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 	if now - _last_action_ms.get(peer_id,-1000) >= 100:
 		_last_action_ms[peer_id] = now
 		var resource: PlayerResource = services.player_for_peer(peer_id)
+		if resource == null: return
 		var columns: int = AccountStorageSqlite.COLUMNS if destination == "storage" else InventoryGrid.COLUMNS
 		var pages: int = AccountStorageSqlite.PAGES if destination == "storage" else InventoryGrid.PAGES
 		var position: int = page * columns * 9 + y * columns + x
 		if (source == "inventory" and destination == "inventory") or (not quick and (x < 0 or x >= columns or y < 0 or y >= 9 or page < 0 or page >= pages)):
 			result = {"ok":false,"error":"request"}
 		else:
-			var operation := services.economy().storage_operation(resource.player_id, uid, revision, source, destination, -1 if quick else position)
+			var operation := services.economy().storage_operation(resource.player_id, uid, revision, source, destination, -1 if quick else position, operation_id)
 			result = operation.response()
 			committed = operation.new_commit
+	_publish_storage_account(peer_id,committed)
+	if command_id != "": receive_operation.rpc_id(peer_id,command_id,result)
+
+@rpc("any_peer", "call_remote", "reliable", 1)
+func request_storage_receipt(operation_id: String, command_id: String) -> void:
+	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96: return
+	var peer_id := multiplayer.get_remote_sender_id()
+	if not _world.characters.has(peer_id) or _store() == null: return
+	var now := Time.get_ticks_msec()
+	var result: Dictionary = {"ok":false,"error":"too_fast"}
+	if now - _last_storage_receipt_ms.get(peer_id,-1000) >= 100:
+		_last_storage_receipt_ms[peer_id] = now
+		var player := services.player_for_peer(peer_id)
+		if player == null: return
+		result = services.economy().storage_receipt(player.player_id,operation_id).response()
+		if result.ok: _publish_storage_account(peer_id,false)
+	receive_operation.rpc_id(peer_id,command_id,result)
+
+func _publish_storage_account(peer_id: int, committed: bool) -> void:
 	# Prepare every affected character before the first notification/publication.
 	var actor: PlayerResource = services.player_for_peer(peer_id)
+	if actor == null: return
 	var affected: Array[int] = []
 	for other_peer: int in _world.characters:
 		var other: PlayerResource = services.player_for_peer(other_peer)
@@ -94,7 +119,6 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 			inventory_changed.emit(services.player_for_peer(other_peer).player_id)
 		else:
 			_send_state(other_peer) # Explicit repair; no committed-change fact.
-	if command_id != "": receive_operation.rpc_id(peer_id,command_id,result)
 
 func _handle_command(action: String, uid: String, revision: int, position: int, command_id: String, operation_id: String) -> void:
 	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96:
@@ -150,7 +174,8 @@ func refresh_authoritative_state(peer_id: int) -> void:
 	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null or _store() == null: return
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
-	services.update_runtime_equipment(resource.player_id, snapshot)
+	var accepted := services.update_runtime_equipment(resource.player_id, snapshot)
+	if snapshot.get("ok",false) and not accepted: return
 	snapshot["storage"] = services.economy().storage_snapshot(resource.player_id)
 	snapshot["economic_context"] = services.economy().economic_context(resource.player_id)
 	_next_projection_version += 1
@@ -192,6 +217,10 @@ func receive_inventory(snapshot: Dictionary) -> void:
 		return
 	var version: Variant = snapshot.get("projection_version")
 	if not version is int or version <= _inventory_version: return
+	if snapshot.get("ok",false):
+		var item_state: Variant = snapshot.get("item_state")
+		if not ItemStateVersion.accepts(_item_watermark,item_state): return
+		_item_watermark = item_state.duplicate(true)
 	_inventory_version = version
 	state = snapshot.duplicate(true)
 	if bool(state.get("ok", false)):

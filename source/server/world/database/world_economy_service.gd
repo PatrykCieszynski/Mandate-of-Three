@@ -33,17 +33,23 @@ func claim_ground_item_operation(character_id: int, drop_uid: String, item: Item
 	return EconomyOperationResult.capture(character_id, account, "ground.pickup", "",
 		response, committed, [account] if committed else [])
 
-func storage_operation(character_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> EconomyOperationResult:
+func storage_operation(character_id: int, uid: String, revision: int, source: String, destination: String, position: int, operation_id: String = "") -> EconomyOperationResult:
 	var account := _runtime.wallet_account_id(character_id)
-	var response: Dictionary = {"ok":false, "error":"storage"}
+	var response: Dictionary = {"ok":false,"error":"storage"}
 	var committed := false
+	var replay := false
 	if _runtime.db != null:
 		var storage := AccountStorageSqlite.new(_runtime.db)
-		response = storage.transfer(character_id, uid, revision, source, destination, position)
+		response = storage.transfer_command(character_id,uid,revision,source,destination,position,operation_id)
 		committed = storage.committed
-	# Account membership/ownership and capacity remain transactional store rules.
-	return EconomyOperationResult.capture(character_id, account, "storage.transfer", "",
-		response, committed, [account] if committed else [])
+		replay = storage.receipt_replay
+	return EconomyOperationResult.capture(character_id,account,"storage.transfer",operation_id,
+		response,committed,[account] if committed else [],replay)
+
+func storage_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
+	var response: Dictionary = {"ok":false,"error":"storage"}
+	if _runtime.db != null: response = AccountStorageSqlite.new(_runtime.db).transfer_receipt(character_id,operation_id)
+	return EconomyOperationResult.capture(character_id,_runtime.wallet_account_id(character_id),"storage.receipt",operation_id,response,false)
 
 func inventory_operation(character_id: int, action: String, uid: String, revision: int, position: int = -1, operation_id: String = "") -> EconomyOperationResult:
 	var account := _runtime.wallet_account_id(character_id)

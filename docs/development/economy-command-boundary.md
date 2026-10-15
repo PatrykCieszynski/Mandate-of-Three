@@ -141,6 +141,8 @@ claims still reject as `claimed` (or `gone` after despawn), including a differen
 claimant. They are not represented as successful receipt replay. Operation IDs
 remain empty rather than inventing a new client intention protocol.
 
+This historical slice predates the complete Storage receipt/recovery slice below.
+
 `WorldDatabase.storage_operation` routes through the same application boundary;
 `transfer_storage` remains a compatible dictionary facade. AccountStorageSqlite
 retains account membership, ownership/provenance, revision, receiving capacity,
@@ -596,13 +598,158 @@ independent-process file read plus fresh controller/RPC proves the scoped restar
 boundary, not the entire launcher/auth lifecycle. The existing items_session
 fixture is updated for explicit IDs but was not executed against live accounts.
 
+## Account Storage vertical slice: receipts through client recovery
+
+Deposit, Storage-to-Storage move and withdrawal now compose EconomyCommandSqlite
+with the existing custody rules. Successful receipts (including same-cell no-ops)
+and item custody/placement/revision writes commit together. A receipt failure
+rolls back every provisional write, including receiving-character provenance.
+The standalone store wrapper remains for trusted tooling/fixtures; production
+service commands require a bounded business ID. No schema migration is added.
+
+The account-scoped fingerprint binds the issuing/receiving character, UID,
+expected revision, source, destination and original requested position (-1 for
+first fit). Replay precedes mutable custody checks. Another character of the
+same account cannot retarget a withdrawal or discover the original character's
+receipt. A matching old receipt confirms success without restoring historical
+placement, ownership or revision after a later account operation.
+
+StorageUiAdapter owns Storage presentation/commands, separate from character-local
+Inventory. It uses the existing small local journal with `storage-` IDs under
+`user://pending_storage_commands`, scoped by authenticated economy/account/issuing
+character. The original payload is persisted before RPC. One unresolved transfer
+blocks replacement; disk failure blocks execution. Timeout/reload/disconnect keep
+the entry. Restart/recreation makes one read-only account/character/kind-filtered
+lookup. An unknown receipt never automatically executes. Explicit `storage.retry`
+may execute that same saved payload only after an unknown result, through normal
+server validation. Definitive rejection or success clears the saved entry.
+
+The Retry control needs neither the original item in Storage nor a free target
+cell. Close changes presentation only; recovery reopens Storage and Inventory.
+Web state carries a pending flag, not authority or economic IDs. Storage and
+Inventory share one native response session, with a single signal subscription.
+Matching client/World builds are required for the additional bounded Storage
+business ID and receipt RPC. Read lookup uses its own per-peer limiter.
+
+After a real mutation World refreshes runtime/private projections for all active
+characters of the account before publishing their change facts. Replay, no-op
+and successful receipt discovery resynchronize current account views without
+another mutation fact. Storage is still available everywhere in this MVP; the
+window-open check is a client UX guard, not NPC/range authorization. This is one
+authoritative SQLite writer and local World fanout, not cross-World cache coherence.
+
+Verification extends item_instances for all three receipt-failure rollbacks,
+same-ID retry, account/character/kind isolation, changed fingerprints, no-op,
+later-state preservation, unique custody, reopen and pre-RPC journal failure.
+The new optional `run-web-inventory.ps1 -Scene storage_recovery` fixture uses two
+distinct characters of one fixture account. It checks shared Storage fanout,
+competing withdrawal (one recipient), lost responses for both winner and loser,
+explicit recovery after the item left Storage, and old deposit discovery after
+the other character moved it. An independent Godot process reads the saved
+intention; fresh controller recreation resolves it. A seeded crash-before-send
+entry performs only discovery until explicit Retry executes it. Exactly four
+real mutations produce four facts per active character; reads/replays add none.
+This fixture does not alter or claim simultaneous-login support in production.
+Web coverage protects empty/current-state Retry without another drag/transfer.
+Both Storage and Inventory release their Retry button after a timeout even when
+the pending-state update arrived before the command result; the existing Web
+contracts now exercise that ordering.
+
+Smoke (10 Godot fixtures and 84 Web contracts), the two-client Storage recovery
+fixture, existing Web Inventory network regression, market custody, Exchange
+ledger and full configured Prettier passed on 2026-10-15. Generated Web JS matches
+TS. `git diff --check` passed.
+
+No native CEF window or normal Gateway/Master relog was run for this slice.
+The headless bridge/RPC and independent-process journal read establish the scoped
+recovery contract, not physical input, full launcher/session restart, power-loss
+filesystem durability or distributed fencing.
+
+## Durable account item revisions and World cache reconciliation
+
+The item domain now has a durable, monotonically increasing account watermark.
+Inventory snapshots and new command receipts carry `item_state` with economy
+`authority_id`, `account_id`, `character_id` and integer `revision`. The scope is
+account-wide because Storage/custody is shared. Character identity still qualifies
+each projection and intention; this does not enable cross-character receipt access.
+
+A small SQLite feature migration adds `account_item_revisions` and transaction-local
+triggers on ItemInstance and custody changes. The same SQL transaction advances
+old/new account scopes on ownership/custody changes; rollback, including a failed
+receipt insertion or COMMIT, rolls back the watermark too. Row changes may advance
+the counter more than once per business command. It is an ordering watermark,
+not a command count, per-UID revision or gapless delivery stream. Business no-ops,
+rejections, replay and read-only receipt discovery do not advance it. Existing
+item expected-revision, ownership/capacity and receipt guarantees stay unchanged.
+Wallet balances, Shop offer terms and progression have separate semantics and do
+not advance this item watermark.
+
+Installation uses its own `meta.item_state_revision_schema` marker, independent
+of the existing identity-gated v18-v23 migration sequence. Startup installs the
+legacy table triggers when needed; canonical custody v19 installation replaces
+them with triggers on the real `item_custody` table (the old placement/Storage
+names are views). The counter survives that migration. Existing populated data
+starts at revision zero without inventing mutation history. Installation is
+atomic/idempotent, leaves data intact on failure and can be retried. No existing
+v19-v23 migration was moved or renumbered. Missing revision storage blocks valid
+item snapshots/receipt commits rather than silently inventing a new watermark.
+
+New successful command receipts capture the issuing character's item watermark
+before receipt+COMMIT. Replay/discovery returns that original watermark, including
+after later mutations/restart; it never substitutes the current revision. Old
+receipts without this additive metadata remain valid and are not rewritten.
+The watermark's integer fields use decimal strings only inside durable JSON,
+then decode to native ints, preserving values beyond JSON float precision. They
+are native integers on Godot RPC/application boundaries. This field describes
+item state only, even on a receipt whose operation also touched wallets. A
+multi-account transaction's current counterpart views still use normal refresh;
+this is not a distributed affected-account revision manifest.
+
+World runtime equipment accepts identity-qualified snapshots in revision order.
+An older revision cannot restore a removed/previous weapon; an equal revision
+cannot overwrite already accepted combat inputs. Failed refresh invalidates
+combat inputs but retains the accepted watermark, preventing repair from stale
+state. A fresh full snapshot at that same or a newer revision can rehydrate an
+invalidated cache. Current-session disconnect clears its cache/watermark; entry
+hydrates persisted current state. No SQL or network read is added to attack.
+Successful stale refreshes cannot update cached publication/weapon presentation.
+
+The client also checks durable scope/revision before accepting private Inventory
+state, independently of the live `projection_version` used for delivery/public
+weapon ordering. A newer delivery number cannot make an older item revision or
+another character/economy snapshot current. Full snapshots may legitimately skip
+revisions and contain the entire state, so no delta-gap protocol is introduced.
+This implementation remains synchronous on one authoritative World writer;
+missed cross-process facts, asynchronous pending-operation barriers and fencing
+are still deferred. Definition/base-stat hot reload is not an item mutation and
+would need its own explicit invalidation if introduced.
+
+Verification extends existing fixtures instead of adding an extraction suite:
+item_instances covers receipt/snapshot alignment, no-op and replay stability,
+account sharing/isolation, ownership rollback, populated legacy-to-canonical
+migration, atomic failed installation/retry, restart and full int64 receipt
+round-trip. Existing receipt-failure tests compare the whole versioned inventory,
+so leaked rollback revisions fail them. SQL updates that leave the row unchanged
+also leave the watermark unchanged. Web Inventory injects an old durable
+snapshot with a newer delivery number and a wrong-character snapshot. The
+progression/combat fixture verifies stale/duplicate cache rejection, failure
+invalidation, same-revision rehydration and the existing no-SQL-per-swing contract.
+
+Smoke (10 Godot fixtures, 84 Web contracts), the updated two-client Web Inventory
+and progression/combat suites, shared-account Storage recovery and NPC Shop
+network regression passed on 2026-10-15. Market custody/purchase, Exchange
+ledger/orders and the existing process-crash/WAL backup/recovery suite passed.
+The Storage race fixture now prepares both contenders' original UID/revision
+before releasing either withdrawal, removing a scheduling dependency in the test.
+`git diff --check` passed. No native window, full Gateway/Master relog or loaded
+World tick performance benchmark was run for this slice.
+
 ## Remaining Stage 2 work
 
-Stable intention IDs/full receipts and client recovery for account Storage,
-durable Economy/World revision reconciliation and broader cache invalidation
-remain later reviewable slices. The live presentation delivery versions above
-do not implement those distributed contracts. Startup/dev grants and checkpoint wallet flows still retain
-their existing entry points. Do not infer distributed C2 admission, durable business
-rejections, session fencing or pending-operation recovery from this change.
-Existing successful receipts remain durable; bounded rejected-command caching
-keeps its current semantics until an explicit persistence change is approved.
+Wallet-specific durable revisions/reconciliation and broader cache invalidation
+remain later reviewable slices. The account item watermark does not implement a
+distributed C4 notification stream, session fencing, admitted-operation barriers,
+cache repair after missed cross-World events or wallet revision ordering. Startup/
+dev grants and checkpoint wallet flows retain their current entry points. Existing
+successful receipts remain durable; bounded rejected-command caching keeps its
+current semantics until an explicit persistence change is approved.

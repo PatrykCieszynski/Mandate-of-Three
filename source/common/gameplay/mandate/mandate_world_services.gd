@@ -46,8 +46,8 @@ func current_player(owner_id: int, fallback: PlayerResource = null) -> PlayerRes
 		if current.player_id == owner_id: return current
 	return player
 
-func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> void:
-	if _server() != null: _server().update_runtime_equipment(owner_id,snapshot)
+func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> bool:
+	return _server() != null and _server().update_runtime_equipment(owner_id,snapshot)
 
 func runtime_stats(owner_id: int) -> Dictionary:
 	if _server() == null: return {}

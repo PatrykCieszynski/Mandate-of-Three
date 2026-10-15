@@ -197,6 +197,7 @@ const equipment = mountEquipment(equipmentRoot, {
 const storage = mountStorage(storageRoot, {
   drag,
   transfer: (payload) => bridge.request('storage.transfer', payload),
+  retry: () => bridge.request('storage.retry', {}),
   manager,
   resolveItemIcon,
   onClose: () => {

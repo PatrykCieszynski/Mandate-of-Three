@@ -2,6 +2,7 @@ import { errorMessage } from '../../protocol.js';
 import { ownedItemPayload, itemGridPreview, itemWindowControls, } from '../../game-ui/items/item-drag-policy.js';
 import { STORAGE_COLUMNS, STORAGE_ROWS, STORAGE_PAGES, STORAGE_PAGE_CELLS, ITEM_SLOT_SIZE, } from './storage-model.js';
 import { UiWindow } from '../../core/window/ui-window.js';
+import { UiButton } from '../../core/primitives/ui-button.js';
 import { UiTab } from '../../core/primitives/ui-tab.js';
 import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
@@ -57,6 +58,39 @@ export function mountStorage(root, options) {
     const sourceBindings = [];
     let pending = false;
     let page = 0, disposed = false;
+    const retry = UiButton({
+        label: 'Retry Storage action',
+        onClick: () => void retryIntent(),
+    });
+    shell.contentRoot.append(retry.element);
+    if (options.drag)
+        bindings.push(options.drag.registerControl(retry.element, 'cancel'));
+    async function retryIntent() {
+        if (disposed || pending || !state.recoveryPending || !options.retry)
+            return;
+        pending = true;
+        retry.setDisabled(true);
+        try {
+            const result = await options.retry();
+            if (!disposed)
+                setStatus(result.ok
+                    ? 'Storage action confirmed.'
+                    : result.error === 'storage_pending'
+                        ? 'Storage action not confirmed. Retry to check its result.'
+                        : result.error === 'journal_unavailable'
+                            ? 'Storage confirmation storage is unavailable. Further transfers are blocked.'
+                            : `Transfer rejected: ${result.error ?? 'request'}`);
+        }
+        catch {
+            if (!disposed)
+                setStatus('Storage action not confirmed. Retry to check its result.');
+        }
+        finally {
+            pending = false;
+            if (!disposed)
+                retry.setDisabled(false);
+        }
+    }
     const tabs = ['I', 'II'].map((label, index) => {
         const tab = UiTab({
             label,
@@ -72,6 +106,10 @@ export function mountStorage(root, options) {
         return tab;
     });
     function render() {
+        retry.element.hidden = !state.recoveryPending || !options.retry;
+        retry.setDisabled(pending);
+        if (state.recoveryPending)
+            setStatus('Storage action not confirmed. Use Retry; the original transfer is saved.');
         sourceBindings.forEach((binding) => binding.dispose());
         sourceBindings.length = 0;
         tooltip.hide();
@@ -89,7 +127,7 @@ export function mountStorage(root, options) {
                 sourceBindings.push(options.drag.registerSource({
                     element: node,
                     payload: (event) => {
-                        if (pending)
+                        if (pending || state.recoveryPending)
                             return null;
                         shell.handle.activate();
                         tooltip.hide();
@@ -125,7 +163,7 @@ export function mountStorage(root, options) {
             options.onItemAction?.(event, item);
     });
     async function submit(from, to, item, position) {
-        if (pending || disposed || !options.transfer)
+        if (pending || state.recoveryPending || disposed || !options.transfer)
             return;
         pending = true;
         setStatus('Transferring…');
@@ -141,7 +179,13 @@ export function mountStorage(root, options) {
                 quick: !position,
             });
             if (!disposed)
-                setStatus(result.ok ? '' : `Transfer rejected: ${result.error ?? 'request'}`);
+                setStatus(result.ok
+                    ? ''
+                    : result.error === 'storage_pending'
+                        ? 'Storage action not confirmed. Use Retry.'
+                        : result.error === 'journal_unavailable'
+                            ? 'Storage confirmation storage is unavailable. Further transfers are blocked.'
+                            : `Transfer rejected: ${result.error ?? 'request'}`);
         }
         catch (error) {
             if (!disposed)
@@ -149,6 +193,8 @@ export function mountStorage(root, options) {
         }
         finally {
             pending = false;
+            if (!disposed)
+                retry.setDisabled(false);
         }
     }
     function receiveFromInventory(item, position) {
@@ -170,6 +216,7 @@ export function mountStorage(root, options) {
                 const preview = itemGridPreview(gridRoot, state, page, ITEM_SLOT_SIZE, payload, pointer);
                 const valid = preview.valid &&
                     !pending &&
+                    !state.recoveryPending &&
                     !!options.transfer &&
                     preview.data?.subject.container !== 'equipment';
                 if (!valid)
@@ -195,7 +242,11 @@ export function mountStorage(root, options) {
         setStatus,
         receiveFromInventory,
         tryQuickDeposit(item) {
-            if (root.hidden || pending || disposed || !options.transfer)
+            if (root.hidden ||
+                pending ||
+                state.recoveryPending ||
+                disposed ||
+                !options.transfer)
                 return null;
             return receiveFromInventory(item);
         },
@@ -215,6 +266,7 @@ export function mountStorage(root, options) {
             tabs.forEach((tab) => tab.dispose());
             tooltip.dispose();
             grid.dispose();
+            retry.dispose();
         },
     };
 }

@@ -1,11 +1,10 @@
 class_name ItemUiAdapter
 extends RefCounted
-## One item-domain adapter for Inventory, Equipment and Storage.
+## Character-local Inventory and Equipment; account Storage has its own adapter.
 var _endpoint: InventoryEndpoint3D
 var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
 var _tree: SceneTree
-var _storage_open: Callable
 signal recovery_needed
 const LocalJournal = preload("res://source/client/ui_web/local_economy_journal.gd")
 var journal = LocalJournal.new("inventory-","user://pending_inventory_commands")
@@ -15,13 +14,11 @@ var _intent: Dictionary = {}
 var _in_flight := false
 var _disposed := false
 
-func attach(endpoint: InventoryEndpoint3D, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree, storage_open: Callable) -> void:
+func attach(endpoint: InventoryEndpoint3D, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree) -> void:
 	_endpoint = endpoint
 	_dispatcher = dispatcher
 	_session = session
 	_tree = tree
-	_storage_open = storage_open
-	dispatcher.register_command("storage.transfer", valid_storage, _storage_transfer)
 	dispatcher.register_command("inventory.move_item", valid_move, _move)
 	dispatcher.register_command("item.activate", valid_equipment, _activate)
 	dispatcher.register_command("equipment.equip", valid_equipment, _equip)
@@ -36,7 +33,6 @@ func dispose() -> void:
 	if is_instance_valid(_endpoint):
 		if _endpoint.state_changed.is_connected(publish): _endpoint.state_changed.disconnect(publish)
 		if _endpoint.operation_finished.is_connected(_session.finish): _endpoint.operation_finished.disconnect(_session.finish)
-	_storage_open = Callable()
 
 static func tooltip_details(item: Dictionary) -> Dictionary:
 	# Existing rolls are shown faithfully. Prefix/suffix metadata is absent until
@@ -80,13 +76,6 @@ func publish(snapshot: Dictionary) -> void:
 			var position: int = int(item.bag_position)
 			display.merge({"x":position % InventoryGrid.COLUMNS, "y":(position % InventoryGrid.PAGE_CELLS) / InventoryGrid.COLUMNS, "page":position / InventoryGrid.PAGE_CELLS})
 			bag.append(display)
-	var stored: Array = []
-	for item: Dictionary in snapshot.get("storage",{}).get("items",[]):
-		var position: int = int(item.bag_position)
-		var display: Dictionary = item_model(item)
-		display.merge({"x":position % 15,"y":(position % 135) / 15,"page":position / 135})
-		stored.append(display)
-	if snapshot.get("storage",{}).get("ok",false): _dispatcher.set_domain("storage",{"columns":15,"rows":9,"pages":2,"items":stored})
 	_dispatcher.set_domain("inventory", {"columns": InventoryGrid.COLUMNS, "rows": InventoryGrid.ROWS, "pages": InventoryGrid.PAGES, "items": bag, "recoveryPending":not _intent.is_empty() and bool(_intent.uncertain)})
 	_dispatcher.set_domain("equipment", {"items":equipped, "stats":snapshot.get("stats", {})})
 
@@ -108,13 +97,6 @@ static func valid_storage(p: Dictionary) -> bool:
 	var columns: int = 15 if p.to == "storage" else 5
 	var pages: int = 2 if p.to == "storage" else 4
 	return WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < columns and p.y >= 0 and p.y < 9 and p.page >= 0 and p.page < pages
-func _storage_transfer(payload: Dictionary) -> Dictionary:
-	# UX guard only. World authorizes account access; Storage currently has no NPC/range restriction.
-	if not _storage_open.call(): return {"ok":false,"error":"closed"}
-	var id: String = _session.begin()
-	if id.is_empty(): return _session.closed_result()
-	_endpoint.request_storage.rpc_id(1,payload.id,int(payload.revision),payload.from,payload.to,int(payload.x),int(payload.y),int(payload.page),payload.quick,id)
-	return await _session.wait(id, _tree)
 func _activate(payload: Dictionary) -> Dictionary:
 	return await _submit(payload, "activate")
 
