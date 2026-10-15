@@ -1,7 +1,7 @@
 class_name MarketplaceService
 extends RefCounted
-## One service per WorldDatabase. It owns marketplace routing, shared read budget
-## and post-COMMIT wallet reconciliation; connection/runtime ownership stays there.
+## One service per WorldDatabase. It owns marketplace command routing and
+## post-COMMIT wallet reconciliation; connection/runtime ownership stays there.
 signal account_changed(account_id: int)
 var _runtime: WorldDatabase
 var rejected_commands := MarketRejectedCommands.new()
@@ -12,53 +12,80 @@ func _init(runtime: WorldDatabase) -> void:
 func snapshot(character_id: int) -> Dictionary:
 	return MarketStoreSqlite.new(_runtime.db,rejected_commands).mine(character_id)
 
+## The application boundary validates untrusted shapes independently of RPC/CEF.
+## Stores still authorize custody/revisions and own the atomic transaction/receipt.
 func command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
-	if _runtime.db==null or not _runtime.wallet_ready: return {"ok":false,"error":"storage"}
-	var result:=_perform_command(character_id,action,payload)
-	if result.ok and action!="receipt":
-		var affected: Array=result.get("affected_accounts",[_runtime.wallet_account_id(character_id)])
-		if action=="buy": affected=[int(result.buyer_account),int(result.seller_account)]
-		for account: Variant in affected: account_changed.emit(int(account))
+	if action == "open" or not MarketRequestRules.valid_command(action, payload):
+		return {"ok": false, "error": "request"}
+	if _runtime.db == null or not _runtime.wallet_ready: return {"ok":false,"error":"storage"}
+	var result: Dictionary
+	var committed := false
+	if action in ["order", "cancel_order", "deposit", "withdraw"]:
+		var exchange := ExchangeStoreSqlite.new(_runtime.db, rejected_commands)
+		result = _exchange_command(exchange, character_id, action, payload)
+		committed = exchange.committed
+	else:
+		var market := MarketStoreSqlite.new(_runtime.db, rejected_commands)
+		result = _market_command(market, character_id, action, payload)
+		committed = market.committed
+	# A successful receipt replay is a successful response, not another commit.
+	# Do not consume newer pending income or publish another account change.
+	if not result.ok or not committed: return result
+	if action in ["order", "cancel_order"]:
+		_reconcile_wallets(result.wallet_states)
+	elif action == "buy":
+		_reconcile_wallets([
+			{"account_id": result.buyer_account, "balance": result.buyer_balance},
+			{"account_id": result.seller_account, "balance": result.seller_balance},
+		])
+	var affected: Array = result.get("affected_accounts", [_runtime.wallet_account_id(character_id)])
+	if action == "buy": affected = [int(result.buyer_account), int(result.seller_account)]
+	var notified := {}
+	for account: Variant in affected:
+		var account_id := int(account)
+		if not notified.has(account_id):
+			notified[account_id] = true
+			account_changed.emit(account_id)
 	return result
 
-func _perform_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
-	var command_id: String = payload.get("command_id","")
+func _pending_wallet_deltas() -> Dictionary:
+	var pending := {}
+	for account: int in _runtime.runtime_wallets:
+		pending[account] = int(_runtime.runtime_wallets[account].pending_currency_delta)
+	return pending
+
+## Account IDs, never character IDs. Only a newly committed result reaches here.
+## Offline wallets stay offline; their durable settlement already happened in SQL.
+func _reconcile_wallets(states: Array) -> void:
+	for state: Dictionary in states:
+		var account := int(state.account_id)
+		if not _runtime.runtime_wallets.has(account): continue
+		var wallet: Dictionary = _runtime.runtime_wallets[account]
+		wallet.wallet_balance = int(state.balance)
+		if state.has("reserved_yang"): wallet.reserved_yang = int(state.reserved_yang)
+		wallet.pending_currency_delta = 0
+		_runtime.dirty_wallet.erase(account)
+
+func _exchange_command(exchange: ExchangeStoreSqlite, character_id: int, action: String, p: Dictionary) -> Dictionary:
 	match action:
-		"order", "cancel_order":
-			var exchange:=ExchangeStoreSqlite.new(_runtime.db,rejected_commands)
-			var pending: Dictionary={}
-			for account: int in _runtime.runtime_wallets: pending[account]=int(_runtime.runtime_wallets[account].pending_currency_delta)
-			var result:=exchange.place_order(character_id,payload,pending) if action=="order" else exchange.cancel_order(character_id,command_id,payload.order_id,int(payload.revision),pending)
-			if result.ok and exchange.committed:
-				for wallet: Dictionary in result.wallet_states:
-					var account:=int(wallet.account_id)
-					if _runtime.runtime_wallets.has(account):
-						_runtime.runtime_wallets[account]={"wallet_balance":int(wallet.balance),"reserved_yang":int(wallet.reserved_yang),"pending_currency_delta":0};_runtime.dirty_wallet.erase(account)
-			return result
-		"deposit": return ExchangeStoreSqlite.new(_runtime.db,rejected_commands).deposit(character_id,command_id,payload.uid,int(payload.revision),int(payload.amount),payload.source)
-		"withdraw": return ExchangeStoreSqlite.new(_runtime.db,rejected_commands).withdraw(character_id,command_id,payload.asset_id,int(payload.amount),payload.destination)
-	var market := MarketStoreSqlite.new(_runtime.db,rejected_commands)
+		"order": return exchange.place_order(character_id, p, _pending_wallet_deltas())
+		"cancel_order": return exchange.cancel_order(character_id, p.command_id, p.order_id, int(p.revision), _pending_wallet_deltas())
+		"deposit": return exchange.deposit(character_id, p.command_id, p.uid, int(p.revision), int(p.amount), p.source)
+		"withdraw": return exchange.withdraw(character_id, p.command_id, p.asset_id, int(p.amount), p.destination)
+	return {"ok": false, "error": "request"}
+
+func _market_command(market: MarketStoreSqlite, character_id: int, action: String, p: Dictionary) -> Dictionary:
 	match action:
-		"list": return market.list_item(character_id,command_id,payload.uid,int(payload.revision),int(payload.position),int(payload.price))
-		"cancel": return market.cancel_offer(character_id,command_id,payload.offer_id,int(payload.revision))
-		"claim": return market.claim_item(character_id,command_id,payload.uid,int(payload.revision))
-		"configure": return market.configure(character_id,command_id,int(payload.revision),payload.name,payload.status)
-		"edit": return market.edit_offer(character_id,command_id,payload.offer_id,int(payload.revision),int(payload.position),int(payload.price))
+		"list": return market.list_item(character_id, p.command_id, p.uid, int(p.revision), int(p.position), int(p.price))
+		"cancel": return market.cancel_offer(character_id, p.command_id, p.offer_id, int(p.revision))
+		"claim": return market.claim_item(character_id, p.command_id, p.uid, int(p.revision))
+		"configure": return market.configure(character_id, p.command_id, int(p.revision), p.name, p.status)
+		"edit": return market.edit_offer(character_id, p.command_id, p.offer_id, int(p.revision), int(p.position), int(p.price))
 		"buy":
-			if not _runtime.wallet_ready or not _runtime.load_wallet(character_id): return {"ok":false,"error":"wallet"}
-			var pending := {}
-			for account: int in _runtime.runtime_wallets: pending[account] = int(_runtime.runtime_wallets[account].pending_currency_delta)
-			var result := market.purchase(character_id,command_id,int(payload.shop_id),payload.offer_id,int(payload.revision),int(payload.price),pending)
-			if result.ok and market.committed:
-				for party: String in ["buyer","seller"]:
-					var account := int(result[party+"_account"])
-					if _runtime.runtime_wallets.has(account):
-						_runtime.runtime_wallets[account].wallet_balance=int(result[party+"_balance"])
-						_runtime.runtime_wallets[account].pending_currency_delta=0
-						_runtime.dirty_wallet.erase(account)
-			return result
-		"receipt": return market.receipt(character_id,command_id)
-	return {"ok":false,"error":"request"}
+			if not _runtime.load_wallet(character_id): return {"ok":false,"error":"wallet"}
+			return market.purchase(character_id, p.command_id, int(p.shop_id), p.offer_id, int(p.revision), int(p.price), _pending_wallet_deltas())
+		"receipt": return market.receipt(character_id, p.command_id)
+	return {"ok": false, "error": "request"}
 
 func query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	if _runtime.db==null or not _runtime.wallet_ready: return {"ok":false,"error":"storage"}

@@ -3,6 +3,7 @@ var db:=SQLite.new()
 var store: WorldStoreSqlite
 var exchange: ExchangeStoreSqlite
 var persistence: WorldDatabase
+var observed_accounts: Array[int] = []
 var items: ItemStoreSqlite
 func request(side: String,amount: int,num: int,den: int,id: String) -> Dictionary:
 	return {"command_id":id,"have_asset":"upgrade_ore" if side=="sell" else "yang","want_asset":"yang" if side=="sell" else "upgrade_ore","quantity":amount,"price_num":num,"price_den":den}
@@ -21,15 +22,18 @@ func _ready() -> void:
 	items=ItemStoreSqlite.new(db);exchange=ExchangeStoreSqlite.new(db)
 	persistence=WorldDatabase.new();add_child(persistence);persistence.db=db;persistence.store=store;persistence.item_store=items;persistence.wallet_store=WalletStoreSqlite.new(db);EconomyFixture.prepare(persistence)
 	assert(persistence.load_wallet(a) and persistence.load_wallet(b));assert(persistence.add_yang(a,33) and persistence.add_yang(b,90))
+	persistence.market_account_changed.connect(func(account: int) -> void: observed_accounts.append(account))
 	seed_ore(a,100,"seed")
 	var sell:=persistence.market_command(a,"order",request("sell",100,10,1,"sell"));assert(sell.ok and sell.remaining==100)
 	assert(exchange.ledger(a).assets[0].free==0 and exchange.ledger(a).assets[0].reserved==100)
+	var before_faults := observed_accounts.size()
 	for fault: String in ["BEFORE UPDATE ON account_wallets","BEFORE INSERT ON exchange_orders","BEFORE UPDATE ON exchange_assets","BEFORE INSERT ON exchange_assets","BEFORE UPDATE ON exchange_orders","BEFORE INSERT ON exchange_fills","BEFORE INSERT ON market_commands"]:
 		assert(db.query("CREATE TEMP TRIGGER fail_fill %s BEGIN SELECT RAISE(ABORT,'matching stage fault'); END;" % fault))
 		assert(persistence.market_command(b,"order",request("buy",60,12,1,"buy60")).error=="storage")
 		assert(exchange.ledger(a).assets[0].reserved==100 and exchange.ledger(b).assets[0].free==0)
 		assert(persistence.wallet_balance(a)==1533 and persistence.wallet_balance(b)==1590,"failed settlement preserves newer pending incomes")
 		assert(db.query("SELECT COUNT(*) AS n FROM exchange_fills;") and db.query_result[0].n==0)
+		assert(observed_accounts.size() == before_faults, "rolled back Exchange work emits no committed fact")
 		assert(db.query("DROP TRIGGER fail_fill;"))
 	var bought:=persistence.market_command(b,"order",request("buy",60,12,1,"buy60"))
 	assert(bought.ok and bought.remaining==0)
@@ -39,7 +43,9 @@ func _ready() -> void:
 	assert(exchange.ledger(a).assets[0].reserved==0 and exchange.ledger(c).assets[0].free==40)
 	assert(persistence.market_command(a,"cancel_order",{"command_id":"stale_cancel","order_id":sell.order_id,"revision":0}).error=="stale")
 	assert(persistence.add_yang(b,17))
+	var before_replay := observed_accounts.size()
 	assert(persistence.market_command(b,"order",request("buy",60,12,1,"buy60")).ok and persistence.wallet_balance(b)==1007,"receipt does not reset newer RAM")
+	assert(observed_accounts.size() == before_replay, "Exchange replay emits no fresh account commit")
 	assert(persistence.flush_wallet());persistence.release_wallet(a)
 	seed_ore(a,50,"offline_seed")
 	var offline:=persistence.market_command(a,"order",request("sell",50,8,1,"offline"));assert(offline.ok)

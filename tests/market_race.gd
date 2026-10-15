@@ -131,6 +131,11 @@ func run_server() -> void:
 		var slot:=server.database.item_store._free_bag_position(owner,1)
 		check(EconomyFixture.insert_item(server.database.item_store,ore,slot),"native UI fixture material source")
 		check(ExchangeStoreSqlite.new(db).deposit(owner,"native_seed",ore.uid,0,40,"bag").ok,"real fixture deposit to ledger")
+	# Match production startup: the retired fixture had no native auction reader,
+	# so all searches returned storage before reaching the purchase race.
+	server.database.database_path = db.path
+	check(db.query("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;"), "race WAL writer")
+	check(await server.database.start_auction_queries(), "race native reader startup")
 	for id: int in world.characters:
 		check(server.database.add_yang(server.connected_players[id].player_id,500),"pending buyer income")
 		phase.rpc_id(id,"GO",str(offer.shop_id)+":"+offer.offer_id)
@@ -143,6 +148,7 @@ func run_server() -> void:
 	check(market.mine(seller).offers.is_empty(),"sold escrow removed")
 	check(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;",[server.database.wallet_account_id(seller)]) and db.query_result[0].yang==1600,"offline seller credited once")
 	check(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty(),"single custody after race")
+	check(await server.database.auction_queries.pause(), "race reader drained before fixture DB teardown")
 	print("MARKET_RACE_SERVER_OK two buyers, one UID, one spend/credit, offline seller")
 	await get_tree().create_timer(.5).timeout;get_tree().quit(1 if failed else 0)
 

@@ -1,6 +1,6 @@
 class_name MarketRequestRules
 extends RefCounted
-## Wire shape/ranges only. No persistence or ownership decisions; shared by exported
+## Command/query shape and ranges only. No persistence or ownership decisions; shared by exported
 ## clients and World, so client validation never calls a server-only export stub.
 const MAX_YANG := 9000000000000000
 const MAX_RATIO_UNIT := 1000000000
@@ -23,6 +23,37 @@ static func valid_order(p: Dictionary) -> bool:
 	var numerator:=int(p.price_num);var denominator:=int(p.price_den);var divisor:=gcd(numerator,denominator)
 	numerator/=divisor;denominator/=divisor
 	return int(p.quantity)%denominator==0 and int(p.quantity)/denominator<=MAX_YANG/numerator
+static func valid_command(action: String, p: Dictionary) -> bool:
+	if action == "open": return p.is_empty()
+	if not p.get("command_id") is String or p.command_id.is_empty() or p.command_id.length()>96: return false
+	var fields: Array
+	match action:
+		"order": return valid_order(p)
+		"cancel_order": fields = ["command_id","order_id","revision"]
+		"deposit": fields = ["command_id","uid","revision","amount","source"]
+		"withdraw": fields = ["command_id","asset_id","amount","destination"]
+		"list": fields = ["command_id","uid","revision","position","price"]
+		"buy": fields = ["command_id","shop_id","offer_id","revision","price"]
+		"edit": fields = ["command_id","offer_id","revision","position","price"]
+		"cancel": fields = ["command_id","offer_id","revision"]
+		"claim": fields = ["command_id","uid","revision"]
+		"configure": fields = ["command_id","revision","name","status"]
+		"receipt": fields = ["command_id"]
+		_: return false
+	if p.size()!=fields.size() or not p.has_all(fields): return false
+	if p.has("order_id") and (not p.order_id is String or not ItemInstance.valid_uid(p.order_id)): return false
+	if p.has("amount") and (not integer(p.amount,200) or p.amount<=0): return false
+	if action=="deposit" and p.source not in ["bag","account_storage"]: return false
+	if action=="withdraw" and (not p.asset_id is String or asset_definition(p.asset_id)==null or p.destination not in ["bag","claim"]): return false
+	if p.has("shop_id") and (not integer(p.shop_id) or p.shop_id<=0): return false
+	if p.has("uid") and (not p.uid is String or not ItemInstance.valid_uid(p.uid)): return false
+	if p.has("offer_id") and (not p.offer_id is String or not ItemInstance.valid_uid(p.offer_id)): return false
+	if p.has("revision") and not integer(p.revision): return false
+	if p.has("position") and not integer(p.position,39): return false
+	if p.has("price") and (not integer(p.price) or p.price<=0): return false
+	if action=="configure" and (not p.name is String or p.name.length()>40 or p.name.strip_edges().is_empty() or p.status not in ["active","paused"]): return false
+	return true
+
 static func valid_search(p: Dictionary) -> bool:
 	var keys: Array=["definition_id","upgrade_min","upgrade_max","price_min","price_max","affix_filters","sort","cursor","limit"]
 	if p.size()!=keys.size() or not p.has_all(keys): return false

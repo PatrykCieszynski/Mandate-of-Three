@@ -44,6 +44,16 @@ func _ready() -> void:
 	persistence.market_account_changed.connect(func(account: int)->void:
 		assert(reader.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;",[account]) and not reader.query_result.is_empty(),"observer connection sees committed ledger")
 		observed_accounts.append(account))
+	# The application boundary must reject malformed direct callers, not rely on
+	# the network adapter to prevent indexing/type errors or durable writes.
+	assert(db.query("SELECT COUNT(*) AS n FROM market_commands;"))
+	var receipt_count := int(db.query_result[0].n)
+	for malformed: Dictionary in [{}, {"command_id":"bad", "uid":item.uid}, {"command_id":"bad", "shop_id":{}, "offer_id":listed.offer_id, "revision":0, "price":100}]:
+		assert(persistence.market_command(buyer, "buy", malformed).error == "request")
+	assert(persistence.market_command(buyer, "withdraw", {"command_id":"bad_asset", "asset_id":42, "amount":1, "destination":"bag"}).error == "request")
+	assert(persistence.market_command(buyer, "open", {}).error == "request", "open is presentation, not an economic command")
+	assert(db.query("SELECT COUNT(*) AS n FROM market_commands;") and int(db.query_result[0].n) == receipt_count)
+	assert(observed_accounts.is_empty() and persistence.wallet_balance(buyer) == 1590)
 	var before:=items.inventory(buyer)
 	for fault: String in ["BEFORE UPDATE ON account_wallets","BEFORE DELETE ON shop_cells","BEFORE UPDATE ON item_instances","BEFORE UPDATE ON item_custody","BEFORE DELETE ON shop_offers","BEFORE INSERT ON market_commands"]:
 		assert(db.query("CREATE TEMP TRIGGER fail_sale %s BEGIN SELECT RAISE(ABORT,'purchase stage fault'); END;" % fault))
@@ -59,7 +69,10 @@ func _ready() -> void:
 	assert(items.inventory(buyer).items.any(func(i: Dictionary)->bool:return i.uid==item.uid and i.revision==2))
 	assert(market.purchase(rival,"rival",listed.shop_id,listed.offer_id,0,100,{}).error=="unavailable")
 	assert(persistence.add_yang(buyer,17) and persistence.add_yang(seller,19))
+	var notifications := observed_accounts.size()
 	assert(persistence.market_command(buyer,"buy",payload).ok)
+	assert(persistence.market_command(buyer,"receipt",{"command_id":payload.command_id}).ok)
+	assert(observed_accounts.size() == notifications, "receipt/retry publishes no new committed account changes")
 	assert(persistence.wallet_balance(buyer)==1507 and persistence.wallet_balance(seller)==1652,"replayed receipt never restores stale committed balances")
 	assert(persistence.flush_wallet())
 	assert(db.close_db() and db.open_db());assert(MarketStoreSqlite.ensure_schema(db))
