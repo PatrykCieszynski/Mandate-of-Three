@@ -46,7 +46,7 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	var operation := services.economy().market_operation(owner, action, payload)
 	var response := operation.response()
 	var recovered_receipt := action == "receipt" and bool(response.get("ok", false))
-	if response.get("ok", false) and (recovered_receipt or action in ["list","claim","buy","deposit","withdraw"]):
+	if response.get("ok", false) and (recovered_receipt or action in ["list","cancel","claim","buy","deposit","withdraw"]):
 		if operation.new_commit:
 			_world.inventory_endpoint.accept_committed_change(peer_id)
 		else:

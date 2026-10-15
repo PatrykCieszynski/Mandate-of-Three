@@ -73,10 +73,10 @@ func run_client() -> void:
 	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	check(world.market_endpoint.state.offers.size()==1,"reload keeps client market snapshot")
 	check((await command("market.edit",{"command_id":"edit_a","offer_id":offer.offer_id,"revision":0,"position":12,"price":321})).ok,"old command retry after reload returns receipt")
-	check((await command("market.cancel",{"command_id":"cancel_a","offer_id":offer.offer_id,"revision":1})).ok,"cancel becomes account claim")
-	var claim: Dictionary = world.market_endpoint.state.claims[0]
-	check((await command("market.claim",{"command_id":"claim_a","uid":claim.uid,"revision":claim.revision})).ok,"claim restores persistent UID to bag")
-	check(world.inventory_endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid==original.uid),"claim preserves original UID")
+	check((await command("market.cancel",{"command_id":"cancel_a","offer_id":offer.offer_id,"revision":1})).ok,"withdraw returns escrow UID directly into character bag")
+	await wait_until(func() -> bool: return world.inventory_endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid==original.uid))
+	check(world.market_endpoint.state.offers.is_empty() and world.market_endpoint.state.claims.is_empty(),"withdraw removes offer without creating an account claim")
+	check((await command("market.cancel",{"command_id":"cancel_a","offer_id":offer.offer_id,"revision":1})).ok,"receipt replay does not move the item again")
 	web.bridge.receive('{"v":1,"type":"ui.text_focus","payload":{"active":true}}')
 	check(ClientState.menu_open,"explicit text field focus captures gameplay keyboard")
 	web.bridge.receive('{"v":1,"type":"ui.text_focus","payload":{"active":false}}')
@@ -107,7 +107,7 @@ func run_server() -> void:
 		check(snapshot.name=="Bread Shop" and snapshot.status=="paused" and snapshot.offers.is_empty() and snapshot.claims.is_empty(),"durable private shop state")
 		check(server.database.item_store.inventory(owner).items.size()==2,"no duplicate/lost items after full flow")
 	check(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty(),"network commands preserve global SQL custody")
-	print("MARKET_SERVER_OK RPC duplicate/malformed/overload correlation, native bridge, private shops, move/price/status, reload receipt, cancel/claim")
+	print("MARKET_SERVER_OK RPC duplicate/malformed/overload correlation, native bridge, private shops, move/price/status, reload receipt, direct inventory withdrawal")
 	check(await server.database.auction_queries.pause(),"network fixture drains native reader before quit")
 	await get_tree().create_timer(.5).timeout
 	get_tree().quit()

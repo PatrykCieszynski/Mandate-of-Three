@@ -4,7 +4,7 @@ import { isObject, isItem } from '../../protocol.js';
 export interface MarketOffer {
   id: string;
   revision: number;
-  price: number;
+  price: number | null;
   item: InventoryItem;
 }
 export type MarketSnapshot =
@@ -53,7 +53,7 @@ export function isMarketSnapshot(v: unknown): v is MarketSnapshot {
         typeof o.id === 'string' &&
         /^[a-f0-9]{32}$/.test(o.id) &&
         integer(o.revision) &&
-        integer(o.price, 1) &&
+        (o.price === null || integer(o.price, 1)) &&
         isItem(o.item) &&
         isObject(o.item) &&
         integer(o.item.x, 0, 4) &&

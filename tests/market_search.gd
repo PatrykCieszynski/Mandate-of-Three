@@ -77,7 +77,7 @@ func verify_lookup_migration(search: MarketSearchSqlite, owner: int) -> void:
 	assert(db.query("SELECT name FROM sqlite_master WHERE name='affix_item_lookup';") and db.query_result.is_empty(),"failed version write rolls back CREATE INDEX")
 	assert(db.query("SELECT COUNT(*) AS n FROM item_instances;") and db.query_result[0].n==10000,"rollback retains all items")
 	assert(db.query("DROP TRIGGER fail_lookup;") and persistence.prepare_account_wallets(manifest).ok and persistence.wallet_ready)
-	assert(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value)==MarketSearchSqlite.LOOKUP_SCHEMA_VERSION)
+	assert(db.query("SELECT value FROM meta WHERE key='schema_version';") and int(db.query_result[0].value)==24)
 	assert(MarketSearchSqlite.ensure_lookup_schema(db),"idempotent repeat")
 	assert(db.query("PRAGMA index_info(affix_item_lookup);") and db.query_result.map(func(row: Dictionary)->String:return row.name)==["uid","stat_id","value"])
 	for control: Dictionary in controls: assert(search.search(control.params)==control.response,"exact content/order/cursor parity across migration")
@@ -85,7 +85,7 @@ func verify_lookup_migration(search: MarketSearchSqlite, owner: int) -> void:
 	print("MARKET_LOOKUP_MUTATIONS ",JSON.stringify({"samples":30,"before":before,"after":after,"includes_atomic_commit":true}))
 	assert(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty())
 	assert(db.query("PRAGMA integrity_check;") and db.query_result[0].values()[0]=="ok")
-	assert(db.close_db() and db.open_db() and MarketSearchSqlite.ensure_lookup_schema(db),"restart preserves v23")
+	assert(db.close_db() and db.open_db() and MarketSearchSqlite.ensure_lookup_schema(db),"restart preserves v24 and the lookup index")
 	persistence.queue_free()
 
 func mutation_cost(owner: int) -> Dictionary:
