@@ -6,7 +6,7 @@ static var simulate_us := 0
 static var simulate_calls := 0
 var skip_overlap := false
 var lightweight_motion := false
-var _light_controller := preload("res://tests/fixtures/lightweight_player_motion.gd").new()
+var _light_controller = preload("res://tests/fixtures/lightweight_player_motion.gd").new()
 
 func simulate(delta: float, direction: Vector2) -> void:
 	var started := Time.get_ticks_usec()

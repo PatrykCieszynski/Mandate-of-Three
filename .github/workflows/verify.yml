@@ -69,7 +69,11 @@ jobs:
           & $engine --headless --path . --import *> .godot/cold-import.log
           & $engine --headless --path . --import *> .godot/import.log
           if ($LASTEXITCODE -ne 0) { throw 'Godot import failed' }
-          if (Select-String .godot/import.log -Pattern 'SCRIPT ERROR|Parse Error|Failed loading resource') { throw 'Project load failed' }
+          if (Select-String .godot/import.log -Pattern 'SCRIPT ERROR|Parse Error|Failed loading resource') {
+            Write-Output '==== Godot import errors ===='
+            Select-String .godot/import.log -Pattern 'SCRIPT ERROR|Parse Error|Failed loading resource' -Context 2,3 | ForEach-Object { Write-Output $_ }
+            throw 'Project load failed'
+          }
       - name: Whitespace validation
         shell: pwsh
         run: |
