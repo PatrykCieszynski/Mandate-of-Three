@@ -54,6 +54,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok and store.inventory(owner_id).stats.attack == 23, "starter sword equipped through RPC")
 	check(server.runtime_attack(owner_id) == 23, "equip updates authoritative runtime attack")
+	var older_equipment := store.inventory(owner_id)
 	store.inventory_reads = 0
 	set_phase("BASELINE", hero)
 	await wait_until(func() -> bool: return world.mob_system.mobs[1].hp < 120)
@@ -93,6 +94,13 @@ func run_server() -> void:
 	var equipped: Dictionary = store.inventory(owner_id)
 	check(replies[hero].ok and equipped.stats.attack == 29 and equipped.equipment.weapon == drop_uid, "picked weapon raises authoritative attack")
 	check(server.runtime_attack(owner_id) == 29, "committed swap updates runtime stats")
+	check(not server.update_runtime_equipment(owner_id,older_equipment) and server.runtime_attack(owner_id)==29,"late older snapshot cannot restore prior weapon stats")
+	check(not server.update_runtime_equipment(owner_id,{"ok":false,"error":"storage"}) and server.runtime_attack(owner_id)==-1,"failed refresh gates dependent combat")
+	check(not server.update_runtime_equipment(owner_id,older_equipment) and server.runtime_attack(owner_id)==-1,"failure retains watermark and cannot be repaired by older state")
+	check(server.update_runtime_equipment(owner_id,equipped) and server.runtime_attack(owner_id)==29,"same current revision can rehydrate invalidated cache")
+	var duplicate := equipped.duplicate(true)
+	duplicate.stats.attack = 999
+	check(not server.update_runtime_equipment(owner_id,duplicate) and server.runtime_attack(owner_id)==29,"duplicate revision does not replace accepted combat inputs")
 	check(store.inventory(server.connected_players[other].player_id).items.size() == 2, "other player receives no inventory")
 	await get_tree().create_timer(1.2).timeout
 	var old_dog: MobActor3D = world.mob_system.mobs[1]

@@ -30,14 +30,26 @@ var player_id_to_peer_id: Dictionary[int, int]
 ## Minimal combat view, keyed by persistent character ID. Refreshed only after
 ## loading inventory or a committed item operation, never by a combat action.
 var runtime_equipment: Dictionary[int, Dictionary] = {}
+var _equipment_versions: Dictionary[int, Dictionary] = {}
+const ItemStateVersion = preload("res://source/common/gameplay/items/domain/item_state_version.gd")
 ## UTC epoch gives restart/process continuity without a database write per tick.
 var world_time := WorldTime.authority(preload("res://source/common/gameplay/world_time/world_time_settings.tres"))
 
-func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> void:
+func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> bool:
 	if not snapshot.get("ok", false):
 		runtime_equipment.erase(owner_id)
-		return
-	runtime_equipment[owner_id] = {"equipment": snapshot.equipment.duplicate(true), "stats": snapshot.stats.duplicate(true)}
+		return false
+	var version: Variant = snapshot.get("item_state")
+	if not ItemStateVersion.valid(version) or version.character_id != owner_id:
+		runtime_equipment.erase(owner_id)
+		return false
+	if not ItemStateVersion.accepts(_equipment_versions.get(owner_id,{}),version): return false
+	# An unchanged watermark cannot overwrite already accepted combat inputs.
+	if _equipment_versions.get(owner_id,{})==version and runtime_equipment.has(owner_id):
+		return runtime_equipment[owner_id].equipment==snapshot.equipment and runtime_equipment[owner_id].stats==snapshot.stats
+	_equipment_versions[owner_id] = version.duplicate(true)
+	runtime_equipment[owner_id] = {"equipment":snapshot.equipment.duplicate(true),"stats":snapshot.stats.duplicate(true),"item_state":version.duplicate(true)}
+	return true
 
 func runtime_attack(owner_id: int) -> int:
 	if not runtime_equipment.has(owner_id): return -1
@@ -253,6 +265,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 	database.save_player(player)
 	runtime_equipment.erase(player.player_id)
+	_equipment_versions.erase(player.player_id)
 
 	player_id_to_peer_id.erase(player.player_id)
 	BlockList.clear_player(player.player_id)

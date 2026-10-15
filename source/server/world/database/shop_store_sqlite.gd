@@ -48,7 +48,7 @@ func purchase_receipt(owner_id: int, operation_id: String) -> Dictionary:
 	var args: Variant = JSON.parse_string(row.request_json)
 	if not args is Array or args.size() != 4: return {"ok":false,"error":"storage"}
 	if int(args[0]) != owner_id: return {"ok":false,"error":"unknown_command"}
-	var result: Variant = JSON.parse_string(row.result_json)
+	var result: Variant = EconomyCommandSqlite.decode_result(row.result_json)
 	if not result is Dictionary or not result.get("ok", false): return {"ok":false,"error":"storage"}
 	for field: String in ["balance", "position"]:
 		if result.has(field): result[field] = int(result[field])

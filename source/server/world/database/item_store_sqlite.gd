@@ -121,7 +121,9 @@ func inventory(owner_id: int) -> Dictionary:
 	# Explicit test content: total attack is one, not base character ten plus weapon one.
 	for item: Dictionary in items:
 		if item.uid == equipment.get("weapon","") and item.definition_id == "dev_trace_sword": stats["attack"] = 1.0
-	return {"ok": true, "items": items, "equipment": equipment, "stats": stats}
+	var item_state: Dictionary = preload("res://source/server/world/database/item_state_revision_sqlite.gd").read(db,owner_id)
+	if item_state.is_empty(): return _error("storage")
+	return {"ok": true, "items": items, "equipment": equipment, "stats": stats, "item_state":item_state}
 
 # Legacy standalone/tooling APIs retain their behavior, sharing mutation rules
 # with receipt-backed production commands. No nested transaction is permitted.
@@ -176,7 +178,7 @@ func inventory_receipt(owner_id: int, operation_id: String) -> Dictionary:
 	var args: Variant = JSON.parse_string(row.request_json)
 	if not args is Array or args.size() != 5: return _error("storage")
 	if int(args[0]) != owner_id: return _error("unknown_command")
-	var result: Variant = JSON.parse_string(row.result_json)
+	var result: Variant = EconomyCommandSqlite.decode_result(row.result_json)
 	if not result is Dictionary or not result.get("ok",false): return _error("storage")
 	return result
 

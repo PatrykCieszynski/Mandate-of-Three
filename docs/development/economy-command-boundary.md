@@ -665,12 +665,91 @@ The headless bridge/RPC and independent-process journal read establish the scope
 recovery contract, not physical input, full launcher/session restart, power-loss
 filesystem durability or distributed fencing.
 
+## Durable account item revisions and World cache reconciliation
+
+The item domain now has a durable, monotonically increasing account watermark.
+Inventory snapshots and new command receipts carry `item_state` with economy
+`authority_id`, `account_id`, `character_id` and integer `revision`. The scope is
+account-wide because Storage/custody is shared. Character identity still qualifies
+each projection and intention; this does not enable cross-character receipt access.
+
+A small SQLite feature migration adds `account_item_revisions` and transaction-local
+triggers on ItemInstance and custody changes. The same SQL transaction advances
+old/new account scopes on ownership/custody changes; rollback, including a failed
+receipt insertion or COMMIT, rolls back the watermark too. Row changes may advance
+the counter more than once per business command. It is an ordering watermark,
+not a command count, per-UID revision or gapless delivery stream. Business no-ops,
+rejections, replay and read-only receipt discovery do not advance it. Existing
+item expected-revision, ownership/capacity and receipt guarantees stay unchanged.
+Wallet balances, Shop offer terms and progression have separate semantics and do
+not advance this item watermark.
+
+Installation uses its own `meta.item_state_revision_schema` marker, independent
+of the existing identity-gated v18-v23 migration sequence. Startup installs the
+legacy table triggers when needed; canonical custody v19 installation replaces
+them with triggers on the real `item_custody` table (the old placement/Storage
+names are views). The counter survives that migration. Existing populated data
+starts at revision zero without inventing mutation history. Installation is
+atomic/idempotent, leaves data intact on failure and can be retried. No existing
+v19-v23 migration was moved or renumbered. Missing revision storage blocks valid
+item snapshots/receipt commits rather than silently inventing a new watermark.
+
+New successful command receipts capture the issuing character's item watermark
+before receipt+COMMIT. Replay/discovery returns that original watermark, including
+after later mutations/restart; it never substitutes the current revision. Old
+receipts without this additive metadata remain valid and are not rewritten.
+The watermark's integer fields use decimal strings only inside durable JSON,
+then decode to native ints, preserving values beyond JSON float precision. They
+are native integers on Godot RPC/application boundaries. This field describes
+item state only, even on a receipt whose operation also touched wallets. A
+multi-account transaction's current counterpart views still use normal refresh;
+this is not a distributed affected-account revision manifest.
+
+World runtime equipment accepts identity-qualified snapshots in revision order.
+An older revision cannot restore a removed/previous weapon; an equal revision
+cannot overwrite already accepted combat inputs. Failed refresh invalidates
+combat inputs but retains the accepted watermark, preventing repair from stale
+state. A fresh full snapshot at that same or a newer revision can rehydrate an
+invalidated cache. Current-session disconnect clears its cache/watermark; entry
+hydrates persisted current state. No SQL or network read is added to attack.
+Successful stale refreshes cannot update cached publication/weapon presentation.
+
+The client also checks durable scope/revision before accepting private Inventory
+state, independently of the live `projection_version` used for delivery/public
+weapon ordering. A newer delivery number cannot make an older item revision or
+another character/economy snapshot current. Full snapshots may legitimately skip
+revisions and contain the entire state, so no delta-gap protocol is introduced.
+This implementation remains synchronous on one authoritative World writer;
+missed cross-process facts, asynchronous pending-operation barriers and fencing
+are still deferred. Definition/base-stat hot reload is not an item mutation and
+would need its own explicit invalidation if introduced.
+
+Verification extends existing fixtures instead of adding an extraction suite:
+item_instances covers receipt/snapshot alignment, no-op and replay stability,
+account sharing/isolation, ownership rollback, populated legacy-to-canonical
+migration, atomic failed installation/retry, restart and full int64 receipt
+round-trip. Existing receipt-failure tests compare the whole versioned inventory,
+so leaked rollback revisions fail them. SQL updates that leave the row unchanged
+also leave the watermark unchanged. Web Inventory injects an old durable
+snapshot with a newer delivery number and a wrong-character snapshot. The
+progression/combat fixture verifies stale/duplicate cache rejection, failure
+invalidation, same-revision rehydration and the existing no-SQL-per-swing contract.
+
+Smoke (10 Godot fixtures, 84 Web contracts), the updated two-client Web Inventory
+and progression/combat suites, shared-account Storage recovery and NPC Shop
+network regression passed on 2026-10-15. Market custody/purchase, Exchange
+ledger/orders and the existing process-crash/WAL backup/recovery suite passed.
+The Storage race fixture now prepares both contenders' original UID/revision
+before releasing either withdrawal, removing a scheduling dependency in the test.
+`git diff --check` passed. No native window, full Gateway/Master relog or loaded
+World tick performance benchmark was run for this slice.
+
 ## Remaining Stage 2 work
 
-Durable Economy/World revision reconciliation and broader cache invalidation
-remain later reviewable slices. The live presentation delivery versions above
-do not implement those distributed contracts. Startup/dev grants and checkpoint
-wallet flows still retain their existing entry points. Do not infer distributed
-C2 admission, durable business rejections or session fencing from this change.
-Existing successful receipts remain durable; bounded rejected-command caching
-keeps its current semantics until an explicit persistence change is approved.
+Wallet-specific durable revisions/reconciliation and broader cache invalidation
+remain later reviewable slices. The account item watermark does not implement a
+distributed C4 notification stream, session fencing, admitted-operation barriers,
+cache repair after missed cross-World events or wallet revision ordering. Startup/
+dev grants and checkpoint wallet flows retain their current entry points. Existing
+successful receipts remain durable; bounded rejected-command caching keeps its
+current semantics until an explicit persistence change is approved.
