@@ -128,6 +128,7 @@ func run() -> void:
 	check(store.change_equipment(dev_owner,granted.uid,0,"equip").ok,"practice sword equips")
 	check(store.inventory(dev_owner).stats.attack == 1,"practice weapon sets total attack to one")
 	check(store.change_equipment(dev_owner,granted.uid,1,"unequip").ok and store.inventory(dev_owner).stats.attack == 10,"unequip restores base attack")
+	_check_inventory_boundary(db, legacy)
 	db.close_db()
 	if not failed:
 		print("ITEM_INSTANCES_OK: distinct UID/rolls, exact equip, ownership, revisions, rollback, database reopen, legacy save isolation")
@@ -183,3 +184,37 @@ func _check_storage(database: SQLite, legacy: WorldStoreSqlite, store: ItemStore
 	before=storage.snapshot(first)
 	check(storage.transfer(first,excess.uid,0,"inventory","storage").error=="full","full account Storage rejects quick deposit")
 	check(store.inventory(first)==bag_before and storage.snapshot(first)==before,"full transfer preserves last valid states")
+
+# Protect the commit/no-op distinction: existing swap/rollback cases alone cannot
+# detect duplicate change facts or a no-op incorrectly labelled receipt replay.
+func _check_inventory_boundary(database: SQLite, legacy: WorldStoreSqlite) -> void:
+	var persistence := WorldDatabase.new()
+	persistence.db = database
+	persistence.store = legacy
+	var owner := EconomyFixture.create_character(legacy, "inventory_boundary", {"name":"Boundary", "skin":1})
+	var items := ItemStoreSqlite.new(database)
+	check(items.initialize_character(owner).ok, "boundary starter fixture")
+	var candidate: Dictionary = items.inventory(owner).items[0]
+	var operation := persistence.inventory_operation(owner, "activate", candidate.uid, 0)
+	check(operation.response().ok and operation.new_commit and not operation.receipt_replay, "activation reports a new mutation")
+	check(operation.character_id == owner and operation.account_id == legacy.resolve_account_id(owner) and operation.changed_accounts == PackedInt64Array([operation.account_id]) and operation.operation_id.is_empty(), "inventory result has trusted context without fabricated receipt identity")
+	var equipped := items.inventory(owner)
+	operation = persistence.inventory_operation(owner, "equip", candidate.uid, 1)
+	check(operation.response().ok and not operation.new_commit and not operation.receipt_replay and operation.changed_accounts.is_empty() and items.inventory(owner) == equipped, "repeat equip is an unchanged success, not a receipt replay")
+	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 0)
+	check(operation.response().error == "stale" and not operation.new_commit and not operation.receipt_replay and items.inventory(owner) == equipped, "stale retry preserves equipped state")
+	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 1, 15)
+	check(operation.response().ok and operation.new_commit, "boundary exact unequip commits")
+	var before := items.inventory(owner)
+	operation = persistence.inventory_operation(owner, "move", candidate.uid, 2, 15)
+	check(operation.response().ok and not operation.new_commit and not operation.receipt_replay and items.inventory(owner) == before, "same-cell move preserves revision without commit fact")
+	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 2)
+	check(operation.response().ok and not operation.new_commit and not operation.receipt_replay, "already-bag unequip is a no-op")
+	check(database.query("CREATE TEMP TRIGGER fail_boundary_revision BEFORE UPDATE ON item_instances BEGIN SELECT RAISE(ABORT,'boundary failure'); END;"), "inject boundary failure")
+	operation = persistence.inventory_operation(owner, "move", candidate.uid, 2, 20)
+	check(operation.response().error == "storage" and not operation.new_commit and operation.changed_accounts.is_empty() and items.inventory(owner) == before, "boundary rolls back placement and revision without a commit fact")
+	check(database.query("DROP TRIGGER fail_boundary_revision;"), "remove boundary failure")
+	check(items.move_bag_item(owner, candidate.uid, 2, 20).ok and items.committed, "shared store mutation commits")
+	check(items.move_bag_item(owner, candidate.uid, 3, 20).ok and not items.committed, "shared store resets commit outcome for no-op")
+	check(items.activate_item(owner, "invalid", 3).error == "request" and not items.committed, "shared store rejects without stale commit outcome")
+	persistence.free()

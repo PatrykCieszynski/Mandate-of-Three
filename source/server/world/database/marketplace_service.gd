@@ -19,7 +19,8 @@ func _operation(character_id: int, action: String, payload: Dictionary, result: 
 	var account := 0
 	if _runtime.db != null and _runtime.wallet_ready and result.get("error", "") not in ["request", "storage"]:
 		account = _runtime.wallet_account_id(character_id)
-	return EconomyOperationResult.capture(character_id, account, action, id, result, committed, affected)
+	return EconomyOperationResult.capture(character_id, account, action, id, result, committed, affected,
+		action != "receipt" and bool(result.get("ok", false)) and not committed)
 
 func execute(character_id: int, action: String, payload: Dictionary) -> EconomyOperationResult:
 	if action == "open" or not MarketRequestRules.valid_command(action, payload):

@@ -20,6 +20,22 @@ func market_operation(character_id: int, action: String, payload: Dictionary) ->
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	return _marketplace.query(character_id, action, payload)
 
+func inventory_operation(character_id: int, action: String, uid: String, revision: int, position: int = -1) -> EconomyOperationResult:
+	var account := _runtime.wallet_account_id(character_id)
+	var response: Dictionary = {"ok":false, "error":"storage"}
+	var committed := false
+	if _runtime.db != null:
+		var items := ItemStoreSqlite.new(_runtime.db)
+		match action:
+			"activate": response = items.activate_item(character_id, uid, revision)
+			"move": response = items.move_bag_item(character_id, uid, revision, position)
+			_: response = items.change_equipment(character_id, uid, revision, action, position)
+		committed = items.committed
+	# UID/revision checks remain in the transaction. These operations have no
+	# durable receipts; an already-satisfied placement is a successful no-op.
+	return EconomyOperationResult.capture(character_id, account, "inventory." + action, "",
+		response, committed, [account] if committed else [])
+
 func purchase_shop_operation(character_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> EconomyOperationResult:
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary
