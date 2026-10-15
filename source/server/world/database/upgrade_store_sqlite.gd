@@ -2,8 +2,12 @@ class_name UpgradeStoreSqlite
 extends RefCounted
 ## One connection/transaction for material, pending income, spend and item mutation.
 var db: SQLite
-func _init(database: SQLite) -> void:
+var _transaction: EconomyCommandSqlite
+var committed: bool:
+	get: return _transaction.committed
+func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
 	db = database
+	_transaction = EconomyCommandSqlite.new(db, rejected_commands)
 
 func candidate(owner_id: int, uid: String, revision: int, recipe: UpgradeDefinition) -> Dictionary:
 	if not ItemInstance.valid_uid(uid) or revision < -1: return {"ok":false, "error":"request"}
@@ -16,9 +20,11 @@ func candidate(owner_id: int, uid: String, revision: int, recipe: UpgradeDefinit
 	if item.definition_id != recipe.item_definition_id or item.amount != 1: return {"ok":false, "error":"unsupported_item"}
 	return {"ok":true, "item":item}
 
-func upgrade(owner_id: int, pending_yang: int, recipe: UpgradeDefinition, uid: String, revision: int) -> Dictionary:
+func upgrade(owner_id: int, pending_yang: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String = "") -> Dictionary:
+	_transaction.committed = false
 	if revision < 0 or recipe == null or not recipe.validation_errors().is_empty(): return {"ok":false, "error":"request"}
-	if not db.query("BEGIN IMMEDIATE;"): return {"ok":false, "error":"storage"}
+	# Lookup precedes mutable item/wallet checks; the original revision is stale after commit.
+	if not _transaction.begin(owner_id, operation_id, "upgrade", [owner_id,str(recipe.upgrade_id),uid,revision]): return _transaction.cached
 	var selected: Dictionary = candidate(owner_id,uid,revision,recipe)
 	if not selected.ok: return _rollback(str(selected.error))
 	var item: ItemInstance = selected.item
@@ -45,9 +51,7 @@ func upgrade(owner_id: int, pending_yang: int, recipe: UpgradeDefinition, uid: S
 	if not spent.ok: return _rollback(str(spent.error))
 	if not db.query_with_bindings("UPDATE item_instances SET upgrade_level=?,revision=revision+1 WHERE uid=? AND owner_character_id=? AND revision=? AND upgrade_level=?;",[recipe.to_level,uid,owner_id,revision,recipe.from_level]): return _rollback("storage")
 	if not db.query("SELECT changes() AS n;") or int(db.query_result[0].n) != 1: return _rollback("stale")
-	if not db.query("COMMIT;"): return _rollback("storage")
-	return {"ok":true, "balance":spent.balance}
+	return _transaction.commit({"ok":true,"balance":spent.balance})
 
 func _rollback(error: String) -> Dictionary:
-	db.query("ROLLBACK;")
-	return {"ok":false, "error":error}
+	return _transaction.rollback(error)

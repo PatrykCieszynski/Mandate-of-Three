@@ -116,6 +116,8 @@ function isUpgrade(value) {
         return false;
     if (!value.active)
         return Object.keys(value).length === 1;
+    if ('upgradePending' in value && typeof value.upgradePending !== 'boolean')
+        return false;
     const id = (v) => typeof v === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(v);
     if (typeof value.npcInstanceId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value.npcInstanceId) || !id(value.serviceId) || !id(value.upgradeId) || !id(value.itemDefinitionId) || typeof value.itemName !== 'string' || !value.itemName || value.itemName.length > 128 || !id(value.materialDefinitionId) || typeof value.materialName !== 'string' || value.materialName.length > 128 || value.fromLevel !== 0 || value.toLevel !== 1 || value.successRate !== 100 || !integerRange(value.yangCost, 1, MAX_YANG) || !integerRange(value.materialAmount, 1, 999) || !integerRange(value.materialOwned, 0) || !isObject(value.candidate))
         return false;

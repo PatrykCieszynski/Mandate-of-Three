@@ -3,6 +3,7 @@ export type UpgradeSnapshot =
   | { active: false }
   | {
       active: true;
+      upgradePending?: boolean;
       npcInstanceId: string;
       serviceId: string;
       upgradeId: string;

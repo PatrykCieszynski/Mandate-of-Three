@@ -80,11 +80,10 @@ service, range and living player as before, then uses `new_commit` to refresh
 inventory/combat stats and publish the existing inventory/wallet facts. Quote,
 selection, rejection and stale retry do not claim a commit.
 
-Upgrade remains **revision-guarded**, not receipt-backed. Its operation ID is
-intentionally empty: the existing UI command ID is transport correlation and is
-not silently promoted to durable economic identity. A repeated stale upgrade
-still returns `stale`, unlike a Shop/Exchange successful receipt replay. Adding
-stable upgrade intention IDs and durable receipts is a later explicit change.
+At the third slice, Upgrade was **revision-guarded**, not receipt-backed. Its
+operation ID was deliberately empty: UI command correlation was not promoted to
+business identity. A repeated stale request returned `stale`. The eleventh slice
+below supersedes that limitation with explicit intention IDs and durable receipts.
 
 ## Fourth slice: NPC Shop purchase
 
@@ -431,10 +430,54 @@ configured Prettier check passed on 2026-10-15. Full desktop
 relaunch through Gateway/Master and manual native CEF interaction are not verified
 by this headless fixture; no login/session admission behavior was changed.
 
+## Eleventh slice: durable Upgrade intentions
+
+Upgrade now composes the existing EconomyCommandSqlite boundary, using successful
+`upgrade` receipts in `market_commands`. The operation ID is explicit and separate
+from native/Web request IDs. Empty operation IDs cannot execute a mutation. The
+fingerprint binds receiving character, recipe ID, item UID and expected revision.
+Receipt insertion, material consumption, pending Yang settlement/spend and item
+upgrade/revision commit in the same transaction; a receipt write failure rolls
+all of them back. Rejections still do not create permanent receipt rows.
+
+Receipt lookup occurs before mutable candidate/affordability checks. Reusing the
+same intention returns its original success after the item revision changes or
+the wallet drops below the recipe price. Different intent payloads conflict;
+a new operation with an old revision remains stale. WorldEconomyService accepts
+wallet RAM only for a new commit and does not replace later pending income with
+a historical receipt balance. Upgrade3D repairs current Inventory/wallet views
+on replay without emitting another committed mutation fact. NPC/service/range,
+living-player authorization and rate admission remain required before replay.
+The optional operation-ID argument extends the existing Upgrade RPC specifically
+to carry that business identity; the client and World must run matching builds.
+
+UpgradeUiAdapter retains one unresolved intent across CEF reload, prevents a new
+payload from replacing it, and exposes empty-payload `upgrade.retry`. Its Retry
+button uses the stored original payload even when authoritative presentation
+already shows +1, no remaining material or insufficient Yang. `upgradePending`
+is presentation state, not server authority. An uncertain response does not show
+a definite visual failure. Closing the NPC window keeps the RAM intention;
+reopen the original service to retry. No new frontend framework or SQL schema.
+
+This slice does **not** add Upgrade client disk journaling or out-of-range
+receipt-only recovery. Unlike NPC purchase, exiting the game loses this adapter's
+RAM intention; extending restart recovery to Upgrade is a separate bounded task.
+The durable server receipt can still replay a known operation after DB reopen.
+
+Existing upgrade_transaction adds successful replay, payload/character conflicts,
+receipt-failure rollback and same-ID retry, later pending income preservation,
+replay below current affordability and DB reopen. Existing two-client Upgrade
+now discards the first accepted response, waits for the real adapter timeout,
+blocks changed intent and retries through the Web bridge after +1 arrived.
+Exactly one inventory and one wallet commit fact remain. The Web fixture checks
+Retry after +1 without another execute or local affordability/material checks.
+Smoke (10 Godot fixtures, 81 Web contracts), two-client Upgrade and the configured
+Prettier check passed on 2026-10-15. No native window or manual relog was run.
+
 ## Remaining Stage 2 work
 
 Stable intention IDs and full durable result receipts for remaining non-market
-operations (Upgrade/Inventory/Storage), broader client-side operation journaling,
+operations (Inventory/Storage), Upgrade and broader client-side operation journaling,
 durable Economy/World revision reconciliation and broader cache invalidation
 remain later reviewable slices. The live presentation delivery versions above
 do not implement those distributed contracts. Startup/dev grants and checkpoint wallet flows still retain

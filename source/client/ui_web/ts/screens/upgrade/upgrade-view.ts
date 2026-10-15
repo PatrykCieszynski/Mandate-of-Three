@@ -37,6 +37,7 @@ export function mountUpgrade(
     onClose: () => void;
     select?: (command: UpgradeCommand) => Promise<CommandResult>;
     execute?: (command: UpgradeCommand) => Promise<CommandResult>;
+    retry?: () => Promise<CommandResult>;
     devPreview?: boolean;
     onRegionsChanged?: () => void;
   },
@@ -154,6 +155,37 @@ export function mountUpgrade(
       yes.element.focus({ preventScroll: true });
     },
   });
+  const retry = UiButton({
+    label: 'Retry upgrade',
+    onClick: () => void retryUpgrade(),
+  });
+  async function retryUpgrade() {
+    if (
+      disposed ||
+      pending ||
+      !recipe.active ||
+      !recipe.upgradePending ||
+      !options.retry
+    )
+      return;
+    const token = generation;
+    pending = true;
+    confirmed = false;
+    clearEffect();
+    render();
+    let result: CommandResult;
+    try {
+      result = await options.retry();
+    } catch {
+      result = { ok: false, error: 'upgrade_pending' };
+    }
+    if (disposed || token !== generation) return;
+    pending = false;
+    notice = result.ok
+      ? 'Upgrade confirmed.'
+      : 'Upgrade not confirmed. Reopen the original service and retry.';
+    render();
+  }
   const cancel = UiButton({
     label: 'Cancel',
     className: 'upgrade-cancel',
@@ -185,7 +217,11 @@ export function mountUpgrade(
   confirmActions.className = 'upgrade-actions';
   confirmActions.append(yes.element, no.element);
   confirmation.append(confirmActions);
-  find('.upgrade-primary-actions').append(upgrade.element, cancel.element);
+  find('.upgrade-primary-actions').append(
+    upgrade.element,
+    retry.element,
+    cancel.element,
+  );
   shell.listen(slot, 'pointermove', (event) => {
     if (item && !options.drag.active && !confirmed)
       tip.show(event, (effectPreview ?? presentation())!.current);
@@ -255,7 +291,8 @@ export function mountUpgrade(
     render();
   }
   function canUpgrade() {
-    if (!item || pending) return false;
+    if (!item || pending || (recipe.active && recipe.upgradePending))
+      return false;
     if (options.devPreview) return level < MAX_UPGRADE_LEVEL;
     return (
       recipe.active &&
@@ -317,14 +354,17 @@ export function mountUpgrade(
     if (disposed || token !== generation) return result;
     if (action === 'execute') {
       clearEffect();
-      root.dataset.upgradeEffect = result.ok ? 'success' : 'failure';
+      if (result.error !== 'upgrade_pending')
+        root.dataset.upgradeEffect = result.ok ? 'success' : 'failure';
     }
     pending = false;
     notice = result.ok
       ? action === 'execute'
         ? 'Upgrade successful.'
         : ''
-      : `Rejected: ${result.error ?? 'request'}`;
+      : result.error === 'upgrade_pending'
+        ? 'Upgrade not confirmed. Use Retry upgrade; keep the original service open.'
+        : `Rejected: ${result.error ?? 'request'}`;
     render();
     return result;
   }
@@ -459,6 +499,9 @@ export function mountUpgrade(
     confirmation.hidden = !confirmed;
     find('.upgrade-confirm-text').textContent =
       `Upgrade to ${preview?.next?.name ?? ''} for ${(preview?.cost ?? 0).toLocaleString('en-US')} Yang?`;
+    retry.element.hidden =
+      !recipe.active || !recipe.upgradePending || !options.retry;
+    retry.setDisabled(pending);
     upgrade.element.hidden = confirmed;
     cancel.element.hidden = confirmed;
     upgrade.setDisabled(!canUpgrade());
@@ -560,7 +603,7 @@ export function mountUpgrade(
       clearEffect();
       generation++;
       bindings.forEach((binding) => binding.dispose());
-      [upgrade, cancel, yes, no].forEach((button) => button.dispose());
+      [upgrade, retry, cancel, yes, no].forEach((button) => button.dispose());
       if (devControls)
         [devControls.example, devControls.previous, devControls.next].forEach(
           (button) => button.dispose(),

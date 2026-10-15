@@ -1,5 +1,8 @@
 extends "res://tests/pve_network.gd"
 var listening: bool = false
+var adapter := UpgradeUiAdapter.new()
+var session := UiCommandSession.new()
+var bridge: WebUiBridge
 var committed_inventory_changes: int = 0
 var committed_wallet_changes: int = 0
 var inventory_notifications: int = 0
@@ -60,7 +63,7 @@ func run_server() -> void:
 	check(not replies[other].ok and not replies[other].active and items.inventory(player.player_id)==before,"second client cannot upgrade another player's item")
 	set_phase("UPGRADE",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(replies[hero].ok and replies[hero].level==1 and replies[hero].balance==1100,"successful RPC refreshes item and wallet")
+	check(not replies[hero].ok and replies[hero].error=="upgrade_pending" and replies[hero].level==1 and replies[hero].balance==1100,"lost response retains pending intention while committed item/wallet refresh")
 	before = items.inventory(player.player_id)
 	var upgraded: Dictionary = {}
 	for item: Dictionary in before.items:
@@ -72,7 +75,7 @@ func run_server() -> void:
 	check(not replies[hero].ok and replies[hero].error == "stale" and replies[hero].inventoryUpdates == 1 and replies[hero].walletUpdates == 0,"stale selection repairs Inventory without wallet refresh")
 	set_phase("REPLAY",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(not replies[hero].ok and replies[hero].error=="stale" and items.inventory(player.player_id)==before and replies[hero].inventoryItem==upgraded and replies[hero].balance==1100,"stale replay leaves item, client Inventory and wallet unchanged")
+	check(replies[hero].ok and items.inventory(player.player_id)==before and replies[hero].inventoryItem==upgraded and replies[hero].balance==1100,"stable intention replay confirms success with no second consumption")
 	world.characters[hero].position = Vector3(12,0,12)
 	await get_tree().create_timer(0.15).timeout
 	set_phase("RANGE",hero)
@@ -102,14 +105,13 @@ func _process(delta: float) -> void:
 			var reply: Dictionary = result.duplicate(true)
 			reply["active"] = world.upgrade_endpoint.state.active
 			report.rpc_id(1,reply))
-		world.upgrade_endpoint.operation_finished.connect(func(_id: String,result: Dictionary) -> void:
-			var reply: Dictionary = result.duplicate(true)
-			var quote: Dictionary = world.upgrade_endpoint.state
-			reply["inventoryItem"] = {}
-			for item: Dictionary in world.inventory_endpoint.state.get("items",[]):
-				if item.uid == drop_uid: reply["inventoryItem"] = item.duplicate(true)
-			reply.merge({"itemName":quote.get("itemName",""),"inventoryUpdates":inventory_notifications - selection_counts.x,"walletUpdates":wallet_notifications - selection_counts.y,"active":quote.active,"candidate":quote.get("candidate",{}).get("id",""),"level":quote.get("candidate",{}).get("level",-1),"balance":world.currency_endpoint.state.get("balance",-1)})
-			report.rpc_id(1,reply))
+		world.upgrade_endpoint.operation_finished.connect(_report_upgrade)
+		var dispatcher := UiCommandDispatcher.new()
+		add_child(dispatcher)
+		bridge = WebUiBridge.new()
+		add_child(bridge)
+		dispatcher.attach(bridge)
+		adapter.attach(world.upgrade_endpoint,dispatcher,session,get_tree())
 		register_ready.rpc_id(1)
 	if phase_name in ["WAIT","DONE"] or attempted: return
 	attempted = true
@@ -119,4 +121,44 @@ func _process(delta: float) -> void:
 		"CANDIDATE", "STALE_SELECT":
 			selection_counts = Vector2i(inventory_notifications,wallet_notifications)
 			world.upgrade_endpoint.request_upgrade.rpc_id(1,"select",NPC_ID,"upgrade",drop_uid,0,"candidate")
-		_: world.upgrade_endpoint.request_upgrade.rpc_id(1,"upgrade",NPC_ID,"upgrade",drop_uid,1 if phase_name=="RANGE" else 0,"upgrade")
+		"UPGRADE": _lost_upgrade()
+		"REPLAY": _retry_from_web()
+		_: world.upgrade_endpoint.request_upgrade.rpc_id(1,"upgrade",NPC_ID,"upgrade",drop_uid,1 if phase_name=="RANGE" else 0,"upgrade","upgrade-"+phase_name)
+
+func _report_upgrade(_id: String, result: Dictionary) -> void:
+	var reply: Dictionary = result.duplicate(true)
+	var quote: Dictionary = world.upgrade_endpoint.state
+	reply["inventoryItem"] = {}
+	for item: Dictionary in world.inventory_endpoint.state.get("items",[]):
+		if item.uid == drop_uid: reply["inventoryItem"] = item.duplicate(true)
+	reply.merge({"itemName":quote.get("itemName",""),"inventoryUpdates":inventory_notifications - selection_counts.x,"walletUpdates":wallet_notifications - selection_counts.y,"active":quote.active,"candidate":quote.get("candidate",{}).get("id",""),"level":quote.get("candidate",{}).get("level",-1),"balance":world.currency_endpoint.state.get("balance",-1)})
+	report.rpc_id(1,reply)
+
+func _lost_upgrade() -> void:
+	world.upgrade_endpoint.operation_finished.disconnect(_report_upgrade)
+	world.upgrade_endpoint.operation_finished.disconnect(session.finish)
+	var payload := {"npc_instance_id":NPC_ID,"service_id":"upgrade","id":drop_uid,"revision":0}
+	var result := await adapter._submit("upgrade",payload)
+	world.upgrade_endpoint.operation_finished.connect(session.finish)
+	session.cancel("ui_reload")
+	var changed := payload.duplicate()
+	changed.revision = 1
+	check((await adapter._submit("upgrade",changed)).error == "upgrade_pending", "new revision cannot replace an unresolved upgrade")
+	world.upgrade_endpoint.operation_finished.connect(_report_upgrade)
+	_report_upgrade("",result)
+
+func _retry_from_web() -> void:
+	world.upgrade_endpoint.operation_finished.disconnect(_report_upgrade)
+	var received := {}
+	var listener := func(json: String) -> void:
+		var message: Dictionary = JSON.parse_string(json)
+		if message.type == "ui.snapshot": received.pending = message.payload.upgrade.get("upgradePending",false)
+		if message.type == "command.result" and message.id == "upgrade-retry": received.result = message.payload
+	bridge.outgoing.connect(listener)
+	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+	check(received.get("pending",false), "ui.ready retains unresolved upgrade after +1 state arrived")
+	bridge.receive('{"v":1,"type":"upgrade.retry","id":"upgrade-retry","payload":{}}')
+	await wait_until(func() -> bool: return received.has("result"))
+	bridge.outgoing.disconnect(listener)
+	world.upgrade_endpoint.operation_finished.connect(_report_upgrade)
+	_report_upgrade("",received.result)
