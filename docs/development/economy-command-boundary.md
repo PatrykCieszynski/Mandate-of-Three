@@ -97,10 +97,11 @@ ShopStoreSqlite is unchanged: it resolves the offer, checks exact/first-fit bag
 capacity before wallet writes, then commits pending income, price and item
 creation atomically. Wallet RAM is accepted only after successful COMMIT.
 
-NPC purchases have no durable receipts yet. Their operation ID is empty and every
-successful call creates a distinct paid item, even for the same offer. Neither
-the offer ID nor UI transport correlation is treated as durable intention identity.
-This slice does not add retry/idempotency guarantees to that existing behavior.
+At this fourth slice, NPC purchases had no durable receipts. This is superseded
+by the eighth slice below. Their operation ID was empty and every
+successful call created a distinct paid item, even for the same offer. Neither
+the offer ID nor UI transport correlation was treated as durable intention identity.
+That slice did not add retry/idempotency guarantees.
 
 ## Fifth slice: Inventory activation, equipment and bag moves
 
@@ -180,6 +181,50 @@ no database migration or JavaScript change. The internal weapon RPC gains a
 version argument, so client and World must update together; mixed protocol builds
 are not supported by this slice.
 
+## Eighth slice: durable NPC purchase intentions
+
+NPC Shop purchases require an explicit business operation ID, independently of
+browser/native request correlation. ShopUiAdapter creates a random ID for each
+new purchase. A timeout, UI reload cancellation or storage uncertainty retains
+one unresolved intention in adapter RAM; retrying the same payload reuses that
+ID with a new native RPC correlation. A different purchase is blocked until the
+old one resolves. A committed/replayed success releases it; a definitive store
+rejection following receipt lookup also releases it. Authorization/transport
+failure on an uncertain retry is not treated as proof of economic failure.
+
+ShopStoreSqlite composes the existing EconomyCommandSqlite transaction boundary.
+The existing account-scoped `market_commands` table stores successful NPC results
+under `npc_shop.buy`, atomically with pending income, Yang spend and item creation.
+The request fingerprint binds receiving character, canonical shop ID, offer ID and
+requested placement. Reusing the ID with different arguments (including another
+character of the same account) conflicts. A replay returns the original UID/result
+before checking current capacity, balance or offer availability. No new schema,
+separate writer, inheritance or generic persistence interface was introduced.
+
+WorldEconomyService accepts wallet RAM only on a new commit. Receipt balance is
+historical and never overwrites later income. Shop3D emits inventory/wallet facts
+only for a new commit; replay resynchronizes the caller's current views without
+another mutation fact. Current NPC/service/range authorization and rate limits
+still apply before the economic operation, including replay. Failed commands roll
+back and do not add durable receipt rows. Successful receipts are not pruned.
+
+The purchase RPC gains a separate operation ID; matching client/World builds are
+required. An empty ID rejects instead of silently bypassing idempotency. Browser
+`shop.buy` shape is unchanged because the Godot adapter owns intention identity.
+When unresolved, the Shop view exposes a Retry purchase button. The explicit
+`shop.retry` Web command accepts an empty payload only; ShopUiAdapter resubmits
+the remembered intention and exact original payload. Retry does not pass through
+browser Inventory placement validation, so a committed item occupying its target
+cell cannot block receipt recovery. A `purchasePending` presentation flag is
+republished after state changes and included in `ui.ready` snapshots. The flag
+and button do not grant authority: normal server NPC/service/range checks remain.
+
+**Recovery limit:** the adapter and unresolved ID survive browser reload within
+the running client, not full client exit/relog. SQLite receipts survive restart,
+but automatic discovery/client journaling and receipt-only resolution outside NPC
+range are not implemented here. This is synchronous single-World receipt safety,
+not full durable C2 admission/distributed recovery or durable rejection policy.
+
 ## Regression evidence
 
 Existing suites protect rollback, ownership and recovery. Their original wallet
@@ -244,6 +289,27 @@ Smoke (10 Godot fixtures, 78 Web contracts), Web Inventory and the existing
 two-client Market race/receipt-cache recovery passed on 2026-10-15. These are
 headless checks, not native appearance/physical input or full reconnect proof.
 
+For NPC purchase receipts, existing shop_purchase cases now supply explicit
+intentions. Focused checks protect exact result replay, changed-placement and
+same-account/different-character conflicts, later pending income, receipt-write
+rollback, retry after rollback, reopen with a full bag and one receipt per actual
+purchase. Existing shop_network deliberately discards the first committed RPC
+response, waits for the real adapter timeout and retries through that same adapter.
+The retry now enters through the explicit Web bridge command while the purchased
+item already occupies the exact target, and ui.ready exposes retry availability.
+A changed unresolved payload is blocked; after resolution, a new purchase creates
+a distinct paid item. The existing two-client flow still requires exactly two
+inventory and wallet mutation facts. No new test suite was added. Smoke
+(10 Godot fixtures, 78 Web contracts) and two-client NPC Shop passed on 2026-10-15.
+No native window was launched.
+
+PR #17 review regression: the Web Shop/Inventory fixture simulates a pending
+exact purchase whose target is now occupied. A repeated drag stays invalid, but
+clicking Retry invokes only the empty-payload recovery action. This closes the
+coverage gap left by calling the Godot adapter directly. Review checks passed:
+full configured Prettier format check, smoke (10 Godot fixtures, 79 Web contracts)
+and the two-client NPC Shop flow. Generated JavaScript matches TypeScript.
+
 Relevant commands, run sequentially where they share port 18098:
 
 ```powershell
@@ -278,7 +344,8 @@ are recorded separately. Incidental generated import/UID files were removed.
 
 ## Remaining Stage 2 work
 
-Stable intention IDs and full durable result receipts for non-market operations,
+Stable intention IDs and full durable result receipts for remaining non-market
+operations (Upgrade/Inventory/Storage), client-side unresolved-operation journaling,
 durable Economy/World revision reconciliation and broader cache invalidation
 remain later reviewable slices. The live presentation delivery versions above
 do not implement those distributed contracts. Startup/dev grants and checkpoint wallet flows still retain

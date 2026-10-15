@@ -20,6 +20,7 @@ export type ShopSnapshot =
       name: string;
       currency: 'yang';
       offers: ShopOfferPresentation[];
+      purchasePending?: boolean;
     };
 export type ShopBuyCommand = {
   npc_instance_id: string;

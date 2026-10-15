@@ -5,6 +5,7 @@ import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { paintItemIcon } from '../../game-ui/items/item-icon.js';
 import { ITEM_SLOT_SIZE } from '../../game-ui/items/item-geometry.js';
 import { shopOfferLayout } from './shop-layout.js';
+import { UiButton } from '../../core/primitives/ui-button.js';
 import { UiTab } from '../../core/primitives/ui-tab.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { itemWindowControls } from '../../game-ui/items/item-drag-policy.js';
@@ -25,6 +26,7 @@ export function mountShop(
     drag: ItemDragRuntime;
     resolveItemIcon: ResolveItemIcon;
     buy: (command: ShopBuyCommand) => Promise<CommandResult>;
+    retry?: () => Promise<CommandResult>;
     onClose: () => void;
     onRegionsChanged?: () => void;
   },
@@ -76,11 +78,18 @@ export function mountShop(
   status.className = 'shop-status';
   status.setAttribute('role', 'status');
   status.hidden = true;
-  shell.contentRoot.append(offers, tabList, status);
+  const retry = UiButton({
+    label: 'Retry purchase',
+    className: 'shop-retry ui-button',
+    onClick: () => void retryPurchase(),
+  });
+  retry.element.hidden = true;
+  shell.contentRoot.append(offers, tabList, status, retry.element);
   const tip = ItemTooltip(root, { geometry: () => options.manager });
   const sources: DragRegistration[] = [],
     controls = itemWindowControls(options.drag, root);
   controls.push(options.drag.registerControl(tabList, 'cancel'));
+  controls.push(options.drag.registerControl(retry.element, 'cancel'));
   const errors: Record<string, string> = {
     funds: 'Not enough Yang.',
     inventory_full: 'Inventory is full.',
@@ -90,9 +99,48 @@ export function mountShop(
     no_interaction: 'Reopen the NPC interaction.',
     service_disabled: 'Shop is unavailable.',
     too_fast: 'Wait before buying again.',
-    storage: 'Purchase failed. Try again.',
+    storage: 'Purchase could not be confirmed. Retry the same purchase.',
+    purchase_pending:
+      'Purchase not confirmed. Reopen the original shop and use Retry purchase.',
     request: 'Invalid placement.',
+    no_pending_purchase: 'No purchase needs confirmation.',
   };
+  function updateRetry() {
+    retry.element.hidden =
+      !state.active || !state.purchasePending || !options.retry;
+    retry.setDisabled(pending);
+  }
+  async function retryPurchase() {
+    if (
+      disposed ||
+      pending ||
+      !state.active ||
+      !state.purchasePending ||
+      !options.retry
+    )
+      return;
+    pending = true;
+    tip.hide();
+    updateRetry();
+    const requestGeneration = generation;
+    setStatus('Confirming purchase…');
+    try {
+      const result = await options.retry();
+      if (!disposed && generation === requestGeneration)
+        setStatus(
+          result.ok
+            ? 'Purchased.'
+            : (errors[result.error ?? ''] ??
+                'Purchase not confirmed. Use Retry purchase.'),
+        );
+    } catch {
+      if (!disposed && generation === requestGeneration)
+        setStatus('Purchase not confirmed. Use Retry purchase.');
+    } finally {
+      if (generation === requestGeneration) pending = false;
+      if (!disposed) updateRetry();
+    }
+  }
   function setStatus(text: string) {
     status.textContent = text;
     status.hidden = !text;
@@ -137,6 +185,7 @@ export function mountShop(
         setStatus('Purchase failed. Try again.');
     } finally {
       if (generation === requestGeneration) pending = false;
+      if (!disposed) updateRetry();
     }
   }
   function render() {
@@ -148,6 +197,7 @@ export function mountShop(
     tabList.replaceChildren();
     tabList.hidden = true;
     root.hidden = !state.active;
+    updateRetry();
     if (state.active) {
       const catalog = state;
       shell.panel.querySelector('h1')!.textContent = catalog.name;
@@ -263,6 +313,7 @@ export function mountShop(
       controls.forEach((binding) => binding.dispose());
       tabs.forEach((tab) => tab.dispose());
       gridView.dispose();
+      retry.dispose();
       tip.dispose();
       shell.dispose();
     },

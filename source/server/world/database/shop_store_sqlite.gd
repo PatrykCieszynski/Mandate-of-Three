@@ -2,13 +2,20 @@ class_name ShopStoreSqlite
 extends RefCounted
 ## Caller supplies server-resolved content, never a client price/item/quantity.
 var db: SQLite
+var _transaction: EconomyCommandSqlite
+var committed: bool:
+	get: return _transaction.committed
 
-func _init(database: SQLite) -> void:
+func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
 	db = database
+	_transaction = EconomyCommandSqlite.new(db, rejected_commands)
 
-func purchase(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> Dictionary:
-	if not db.query("BEGIN IMMEDIATE;"): return {"ok":false, "error":"storage"}
-	if shop == null or not shop.validation_errors().is_empty(): return _rollback("invalid_definition")
+func purchase(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1, operation_id: String = "") -> Dictionary:
+	_transaction.committed = false
+	if shop == null or not shop.validation_errors().is_empty(): return {"ok":false, "error":"invalid_definition"}
+	# Character is part of the intention: another character on the same account
+	# cannot replay a purchase into a different receiving inventory.
+	if not _transaction.begin(owner_id, operation_id, "npc_shop.buy", [owner_id, str(shop.shop_id), str(offer_id), requested_position]): return _transaction.cached
 	var offer: ShopOfferDefinition
 	for candidate: ShopOfferDefinition in shop.offers:
 		if candidate.offer_id == offer_id:
@@ -27,9 +34,7 @@ func purchase(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: 
 	item.amount = offer.quantity
 	var inserted: Dictionary = items.receive_item_in_transaction(item, int(receiving.position))
 	if not inserted.ok: return _rollback(str(inserted.error))
-	if not db.query("COMMIT;"): return _rollback("storage")
-	return {"ok":true, "balance":spent.balance, "uid":inserted.uid, "position":inserted.position}
+	return _transaction.commit({"ok":true, "balance":spent.balance, "uid":inserted.uid, "position":inserted.position})
 
 func _rollback(error: String) -> Dictionary:
-	db.query("ROLLBACK;")
-	return {"ok":false, "error":error}
+	return _transaction.rollback(error)

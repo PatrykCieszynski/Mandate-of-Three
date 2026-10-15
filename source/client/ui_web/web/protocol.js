@@ -133,6 +133,8 @@ function isShop(value) {
     const id = (v) => typeof v === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(v);
     if (typeof value.npcInstanceId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value.npcInstanceId) || !id(value.serviceId) || !id(value.shopId) || typeof value.name !== 'string' || !value.name || value.name.length > 128 || value.currency !== 'yang' || !Array.isArray(value.offers) || value.offers.length > 180)
         return false;
+    if ('purchasePending' in value && typeof value.purchasePending !== 'boolean')
+        return false;
     const seen = new Set();
     for (const offer of value.offers) {
         if (!isObject(offer) || !id(offer.offerId) || typeof offer.offerId !== 'string' || seen.has(offer.offerId) || !id(offer.itemDefinitionId) || typeof offer.name !== 'string' || !offer.name || offer.name.length > 128 || typeof offer.iconId !== 'string' || offer.iconId.length > 64 || !integerRange(offer.height, 1, 3) || !integerRange(offer.quantity, 1) || !integerRange(offer.price, 1, MAX_YANG) || ('description' in offer && typeof offer.description !== 'string') || ('tooltip' in offer && !isItemTooltipDetails(offer.tooltip)) || 'uid' in offer || 'revision' in offer)

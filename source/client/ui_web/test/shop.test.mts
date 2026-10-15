@@ -89,7 +89,7 @@ test('Shop snapshots validate all offers before atomic replacement and survive f
   assert.equal(store.apply(message('shop.updated', { active: false })), true);
   assert.deepEqual(store.state.shop, { active: false });
 });
-function fixture() {
+function fixture(rejection = 'funds') {
   const env = environment();
   Object.assign(globalThis, {
     HTMLElement: env.host.HTMLElement,
@@ -109,14 +109,19 @@ function fixture() {
   env.doc.body.append(shopRoot, invRoot);
   const commands: ShopBuyCommand[] = [];
   let success = false;
+  let retries = 0;
   const view = mountShop(shopRoot, {
     manager: env.manager,
     drag,
     resolveItemIcon: () => null,
     onClose: () => {},
+    retry: async () => {
+      retries++;
+      return { ok: true };
+    },
     buy: async (command) => {
       commands.push(command);
-      return success ? { ok: true } : { ok: false, error: 'funds' };
+      return success ? { ok: true } : { ok: false, error: rejection };
     },
   });
   const inventory = mountInventory(invRoot, {
@@ -186,6 +191,7 @@ function fixture() {
     view,
     inventory,
     commands,
+    retryCount: () => retries,
     pointer,
     source,
     drop,
@@ -403,7 +409,10 @@ test('Item tooltip preserves descriptions and clears offer pricing for owned ite
         currency: 'yang',
       },
     );
-    assert.equal(tip.element.querySelector('.item-tooltip-description')?.textContent, 'Forged steel.');
+    assert.equal(
+      tip.element.querySelector('.item-tooltip-description')?.textContent,
+      'Forged steel.',
+    );
     const footer = tip.element.querySelector('footer')!;
     assert.equal(footer.textContent, 'Buy price: 1,000 Yang');
     assert.equal(footer.hidden, false);
@@ -411,7 +420,10 @@ test('Item tooltip preserves descriptions and clears offer pricing for owned ite
       { clientX: 10, clientY: 10 },
       { name: 'Owned Sword', description: 'Already yours.' },
     );
-    assert.equal(tip.element.querySelector('.item-tooltip-description')?.textContent, 'Already yours.');
+    assert.equal(
+      tip.element.querySelector('.item-tooltip-description')?.textContent,
+      'Already yours.',
+    );
     assert.equal(footer.hidden, true);
     assert.equal(footer.textContent, '');
   } finally {
@@ -515,6 +527,60 @@ test('Shop pages keep offer authority separate from Inventory pages and reset/cl
     f.view.setState({ active: false });
     f.view.setState(catalog);
     assert.equal(ids()[0], 'offer_0', 'Reopening starts on first page');
+  } finally {
+    f.cleanup();
+  }
+});
+
+// A committed item can occupy the requested cell before the purchase result
+// arrives. Normal D&D must stay blocked there; result recovery must bypass it.
+test('Pending exact purchase can be retried from Shop despite an occupied target', async () => {
+  const f = fixture('purchase_pending');
+  try {
+    await f.drop(f.grid);
+    assert.equal(f.commands.length, 1);
+    const original = f.commands[0]!;
+    assert.ok('x' in original);
+    f.inventory.setState({
+      inventory: {
+        columns: 5,
+        rows: 9,
+        pages: 4,
+        items: [
+          {
+            ...bagItem,
+            id: 'purchased-sword',
+            height: 2,
+            x: original.x!,
+            y: original.y!,
+            page: original.page!,
+          },
+        ],
+      },
+    });
+    f.view.setState({ ...shop, purchasePending: true });
+    await f.drop(f.grid);
+    assert.equal(
+      f.commands.length,
+      1,
+      'occupied target still blocks a new purchase',
+    );
+    const retry = f.shopRoot.querySelector<HTMLButtonElement>('.shop-retry')!;
+    assert.equal(retry.hidden, false);
+    retry.click();
+    await flush();
+    assert.equal(
+      f.retryCount(),
+      1,
+      'explicit retry has no placement payload or capacity check',
+    );
+    assert.equal(
+      f.commands.length,
+      1,
+      'retry never creates a fresh buy intention',
+    );
+    f.view.setState({ ...shop, purchasePending: false });
+    assert.equal(retry.hidden, true);
   } finally {
     f.cleanup();
   }
