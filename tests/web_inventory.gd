@@ -6,6 +6,7 @@ class HeadlessUiHost extends WebUiHost:
 
 var web: CoreUiController
 var web_results: Dictionary = {}
+var web_snapshots: Array[Dictionary] = []
 var running: bool = false
 var inventory_facts: Dictionary = {}
 
@@ -55,15 +56,28 @@ func run_client() -> void:
 	web.setup(world)
 	web.bridge.outgoing.connect(func(json: String) -> void:
 		var message: Dictionary = JSON.parse_string(json)
-		if message.type == "command.result" and str(message.id).begins_with("fixture-"): web_results[str(message.id)] = message.payload)
+		if message.type == "command.result" and str(message.id).begins_with("fixture-"): web_results[str(message.id)] = message.payload
+		if message.type == "ui.snapshot": web_snapshots.append(message.payload))
 	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 	register_ready.rpc_id(1)
 	await wait_until(func() -> bool: return phase_name == "GO")
 	var endpoint: InventoryEndpoint3D = world.inventory_endpoint
+	var entry_projection := endpoint.state.duplicate(true)
+	check(int(entry_projection.get("projection_version", 0)) > 0, "entry snapshot hydrates a versioned inventory/equipment projection")
 	var item: Dictionary = endpoint.state.items[0].duplicate(true)
 	var result: Dictionary = await command("inventory.move_item", {"id":item.uid,"revision":item.revision,"x":0,"y":3,"page":0})
 	check(result.ok, "web command waits for committed move RPC")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 15 and i.revision == 1), "snapshot after move")
+	var moved_projection := endpoint.state.duplicate(true)
+	check(int(moved_projection.projection_version) > int(entry_projection.projection_version), "committed move advances projection version")
+	var duplicate_notifications: Array[Dictionary] = []
+	var observe_duplicate := func(snapshot: Dictionary) -> void: duplicate_notifications.append(snapshot)
+	endpoint.state_changed.connect(observe_duplicate)
+	endpoint.receive_inventory(entry_projection)
+	endpoint.receive_inventory(moved_projection)
+	endpoint.receive_inventory({"ok":true})
+	endpoint.state_changed.disconnect(observe_duplicate)
+	check(endpoint.state == moved_projection and duplicate_notifications.is_empty(), "older and duplicate full snapshots cannot undo a committed move")
 	var unchanged: Array = endpoint.state.items.duplicate(true)
 	result = await command("inventory.move_item", {"id":item.uid,"revision":1,"x":0,"y":3,"page":0})
 	check(result.ok and endpoint.state.items == unchanged, "same-cell Web move succeeds without changing revision")
@@ -86,6 +100,7 @@ func run_client() -> void:
 	check(not endpoint.state.items.any(func(i: Dictionary) -> bool: return i.has("primary_action")), "action stays outside presentation snapshots")
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
 	check(current.location == "equipment", "equipped item leaves bag")
+	var equipped_projection := endpoint.state.duplicate(true)
 	unchanged = endpoint.state.items.duplicate(true)
 	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
 	check(result.ok and endpoint.state.items == unchanged and endpoint.state.stats.attack > 10, "repeat Web equip preserves equipment and runtime-derived stats")
@@ -93,6 +108,10 @@ func run_client() -> void:
 	check(not result.ok and result.error == "stale", "Web unequip rejects stale revision")
 	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision})
 	check(result.ok and not endpoint.state.equipment.has("weapon"), "Web unequip commits and clears slot")
+	var unequipped_projection := endpoint.state.duplicate(true)
+	endpoint.receive_inventory(equipped_projection)
+	endpoint.receive_weapon(world.local_peer, str(item.definition_id), int(equipped_projection.projection_version))
+	check(endpoint.state == unequipped_projection and endpoint.public_weapons.get(world.local_peer) == "", "delayed equipment snapshot and public weapon cannot restore an unequipped sword")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.location == "bag"), "unequip returns to free bag cells")
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
 	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
@@ -101,6 +120,12 @@ func run_client() -> void:
 	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision,"x":2,"y":3,"page":1})
 	check(result.ok and endpoint.state.stats.attack == 10, "exact unequip restores runtime stats")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 62 and i.revision == current.revision + 1), "Web exact unequip publishes selected cell and page")
+	# A browser transport reload must replay the current accepted domain state,
+	# without requiring another mutation or accepting an old network snapshot.
+	var snapshot_count := web_snapshots.size()
+	web.bridge.reset_transport()
+	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+	check(web_snapshots.size() == snapshot_count + 1 and web_snapshots[-1].equipment.items.is_empty() and web_snapshots[-1].inventory.items.any(func(i: Dictionary) -> bool: return i.id == item.uid and int(i.revision) == int(current.revision) + 1), "ui.ready after reload restores the latest accepted inventory/equipment projection")
 	web.storage_opened = true
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
 	var transfer_payload: Dictionary = {"id":item.uid,"revision":current.revision,"from":"inventory","to":"storage","x":14,"y":0,"page":1,"quick":false}
