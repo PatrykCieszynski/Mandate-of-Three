@@ -11,6 +11,11 @@ var _authoritative_snapshots: Dictionary[int, Dictionary] = {}
 var state: Dictionary = {}
 var public_weapons: Dictionary[int, String] = {}
 var _last_action_ms: Dictionary[int, int] = {}
+# Delivery versions belong to this live map endpoint, not durable item revisions.
+# Full snapshots may skip versions (including updates for other characters).
+var _next_projection_version := 0
+var _inventory_version := 0
+var _weapon_versions: Dictionary[int, int] = {}
 var _world: Node
 func _ready() -> void:
 	_world = get_parent()
@@ -30,11 +35,12 @@ func initialize_peer(peer_id: int) -> void:
 		print("DEV_TRACE_SWORD owner=",resource.player_id," result=",result)
 	resynchronize(peer_id, "" if result.ok else str(result.error))
 	for other_id: int in public_weapons:
-		receive_weapon.rpc_id(peer_id, other_id, public_weapons[other_id])
+		receive_weapon.rpc_id(peer_id, other_id, public_weapons[other_id], _weapon_versions[other_id])
 
 func remove_peer(peer_id: int) -> void:
 	_authoritative_snapshots.erase(peer_id)
 	public_weapons.erase(peer_id)
+	_weapon_versions.erase(peer_id)
 	_last_action_ms.erase(peer_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
@@ -129,14 +135,13 @@ func refresh_authoritative_state(peer_id: int) -> void:
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
 	services.update_runtime_equipment(resource.player_id, snapshot)
 	snapshot["storage"] = services.economy().storage_snapshot(resource.player_id)
+	_next_projection_version += 1
+	snapshot["projection_version"] = _next_projection_version
 	_authoritative_snapshots[peer_id] = snapshot
 	if not snapshot.ok: return
-	var definition_id: String = ""
-	var uid: String = str(snapshot.equipment.get("weapon", ""))
-	for item: Dictionary in snapshot.items:
-		if item.uid == uid:
-			definition_id = str(item.definition_id)
+	var definition_id := _equipped_weapon(snapshot)
 	public_weapons[peer_id] = definition_id
+	_weapon_versions[peer_id] = int(snapshot.projection_version)
 	var body: PlayerActor3D = _world.characters.get(peer_id)
 	if body != null:
 		body.set_weapon(definition_id)
@@ -161,19 +166,32 @@ func _send_state(peer_id: int, error: String = "") -> void:
 	if not snapshot.ok: return
 	var definition_id: String = public_weapons.get(peer_id, "")
 	for observer: int in _world.characters:
-		receive_weapon.rpc_id(observer, peer_id, definition_id)
+		receive_weapon.rpc_id(observer, peer_id, definition_id, _weapon_versions[peer_id])
 
 @rpc("authority", "call_remote", "reliable", 1)
 func receive_inventory(snapshot: Dictionary) -> void:
 	if GameMode.is_world_server():
 		return
+	var version: Variant = snapshot.get("projection_version")
+	if not version is int or version <= _inventory_version: return
+	_inventory_version = version
 	state = snapshot.duplicate(true)
+	if bool(state.get("ok", false)):
+		# Private equipment and the local model advance together, even if an older
+		# public weapon message arrives later on the other reliable channel.
+		receive_weapon(multiplayer.get_unique_id(), _equipped_weapon(state), version)
 	state_changed.emit(state)
 
+func _equipped_weapon(snapshot: Dictionary) -> String:
+	var uid: String = str(snapshot.equipment.get("weapon", ""))
+	for item: Dictionary in snapshot.items:
+		if item.uid == uid: return str(item.definition_id)
+	return ""
+
 @rpc("authority", "call_remote", "reliable", 0)
-func receive_weapon(peer_id: int, definition_id: String) -> void:
-	if GameMode.is_world_server():
-		return
+func receive_weapon(peer_id: int, definition_id: String, version: int) -> void:
+	if GameMode.is_world_server() or version <= _weapon_versions.get(peer_id, 0): return
+	_weapon_versions[peer_id] = version
 	public_weapons[peer_id] = definition_id
 	var body: PlayerActor3D = _world.characters.get(peer_id)
 	if body != null:

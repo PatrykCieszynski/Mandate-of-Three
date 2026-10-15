@@ -151,6 +151,35 @@ No schema, RPC, Yang policy or item-generation behavior changed. Transactions
 remain synchronous in the current single World; there is no distributed claim
 flow, generic command framework or new persistence worker.
 
+## Seventh slice: live Inventory/Equipment projection versions
+
+InventoryEndpoint stamps each refreshed private full snapshot with a positive,
+monotonically increasing `projection_version`. The snapshot includes bag,
+equipment, derived display stats and account Storage. Read repair and no-op
+refreshes also advance this delivery version; it is not a count of economic
+mutations. Publication reuses the prepared snapshot without recomputing stats.
+
+Client intake ignores missing/invalid versions and duplicate/older snapshots
+before changing accepted state or notifying the CEF adapter. Public weapon RPCs
+carry the corresponding projection version and reject old/duplicate updates per
+actor. Accepted private equipment also advances the local weapon model, so an
+older public weapon message arriving on the other reliable channel cannot undo
+an unequip. Late-join publication includes current weapon versions.
+
+These are **live map endpoint delivery versions**, not durable Economy revisions,
+operation receipts or session fencing. The counter is local RAM and a recreated
+client endpoint hydrates afresh. Full snapshots may legitimately skip versions:
+a newer full view replaces the old one without a delta-replay/gap protocol.
+Existing item revisions remain the transactional concurrency contract. Runtime
+combat cache refresh and SQL transactions are unchanged; this slice protects
+client presentation from stale delivery, not cross-process World cache authority.
+
+CEF continues to receive the same presentation domains. Reload `ui.ready` uses
+the accepted current domains, without requiring a new network mutation. There is
+no database migration or JavaScript change. The internal weapon RPC gains a
+version argument, so client and World must update together; mixed protocol builds
+are not supported by this slice.
+
 ## Regression evidence
 
 Existing suites protect rollback, ownership and recovery. Their original wallet
@@ -207,6 +236,14 @@ racing and repeated pickup requests. No new test suite was introduced. Smoke
 (10 Godot fixtures and 78 Web contracts), run-pve.ps1 and run-web-inventory.ps1
 passed for this slice on 2026-10-15.
 
+For the seventh slice, the existing two-client Web Inventory fixture captures
+real earlier snapshots, injects them through the production receive handlers
+after move/unequip, and requires no state regression or duplicate notification.
+It also verifies that reload `ui.ready` returns current inventory/equipment.
+Smoke (10 Godot fixtures, 78 Web contracts), Web Inventory and the existing
+two-client Market race/receipt-cache recovery passed on 2026-10-15. These are
+headless checks, not native appearance/physical input or full reconnect proof.
+
 Relevant commands, run sequentially where they share port 18098:
 
 ```powershell
@@ -242,8 +279,9 @@ are recorded separately. Incidental generated import/UID files were removed.
 ## Remaining Stage 2 work
 
 Stable intention IDs and full durable result receipts for non-market operations,
-versioned inventory/equipment snapshots and broader reconciliation remain later
-reviewable slices. Startup/dev grants and checkpoint wallet flows still retain
+durable Economy/World revision reconciliation and broader cache invalidation
+remain later reviewable slices. The live presentation delivery versions above
+do not implement those distributed contracts. Startup/dev grants and checkpoint wallet flows still retain
 their existing entry points. Do not infer distributed C2 admission, durable business
 rejections, session fencing or pending-operation recovery from this change.
 Existing successful receipts remain durable; bounded rejected-command caching
