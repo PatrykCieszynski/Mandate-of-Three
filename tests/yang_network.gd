@@ -13,7 +13,24 @@ func phase(command: String, uid: String) -> void:
 		expected_balance = int(uid)
 		var currency: CurrencyEndpoint3D = world.currency_endpoint
 		check(int(currency.state.balance) == expected_balance, "private wallet snapshot")
-		check(currency.state.keys().size() == 2 and currency.state.has("drops"), "wallet snapshot excludes other balances and pending deltas")
+		check(currency.state.has("drops") and not currency.state.has("pending_currency_delta") and not currency.state.wallet_state.has("pending_applied") and not currency.state.wallet_state.has("balance") and currency.state.wallet_state.account_id==world.inventory_endpoint.state.economic_context.account_id, "wallet projection exposes only own account display and ordering metadata")
+		var accepted := currency.state.duplicate(true)
+		var stale := accepted.duplicate(true)
+		stale.projection_version = int(accepted.projection_version)+100
+		stale.wallet_state.revision -= 1
+		stale.balance = 0
+		currency.receive_state(stale)
+		check(currency.state==accepted,"new delivery cannot authorize older durable wallet state")
+		stale=accepted.duplicate(true)
+		stale.projection_version = int(accepted.projection_version)-1
+		stale.balance=0
+		currency.receive_state(stale)
+		check(currency.state==accepted,"older same-revision delivery cannot erase newer pending-income display")
+		stale=accepted.duplicate(true)
+		stale.projection_version = int(accepted.projection_version)+101
+		stale.wallet_state.account_id += 1
+		currency.receive_state(stale)
+		check(currency.state==accepted,"wallet ordering remains scoped to authenticated account")
 		check(currency._balance_label.text == "%d Yang" % expected_balance, "HUD shows authoritative Yang")
 		if not failed:
 			print("YANG_CLIENT_OK: ",client_number," private balance, ground currency, HUD and spend feedback")

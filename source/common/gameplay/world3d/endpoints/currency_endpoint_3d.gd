@@ -11,6 +11,10 @@ signal state_changed(snapshot: Dictionary)
 signal wallet_changed(owner_id: int)
 var ground: Dictionary[int, Dictionary] = {}
 var state: Dictionary = {}
+const WalletStateVersion = preload("res://source/common/gameplay/items/domain/wallet_state_version.gd")
+var _wallet_watermark: Dictionary = {}
+var _projection_version := 0
+var _received_version := 0
 var _next_drop_id: int = 0
 var _tick_elapsed: float = 0.0
 var _spend_sequences: Dictionary[int, int] = {}
@@ -148,13 +152,23 @@ func _send_snapshot(only_peer: int = -1) -> void:
 			drops[id] = {"amount": drop.amount, "position": drop.position,
 				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner),
 				"reserved_for": drop.owner_name if now < int(drop.protected_until) else ""}
-		receive_state.rpc_id(peer_id, {"balance": _database().wallet_balance(_owner(peer_id)), "drops": drops})
+		var snapshot := _database().wallet_snapshot(_owner(peer_id))
+		_projection_version += 1
+		snapshot.merge({"drops":drops,"projection_version":_projection_version})
+		receive_state.rpc_id(peer_id,snapshot)
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_state(snapshot: Dictionary) -> void:
 	if not GameMode.is_client(): return
-	state = snapshot
-	state_changed.emit(snapshot)
+	var version: Variant = snapshot.get("projection_version")
+	if not version is int or version<=_received_version: return
+	var wallet_state: Variant = snapshot.get("wallet_state")
+	if not WalletStateVersion.accepts(_wallet_watermark,wallet_state): return
+	if not snapshot.get("balance") is int or snapshot.balance<0 or snapshot.balance>WalletStoreSqlite.MAX_YANG or not snapshot.get("drops") is Dictionary: return
+	_received_version = version
+	_wallet_watermark = wallet_state.duplicate(true)
+	state = snapshot.duplicate(true)
+	state_changed.emit(state)
 	for id: int in _visuals.keys():
 		if not snapshot.drops.has(id):
 			_visuals[id].queue_free()

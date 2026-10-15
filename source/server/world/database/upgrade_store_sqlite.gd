@@ -51,7 +51,7 @@ func upgrade(owner_id: int, pending_yang: int, recipe: UpgradeDefinition, uid: S
 	if not spent.ok: return _rollback(str(spent.error))
 	if not db.query_with_bindings("UPDATE item_instances SET upgrade_level=?,revision=revision+1 WHERE uid=? AND owner_character_id=? AND revision=? AND upgrade_level=?;",[recipe.to_level,uid,owner_id,revision,recipe.from_level]): return _rollback("storage")
 	if not db.query("SELECT changes() AS n;") or int(db.query_result[0].n) != 1: return _rollback("stale")
-	return _transaction.commit({"ok":true,"balance":spent.balance})
+	return _transaction.commit({"ok":true,"balance":spent.balance,"wallet_states":[spent.wallet_state]})
 
 func upgrade_receipt(owner_id: int, operation_id: String) -> Dictionary:
 	if operation_id.is_empty() or operation_id.length() > 96: return {"ok":false,"error":"request"}

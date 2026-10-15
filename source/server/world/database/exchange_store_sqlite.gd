@@ -16,7 +16,7 @@ func receipt(character_id: int, command_id: String) -> Dictionary:
 
 static func ensure_ledger_schema(database: SQLite) -> bool:
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
-	if int(database.query_result[0].value)>=21: return true
+	if int(database.query_result[0].value)>=21: return preload("res://source/server/world/database/wallet_state_sqlite.gd").ensure_schema(database)
 	if int(database.query_result[0].value)!=20 or not database.query("BEGIN IMMEDIATE;"): return false
 	for sql: String in [
 		"ALTER TABLE account_wallets ADD COLUMN reserved_yang INTEGER NOT NULL DEFAULT 0 CHECK(typeof(reserved_yang)='integer' AND reserved_yang>=0 AND reserved_yang<=yang);",
@@ -24,8 +24,9 @@ static func ensure_ledger_schema(database: SQLite) -> bool:
 		"INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version','21');","COMMIT;"
 	]:
 		if not database.query(sql): database.query("ROLLBACK;");return false
-	return true
+	return preload("res://source/server/world/database/wallet_state_sqlite.gd").ensure_schema(database)
 static func asset_definition(asset: String) -> ItemDefinition: return MarketRequestRules.asset_definition(asset)
+
 func ledger(character_id: int) -> Dictionary:
 	var account:=WorldStoreSqlite.new(db).resolve_account_id(character_id)
 	if account<=0: return {"ok":false,"error":"owner"}
@@ -170,7 +171,7 @@ func place_order(character_id: int,p: Dictionary,pending: Dictionary) -> Diction
 		taker.remaining=int(taker.remaining)-fill
 		affected[int(maker.account_id)]=true
 		if int(taker.remaining)==0: break
-	return _finish_exchange({"ok":true,"order_id":order_id,"remaining":int(taker.remaining),"affected_accounts":affected.keys()},touched)
+	return _finish_exchange({"ok":true,"order_id":order_id,"remaining":int(taker.remaining),"affected_accounts":affected.keys()},touched,pending)
 func cancel_order(character_id: int,command_id: String,order_id: String,revision: int,pending: Dictionary) -> Dictionary:
 	if not _transaction.begin(character_id,command_id,"exchange.cancel",[order_id,revision]): return _transaction.cached
 	if not db.query_with_bindings("SELECT * FROM exchange_orders WHERE order_id=? AND account_id=?;",[order_id,_transaction.account_id]): return _transaction.rollback("storage")
@@ -183,7 +184,7 @@ func cancel_order(character_id: int,command_id: String,order_id: String,revision
 	if asset=="yang" and not _flush_pending(_transaction.account_id,pending,touched): return _transaction.rollback("storage")
 	if not release_in_transaction(_transaction.account_id,asset,int(order.reserved_amount)): return _transaction.rollback("storage")
 	if not db.query_with_bindings("UPDATE exchange_orders SET remaining=0,reserved_amount=0,status='cancelled',revision=revision+1 WHERE order_id=?;",[order_id]): return _transaction.rollback("storage")
-	return _finish_exchange({"ok":true,"order_id":order_id,"refunded":int(order.reserved_amount),"affected_accounts":[_transaction.account_id]},touched)
+	return _finish_exchange({"ok":true,"order_id":order_id,"refunded":int(order.reserved_amount),"affected_accounts":[_transaction.account_id]},touched,pending)
 func orders_snapshot(character_id: int,pending_yang: int=0) -> Dictionary:
 	var snapshot:=ledger(character_id)
 	if not snapshot.ok: return snapshot
@@ -202,7 +203,7 @@ func orders_snapshot(character_id: int,pending_yang: int=0) -> Dictionary:
 		for row: Dictionary in book.slice(0,10): snapshot.depth.append(row)
 	return snapshot
 
-func _finish_exchange(result: Dictionary,touched: Dictionary) -> Dictionary:
+func _finish_exchange(result: Dictionary,touched: Dictionary,pending: Dictionary) -> Dictionary:
 	# Read final totals before COMMIT. Runtime reconciliation cannot depend on a
 	# fallible database read after the economic mutation has already committed.
 	var states: Array=[]
@@ -210,6 +211,8 @@ func _finish_exchange(result: Dictionary,touched: Dictionary) -> Dictionary:
 	for account: int in touched:
 		var wallet:=wallets.load_wallet(account)
 		if not wallet.ok: return _transaction.rollback("storage")
-		states.append({"account_id":account,"balance":int(wallet.balance),"reserved_yang":int(wallet.reserved_yang)})
+		var state: Dictionary = wallet.wallet_state
+		state.pending_applied = int(pending.get(account,0))
+		states.append(state)
 	result.wallet_states=states
 	return _transaction.commit(result)

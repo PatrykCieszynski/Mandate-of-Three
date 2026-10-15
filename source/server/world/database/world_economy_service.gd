@@ -81,7 +81,7 @@ func purchase_shop_operation(character_id: int, shop: ShopDefinition, offer_id: 
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary
 	var committed := false
-	if _runtime.db == null or not _runtime.runtime_wallets.has(account):
+	if _runtime.db == null or not _runtime.wallet_ready or not _runtime.runtime_wallets.has(account):
 		response = {"ok":false, "error":"storage"}
 	else:
 		# Store resolves the authoritative offer and capacity before wallet writes.
@@ -90,7 +90,8 @@ func purchase_shop_operation(character_id: int, shop: ShopDefinition, offer_id: 
 			int(_runtime.runtime_wallets[account].pending_currency_delta), shop, offer_id, requested_position, operation_id)
 		committed = shop_store.committed
 	if committed:
-		_runtime.accept_committed_wallet_balance(character_id, int(response.balance))
+		for state: Dictionary in response.wallet_states:
+			_runtime.reconcile_committed_wallet(state)
 	# Replay never replaces wallet RAM with the historical receipt balance.
 	return EconomyOperationResult.capture(character_id, account, "npc_shop.buy", operation_id,
 		response, committed, [account] if committed else [], bool(response.get("ok", false)) and not committed)
@@ -104,7 +105,7 @@ func upgrade_operation(character_id: int, recipe: UpgradeDefinition, uid: String
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary
 	var committed := false
-	if _runtime.db == null or not _runtime.runtime_wallets.has(account):
+	if _runtime.db == null or not _runtime.wallet_ready or not _runtime.runtime_wallets.has(account):
 		response = {"ok":false, "error":"storage"}
 	elif recipe == null or not recipe.validation_errors().is_empty():
 		response = {"ok":false, "error":"invalid_definition"}
@@ -115,7 +116,8 @@ func upgrade_operation(character_id: int, recipe: UpgradeDefinition, uid: String
 			int(_runtime.runtime_wallets[account].pending_currency_delta), recipe, uid, revision, operation_id)
 		committed = upgrades.committed
 	if committed:
-		_runtime.accept_committed_wallet_balance(character_id, int(response.balance))
+		for state: Dictionary in response.wallet_states:
+			_runtime.reconcile_committed_wallet(state)
 	return EconomyOperationResult.capture(character_id, account, "upgrade", operation_id,
 		response, committed, [account] if committed else [], bool(response.get("ok", false)) and not committed)
 

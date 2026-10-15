@@ -4,6 +4,7 @@ var store: WorldStoreSqlite
 var exchange: ExchangeStoreSqlite
 var persistence: WorldDatabase
 var observed_accounts: Array[int] = []
+var fact_wallets: Array[Dictionary]=[]
 var items: ItemStoreSqlite
 func request(side: String,amount: int,num: int,den: int,id: String) -> Dictionary:
 	return {"command_id":id,"have_asset":"upgrade_ore" if side=="sell" else "yang","want_asset":"yang" if side=="sell" else "upgrade_ore","quantity":amount,"price_num":num,"price_den":den}
@@ -22,7 +23,9 @@ func _ready() -> void:
 	items=ItemStoreSqlite.new(db);exchange=ExchangeStoreSqlite.new(db)
 	persistence=WorldDatabase.new();add_child(persistence);persistence.db=db;persistence.store=store;persistence.item_store=items;persistence.wallet_store=WalletStoreSqlite.new(db);EconomyFixture.prepare(persistence)
 	assert(persistence.load_wallet(a) and persistence.load_wallet(b));assert(persistence.add_yang(a,33) and persistence.add_yang(b,90))
-	persistence.market_account_changed.connect(func(account: int) -> void: observed_accounts.append(account))
+	persistence.market_account_changed.connect(func(account: int) -> void:
+		fact_wallets.append(persistence.runtime_wallets.duplicate(true))
+		observed_accounts.append(account))
 	seed_ore(a,100,"seed")
 	var sell:=persistence.market_command(a,"order",request("sell",100,10,1,"sell"));assert(sell.ok and sell.remaining==100)
 	assert(exchange.ledger(a).assets[0].free==0 and exchange.ledger(a).assets[0].reserved==100)
@@ -35,11 +38,15 @@ func _ready() -> void:
 		assert(db.query("SELECT COUNT(*) AS n FROM exchange_fills;") and db.query_result[0].n==0)
 		assert(observed_accounts.size() == before_faults, "rolled back Exchange work emits no committed fact")
 		assert(db.query("DROP TRIGGER fail_fill;"))
+	fact_wallets.clear()
 	var operation := persistence.market_operation(b, "order", request("buy",60,12,1,"buy60"))
 	var bought := operation.response()
 	assert(operation.operation_id == "buy60" and operation.new_commit and not operation.receipt_replay)
 	assert(store.resolve_account_id(a) in operation.changed_accounts and store.resolve_account_id(b) in operation.changed_accounts)
 	assert(bought.ok and bought.remaining==0)
+	for notification: Dictionary in fact_wallets:
+		for state: Dictionary in bought.wallet_states:
+			assert(notification[int(state.account_id)].wallet_state==state,"all settlement wallets reconcile before first Exchange account fact")
 	assert(persistence.wallet_balance(b)==990 and persistence.wallet_balance(a)==2133,"maker 10 instead of limit 12; reserve difference is free, not burned")
 	assert(persistence.wallet_available(b)==990 and exchange.ledger(b).assets[0].free==60 and exchange.ledger(a).assets[0].reserved==40)
 	assert(persistence.market_command(c,"order",request("buy",40,10,1,"buy40")).ok)
@@ -50,6 +57,7 @@ func _ready() -> void:
 	var replay := persistence.market_operation(b, "order", request("buy",60,12,1,"buy60"))
 	assert(replay.response().ok and not replay.new_commit and replay.receipt_replay and replay.changed_accounts.is_empty())
 	assert(persistence.wallet_balance(b)==1007,"receipt does not reset newer RAM")
+	assert(replay.response().wallet_states==bought.wallet_states,"Exchange retry retains original revision and consumed pending prefix")
 	assert(observed_accounts.size() == before_replay, "Exchange replay emits no fresh account commit")
 	assert(persistence.flush_wallet());persistence.release_wallet(a)
 	seed_ore(a,50,"offline_seed")

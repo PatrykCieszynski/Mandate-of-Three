@@ -744,12 +744,96 @@ before releasing either withdrawal, removing a scheduling dependency in the test
 `git diff --check` passed. No native window, full Gateway/Master relog or loaded
 World tick performance benchmark was run for this slice.
 
-## Remaining Stage 2 work
+## Versioned wallet commits and pending-income reconciliation
 
-Wallet-specific durable revisions/reconciliation and broader cache invalidation
-remain later reviewable slices. The account item watermark does not implement a
-distributed C4 notification stream, session fencing, admitted-operation barriers,
-cache repair after missed cross-World events or wallet revision ordering. Startup/
-dev grants and checkpoint wallet flows retain their current entry points. Existing
-successful receipts remain durable; bounded rejected-command caching keeps its
-current semantics until an explicit persistence change is approved.
+Account wallets now carry an identity-qualified durable revision, separate from
+both item revisions and unsaved grinding Yang. An additive feature migration adds
+`account_wallets.wallet_revision` and a transaction-local update trigger. Changes
+to Yang or reserved Yang advance it; unchanged rows do not. It is an ordering
+watermark, not a command count: income plus spend may advance it more than once.
+Revision changes roll
+back with the monetary mutation and receipt. Existing balances begin at revision
+zero, without invented historical events. The feature's own meta marker preserves
+the identity-gated v18-v23 migration sequence and upgrades its trigger after the
+Exchange reserved column appears. Failed ALTER/installation rolls back and can
+be retried without losing balances or resetting the counter.
+
+WalletStore captures final wallet state before COMMIT: economy authority, account,
+revision, durable balance, reserved Yang and `pending_applied`. The last field is
+the exact pending-income prefix consumed by that transaction, not all future RAM
+income. Critical spend/credit, NPC Shop, Upgrade, player purchase and Exchange
+settlement use this state; checkpoint batches return the same form for their
+original dirty deltas. Exchange captures every Yang counterpart after matching;
+player purchases include both buyer and seller. Offline counterparts stay offline
+in RAM. Application services reconcile all loaded affected wallets before account
+change facts are published, with no fallible post-COMMIT SQL read.
+
+The existing RAM view retains `wallet_balance`, `pending_currency_delta` and
+reserved Yang, plus its last durable balance/version. Reconciliation accepts a
+newer revision and computes:
+
+```text
+remaining_pending = current_pending - committed.pending_applied
+runtime_balance = committed.balance + remaining_pending
+```
+
+Later income remains dirty. An equal matching revision is a duplicate and cannot
+consume pending again; an older revision is ignored. Wrong-economy or inconsistent
+state cannot overwrite RAM. Successful receipt replay/discovery retains the
+original final wallet states and never invokes new-commit reconciliation. Integer
+fields in new durable wallet metadata are encoded as decimal strings and decoded
+to native ints, preserving int64 revision precision. Legacy receipts with old
+wallet-state shapes remain readable and are never used as fresh commits.
+
+A newly committed state that cannot be explained safely (for example, a pending
+prefix larger than the retained pending amount) disables monetary writes and
+checkpoints until process restart. It retains RAM/dirty evidence instead of
+checkpointing potentially already-consumed income a second time. A later identity
+manifest cannot reopen that failure gate. This recovery guard runs in release
+builds as ordinary code. Existing soft-progression persistence remains separate.
+
+Currency snapshots carry private account scope, durable wallet revision and a
+live delivery sequence. The latter orders updates to pending-income display and
+transient ground currency while the durable revision remains unchanged. The
+client rejects older durable state even with a newer delivery sequence, older
+same-revision delivery and another account's scope. Projection reads are RAM-only;
+pending deltas/consumed prefixes and counterpart balances are not exposed in the
+currency snapshot. CEF continues consuming its existing balance view. Matching
+client/World builds are required; no frontend layout or gameplay rule changes.
+
+This remains one synchronous authoritative writer/earning owner. Capturing a
+prefix protects newer income at the reconciliation boundary; it does not allow
+multiple asynchronous transactions to consume overlapping pending prefixes.
+Durable Yang batch identities, distributed earning ownership, session fencing,
+missed cross-World invalidations and automatic repair after an unexplained commit
+are later milestones. No new queue, service, ORM or general persistence framework
+is introduced. Pickup income still uses RAM/dirty checkpoints; item/economy-critical
+transactions remain immediate.
+
+Verification extends existing suites. yang_wallet covers newer alt income after
+SQL completion, duplicate/older commit results, reservation-only revisions,
+checkpoint/spend rollback, offline settlement, int64 receipt/reopen, failed feature
+installation/retry and v18-to-Exchange migration without counter reset. It checks
+the unexplained-commit write gate and that identity refresh cannot reopen it.
+market_purchase and exchange_orders verify all affected versioned wallets are
+reconciled before the first account fact and that replay retains original states.
+yang_network verifies private scope, durable and delivery ordering while keeping
+its autoloot, full inventory, spending and disconnect/save behavior.
+
+Smoke (10 Godot fixtures, 84 Web contracts), the headless Yang network/forced-save
+flow, NPC Shop/Upgrade and Market/Exchange two-client suites passed on 2026-10-15.
+Market purchase, Exchange ledger/orders and existing process-crash/WAL recovery
+also passed; `git diff --check` passed. No native CEF window, full Gateway/Master
+relog or loaded tick benchmark was run. No TypeScript/generated Web changes were
+needed for the existing CEF balance view.
+
+## Remaining architecture work
+
+Local item/wallet ordering and existing synchronous reconciliation are implemented;
+this is not completion of distributed C4. Bounded invalidation/coalescing and
+loaded World tick measurements remain a separate local pass where evidence
+justifies changes. Stage 3 Shop product contracts and later MapInstance/handoff
+work remain on the roadmap. Extraction still requires admitted-operation barriers,
+fencing, durable earning-batch reconciliation and cross-process cache recovery.
+Existing successful receipts remain durable; rejected-command caching and current
+startup/dev-grant entry points retain their approved semantics.
