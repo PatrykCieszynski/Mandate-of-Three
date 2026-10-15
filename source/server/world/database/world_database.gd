@@ -21,6 +21,7 @@ const WALLET_SAVE_SECONDS: float = 30.0
 var runtime_wallets: Dictionary[int, Dictionary] = {}
 var _wallet_accounts: Dictionary[int, int] = {}
 var wallet_ready := false
+var _economy_identity := ""
 var auction_queries: AuctionQueryService
 var _auction_lifecycle_busy := false
 var _auction_quiesced := false
@@ -59,7 +60,19 @@ func coordinated_backup(keep_last: int = 10, restart_reader: bool = true, final_
 func shutdown_database() -> bool:
 	if not await coordinated_backup(10,false,true): return false
 	wallet_ready=false
+	_economy_identity = ""
 	return db!=null and db.close_db()
+
+func economic_context(character_id: int) -> Dictionary:
+	if db == null or character_id <= 0: return {}
+	if _economy_identity.is_empty():
+		if not db.query("SELECT value FROM meta WHERE key='economy_authority_id';") or db.query_result.is_empty(): return {}
+		var value := str(db.query_result[0].value)
+		if not ItemInstance.valid_uid(value): return {}
+		_economy_identity = value
+	var account := wallet_account_id(character_id)
+	if account <= 0: return {}
+	return {"authority_id":_economy_identity,"account_id":account,"character_id":character_id}
 
 func wallet_account_id(character_id: int) -> int:
 	if not _wallet_accounts.has(character_id) and store != null:

@@ -382,10 +382,59 @@ headless editor loaded a saved Terrain3D spike scene and reported a tool-script
 The affected terrain code was unchanged; runtime economy/network/smoke checks
 are recorded separately. Incidental generated import/UID files were removed.
 
+## Tenth slice: NPC purchase client journal
+
+Before sending a new NPC purchase, ShopUiAdapter writes the stable operation ID
+and original payload to `user://pending_npc_purchases`. Each immutable intention
+has its own JSON file inside a hashed economy/account/character scope. The file
+is flushed, closed and renamed before RPC; an unfinished `.tmp` is never sent.
+This is process-restart recovery, not a claim of OS/power-loss fsync durability.
+No credentials, balances, inventory copies or authority are stored client-side.
+
+The authenticated private Inventory projection supplies `economic_context`:
+`authority_id`, Master `account_id` and receiving `character_id`. The authority
+ID is a random additive key in SQLite's existing `meta` table, generated once
+and retained by normal backup/restore. A fresh dev DB has a different identity,
+so reused numeric IDs cannot pick up another economy's intentions. It identifies
+the current SQLite economy, not a channel/instance/process or future realm service.
+A copied database retains that identity; independently operated copies must not
+be treated as separate economies without assigning their own identity.
+This adds private snapshot metadata, not a new mutation command or SQL table.
+
+A new adapter restores at most one unresolved intention in that scope and sends
+one **read-only receipt lookup**. A committed receipt clears the local file only
+after its result arrives; World repairs current views as before. The recovery
+window can appear without reopening the NPC or restoring a stale catalog.
+An absent receipt retains the intention. Only the player's explicit Retry can
+resubmit the original ID/payload through normal NPC/service/range authorization;
+startup/relog never automatically buys. This also covers a crash after journal
+creation but before RPC. Timeout, disconnect and UI reload retain the file.
+
+Known success or definitive store rejection removes the matching entry. A failed
+write blocks sending; failed removal keeps the intention unresolved, preventing
+a new ID after an unknown outcome. Corrupt, unsupported or multiple records fail
+closed, rather than silently dropping/choosing an intention. The UI reports
+`journal_unavailable`; there is deliberately no destructive reset button.
+Closing or dismissing the recovery window does not discard an intention.
+Immutable filenames avoid overwriting another running client's record; concurrent
+clients can still leave multiple records, which require explicit recovery tooling
+in a later slice. Server receipts and authorization remain the authority even
+when local files are modified or removed.
+
+Verification reuses shop_purchase and the two-client Shop fixture. It checks
+scope isolation, corruption, failed disk admission, stable DB identity, a fresh
+Godot process reading the saved ID, and a newly composed adapter recovering a lost
+committed result outside NPC range with an occupied target. A crash-before-RPC
+entry produces one absent-receipt response and no automatic buy. Existing item,
+wallet, rollback and exactly-two-commit assertions remain in place. Smoke (10 Godot fixtures, 80 Web contracts), the two-client Shop flow and the
+configured Prettier check passed on 2026-10-15. Full desktop
+relaunch through Gateway/Master and manual native CEF interaction are not verified
+by this headless fixture; no login/session admission behavior was changed.
+
 ## Remaining Stage 2 work
 
 Stable intention IDs and full durable result receipts for remaining non-market
-operations (Upgrade/Inventory/Storage), client-side unresolved-operation journaling,
+operations (Upgrade/Inventory/Storage), broader client-side operation journaling,
 durable Economy/World revision reconciliation and broader cache invalidation
 remain later reviewable slices. The live presentation delivery versions above
 do not implement those distributed contracts. Startup/dev grants and checkpoint wallet flows still retain
