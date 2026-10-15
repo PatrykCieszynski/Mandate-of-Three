@@ -8,6 +8,10 @@ extends BaseMultiplayerEndpoint
 var connected_worlds: Dictionary[int, Dictionary]
 ## Latest issued World ticket also fences delayed disconnect notifications.
 var _world_sessions: Dictionary[String, Dictionary] = {}
+## One current, bounded-lifetime request per account, recorded BEFORE World work.
+var _entry_attempts: Dictionary[String, Dictionary] = {}
+const ENTRY_ATTEMPT_TTL_MS: int = 30_000
+const MAX_ENTRY_ATTEMPTS: int = 1024
 
 
 func _ready() -> void:
@@ -29,6 +33,9 @@ func _on_peer_connected(peer_id: int) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	var dropped: Dictionary = connected_worlds.get(peer_id, {})
+	for username: String in _entry_attempts.keys():
+		if _entry_attempts[username].world_id == peer_id:
+			_entry_attempts.erase(username)
 	for username: String in _world_sessions.keys():
 		var session: Dictionary = _world_sessions[username]
 		if session.world_id == peer_id:
@@ -224,6 +231,37 @@ func fetch_token(_auth_token: String, _username: String, _character_id: int, _ac
 	pass
 
 
+## Login and character creation share one attempt slot. A random attempt identity
+## is echoed by World; request IDs alone can be reused after a Gateway restart.
+func begin_entry_attempt(username: String, world_id: int, gateway_id: int, request_id: int, kind: StringName, character_id: int = 0) -> String:
+	var now := Time.get_ticks_msec()
+	for account: String in _entry_attempts.keys():
+		if int(_entry_attempts[account].expires_at) <= now:
+			_entry_attempts.erase(account)
+	revoke_world_session(username)
+	if _entry_attempts.size() >= MAX_ENTRY_ATTEMPTS: return ""
+	var attempt_id := authentication_manager.generate_random_token()
+	_entry_attempts[username] = {"id": attempt_id, "world_id": world_id,
+		"gateway_id": gateway_id, "request_id": request_id, "kind": kind,
+		"character_id": character_id, "expires_at": now + ENTRY_ATTEMPT_TTL_MS}
+	return attempt_id
+
+
+func _consume_entry_attempt(username: String, world_id: int, gateway_id: int, request_id: int, kind: StringName, attempt_id: String, character_id: int = 0) -> bool:
+	var attempt: Dictionary = _entry_attempts.get(username, {})
+	if attempt.is_empty() or attempt.id != attempt_id: return false
+	if attempt.world_id != world_id or attempt.gateway_id != gateway_id or attempt.request_id != request_id or attempt.kind != kind or attempt.character_id != character_id:
+		return false
+	_entry_attempts.erase(username) # Consume even errors; duplicate replies do nothing.
+	return int(attempt.expires_at) > Time.get_ticks_msec()
+
+
+## Keep the Gateway transport separate from attempt acceptance; tests observe
+## actual result_login/creation callbacks, not just token registration helpers.
+func _entry_response(gateway_id: int, request_id: int, response: Dictionary) -> void:
+	gateway_manager.gateway_response.rpc_id(gateway_id, request_id, response)
+
+
 ## Called only when issuing a trusted ticket; character identity stays in World.
 func register_world_session(world_id: int, username: String, token: String) -> void:
 	_world_sessions[username] = {"world_id": world_id, "token": token}
@@ -243,6 +281,7 @@ func retire_world_session(world_id: int, username: String, token: String) -> boo
 
 ## A new Gateway login invalidates unclaimed tickets as well as active ownership.
 func revoke_world_session(username: String) -> void:
+	_entry_attempts.erase(username)
 	var session: Dictionary = _world_sessions.get(username, {})
 	_world_sessions.erase(username)
 	if not session.is_empty() and connected_worlds.has(int(session.world_id)):
@@ -260,14 +299,15 @@ func player_disconnected(username: String, session_token: String) -> void:
 
 
 @rpc("authority")
-func create_player_character_request(_gateway_id: int, _peer_id: int, _username: String, _character_data: Dictionary, _account_id: int) -> void:
+func create_player_character_request(_gateway_id: int, _peer_id: int, _username: String, _character_data: Dictionary, _account_id: int, _attempt_id: String) -> void:
 	pass
 
 
 @rpc("any_peer")
-func player_character_creation_result(gateway_id: int, peer_id: int, username: String, result_code: int) -> void:
+func player_character_creation_result(gateway_id: int, peer_id: int, username: String, result_code: int, attempt_id: String) -> void:
 	var world_id: int = multiplayer_api.get_remote_sender_id()
 	if not connected_worlds.has(world_id): return
+	if not _consume_entry_attempt(username, world_id, gateway_id, peer_id, &"create", attempt_id): return
 	if result_code:
 		var account: AccountResource = authentication_manager.account_collection.collection.get(username)
 		if not account:
@@ -283,7 +323,7 @@ func player_character_creation_result(gateway_id: int, peer_id: int, username: S
 		register_world_session(world_id, username, auth_token)
 		fetch_token.rpc_id(world_id, auth_token, username, result_code, account.id)
 		
-		gateway_manager.gateway_response.rpc_id(
+		_entry_response(
 			gateway_id,
 			peer_id,
 			{
@@ -293,9 +333,7 @@ func player_character_creation_result(gateway_id: int, peer_id: int, username: S
 			}
 		)
 	else:
-		gateway_manager.player_character_creation_result.rpc_id(
-			gateway_id, peer_id, result_code
-		)
+		_entry_response(gateway_id, peer_id, {"error": GatewayAPI.ERR_GENERIC})
 
 
 @rpc("any_peer")
@@ -304,16 +342,17 @@ func request_player_characters(_gateway_id: int, _peer_id: int, _username: Strin
 
 
 @rpc("any_peer")
-func request_login(_gateway_id: int, _peer_id: int, _username: String, _character_id: int) -> void:
+func request_login(_gateway_id: int, _peer_id: int, _username: String, _character_id: int, _attempt_id: String) -> void:
 	pass
 
 
 @rpc("any_peer")
-func result_login(result_code: int, gateway_id: int, peer_id: int, username: String, character_id: int) -> void:
+func result_login(result_code: int, gateway_id: int, peer_id: int, username: String, character_id: int, attempt_id: String) -> void:
 	var world_id: int = multiplayer_api.get_remote_sender_id()
 	if not connected_worlds.has(world_id): return
+	if not _consume_entry_attempt(username, world_id, gateway_id, peer_id, &"login", attempt_id, character_id): return
 	if result_code != OK:
-		gateway_manager.gateway_response.rpc_id(gateway_id,peer_id,{"error":result_code})
+		_entry_response(gateway_id, peer_id, {"error": result_code})
 		return
 	if result_code == OK:
 		# Last-login-wins; only the matching ticket may later clear this status.
@@ -326,9 +365,9 @@ func result_login(result_code: int, gateway_id: int, peer_id: int, username: Str
 		await get_tree().create_timer(0.5).timeout
 		# A newer login or world disconnect may have retired this attempt.
 		if _world_sessions.get(username, {}).get("token", "") != auth_token or not connected_worlds.has(world_id):
-			gateway_manager.gateway_response.rpc_id(gateway_id, peer_id, {"error": ERR_UNAUTHORIZED})
+			_entry_response(gateway_id, peer_id, {"error": ERR_UNAUTHORIZED})
 			return
-		gateway_manager.gateway_response.rpc_id(
+		_entry_response(
 			gateway_id,
 			peer_id,
 			{

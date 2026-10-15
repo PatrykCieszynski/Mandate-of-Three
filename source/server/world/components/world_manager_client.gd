@@ -372,7 +372,7 @@ func account_identity_manifest(identities: Dictionary) -> void:
 	if not await database.start_auction_queries(): ServerLog.error("Auction reader unavailable; economy remains operational.")
 
 @rpc("authority")
-func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary, account_id: int) -> void:
+func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary, account_id: int, attempt_id: String) -> void:
 	var character_id := 0
 	if database.wallet_ready and database.store.bind_account_identity(username,account_id,true):
 		character_id = database.create_player_character(username, character_data)
@@ -382,12 +382,13 @@ func create_player_character_request(gateway_id: int, peer_id: int, username: St
 		gateway_id,
 		peer_id,
 		username,
-		character_id
+		character_id,
+		attempt_id
 	)
 
 
 @rpc("any_peer")
-func player_character_creation_result(_gateway_id: int, _peer_id: int, _username: String, _result_code: int) -> void:
+func player_character_creation_result(_gateway_id: int, _peer_id: int, _username: String, _result_code: int, _attempt_id: String) -> void:
 	pass
 
 
@@ -413,11 +414,12 @@ func request_login(
 	gateway_id: int,
 	peer_id: int,
 	username: String,
-	character_id: int
+	character_id: int,
+	attempt_id: String
 ) -> void:
 	var player: PlayerResource = database.get_player_resource(character_id)
 	if not database.wallet_ready or player == null or player.account_name != username:
-		result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id)
+		result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id,attempt_id)
 		return
 	result_login.rpc_id(
 		1,
@@ -426,6 +428,7 @@ func request_login(
 		peer_id,
 		username,
 		character_id,
+		attempt_id,
 	)
 
 
@@ -435,6 +438,7 @@ func result_login(
 	_gateway_id: int,
 	_peer_id: int,
 	_username: String,
-	_character_id: int
+	_character_id: int,
+	_attempt_id: String
 ) -> void:
 	pass

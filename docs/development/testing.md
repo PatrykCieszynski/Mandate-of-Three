@@ -290,3 +290,10 @@ half-open handshake and Master notification fencing against disposable SQLite.
 It shares port 18098 with the network suites: run sequentially. This specifically
 covers native auth ordering, which A2's prebound RPC fixture does not exercise.
 See [World session admission](world-session-admission.md) for scope and deployment.
+
+The same account runner includes `master_entry_attempts`: actual Master result
+RPCs delivered out of order, superseded logins/enters/creation, duplicate replies
+and reused request IDs. This protects token issuance ordering, which a fixture
+calling only `register_world_session` cannot cover. For login/session changes,
+also run `run-items.ps1 -WithSession` against normal Gateway/Master/World roles;
+the 2026-10-15 isolated full-process result is recorded in the session admission doc.

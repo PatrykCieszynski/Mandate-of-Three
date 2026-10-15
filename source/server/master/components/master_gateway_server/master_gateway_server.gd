@@ -163,8 +163,12 @@ func create_player_character_request(
 	if not world_manager.connected_worlds.has(world_id):
 		gateway_response.rpc_id(gateway_id, request_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS, "msg": "world not found."})
 		return
+	var attempt_id := world_manager.begin_entry_attempt(account.username, world_id, gateway_id, request_id, &"create")
+	if attempt_id.is_empty():
+		gateway_response.rpc_id(gateway_id, request_id, {"error": ERR_BUSY})
+		return
 	world_manager.create_player_character_request.rpc_id(
-		world_id, gateway_id, request_id, account.username, character_data, account.id
+		world_id, gateway_id, request_id, account.username, character_data, account.id, attempt_id
 	)
 
 
@@ -193,6 +197,10 @@ func request_enter_world(gateway_id: int, request_id: int, username: String, wor
 	if not world_manager.connected_worlds.has(world_id):
 		return
 
+	var attempt_id := world_manager.begin_entry_attempt(account.username, world_id, gateway_id, request_id, &"login", character_id)
+	if attempt_id.is_empty():
+		gateway_response.rpc_id(gateway_id, request_id, {"error": ERR_BUSY})
+		return
 	account.last_world_name = world_manager.connected_worlds[world_id].get("info", {}).get("name", "")
 	account.last_character_id = character_id
 	# Persist on every world-enter, not just debug — release builds must keep the
@@ -204,5 +212,6 @@ func request_enter_world(gateway_id: int, request_id: int, username: String, wor
 		gateway_id,
 		request_id,
 		username,
-		character_id
+		character_id,
+		attempt_id
 	)
