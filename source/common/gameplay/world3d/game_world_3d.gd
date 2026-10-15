@@ -12,6 +12,9 @@ const INPUT_TIMEOUT_MS: int = 250
 const SNAPSHOT_INTERVAL: float = 1.0 / 20.0
 var characters: Dictionary[int, PlayerActor3D] = {}
 var intentions: Dictionary[int, Dictionary] = {}
+## Per-viewer replica membership; never used for server-side combat authority.
+var _interest_grid := WorldInterestGrid3D.new()
+var _visible_by_peer: Dictionary = {}
 var local_peer: int = 0
 var input_enabled: bool = true
 var _server: bool = false
@@ -310,6 +313,7 @@ func remove_peer(peer_id: int) -> void:
 	currency_endpoint.remove_peer(peer_id)
 	inventory_endpoint.remove_peer(peer_id)
 	intentions.erase(peer_id)
+	_visible_by_peer.erase(peer_id)
 	if characters.has(peer_id):
 		characters[peer_id].queue_free()
 		characters.erase(peer_id)
@@ -321,13 +325,37 @@ func remove_peer(peer_id: int) -> void:
 	_send_roster.call_deferred()
 
 func _send_roster() -> void:
-	var roster: Dictionary = {}
-	for peer_id: int in characters:
-		var resource: PlayerResource = services.player_for_peer(peer_id)
-		if resource != null:
-			roster[peer_id] = resource.display_name
-	for peer_id: int in characters:
-		receive_roster.rpc_id(peer_id, roster)
+	_refresh_interest()
+
+func _refresh_interest() -> void:
+	_interest_grid.rebuild(characters, mob_system.mobs)
+	var next_visible: Dictionary = {}
+	for viewer_id: int in characters:
+		var previous: Dictionary = _visible_by_peer.get(viewer_id, {})
+		var old_players: Dictionary = previous.get("players", {})
+		var old_mobs: Dictionary = previous.get("mobs", {})
+		var players: Dictionary = _interest_grid.visible_players(viewer_id, old_players)
+		var mobs: Dictionary = _interest_grid.visible_mobs(viewer_id, old_mobs)
+		next_visible[viewer_id] = {"players": players, "mobs": mobs}
+		if not _visible_by_peer.has(viewer_id) or players != old_players:
+			# Reliable full membership list on enters/exits, including self.
+			# Snapshot positions remain unreliable and never create actors.
+			var roster: Dictionary = {}
+			for actor_id: int in players:
+				var resource: PlayerResource = services.player_for_peer(actor_id)
+				if resource != null:
+					roster[actor_id] = resource.display_name
+			receive_roster.rpc_id(viewer_id, roster)
+	_visible_by_peer = next_visible
+
+func interest_players_for(viewer_id: int) -> Dictionary:
+	return _visible_by_peer.get(viewer_id, {}).get("players", {})
+
+func interest_mobs_for(viewer_id: int) -> Dictionary:
+	return _visible_by_peer.get(viewer_id, {}).get("mobs", {})
+
+func interested_in_peer(viewer_id: int, actor_id: int) -> bool:
+	return interest_players_for(viewer_id).has(actor_id)
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_roster(roster: Dictionary) -> void:
@@ -395,12 +423,14 @@ func _physics_process(delta: float) -> void:
 			submit_input.rpc_id(1, _sequence, direction)
 
 func _broadcast_snapshot() -> void:
-	var snapshot: Dictionary = {}
-	for peer_id: int in characters:
-		var body: PlayerActor3D = characters[peer_id]
-		snapshot[peer_id] = [body.position, body.rotation.y]
-	for peer_id: int in characters:
-		receive_snapshot.rpc_id(peer_id, snapshot)
+	_refresh_interest()
+	for viewer_id: int in characters:
+		var snapshot: Dictionary = {}
+		for actor_id: int in interest_players_for(viewer_id):
+			var body: PlayerActor3D = characters.get(actor_id)
+			if body != null:
+				snapshot[actor_id] = [body.position, body.rotation.y]
+		receive_snapshot.rpc_id(viewer_id, snapshot)
 
 @rpc("authority", "call_remote", "unreliable_ordered", 2)
 func receive_snapshot(snapshot: Dictionary) -> void:
