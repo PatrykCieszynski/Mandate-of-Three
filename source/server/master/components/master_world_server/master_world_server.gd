@@ -6,6 +6,8 @@ extends BaseMultiplayerEndpoint
 @export var gateway_manager: GatewayManagerServer
 
 var connected_worlds: Dictionary[int, Dictionary]
+## Latest issued World ticket also fences delayed disconnect notifications.
+var _world_sessions: Dictionary[String, Dictionary] = {}
 
 
 func _ready() -> void:
@@ -27,6 +29,10 @@ func _on_peer_connected(peer_id: int) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	var dropped: Dictionary = connected_worlds.get(peer_id, {})
+	for username: String in _world_sessions.keys():
+		var session: Dictionary = _world_sessions[username]
+		if session.world_id == peer_id:
+			retire_world_session(peer_id, username, session.token)
 	connected_worlds.erase(peer_id)
 	# Push the updated roster to every gateway so their cached world list (served
 	# at /v1/worlds) drops the dead world. Connect already broadcasts (see
@@ -218,12 +224,39 @@ func fetch_token(_auth_token: String, _username: String, _character_id: int, _ac
 	pass
 
 
-@rpc("any_peer")
-func player_disconnected(username: String) -> void:
+## Called only when issuing a trusted ticket; character identity stays in World.
+func register_world_session(world_id: int, username: String, token: String) -> void:
+	_world_sessions[username] = {"world_id": world_id, "token": token}
+
+
+func retire_world_session(world_id: int, username: String, token: String) -> bool:
+	var session: Dictionary = _world_sessions.get(username, {})
+	if not connected_worlds.has(world_id) or session.is_empty() or token.is_empty(): return false
+	if session.world_id != world_id or session.token != token: return false
+	_world_sessions.erase(username)
 	var account: AccountResource = authentication_manager.account_collection.collection.get(username)
 	if account != null:
-		account.peer_id = 0 # frees the account for a fresh login (see login_request)
-		authentication_manager.active_accounts.erase(account.username)
+		account.peer_id = 0
+		authentication_manager.active_accounts.erase(username)
+	return true
+
+
+## A new Gateway login invalidates unclaimed tickets as well as active ownership.
+func revoke_world_session(username: String) -> void:
+	var session: Dictionary = _world_sessions.get(username, {})
+	_world_sessions.erase(username)
+	if not session.is_empty() and connected_worlds.has(int(session.world_id)):
+		revoke_account_admission.rpc_id(int(session.world_id), username)
+
+
+@rpc("authority")
+func revoke_account_admission(_username: String) -> void:
+	pass
+
+
+@rpc("any_peer")
+func player_disconnected(username: String, session_token: String) -> void:
+	retire_world_session(multiplayer_api.get_remote_sender_id(), username, session_token)
 
 
 @rpc("authority")
@@ -247,6 +280,7 @@ func player_character_creation_result(gateway_id: int, peer_id: int, username: S
 		# release build. (Was gated on "debug", which masked this on the debug server.)
 		authentication_manager.save_account_collection()
 		var auth_token: String = authentication_manager.generate_random_token()
+		register_world_session(world_id, username, auth_token)
 		fetch_token.rpc_id(world_id, auth_token, username, result_code, account.id)
 		
 		gateway_manager.gateway_response.rpc_id(
@@ -282,14 +316,18 @@ func result_login(result_code: int, gateway_id: int, peer_id: int, username: Str
 		gateway_manager.gateway_response.rpc_id(gateway_id,peer_id,{"error":result_code})
 		return
 	if result_code == OK:
-		# Mark the account connected so login_request refuses a second login;
-		# player_disconnected clears it on world disconnect.
+		# Last-login-wins; only the matching ticket may later clear this status.
 		var account: AccountResource = authentication_manager.account_collection.collection.get(username)
 		if account == null: return
 		account.peer_id = peer_id
 		var auth_token: String = authentication_manager.generate_random_token()
+		register_world_session(world_id, username, auth_token)
 		fetch_token.rpc_id(world_id, auth_token, username, character_id, account.id)
 		await get_tree().create_timer(0.5).timeout
+		# A newer login or world disconnect may have retired this attempt.
+		if _world_sessions.get(username, {}).get("token", "") != auth_token or not connected_worlds.has(world_id):
+			gateway_manager.gateway_response.rpc_id(gateway_id, peer_id, {"error": ERR_UNAUTHORIZED})
+			return
 		gateway_manager.gateway_response.rpc_id(
 			gateway_id,
 			peer_id,

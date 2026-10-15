@@ -283,3 +283,10 @@ World A2 adds an opt-in two-client ingress regression to the existing network
 runner: `run-combat.ps1 -Scene world_rpc_admission -MarkerPrefix WORLD_RPC`.
 It checks authenticated identity, literal operation admission and own-instance
 routing with real RPCs, no DB or windows. See [World RPC admission](world-rpc-admission.md).
+
+`run-account-identity.ps1` also includes `world_session_admission`: real loopback
+native authentication, bounded/expiring single-use tickets, account replacement,
+half-open handshake and Master notification fencing against disposable SQLite.
+It shares port 18098 with the network suites: run sequentially. This specifically
+covers native auth ordering, which A2's prebound RPC fixture does not exercise.
+See [World session admission](world-session-admission.md) for scope and deployment.

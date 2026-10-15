@@ -16,7 +16,12 @@ extends BaseMultiplayerEndpoint
 const BACKUP_EVERY_N_SAVES: int = 6  # 6 × 5 min = 30 min
 var _periodic_save_count: int = 0
 
-var token_list: Dictionary[String, PlayerResource]
+## Short-lived, single-use Master tickets, not cached character snapshots.
+@export var handoff_ttl_ms: int = 30_000
+@export var max_handoff_tickets: int = 1024
+var token_list: Dictionary[String, Dictionary] = {}
+var _pending_admissions: Dictionary[int, Dictionary] = {}
+var _session_tokens: Dictionary[int, String] = {}
 
 ## {peer_id: PlayerResource}
 var connected_players: Dictionary[int, PlayerResource]
@@ -54,8 +59,40 @@ func accept_master_handoff(auth_token: String, username: String, character_id: i
 	if not database.store.bind_account_identity(username,account_id):
 		push_warning("Rejected Master account identity mapping for world character %d." % character_id)
 		return false
-	token_list[auth_token] = player
+	prune_handoff_tickets()
+	# A fresh ticket supersedes unused tickets and pending auth for this account.
+	revoke_account_admission(username)
+	if token_list.size() + _pending_admissions.size() >= max_handoff_tickets:
+		_notify_master_disconnected(username, auth_token)
+		return false
+	token_list[auth_token] = {
+		"account": username, "character_id": character_id,
+		"expires_at": Time.get_ticks_msec() + maxi(1, handoff_ttl_ms),
+	}
 	return true
+
+
+func revoke_account_admission(username: String) -> void:
+	for token: String in token_list.keys():
+		if token_list[token].account == username:
+			token_list.erase(token)
+	for pending_peer: int in _pending_admissions.keys():
+		if _pending_admissions[pending_peer].account == username:
+			_pending_admissions.erase(pending_peer)
+			peer.disconnect_peer(pending_peer)
+
+
+func prune_handoff_tickets() -> void:
+	var now := Time.get_ticks_msec()
+	for token: String in token_list.keys():
+		if int(token_list[token].expires_at) <= now:
+			var account: String = token_list[token].account
+			token_list.erase(token)
+			_notify_master_disconnected(account, token)
+	for pending_peer: int in _pending_admissions.keys():
+		if int(_pending_admissions[pending_peer].expires_at) <= now:
+			peer.disconnect_peer(pending_peer)
+
 
 ## Zero means unknown/unbound. Character IDs are local to this World's database.
 func resolve_account_id(character_id: int) -> int:
@@ -103,6 +140,12 @@ func start_world_server() -> void:
 		func() -> void: NetProfiler.report_and_reset(connected_players.size(), 1.0)
 	)
 	add_child(net_report_timer)
+	var ticket_timer := Timer.new()
+	ticket_timer.name = "HandoffExpiryTimer"
+	ticket_timer.wait_time = 1.0
+	ticket_timer.autostart = true
+	ticket_timer.timeout.connect(prune_handoff_tickets)
+	add_child(ticket_timer)
 
 
 func _on_periodic_save() -> void:
@@ -152,10 +195,31 @@ func _connect_multiplayer_api_signals(api: SceneMultiplayer) -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
+	# Both sides completed native authentication. Until this signal there is no
+	# gameplay authority, even if our complete_auth has already succeeded.
+	var ticket: Dictionary = _pending_admissions.get(peer_id, {})
+	if ticket.is_empty():
+		peer.disconnect_peer(peer_id)
+		return
+	_pending_admissions.erase(peer_id)
+	var player := database.get_player_resource(int(ticket.character_id))
+	if player == null or player.account_name != ticket.account or int(ticket.expires_at) <= Time.get_ticks_msec():
+		_notify_master_disconnected(ticket.account, ticket.token)
+		peer.disconnect_peer(peer_id)
+		return
+	_session_tokens[peer_id] = ticket.token
+	connected_players[peer_id] = player
+	player.current_peer_id = peer_id
+	player.session_start_ms = Time.get_ticks_msec()
+	player_id_to_peer_id[player.player_id] = peer_id
+	BlockList.set_for(player.player_id, player.blocked_ids)
+	_publish_authenticated_state(peer_id, player)
 	ServerLog.info("Peer %d connected." % peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	var session_token: String = _session_tokens.get(peer_id, "")
+	_session_tokens.erase(peer_id)
 	ServerLog.info("Peer %d disconnected." % peer_id)
 	# Sparring: if mid-match, end it before we tear down so the survivor gets
 	# the win + teleport instead of being stranded in the arena.
@@ -210,12 +274,13 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# Another character can have replaced this account's login too. Stale peer
 	# entries neither keep a wallet alive nor count as an active account at Master.
 	if not account_still_connected:
-		_notify_master_disconnected(player.account_name)
+		_notify_master_disconnected(player.account_name, session_token)
 
 
 
-func _notify_master_disconnected(account_name: String) -> void:
-	world_manager.player_disconnected.rpc_id(1, account_name)
+func _notify_master_disconnected(account_name: String, session_token: String = "") -> void:
+	if world_manager != null and world_manager.multiplayer_api != null and world_manager.multiplayer_api.has_multiplayer_peer():
+		world_manager.player_disconnected.rpc_id(1, account_name, session_token)
 
 
 func _on_peer_authenticating(peer_id: int) -> void:
@@ -224,43 +289,63 @@ func _on_peer_authenticating(peer_id: int) -> void:
 
 
 func _on_peer_authentication_failed(peer_id: int) -> void:
+	var ticket: Dictionary = _pending_admissions.get(peer_id, {})
+	_pending_admissions.erase(peer_id)
+	if not ticket.is_empty():
+		_notify_master_disconnected(ticket.account, ticket.token)
 	print("Peer: %d failed to authenticate." % peer_id)
 
 
 func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
-	# Cast as String if not returns empty String
-	var auth_token: String = bytes_to_var(data) as String
-	print("Peer: %d is trying to authenticate." % peer_id)
-	if is_valid_authentication_token(auth_token):
-		multiplayer.complete_auth(peer_id)
-		connected_players[peer_id] = token_list[auth_token]
-		var owner_id: int = connected_players[peer_id].player_id
-		if database.dirty_progression.has(owner_id):
-			connected_players[peer_id] = database.dirty_progression[owner_id]
-		connected_players[peer_id].current_peer_id = peer_id
-		# Stamp the session start so the played_seconds counter can advance on
-		# disconnect. Reset on every fresh login.
-		connected_players[peer_id].session_start_ms = Time.get_ticks_msec()
-		player_id_to_peer_id[connected_players[peer_id].player_id] = peer_id
-		# Hydrate the per-player block-list cache so chat filtering is a
-		# dictionary lookup, not a JSON parse per message.
-		BlockList.set_for(connected_players[peer_id].player_id, connected_players[peer_id].blocked_ids)
-		token_list.erase(auth_token)
-		data_push.rpc_id.call_deferred(peer_id, &"player_id.set", {"player_id": connected_players[peer_id].player_id})
-		data_push.rpc_id.call_deferred(peer_id, &"active_guild_id.set", {"active_guild_id": connected_players[peer_id].active_guild_id})
-		# Wardstone mirror: lets sealed portals render + explain locally with zero
-		# round trips (docs/wardstones.md). Re-pushed on every grant. Backfill
-		# first: finales turned in before the system shipped still owe their stone.
-		QuestService.backfill_wardstones(connected_players[peer_id])
-		data_push.rpc_id.call_deferred(peer_id, &"wardstones.set", {"wardstones": connected_players[peer_id].wardstones})
-	else:
+	# A duplicate packet cannot start another continuation for an admitted ticket.
+	if _pending_admissions.has(peer_id): return
+	if data.size() > 1024:
+		peer.disconnect_peer(peer_id)
+		return
+	var decoded: Variant = bytes_to_var(data)
+	if not decoded is String or not is_valid_authentication_token(decoded):
+		peer.disconnect_peer(peer_id)
+		return
+	var auth_token: String = decoded
+	var ticket: Dictionary = token_list[auth_token]
+	token_list.erase(auth_token) # Consume before yielding; replay cannot win.
+	ticket.token = auth_token
+	_pending_admissions[peer_id] = ticket
+	# Disconnect at the transport layer: SceneMultiplayer.disconnect_peer
+	# intentionally suppresses its local disconnect signals and skips cleanup.
+	for old_peer: int in connected_players.keys():
+		if connected_players[old_peer].account_name == ticket.account:
+			peer.disconnect_peer(old_peer)
+	# Let every instance's disconnect subscriber retire actors, intents and
+	# checkpoints. WebSocket close may take more than one poll; never overlap
+	# authority or wait beyond the native authentication deadline.
+	var cleanup_deadline := mini(int(ticket.expires_at), Time.get_ticks_msec() + 2000)
+	while true:
+		await get_tree().process_frame
+		if _pending_admissions.get(peer_id, {}).get("token", "") != auth_token: return
+		if Time.get_ticks_msec() >= cleanup_deadline or not multiplayer_api.get_authenticating_peers().has(peer_id):
+			peer.disconnect_peer(peer_id)
+			return
+		var previous_owner := false
+		for current: PlayerResource in connected_players.values():
+			if current.account_name == ticket.account:
+				previous_owner = true
+				break
+		if not previous_owner: break
+	if multiplayer_api.complete_auth(peer_id) != OK:
 		peer.disconnect_peer(peer_id)
 
 
+func _publish_authenticated_state(peer_id: int, player: PlayerResource) -> void:
+	data_push.rpc_id.call_deferred(peer_id, &"player_id.set", {"player_id": player.player_id})
+	data_push.rpc_id.call_deferred(peer_id, &"active_guild_id.set", {"active_guild_id": player.active_guild_id})
+	QuestService.backfill_wardstones(player)
+	data_push.rpc_id.call_deferred(peer_id, &"wardstones.set", {"wardstones": player.wardstones})
+
+
 func is_valid_authentication_token(auth_token: String) -> bool:
-	if token_list.has(auth_token):
-		return true
-	return false
+	prune_handoff_tickets()
+	return token_list.has(auth_token)
 
 
 @export var instance_manager: InstanceManagerServer

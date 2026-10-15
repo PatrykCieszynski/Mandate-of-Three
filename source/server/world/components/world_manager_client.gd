@@ -352,8 +352,13 @@ func fetch_token(auth_token: String, username: String, character_id: int, accoun
 	token_received.emit(auth_token, username, character_id, account_id)
 
 
+@rpc("authority")
+func revoke_account_admission(username: String) -> void:
+	world_server.revoke_account_admission(username)
+
+
 @rpc("any_peer")
-func player_disconnected(_username: String) -> void:
+func player_disconnected(_username: String, _session_token: String) -> void:
 	pass
 
 

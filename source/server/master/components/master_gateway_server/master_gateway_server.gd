@@ -98,7 +98,8 @@ func login_request(username: String, password: String) -> Dictionary:
 
 	if not account:
 		return {"error": GatewayAPI.ERR_BAD_CREDENTIALS}
-	elif account.peer_id:
+	world_manager.revoke_world_session(account.username)
+	if account.peer_id:
 		# Last-login-wins. peer_id marks the account connected, but the ONLY thing
 		# that clears it is a world-side game-peer disconnect (player_disconnected).
 		# A drop during the world handoff (token issued, client never reached the
