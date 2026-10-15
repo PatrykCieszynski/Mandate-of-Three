@@ -77,7 +77,7 @@ func simulate(delta: float, direction: Vector2) -> void:
 			velocity.z = 0
 			break
 	var temporary_exceptions: Array[PhysicsBody3D] = []
-	var existing_exceptions: Array[PhysicsBody3D] = get_collision_exceptions() if not overlaps.is_empty() else []
+	var existing_exceptions := get_collision_exceptions()
 	for mob: PhysicsBody3D in overlaps:
 		if existing_exceptions.has(mob): continue
 		add_collision_exception_with(mob)
