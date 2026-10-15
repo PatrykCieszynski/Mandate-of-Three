@@ -174,10 +174,14 @@ export function mountMarket(root: HTMLElement, options: Options) {
     candidate = null;
     selected = offer.id;
     negotiable.checked = offer.price === null;
-  price.disabled = negotiable.checked;
-  if (offer.price !== null) price.value = String(offer.price);
+    price.disabled = negotiable.checked;
+    if (offer.price !== null) price.value = String(offer.price);
     selection.textContent =
-      offer.item.name + ' · ' + (offer.price === null ? 'Do negocjacji' : offer.price.toLocaleString('en-US') + ' Yang');
+      offer.item.name +
+      ' · ' +
+      (offer.price === null
+        ? 'Do negocjacji'
+        : offer.price.toLocaleString('en-US') + ' Yang');
     confirm.textContent = 'Set price';
     cancel.disabled = false;
   }

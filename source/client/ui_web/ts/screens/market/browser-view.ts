@@ -164,7 +164,14 @@ export function mountMarketBrowser(
   whisper.disabled = true;
   whisper.title = 'Private messages are not implemented yet.';
   whisper.hidden = true;
-  visitor.contentRoot.append(shopName, shopGridRoot, offerInfo, buy, whisper, retry);
+  visitor.contentRoot.append(
+    shopName,
+    shopGridRoot,
+    offerInfo,
+    buy,
+    whisper,
+    retry,
+  );
   function input(label: string) {
     const n = document.createElement('input');
     n.type = 'text';
@@ -289,7 +296,11 @@ export function mountMarketBrowser(
   function choose(offer: MarketOffer) {
     selected = offer;
     offerInfo.textContent =
-      offer.item.name + ' · ' + (offer.price === null ? 'Do negocjacji' : offer.price.toLocaleString('en-US') + ' Yang');
+      offer.item.name +
+      ' · ' +
+      (offer.price === null
+        ? 'Do negocjacji'
+        : offer.price.toLocaleString('en-US') + ' Yang');
     whisper.hidden = offer.price !== null;
     buy.disabled =
       offer.price === null ||
@@ -363,7 +374,9 @@ export function mountMarketBrowser(
       row.append(cell);
       for (const text of [
         String(result.item.quantity),
-        result.price === null ? 'Do negocjacji' : result.price.toLocaleString('en-US'),
+        result.price === null
+          ? 'Do negocjacji'
+          : result.price.toLocaleString('en-US'),
         result.shopName,
       ]) {
         const c = document.createElement('td');
