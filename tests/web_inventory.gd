@@ -7,9 +7,11 @@ class HeadlessUiHost extends WebUiHost:
 var web: CoreUiController
 var web_results: Dictionary = {}
 var running: bool = false
+var inventory_facts: Dictionary = {}
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
+	world.inventory_endpoint.inventory_changed.connect(func(owner: int) -> void: inventory_facts[owner] = int(inventory_facts.get(owner, 0)) + 1)
 	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled = false
 	for id: int in world.characters: phase.rpc_id(id, "GO", "")
 	await wait_until(func() -> bool: return done_peers.size() == 2)
@@ -19,6 +21,7 @@ func run_server() -> void:
 		check(snapshot.items.size() == 2 and snapshot.stats.attack == 10 and snapshot.equipment.is_empty(), "private exact inventory after moves")
 		check(snapshot.items.all(func(i: Dictionary) -> bool: return i.location == "bag" and i.bag_position >= 0), "RPC equipment cycle persisted")
 		check(server.runtime_attack(owner) == 10, "runtime attack reconciled")
+		check(int(inventory_facts.get(owner, 0)) == 9, "only nine real mutations publish facts; no-op and rejected commands still repair snapshots")
 	var before: Array = []
 	for id: int in world.characters: before.append(server.database.item_store.inventory(server.connected_players[id].player_id))
 	db.close_db()
@@ -61,6 +64,9 @@ func run_client() -> void:
 	var result: Dictionary = await command("inventory.move_item", {"id":item.uid,"revision":item.revision,"x":0,"y":3,"page":0})
 	check(result.ok, "web command waits for committed move RPC")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 15 and i.revision == 1), "snapshot after move")
+	var unchanged: Array = endpoint.state.items.duplicate(true)
+	result = await command("inventory.move_item", {"id":item.uid,"revision":1,"x":0,"y":3,"page":0})
+	check(result.ok and endpoint.state.items == unchanged, "same-cell Web move succeeds without changing revision")
 	result = await command("inventory.move_item", {"id":item.uid,"revision":0,"x":1,"y":3,"page":0})
 	check(not result.ok and result.error == "stale", "server rejects stale UI command")
 	result = await command("inventory.move_item", {"id":item.uid,"revision":1,"x":1,"y":0,"page":0})
@@ -80,6 +86,9 @@ func run_client() -> void:
 	check(not endpoint.state.items.any(func(i: Dictionary) -> bool: return i.has("primary_action")), "action stays outside presentation snapshots")
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
 	check(current.location == "equipment", "equipped item leaves bag")
+	unchanged = endpoint.state.items.duplicate(true)
+	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
+	check(result.ok and endpoint.state.items == unchanged and endpoint.state.stats.attack > 10, "repeat Web equip preserves equipment and runtime-derived stats")
 	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision - 1})
 	check(not result.ok and result.error == "stale", "Web unequip rejects stale revision")
 	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision})

@@ -92,20 +92,20 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 	if not _world.characters.has(peer_id) or _store() == null:
 		return
 	var result: Dictionary
+	var committed := false
 	var now: int = Time.get_ticks_msec()
 	if now - _last_action_ms.get(peer_id, -1000) < 100:
 		result = {"ok": false, "error": "too_fast"}
 	else:
 		_last_action_ms[peer_id] = now
 		var resource: PlayerResource = services.player_for_peer(peer_id)
-		if action == "activate":
-			result = _store().activate_item(resource.player_id,uid,revision)
-		else:
-			result = _store().move_bag_item(resource.player_id, uid, revision, position) if action == "move" else _store().change_equipment(resource.player_id, uid, revision, action, position)
-	if result.ok:
+		var operation := services.economy().inventory_operation(resource.player_id, action, uid, revision, position)
+		result = operation.response()
+		committed = operation.new_commit
+	if committed:
 		accept_committed_change(peer_id)
 	else:
-		resynchronize(peer_id, str(result.error))
+		resynchronize(peer_id, "" if result.ok else str(result.error))
 	if command_id != "":
 		receive_operation.rpc_id(peer_id, command_id, result)
 

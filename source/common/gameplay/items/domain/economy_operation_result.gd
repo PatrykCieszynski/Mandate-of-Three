@@ -11,7 +11,7 @@ var receipt_replay := false
 var changed_accounts: PackedInt64Array = []
 var _response: Dictionary = {}
 
-static func capture(owner: int, account: int, kind: String, id: String, result: Dictionary, committed: bool, affected: Array = []) -> EconomyOperationResult:
+static func capture(owner: int, account: int, kind: String, id: String, result: Dictionary, committed: bool, affected: Array = [], replayed: bool = false) -> EconomyOperationResult:
 	var operation := EconomyOperationResult.new()
 	operation.operation_id = id
 	operation.character_id = owner
@@ -19,9 +19,8 @@ static func capture(owner: int, account: int, kind: String, id: String, result: 
 	operation.action = kind
 	operation._response = result.duplicate(true)
 	operation.new_commit = committed and bool(result.get("ok", false))
-	# For current synchronous Market/Exchange mutations, successful non-commit
-	# means receipt replay. Explicit receipt lookup is read-only, not a mutation.
-	operation.receipt_replay = kind != "receipt" and bool(result.get("ok", false)) and not operation.new_commit
+	# Replay is explicit: a successful no-op is neither a mutation nor a receipt.
+	operation.receipt_replay = replayed and bool(result.get("ok", false)) and not operation.new_commit
 	if operation.new_commit:
 		for value: Variant in affected:
 			var affected_id := int(value)

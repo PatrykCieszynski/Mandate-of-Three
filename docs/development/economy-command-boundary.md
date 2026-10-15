@@ -3,7 +3,7 @@
 These are narrow parts of the local Economy architecture work. They harden
 the existing WorldDatabase entry points through `WorldEconomyService`, which
 composes MarketplaceService for Shop/Exchange and handles upgrade/NPC purchase
-orchestration.
+orchestration, plus Inventory activation/equipment/bag-move commands.
 This does not complete Stage 2 or introduce a new
 service process, generic database interface, queue or database migration.
 
@@ -101,6 +101,27 @@ successful call creates a distinct paid item, even for the same offer. Neither
 the offer ID nor UI transport correlation is treated as durable intention identity.
 This slice does not add retry/idempotency guarantees to that existing behavior.
 
+## Fifth slice: Inventory activation, equipment and bag moves
+
+`WorldDatabase.inventory_operation` delegates to WorldEconomyService, which
+routes activation, equip/unequip and bag moves to the existing ItemStoreSqlite
+transactions. Endpoint admission/rate limits and authoritative UID, ownership,
+revision, overlap and placement rules remain unchanged. No schema or RPC changes.
+
+ItemStore reports whether its standalone transaction actually mutated state,
+resetting that outcome for each command. Equipping an already-equipped item,
+unequipping an already-bagged item and moving to the same cell still succeed,
+but preserve revisions and do not claim a mutation. The common result now takes
+an explicit replay flag; only MarketplaceService supplies receipt replay semantics.
+Inventory no-ops are not receipt replays and have no changed accounts.
+
+Only a new item mutation publishes `inventory_changed`. Rejections and
+successful no-ops still resynchronize the caller's current authoritative view.
+Equipment/runtime combat stats and weapon presentation retain their existing
+post-commit refresh path. Inventory operations keep empty operation IDs: UID and
+expected revision guard them, without introducing durable intention receipts.
+Storage, initialization and ground pickup have not moved in this slice.
+
 ## Regression evidence
 
 Existing suites protect rollback, ownership and recovery. Their original wallet
@@ -136,6 +157,16 @@ focused checks for typed commit/failure results and two distinct paid item UIDs.
 `run-npc.ps1 -Scenario shop` checks two real clients, private snapshots, NPC/range
 authorization and exactly two inventory/wallet facts for two successful purchases.
 
+The existing `item_instances` fixture adds boundary commit/no-op/stale/SQL-fault
+checks because previous state-only assertions could not detect false commit facts
+or no-ops labelled as receipt replay. Existing swaps/ownership/rollback/reopen
+coverage remains. The two-client `web_inventory` flow now includes same-cell move
+and repeat-equip successes and checks that only its nine real mutations per player
+publish facts, while rejected/no-op responses still repair current snapshots.
+Both clients retain private state, runtime-stat reconciliation and reopen checks.
+Smoke (10 Godot fixtures, 78 Web contracts), Web Inventory, Market purchase and
+Exchange orders passed on 2026-10-15 for this slice. No native window was launched.
+
 Relevant commands, run sequentially where they share port 18098:
 
 ```powershell
@@ -146,6 +177,7 @@ Relevant commands, run sequentially where they share port 18098:
 & .\tests\run-combat.ps1 -Scene market_race -MarkerPrefix MARKET_RACE
 & .\tests\run-combat.ps1 -Scene exchange_network -MarkerPrefix EXCHANGE_NETWORK
 & .\tests\run-market-recovery.ps1
+& .\tests\run-web-inventory.ps1
 & .\tests\run-upgrade.ps1
 & .\tests\run-npc.ps1 -Scenario shop
 & .\tests\run-smoke.ps1
@@ -168,7 +200,7 @@ are recorded separately. Incidental generated import/UID files were removed.
 
 ## Remaining Stage 2 work
 
-Pickup/equip and other remaining economic operations have not
+Pickup/Storage and other remaining economic operations have not
 been migrated into this application boundary. Applying the operation result to those
 domains, versioned inventory/equipment snapshots and broader reconciliation remain
 later reviewable slices. Do not infer distributed C2 admission, durable business

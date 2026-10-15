@@ -6,6 +6,8 @@ extends RefCounted
 const BAG_CAPACITY: int = InventoryGrid.CAPACITY
 const ITEM_SELECT: String = "SELECT i.*, p.location, p.bag_position, p.equipment_slot FROM item_instances i JOIN item_placements p ON p.item_uid=i.uid "
 var db: SQLite
+# Last standalone transaction outcome; successful no-ops do not mutate items.
+var committed := false
 
 func _init(database: SQLite) -> void:
 	db = database
@@ -31,6 +33,7 @@ static func ensure_schema(database: SQLite) -> bool:
 	return true
 
 func initialize_character(owner_id: int) -> Dictionary:
+	committed = false
 	if not db.query("BEGIN IMMEDIATE;"):
 		return _error("storage")
 	if not db.query_with_bindings("SELECT player_id FROM players WHERE player_id=?;", [owner_id]):
@@ -56,6 +59,7 @@ static func ensure_ground_claim_schema(database: SQLite) -> bool:
 	return database.query("CREATE TABLE IF NOT EXISTS ground_item_claims (drop_uid TEXT PRIMARY KEY NOT NULL, owner_character_id INTEGER NOT NULL);")
 
 func claim_ground_item(owner_id: int, drop_uid: String, item: ItemInstance) -> Dictionary:
+	committed = false
 	# The application supplies the prepared item and exact drop identity. RPC accepts
 	# a drop UID alone. Receipt + item + placement commit together, before despawn.
 	if item == null or not ItemInstance.valid_uid(drop_uid) or item.uid != drop_uid:
@@ -119,6 +123,7 @@ func inventory(owner_id: int) -> Dictionary:
 	return {"ok": true, "items": items, "equipment": equipment, "stats": stats}
 
 func activate_item(owner_id: int, uid: String, expected_revision: int) -> Dictionary:
+	committed = false
 	if not ItemInstance.valid_uid(uid) or expected_revision < 0: return _error("request")
 	if not db.query_with_bindings(ITEM_SELECT + "WHERE i.uid=? AND i.owner_character_id=? AND p.owner_character_id=?;", [uid,owner_id,owner_id]): return _error("storage")
 	if db.query_result.is_empty(): return _error("owner")
@@ -138,6 +143,7 @@ func activate_item(owner_id: int, uid: String, expected_revision: int) -> Dictio
 			return _error("no_action")
 
 func change_equipment(owner_id: int, uid: String, expected_revision: int, action: String, requested_position: int = -1) -> Dictionary:
+	committed = false
 	if action not in ["equip", "unequip"] or not ItemInstance.valid_uid(uid) or expected_revision < 0 or requested_position < -1 or requested_position >= InventoryGrid.CAPACITY or (action != "unequip" and requested_position != -1):
 		return _error("request")
 	if not db.query("BEGIN IMMEDIATE;"):
@@ -156,7 +162,7 @@ func change_equipment(owner_id: int, uid: String, expected_revision: int, action
 		return _rollback("slot")
 	if action == "unequip" and item.location == "bag" and requested_position != -1: return _rollback("placement")
 	if (action == "equip" and item.location == "equipment") or (action == "unequip" and item.location == "bag"):
-		return _commit()
+		return _commit(false)
 	if action == "unequip":
 		var receiving: Dictionary = resolve_inventory_position(owner_id, definition.inventory_height, requested_position)
 		if not receiving.ok: return _rollback("bag_full" if receiving.error == "inventory_full" else str(receiving.error))
@@ -186,6 +192,7 @@ func change_equipment(owner_id: int, uid: String, expected_revision: int, action
 	return _commit()
 
 func move_bag_item(owner_id: int, uid: String, expected_revision: int, position: int) -> Dictionary:
+	committed = false
 	if not ItemInstance.valid_uid(uid) or expected_revision < 0 or position < 0 or position >= BAG_CAPACITY:
 		return _error("request")
 	if not db.query("BEGIN IMMEDIATE;"):
@@ -200,7 +207,7 @@ func move_bag_item(owner_id: int, uid: String, expected_revision: int, position:
 	if item.revision != expected_revision:
 		return _rollback("stale")
 	if item.bag_position == position:
-		return _commit()
+		return _commit(false)
 	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
 	if definition == null: return _rollback("unknown_definition")
 	var receiving: Dictionary = resolve_inventory_position(owner_id, definition.inventory_height, position, [uid])
@@ -304,9 +311,10 @@ func _remove_placement(uid: String) -> bool:
 func _increment_revision(uid: String, owner_id: int) -> bool:
 	return db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=? AND owner_character_id=?;", [uid, owner_id])
 
-func _commit() -> Dictionary:
+func _commit(mutated: bool = true) -> Dictionary:
 	if not db.query("COMMIT;"):
 		return _rollback("storage")
+	committed = mutated
 	return {"ok": true}
 
 func _rollback(reason: String) -> Dictionary:
@@ -317,6 +325,7 @@ func _error(reason: String) -> Dictionary:
 	return {"ok": false, "error": reason}
 
 func grant_dev_trace_sword(owner_id: int) -> Dictionary:
+	committed = false
 	# Server tooling only. Atomic placement; relog cannot produce another owned copy.
 	if not db.query("BEGIN IMMEDIATE;"): return _error("storage")
 	if not db.query_with_bindings("SELECT player_id FROM players WHERE player_id=?;",[owner_id]): return _rollback("storage")
