@@ -81,6 +81,15 @@ func run_client() -> void:
 	var duplicate_notifications: Array[Dictionary] = []
 	var observe_duplicate := func(snapshot: Dictionary) -> void: duplicate_notifications.append(snapshot)
 	endpoint.state_changed.connect(observe_duplicate)
+	var stale_with_new_delivery := entry_projection.duplicate(true)
+	stale_with_new_delivery.projection_version = int(moved_projection.projection_version)+100
+	endpoint.receive_inventory(stale_with_new_delivery)
+	check(endpoint.state==moved_projection,"newer delivery sequence cannot authorize older durable item state")
+	var wrong_scope := moved_projection.duplicate(true)
+	wrong_scope.projection_version = int(moved_projection.projection_version)+101
+	wrong_scope.item_state.character_id += 1
+	endpoint.receive_inventory(wrong_scope)
+	check(endpoint.state==moved_projection,"item snapshot cannot switch authenticated character scope")
 	endpoint.receive_inventory(entry_projection)
 	endpoint.receive_inventory(moved_projection)
 	endpoint.receive_inventory({"ok":true})

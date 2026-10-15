@@ -19,7 +19,7 @@ static func ensure_schema(database: SQLite) -> bool:
 	if not database.query("PRAGMA foreign_keys=ON;"): return false
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
 	var version := int(database.query_result[0].value)
-	if version >= 19: return true
+	if version >= 19: return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database)
 	if version < 18 or not database.query("BEGIN IMMEDIATE;"): return false
 	if not database.query("SELECT i.uid FROM item_instances i LEFT JOIN item_placements p ON p.item_uid=i.uid LEFT JOIN account_storage s ON s.item_uid=i.uid WHERE (p.item_uid IS NOT NULL)+(s.item_uid IS NOT NULL)<>1 LIMIT 1;") or not database.query_result.is_empty():
 		database.query("ROLLBACK;")
@@ -67,7 +67,7 @@ static func ensure_schema(database: SQLite) -> bool:
 		if not database.query(statement):
 			database.query("ROLLBACK;")
 			return false
-	return true
+	return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database)
 
 func _shop(account_id: int) -> int:
 	if not db.query_with_bindings("INSERT OR IGNORE INTO account_shops(account_id) VALUES(?);",[account_id]): return 0

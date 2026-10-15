@@ -4,6 +4,7 @@ extends RefCounted
 ## Caller writes domain data between begin and commit on this same connection.
 var db: SQLite
 var account_id := 0
+var _character_id := 0
 var _command := ""
 var _kind := ""
 var _request := ""
@@ -34,6 +35,7 @@ func begin(character_id: int, command_id: String, kind: String, args: Array) -> 
 	if account_id <= 0:
 		cached = rollback("owner")
 		return false
+	_character_id = character_id
 	_command = command_id
 	_kind = kind
 	_request = JSON.stringify(args)
@@ -42,7 +44,7 @@ func begin(character_id: int, command_id: String, kind: String, args: Array) -> 
 		return false
 	if not db.query_result.is_empty():
 		var row: Dictionary = db.query_result[0]
-		cached = JSON.parse_string(row.result_json) if row.kind==kind and row.request_json==_request else {"ok":false,"error":"command_conflict"}
+		cached = decode_result(row.result_json) if row.kind==kind and row.request_json==_request else {"ok":false,"error":"command_conflict"}
 		for field: String in ["revision","position","shop_id","price","balance"]:
 			if cached.has(field): cached[field] = int(cached[field])
 		db.query("ROLLBACK;")
@@ -59,7 +61,11 @@ func commit(result: Dictionary) -> Dictionary:
 		if not db.query("ROLLBACK;"): return {"ok":false,"error":"storage"}
 		rejected.remember(account_id,_command,_kind,_request,result)
 		return result
-	if not db.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[account_id,_command,_kind,_request,JSON.stringify(result)]): return rollback("storage")
+	# Capture the watermark before receipt+COMMIT, never reconstruct it on replay.
+	result = result.duplicate(true)
+	result["item_state"] = preload("res://source/server/world/database/item_state_revision_sqlite.gd").read(db,_character_id)
+	if result.item_state.is_empty(): return rollback("storage")
+	if not db.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[account_id,_command,_kind,_request,_encode_result(result)]): return rollback("storage")
 	if not db.query("COMMIT;"): return rollback("storage")
 	committed = true
 	return result
@@ -71,4 +77,23 @@ func receipt(character_id: int, command_id: String) -> Dictionary:
 	if db.query_result.is_empty():
 		var cached:=rejected.receipt(receipt_account,command_id)
 		return cached if not cached.is_empty() else {"ok":false,"error":"unknown_command"}
-	return JSON.parse_string(db.query_result[0].result_json)
+	return decode_result(db.query_result[0].result_json)
+
+# JSON numbers are floats in Godot. Decimal strings preserve the full integer
+# watermark in durable receipts; native RPCs and application results remain ints.
+static func _encode_result(result: Dictionary) -> String:
+	var stored := result.duplicate(true)
+	if stored.has("item_state"):
+		for field: String in ["account_id","character_id","revision"]: stored.item_state[field]=str(stored.item_state[field])
+	return JSON.stringify(stored)
+
+static func decode_result(json: String) -> Dictionary:
+	var result: Variant = JSON.parse_string(json)
+	if not result is Dictionary: return {"ok":false,"error":"storage"}
+	if result.has("item_state"):
+		if not result.item_state is Dictionary: return {"ok":false,"error":"storage"}
+		for field: String in ["account_id","character_id","revision"]:
+			var value: Variant = result.item_state.get(field)
+			if not value is String or not value.is_valid_int(): return {"ok":false,"error":"storage"}
+			result.item_state[field]=int(value)
+	return result

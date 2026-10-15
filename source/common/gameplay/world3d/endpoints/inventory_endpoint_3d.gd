@@ -12,6 +12,8 @@ var state: Dictionary = {}
 var public_weapons: Dictionary[int, String] = {}
 var _last_action_ms: Dictionary[int, int] = {}
 var _last_receipt_ms: Dictionary[int, int] = {}
+const ItemStateVersion = preload("res://source/common/gameplay/items/domain/item_state_version.gd")
+var _item_watermark: Dictionary = {}
 var _last_storage_receipt_ms: Dictionary[int, int] = {}
 # Delivery versions belong to this live map endpoint, not durable item revisions.
 # Full snapshots may skip versions (including updates for other characters).
@@ -172,7 +174,8 @@ func refresh_authoritative_state(peer_id: int) -> void:
 	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null or _store() == null: return
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
-	services.update_runtime_equipment(resource.player_id, snapshot)
+	var accepted := services.update_runtime_equipment(resource.player_id, snapshot)
+	if snapshot.get("ok",false) and not accepted: return
 	snapshot["storage"] = services.economy().storage_snapshot(resource.player_id)
 	snapshot["economic_context"] = services.economy().economic_context(resource.player_id)
 	_next_projection_version += 1
@@ -214,6 +217,10 @@ func receive_inventory(snapshot: Dictionary) -> void:
 		return
 	var version: Variant = snapshot.get("projection_version")
 	if not version is int or version <= _inventory_version: return
+	if snapshot.get("ok",false):
+		var item_state: Variant = snapshot.get("item_state")
+		if not ItemStateVersion.accepts(_item_watermark,item_state): return
+		_item_watermark = item_state.duplicate(true)
 	_inventory_version = version
 	state = snapshot.duplicate(true)
 	if bool(state.get("ok", false)):

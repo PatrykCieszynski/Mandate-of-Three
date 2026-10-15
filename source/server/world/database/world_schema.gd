@@ -83,6 +83,11 @@ static func ensure_schema(db: SQLite) -> void:
 	if not db.query_with_bindings("INSERT OR IGNORE INTO meta(key,value) VALUES('economy_authority_id',?);", [Crypto.new().generate_random_bytes(16).hex_encode()]):
 		push_error("Could not initialize economy authority identity.")
 
+	# Independent additive feature migration: core schema stops at v17 until the
+	# verified Master identity manifest enables existing v18-v23 migrations.
+	if not preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(db):
+		push_error("Could not initialize durable account item revisions.")
+
 static func migrate_account_identity(db: SQLite) -> bool:
 	if not db.query("BEGIN IMMEDIATE;"): return false
 	if not db.query("PRAGMA table_info(accounts);"):

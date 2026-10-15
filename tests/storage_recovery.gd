@@ -8,6 +8,7 @@ var started := false
 var results: Dictionary = {}
 var facts: Dictionary = {}
 var journal_directory := ""
+var withdrawal_payload: Dictionary = {}
 
 func _ready() -> void:
 	var args := OS.get_cmdline_args()
@@ -50,6 +51,8 @@ func run_server() -> void:
 	set_phase("RECOVER",a)
 	await wait_until(func() -> bool: return replies.has(a))
 	check(replies[a].ok and int(facts[owner_a])==2 and int(facts[owner_b])==2,"deposit discovery repairs both current views without new facts")
+	set_phase("PREPARE_WITHDRAW")
+	await wait_until(func() -> bool: return replies.size()==2)
 	set_phase("WITHDRAW")
 	await wait_until(func() -> bool: return replies.size()==2)
 	var bag_a := server.database.item_store.inventory(owner_a)
@@ -145,8 +148,13 @@ func run_client() -> void:
 			await recreate()
 			await wait_until(func() -> bool: return web.storage.journal.load_pending().entry.is_empty())
 			check(endpoint.state.storage.items[0].bag_position==2 and endpoint.state.storage.items[0].revision==2,"recovery uses latest account state, not original deposit placement")
+		elif current=="PREPARE_WITHDRAW":
+			await wait_until(func() -> bool: return endpoint.state.storage.items.size()==1 and endpoint.state.storage.items[0].revision==2)
+			withdrawal_payload = transfer_payload(endpoint.state.storage.items[0],"storage","inventory",0,true)
 		elif current=="WITHDRAW":
-			await lose_response(transfer_payload(endpoint.state.storage.items[0],"storage","inventory",0,true))
+			# Both clients already captured the same authoritative UID/revision. A
+			# faster winner may publish removal before the other receives this phase.
+			await lose_response(withdrawal_payload)
 		elif current=="CONFIRM":
 			# Winner's UID is no longer in Storage. Retry must bypass current drag validation.
 			web.bridge.reset_transport()

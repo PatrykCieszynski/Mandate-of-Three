@@ -77,7 +77,7 @@ func transfer_receipt(character_id: int, operation_id: String) -> Dictionary:
 	var args: Variant = JSON.parse_string(row.request_json)
 	if not args is Array or args.size() != 6: return _error("storage")
 	if int(args[0]) != character_id: return _error("unknown_command")
-	var result: Variant = JSON.parse_string(row.result_json)
+	var result: Variant = EconomyCommandSqlite.decode_result(row.result_json)
 	if not result is Dictionary or not result.get("ok",false): return _error("storage")
 	return result
 

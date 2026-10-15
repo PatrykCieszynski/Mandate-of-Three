@@ -209,3 +209,14 @@ intention. Old receipts never restore historical ownership/placement. Current
 account views refresh before local change publication, including repair without
 new mutation facts on replay. No cross-World coherence or session-fencing claim
 is implied. See [the Storage vertical slice](../development/economy-command-boundary.md#account-storage-vertical-slice-receipts-through-client-recovery).
+
+
+Account item state now carries an identity-qualified durable watermark, advanced
+by transaction-local ItemInstance/custody triggers and captured in new successful
+command receipts. Rollback reverses the watermark too; replay retains the original
+receipt revision. Current Inventory snapshots hydrate derived World combat inputs;
+stale/duplicate revisions cannot restore older equipment. Failed hydration gates
+combat until a current full snapshot is accepted. Combat still reads RAM only.
+This additive item-state feature migration preserves existing custody migrations;
+it does not change wallet checkpoints or implement cross-World cache coherence.
+See [durable item revisions](../development/economy-command-boundary.md#durable-account-item-revisions-and-world-cache-reconciliation).
