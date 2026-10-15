@@ -12,9 +12,6 @@ func _ready() -> void:
 	# Headless smoke uses --quit-after measured in rendered/process frames;
 	# cap idle FPS so 158 awaited physics frames can complete before the guard.
 	Engine.max_fps = 60
-	check(MobBodyOverlapIndex.capsule_overlap(Vector3.ZERO, 0.35, 1.8, Vector3(0.8, 0, 0), 0.6, 1.2), "horizontal overlap")
-	check(not MobBodyOverlapIndex.capsule_overlap(Vector3.ZERO, 0.35, 1.8, Vector3(1.1, 0, 0), 0.6, 1.2), "horizontal separation")
-	check(not MobBodyOverlapIndex.capsule_overlap(Vector3.ZERO, 0.35, 1.8, Vector3(0, 4, 0), 0.6, 1.2), "vertical separation")
 	var server := WorldServer.new()
 	WorldServer.curr = server
 	var world := preload("res://tests/fixtures/world3d/test_arena.tscn").instantiate() as GameWorld3D
@@ -39,17 +36,12 @@ func _ready() -> void:
 	world.characters[7] = player
 	dog.position = Vector3(0.25, 0.1, 0)
 	await get_tree().physics_frame
-	var overlaps: Variant = world.mob_system.player_body_overlaps(player)
-	check(overlaps != null and overlaps.has(dog), "overlapping standard capsules detected")
-	# Non-upright shapes must use the legacy exact physics query.
-	dog.rotation.x = 0.2
-	world.mob_system._body_overlap_frame = -1
-	check(world.mob_system.player_body_overlaps(player) == null, "tilted collider physics fallback")
-	dog.rotation.x = 0.0
+	var overlaps: Array[PhysicsBody3D] = player._overlapping_mob_bodies()
+	check(overlaps.has(dog), "native physics query detects overlapping mob body")
 	dog.position = Vector3(8, 0.1, 0)
-	world.mob_system._body_overlap_frame = -1
-	overlaps = world.mob_system.player_body_overlaps(player)
-	check(overlaps != null and overlaps.is_empty(), "distant mob rejected by broadphase")
+	await get_tree().physics_frame
+	overlaps = player._overlapping_mob_bodies()
+	check(not overlaps.has(dog), "native physics query rejects distant mob")
 	# Exercise the real motion solver against the floor, not just algebra.
 	dog.position = Vector3(0, 0.1, 0)
 	for index: int in 8:
@@ -73,5 +65,5 @@ func _ready() -> void:
 	if _failed:
 		get_tree().quit(1)
 	else:
-		print("MOB_HOTPATHS_OK: capsule overlap, fallback, sparse filtering, grounded movement and idle")
+		print("MOB_HOTPATHS_OK: native overlap, grounded movement and idle")
 		get_tree().quit(0)

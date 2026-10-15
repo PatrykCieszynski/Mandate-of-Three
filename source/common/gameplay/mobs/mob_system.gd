@@ -7,10 +7,6 @@ var packs: Dictionary[int, MobPackRuntime] = {}
 var _next_mob_id: int = 0
 var _next_pack_id: int = 0
 var _warned_unknown_mob_keys: Dictionary[StringName, bool] = {}
-## Spatial broadphase is rebuilt at most once per physics frame and invalidated
-## on actor lifecycle changes. It is never used to authorize combat hits.
-var _body_overlap_index := MobBodyOverlapIndex.new()
-var _body_overlap_frame := -1
 ## Most packs have no replacement tickets; do not traverse them 60 times/sec.
 var _respawning_pack_ids: Dictionary[int, bool] = {}
 var _world: GameWorld3D
@@ -21,13 +17,6 @@ func setup(world: GameWorld3D, endpoint: Node, adapter: MandateWorldServices) ->
 	_world = world
 	_endpoint = endpoint
 	services = adapter
-
-func player_body_overlaps(player: PlayerActor3D) -> Variant:
-	var frame := Engine.get_physics_frames()
-	if _body_overlap_frame != frame:
-		_body_overlap_index.rebuild(mobs)
-		_body_overlap_frame = frame
-	return _body_overlap_index.overlapping(player)
 
 func create_pack(members: Array[MobSpawnEntry], anchor: Vector3, spawn_radius: float, wander_radius: float, leash_radius: float, respawn_seconds: float = 15, source_metinstone_id: String = "", expires_at: int = 0) -> MobPackRuntime:
 	assert(GameMode.is_world_server() and anchor.is_finite() and not members.is_empty())
@@ -81,7 +70,6 @@ func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntim
 	dog.wander_at_ms = Time.get_ticks_msec() + pack.rng.randi_range(1000,4000)
 	_world.add_child(dog)
 	mobs[dog.mob_instance_id] = dog
-	_body_overlap_frame = -1
 	pack.actor_ids.append(dog.mob_instance_id)
 	return dog
 
@@ -110,7 +98,6 @@ func remove_mob(id: int) -> void:
 			packs.erase(pack.pack_instance_id)
 			_respawning_pack_ids.erase(pack.pack_instance_id)
 	mobs.erase(id)
-	_body_overlap_frame = -1
 	dog.queue_free()
 
 func tick(delta: float, now: int) -> void:
@@ -144,7 +131,6 @@ func die(dog: MobActor3D, now: int) -> void:
 	if dog.respawn_enabled and pack != null:
 		pack.replacements.append({"definition":dog.definition,"at":now+int(pack.respawn_seconds*1000)})
 		_respawning_pack_ids[pack.pack_instance_id] = true
-	_body_overlap_frame = -1
 	var death := MobDeathResult.capture(dog,now,services)
 	mob_died.emit(death)
 	dog.contribution_players.clear()

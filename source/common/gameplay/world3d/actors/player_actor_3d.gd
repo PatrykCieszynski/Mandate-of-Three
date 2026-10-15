@@ -17,8 +17,7 @@ var _advance_yaw := 0.0
 var _advance_distance := 0.0
 var _advance_duration := 0.0
 var _advance_elapsed := 0.0
-## Rare fallback for custom/tilted/noncapsule collision bodies: reuse a query
-## object rather than allocating PhysicsShapeQueryParameters3D every tick.
+## Reuse the PhysicsServer shape query rather than allocating one per player tick.
 var _overlap_shape_query: PhysicsShapeQueryParameters3D
 
 func setup(display_name: String, tint: Color) -> void:
@@ -99,28 +98,19 @@ func simulate(delta: float, direction: Vector2) -> void:
 	for mob: PhysicsBody3D in temporary_exceptions: remove_collision_exception_with(mob)
 
 func _overlapping_mob_bodies() -> Array[PhysicsBody3D]:
+	var overlaps: Array[PhysicsBody3D] = []
 	if combat_collider == null or not collision_mask & 4:
-		return []
-	var world := get_parent() as GameWorld3D
-	if GameMode.is_world_server() and world != null:
-		# Standard actor capsules use a spatial index + exact capsule test,
-		# avoiding a physics-space query *for every player* at 60 Hz.
-		var indexed: Variant = world.mob_system.player_body_overlaps(self)
-		if indexed != null:
-			return indexed
-	# Preserve PhysicsServer behavior for non-standard colliders, tilted
-	# transforms, or future imported actor shapes.
+		return overlaps
+	# Godot's native physics broadphase is much faster than the scripted
+	# grid/capsule scan for densely overlapping players and mobs.
 	if _overlap_shape_query == null:
 		_overlap_shape_query = PhysicsShapeQueryParameters3D.new()
 	_overlap_shape_query.shape = combat_collider.shape
 	_overlap_shape_query.transform = combat_collider.global_transform
 	_overlap_shape_query.collision_mask = 4
-	var overlaps: Array[PhysicsBody3D] = []
-	var seen: Dictionary = {}
 	for hit: Dictionary in get_world_3d().direct_space_state.intersect_shape(_overlap_shape_query, 256):
 		var mob := hit.collider as MobActor3D
-		if mob != null and not seen.has(mob.get_instance_id()):
-			seen[mob.get_instance_id()] = true
+		if mob != null and not overlaps.has(mob):
 			overlaps.append(mob)
 	return overlaps
 
