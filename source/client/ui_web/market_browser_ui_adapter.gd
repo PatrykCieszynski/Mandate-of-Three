@@ -39,13 +39,13 @@ func _query(payload: Dictionary,action: String) -> Dictionary:
 			"catalog": _view.catalog=result.items;_view.stats=result.stats;_view.catalogQuery=payload.query
 			"search":
 				_view.results=[];_view.cursor=result.next_cursor;_view.criteria=payload.duplicate(true)
-				for row: Dictionary in result.results: _view.results.append({"offerId":row.offer_id,"shopId":int(row.shop_id),"shopName":row.shop_name,"revision":int(row.revision),"price":int(row.price),"item":ItemUiAdapter.item_model(row.item)})
+				for row: Dictionary in result.results: _view.results.append({"offerId":row.offer_id,"shopId":int(row.shop_id),"shopName":row.shop_name,"revision":int(row.revision),"price":row.price,"item":ItemUiAdapter.item_model(row.item)})
 			"visit":
 				_view.highlight=payload.offer_id
 				var offers: Array=[]
 				for row: Dictionary in result.offers:
 					var item:=ItemUiAdapter.item_model(row.item);item.merge({"x":int(row.position)%5,"y":int(row.position)/5,"page":0})
-					offers.append({"id":row.offer_id,"revision":int(row.revision),"price":int(row.price),"item":item})
+					offers.append({"id":row.offer_id,"revision":int(row.revision),"price":row.price,"item":item})
 				_view.shop={"active":true,"shopId":int(result.shop_id),"name":result.name,"status":result.status,"revision":int(result.revision),"columns":5,"rows":8,"offers":offers,"claims":[]}
 	elif action=="visit": _view.shop={};_view.highlight=""
 	publish()

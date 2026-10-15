@@ -6,7 +6,7 @@ export interface MarketResult {
   shopId: number;
   shopName: string;
   revision: number;
-  price: number;
+  price: number | null;
   item: ItemPresentation;
 }
 export interface AffixFilter {
@@ -84,7 +84,7 @@ export function isBrowserSnapshot(v: unknown): v is MarketBrowserSnapshot {
         integer(r.shopId, 1) &&
         typeof r.shopName === 'string' &&
         integer(r.revision) &&
-        integer(r.price, 1) &&
+        (r.price === null || integer(r.price, 1)) &&
         isItem(r.item),
     ) &&
     typeof v.cursor === 'string' &&

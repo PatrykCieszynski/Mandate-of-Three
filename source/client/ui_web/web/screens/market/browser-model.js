@@ -35,7 +35,7 @@ export function isBrowserSnapshot(v) {
             integer(r.shopId, 1) &&
             typeof r.shopName === 'string' &&
             integer(r.revision) &&
-            integer(r.price, 1) &&
+            (r.price === null || integer(r.price, 1)) &&
             isItem(r.item)) &&
         typeof v.cursor === 'string' &&
         v.cursor.length <= 64 &&

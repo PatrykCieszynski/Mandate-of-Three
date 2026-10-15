@@ -26,6 +26,40 @@ func _ready() -> void:
 	assert(persistence.add_yang(seller,33) and persistence.add_yang(buyer,90))
 	var seller_account:=store.resolve_account_id(seller)
 	var buyer_account:=store.resolve_account_id(buyer)
+	# Offer-only listings have no public price, cannot be bought through the
+	# authoritative RPC/store and remain in search/visitor results.
+	var negotiating: Array = []
+	for n: int in 2:
+		var extra_item := ItemInstance.create(ItemDefinitions.IRON_SWORD,seller,[])
+		assert(EconomyFixture.insert_item(items,extra_item,items._free_bag_position(seller,2)))
+		var offered := market.list_item(seller,"offer_only_list_%d" % n,extra_item.uid,0,n*10,0)
+		assert(offered.ok)
+		negotiating.append({"uid":extra_item.uid,"offer":offered})
+	var shop_view := market.mine(seller)
+	assert(shop_view.offers.size()==2 and shop_view.offers.all(func(o: Dictionary)->bool:return o.price==null))
+	assert(market.visit(int(negotiating[0].offer.shop_id)).offers.all(func(o: Dictionary)->bool:return o.price==null))
+	var no_price_buy := {"command_id":"forged_offer_only_buy","shop_id":negotiating[0].offer.shop_id,"offer_id":negotiating[0].offer.offer_id,"revision":0,"price":1}
+	assert(persistence.market_command(buyer,"buy",no_price_buy).error=="offer_only")
+	assert(not MarketRequestRules.valid_command("buy",{"command_id":"invalid_zero","shop_id":negotiating[0].offer.shop_id,"offer_id":negotiating[0].offer.offer_id,"revision":0,"price":0}))
+	assert(market.edit_offer(seller,"set_fixed",negotiating[0].offer.offer_id,0,0,120).ok)
+	assert(market.mine(seller).offers.any(func(o: Dictionary)->bool:return o.price==120))
+	assert(market.edit_offer(seller,"remove_fixed",negotiating[0].offer.offer_id,1,0,0).ok)
+	assert(market.mine(seller).offers.all(func(o: Dictionary)->bool:return o.price==null))
+	var criteria := {"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":WalletStoreSqlite.MAX_YANG,"affix_filters":[],"sort":"price_asc","cursor":"","limit":1}
+	var searcher := MarketSearchSqlite.new(db)
+	var first_page := searcher.search(criteria)
+	assert(first_page.ok and first_page.results.size()==1 and first_page.results[0].price==null and first_page.next_cursor.begins_with("0:"))
+	criteria.cursor=first_page.next_cursor
+	var second_page := searcher.search(criteria)
+	assert(second_page.ok and second_page.results.size()==1 and second_page.results[0].price==null and second_page.results[0].offer_id!=first_page.results[0].offer_id)
+	criteria.cursor=""
+	criteria.price_min=1
+	assert(searcher.search(criteria).results.is_empty(),"bounded positive-price search excludes negotiable listings")
+	for n: int in 2:
+		var listing: Dictionary=negotiating[n]
+		assert(market.cancel_offer(seller,"offer_only_cancel_%d" % n,listing.offer.offer_id,2 if n==0 else 0).ok)
+		assert(items.inventory(seller).items.any(func(i: Dictionary)->bool:return i.uid==listing.uid))
+	assert(market.mine(seller).offers.is_empty() and market.mine(seller).claims.is_empty())
 	var item: Dictionary=items.inventory(seller).items[0]
 	var listed:=market.list_item(seller,"list",item.uid,item.revision,0,100)
 	assert(listed.ok)
