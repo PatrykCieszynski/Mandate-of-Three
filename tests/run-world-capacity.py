@@ -39,11 +39,18 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=12.0)
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--encode-per-peer", action="store_true", help="Encode full roster once per synthetic peer (CPU proxy, not RPC)")
+    parser.add_argument("--no-overlap", action="store_true", help="Ablation: return no overlapping mobs (changes collisions)")
+    parser.add_argument("--no-mob-slide", action="store_true", help="Ablation: skip mob move_and_slide (changes gameplay)")
+    parser.add_argument("--wide", action="store_true", help="Use a large sparse physics floor instead of the dense arena")
+    parser.add_argument("--ai-ms", type=int, default=0, help="Ablation: recompute mob AI every N milliseconds (0=baseline)")
+    parser.add_argument("--pack-size", type=int, default=1, help="Mobs per shared pack (1=baseline; max 100)")
     parser.add_argument("--timeout", type=float, default=240.0, help="Per-scenario hard timeout")
     args = parser.parse_args()
     if not args.godot.is_file():
         parser.error("Godot executable not found")
-    if args.warmup < 1 or args.seconds < 3 or args.repeats < 1 or args.timeout < args.warmup + args.seconds + 10:
+    if (args.warmup < 1 or args.seconds < 3 or args.repeats < 1 or
+            args.timeout < args.warmup + args.seconds + 10 or
+            not 1 <= args.pack_size <= 100 or not 0 <= args.ai_ms <= 1000):
         parser.error("Invalid duration/repeat/timeout arguments")
     root = Path(__file__).resolve().parents[1]
     logs = root / ".godot" / "verification" / "world-capacity"
@@ -59,9 +66,17 @@ def main() -> None:
         directory = logs / folder
         directory.mkdir(exist_ok=True)
         environment[key] = str(directory)
+    environment["MANDATE_BENCH_WIDE"] = "1" if args.wide else "0"
 
     results: list[dict] = []
-    mode_label = "encode" if args.encode_per_peer else "simulation"
+    mode_label = "_".join(
+        ["encode" if args.encode_per_peer else "simulation"] +
+        (["no_overlap"] if args.no_overlap else []) +
+        (["no_mob_slide"] if args.no_mob_slide else []) +
+        (["wide"] if args.wide else []) +
+        ([f"ai_{args.ai_ms}"] if args.ai_ms else []) +
+        ([f"pack_{args.pack_size}"] if args.pack_size != 1 else [])
+    )
     for players, mobs in args.scenarios:
         for attempt in range(args.repeats):
             name = f"{mode_label}_players-{players}_mobs-{mobs}_repeat-{attempt + 1}"
@@ -73,6 +88,11 @@ def main() -> None:
                 f"--bench-players={players}", f"--bench-mobs={mobs}",
                 f"--bench-warmup={args.warmup}", f"--bench-seconds={args.seconds}",
                 f"--bench-encode-per-peer={int(args.encode_per_peer)}",
+                f"--bench-no-overlap={int(args.no_overlap)}",
+                f"--bench-no-mob-slide={int(args.no_mob_slide)}",
+                f"--bench-wide={int(args.wide)}",
+                f"--bench-ai-ms={args.ai_ms}",
+                f"--bench-pack-size={args.pack_size}",
             ]
             start = time.monotonic()
             with stdout.open("w", encoding="utf-8") as out, stderr.open("w", encoding="utf-8") as err:
@@ -108,12 +128,16 @@ def main() -> None:
         "host": {"platform": platform.platform(), "machine": platform.machine(),
                  "logical_cpu_count": os.cpu_count(), "godot": str(args.godot.resolve())},
         "settings": {"warmup": args.warmup, "seconds": args.seconds,
-                     "repeats": args.repeats, "encode_per_peer": args.encode_per_peer},
+                     "repeats": args.repeats, "encode_per_peer": args.encode_per_peer,
+                     "no_overlap": args.no_overlap, "no_mob_slide": args.no_mob_slide,
+                     "wide": args.wide, "ai_ms": args.ai_ms, "pack_size": args.pack_size},
         "cases": results,
     }
     (logs / f"results-{mode_label}.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     columns = ["scenario", "players", "mobs", "repeat", "observed_ticks_per_second",
                "static_memory_mib", "estimated_outbound_mib_per_second",
+               "overlap_query_ms_total", "player_simulate_ms_total",
+               "mob_motion_ms_total", "mob_tick_ms_total",
                "physics_p50_ms", "physics_p95_ms", "physics_p99_ms",
                "interval_p95_ms", "interval_p99_ms", "samples_over_budget"]
     with (logs / f"results-{mode_label}.csv").open("w", newline="", encoding="utf-8") as stream:
@@ -128,6 +152,10 @@ def main() -> None:
                 "interval_p95_ms": case["tick_interval"]["p95_ms"],
                 "interval_p99_ms": case["tick_interval"]["p99_ms"],
                 "samples_over_budget": case["physics_samples_over_16_67_ms"],
+                "overlap_query_ms_total": case["profile"]["overlap_query_ms_total"],
+                "player_simulate_ms_total": case["profile"]["player_simulate_ms_total"],
+                "mob_motion_ms_total": case["profile"]["mob_motion_ms_total"],
+                "mob_tick_ms_total": case["profile"]["mob_tick_ms_total"],
             })
     print(f"Saved: {logs / f'results-{mode_label}.json'} and {logs / f'results-{mode_label}.csv'}")
 
