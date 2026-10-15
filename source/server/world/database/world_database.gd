@@ -173,12 +173,11 @@ func accept_committed_wallet_balance(character_id: int, balance: int) -> void:
 	runtime_wallets[owner_id].pending_currency_delta = 0
 	dirty_wallet.erase(owner_id)
 
+func purchase_shop_operation(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> EconomyOperationResult:
+	return _economy().purchase_shop_operation(owner_id, shop, offer_id, requested_position)
+
 func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1) -> Dictionary:
-	var account_id := wallet_account_id(owner_id)
-	if db == null or not runtime_wallets.has(account_id): return {"ok":false, "error":"storage"}
-	var result: Dictionary = ShopStoreSqlite.new(db).purchase(owner_id, int(runtime_wallets[account_id].pending_currency_delta), shop, offer_id, requested_position)
-	if result.ok: accept_committed_wallet_balance(owner_id, int(result.balance))
-	return result
+	return purchase_shop_operation(owner_id, shop, offer_id, requested_position).response()
 
 func upgrade_candidate(owner_id: int, uid: String, revision: int, recipe: UpgradeDefinition) -> Dictionary:
 	return _economy().upgrade_candidate(owner_id, uid, revision, recipe)

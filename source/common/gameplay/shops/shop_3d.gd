@@ -36,13 +36,13 @@ func buy_for_peer(peer_id: int, instance_id: String, service_id: StringName, off
 	if not services.available() or services.economy() == null: return {"ok":false, "error":"storage"}
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false, "error":"unknown_player"}
-	var result: Dictionary = services.economy().purchase_shop_offer(player.player_id, authorization.shop, offer_id, position)
-	if result.ok:
+	var operation := services.economy().purchase_shop_operation(player.player_id, authorization.shop, offer_id, position)
+	if operation.new_commit:
 		# The database operation has committed and accepted wallet RAM.
 		# Prepare equipment/cache before either endpoint sees a change fact.
 		_world.inventory_endpoint.accept_committed_change(peer_id)
 		_world.currency_endpoint.accept_committed_change(peer_id)
-	return result
+	return operation.response()
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
 	if not _open.has(peer_id): return {"active":false}
