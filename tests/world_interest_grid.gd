@@ -1,6 +1,8 @@
 extends Node
 ## Pure interest selection regression tests; no peers or database needed.
 
+var _failed := false
+
 func _ready() -> void:
 	var grid := WorldInterestGrid3D.new()
 	var viewer := Node3D.new()
@@ -44,10 +46,13 @@ func _ready() -> void:
 	_expect(not seen_mobs.has(100), "mob exits at -57m")
 	_expect(grid.visible_players(1).has(1), "self retained after AOI exit")
 	_expect(grid.visible_players(999).is_empty(), "invalid viewer sees nothing")
-	print("WORLD_INTEREST_GRID_OK")
-	get_tree().quit(0)
+	if _failed:
+		get_tree().quit(1)
+	else:
+		print("WORLD_INTEREST_GRID_OK")
+		get_tree().quit(0)
 
 func _expect(condition: bool, description: String) -> void:
 	if not condition:
+		_failed = true
 		push_error("WORLD_INTEREST_GRID_FAILED: " + description)
-		get_tree().quit(1)
