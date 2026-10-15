@@ -4,6 +4,8 @@
 
 **Current technical priority:** [Pre-alpha architecture hardening and Auction integration](architecture-hardening.md) — ordered, testable PRs for authentication, RPC boundaries, Marketplace, persistence and World synchronization.
 
+**Deferred performance:** [World Server optimization plan W0–W7](world-server-optimization.md) — post-Economy/post-SoC packages for player movement, terrain/combat parity, AOI and real-client capacity. Proposal only; no runtime changes authorized.
+
 **Gameplay / visuals:** [Project direction](../decisions/project-direction.md), [first region](../world/first-region-graybox.md), [Visual V4 Terrain3D](../world/visuals/visual-upgrade-v4-terrain3d.md), [Warrior feel](../gameplay/combat/warrior-action-polish.md).
 
 **Completed spike plans** were removed from the active documentation tree; use Git history only if implementation provenance is needed. Do not restore their old TODO lists.
