@@ -93,11 +93,19 @@ export function mountMarket(root: HTMLElement, options: Options) {
   price.value = '100';
   price.dataset.uiText = '';
   price.setAttribute('aria-label', 'Whole stack price in Yang');
+  const negotiable = document.createElement('input');
+  negotiable.type = 'checkbox';
+  negotiable.setAttribute('aria-label', 'Do negocjacji (bez ceny)');
+  const negotiableLabel = document.createElement('label');
+  negotiableLabel.append(negotiable, document.createTextNode('Do negocjacji'));
+  negotiable.addEventListener('change', () => {
+    price.disabled = negotiable.checked;
+  });
   const actions = document.createElement('div');
   actions.className = 'market-actions';
   const confirm = button('List item', () => void submitSelection()),
     cancel = button('Withdraw to Inventory', () => void cancelSelection());
-  actions.append(price, confirm, cancel);
+  actions.append(price, negotiableLabel, confirm, cancel);
   const claims = document.createElement('div');
   claims.className = 'market-claims';
   const claimsTitle = document.createElement('p');
@@ -165,9 +173,15 @@ export function mountMarket(root: HTMLElement, options: Options) {
   function choose(offer: MarketOffer) {
     candidate = null;
     selected = offer.id;
-    price.value = String(offer.price);
+    negotiable.checked = offer.price === null;
+    price.disabled = negotiable.checked;
+    if (offer.price !== null) price.value = String(offer.price);
     selection.textContent =
-      offer.item.name + ' · ' + offer.price.toLocaleString('en-US') + ' Yang';
+      offer.item.name +
+      ' · ' +
+      (offer.price === null
+        ? 'Do negocjacji'
+        : offer.price.toLocaleString('en-US') + ' Yang');
     confirm.textContent = 'Set price';
     cancel.disabled = false;
   }
@@ -187,7 +201,7 @@ export function mountMarket(root: HTMLElement, options: Options) {
     selection.textContent = item.name + ' → slot ' + (position + 1);
     confirm.textContent = 'List item';
     cancel.disabled = true;
-    price.focus();
+    if (!negotiable.checked) price.focus();
   }
   async function submit(action: Action, payload: MarketCommand) {
     if (pending || disposed) return;
@@ -217,6 +231,7 @@ export function mountMarket(root: HTMLElement, options: Options) {
     }
   }
   function validPrice() {
+    if (negotiable.checked) return 0;
     const value = Number(price.value);
     return /^\d+$/.test(price.value) &&
       Number.isSafeInteger(value) &&
@@ -323,7 +338,7 @@ export function mountMarket(root: HTMLElement, options: Options) {
           offer_id: offer.id,
           revision: offer.revision,
           position,
-          price: offer.price,
+          price: offer.price ?? 0,
         });
       else pick(item, position);
     },

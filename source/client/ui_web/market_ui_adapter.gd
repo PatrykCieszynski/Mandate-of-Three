@@ -46,7 +46,7 @@ func publish(snapshot: Dictionary) -> void:
 	for offer: Dictionary in snapshot.offers:
 		var item := ItemUiAdapter.item_model(offer.item)
 		item.merge({"x":int(offer.position)%5,"y":int(offer.position)/5,"page":0})
-		offers.append({"id":offer.offer_id,"revision":int(offer.revision),"price":int(offer.price),"item":item})
+		offers.append({"id":offer.offer_id,"revision":int(offer.revision),"price":offer.price,"item":item})
 	var claims: Array = []
 	for item: Dictionary in snapshot.claims.slice(0,20): claims.append(ItemUiAdapter.item_model(item))
 	var view := {"active":true,"shopId":int(snapshot.shop_id),"name":snapshot.name,"status":snapshot.status,"revision":int(snapshot.revision),"columns":5,"rows":8,"offers":offers,"claims":claims}

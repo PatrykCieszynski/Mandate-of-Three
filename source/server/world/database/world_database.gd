@@ -87,6 +87,7 @@ func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
 	if result.ok and not ExchangeStoreSqlite.ensure_ledger_schema(db): result = {"ok":false,"error":"exchange_ledger_migration"}
 	if result.ok and not ExchangeStoreSqlite.ensure_orders_schema(db): result = {"ok":false,"error":"exchange_orders_migration"}
 	if result.ok and not MarketSearchSqlite.ensure_lookup_schema(db): result = {"ok":false,"error":"market_lookup_migration"}
+	if result.ok and not MarketStoreSqlite.ensure_offer_only_schema(db): result = {"ok":false,"error":"market_offer_only_migration"}
 	wallet_ready = result.ok
 	return result
 
