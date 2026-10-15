@@ -13,7 +13,13 @@ static func _cell(position: Vector3) -> Vector2i:
 
 static func _upright_unit_basis(node: Node3D) -> bool:
 	var basis := node.global_transform.basis
-	return absf(basis.y.x) < 0.0001 and absf(basis.y.z) < 0.0001 and 		absf(basis.x.length_squared() - 1.0) < 0.0001 and 		absf(basis.y.length_squared() - 1.0) < 0.0001 and 		absf(basis.z.length_squared() - 1.0) < 0.0001
+	return (
+		absf(basis.y.x) < 0.0001
+		and absf(basis.y.z) < 0.0001
+		and absf(basis.x.length_squared() - 1.0) < 0.0001
+		and absf(basis.y.length_squared() - 1.0) < 0.0001
+		and absf(basis.z.length_squared() - 1.0) < 0.0001
+	)
 
 static func capsule_overlap(a_center: Vector3, a_radius: float, a_height: float, b_center: Vector3, b_radius: float, b_height: float) -> bool:
 	# Exact upright capsule-vs-capsule overlap in world space: distance
@@ -45,7 +51,12 @@ func rebuild(mobs: Dictionary) -> void:
 
 func overlapping(player: PlayerActor3D) -> Variant:
 	# Null signals that the caller must use the original physics query.
-	if _needs_fallback or player.combat_collider == null or player.combat_collider.disabled or 		not player.combat_collider.shape is CapsuleShape3D or not _upright_unit_basis(player.combat_collider):
+	if (
+		_needs_fallback or player.combat_collider == null
+		or player.combat_collider.disabled
+		or not player.combat_collider.shape is CapsuleShape3D
+		or not _upright_unit_basis(player.combat_collider)
+	):
 		return null
 	var capsule := player.combat_collider.shape as CapsuleShape3D
 	var center := player.combat_collider.global_position
