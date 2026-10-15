@@ -250,7 +250,8 @@ func receive_hurt(peer_id: int, result: Dictionary) -> void:
 func _send_snapshot() -> void:
 	if not services.item_domain_ready(): return
 	var now: int = Time.get_ticks_msec()
-	var mob_snapshots: Array = _world.mob_system.snapshot(now)
+	# Generate each mob record at most once; only the viewer's AOI is sent.
+	var mob_records: Dictionary = {}
 	var combos: Dictionary = attacks.combo_snapshot()
 	var health: Dictionary = {}
 	var respawns: Dictionary = {}
@@ -262,9 +263,16 @@ func _send_snapshot() -> void:
 		levels[id] = services.player_for_peer(id).level
 		hit_locks[id] = _world.characters[id].hit_reaction.snapshot(now)
 	for peer_id: int in _world.characters:
+		var visible_mobs: Array = []
+		for mob_id: int in _world.interest_mobs_for(peer_id):
+			var mob: MobActor3D = _world.mob_system.mobs.get(mob_id)
+			if mob == null: continue
+			if not mob_records.has(mob_id):
+				mob_records[mob_id] = MobSnapshot.capture(mob, now)
+			visible_mobs.append(mob_records[mob_id])
 		var drops: Dictionary = _world.ground_loot.snapshot_for_peer(peer_id,now)
 		var player: PlayerResource = services.player_for_peer(peer_id)
-		receive_state.rpc_id(peer_id, {"mobs": mob_snapshots, "health": health.duplicate(), "drops": drops,
+		receive_state.rpc_id(peer_id, {"mobs": visible_mobs, "health": health.duplicate(), "drops": drops,
 			"combo_options":{"enabled":combo_state(peer_id).combo_enabled,"skill_level":combo_state(peer_id).combo_skill_level,"length":combo_state(peer_id).definition().steps.size()},
 			"combos": combos, "respawns": respawns, "levels": levels, "hit_locks":hit_locks,
 			"metin": {} if _world.metin_encounter == null else _world.metin_encounter.snapshot(now),
