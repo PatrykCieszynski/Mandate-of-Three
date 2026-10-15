@@ -92,22 +92,21 @@ func upgrade_candidate(character_id: int, uid: String, revision: int, recipe: Up
 	if recipe == null or not recipe.validation_errors().is_empty(): return {"ok":false,"error":"invalid_definition"}
 	return UpgradeStoreSqlite.new(_runtime.db).candidate(character_id, uid, revision, recipe)
 
-func upgrade_operation(character_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> EconomyOperationResult:
+func upgrade_operation(character_id: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String = "") -> EconomyOperationResult:
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary
+	var committed := false
 	if _runtime.db == null or not _runtime.runtime_wallets.has(account):
 		response = {"ok":false, "error":"storage"}
 	elif recipe == null or not recipe.validation_errors().is_empty():
 		response = {"ok":false, "error":"invalid_definition"}
-	elif _runtime.wallet_available(character_id) < recipe.yang_cost:
-		response = {"ok":false, "error":"funds"}
 	else:
-		response = UpgradeStoreSqlite.new(_runtime.db).upgrade(character_id,
-			int(_runtime.runtime_wallets[account].pending_currency_delta), recipe, uid, revision)
-	var committed := bool(response.get("ok", false))
+		# Affordability belongs after receipt lookup, inside the atomic transaction.
+		var upgrades := UpgradeStoreSqlite.new(_runtime.db, _marketplace.rejected_commands)
+		response = upgrades.upgrade(character_id,
+			int(_runtime.runtime_wallets[account].pending_currency_delta), recipe, uid, revision, operation_id)
+		committed = upgrades.committed
 	if committed:
 		_runtime.accept_committed_wallet_balance(character_id, int(response.balance))
-	# Upgrades currently use expected UID/revision, not durable operation receipts.
-	# Empty operation_id is intentional: UI transport IDs are not durable IDs.
-	return EconomyOperationResult.capture(character_id, account, "upgrade", "",
-		response, committed, [account] if committed else [])
+	return EconomyOperationResult.capture(character_id, account, "upgrade", operation_id,
+		response, committed, [account] if committed else [], bool(response.get("ok", false)) and not committed)

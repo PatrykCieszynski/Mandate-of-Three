@@ -33,18 +33,21 @@ func select_for_peer(peer_id: int, instance_id: String, service_id: StringName, 
 	_selected[peer_id] = uid # Selection never mutates placement or consumes anything.
 	return {"ok":true}
 
-func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName, uid: String, revision: int, now: int) -> Dictionary:
+func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName, uid: String, revision: int, now: int, operation_id: String = "") -> Dictionary:
 	if now - _last_upgrade.get(peer_id,-1000) < 100: return {"ok":false,"error":"too_fast"}
 	_last_upgrade[peer_id] = now
 	var auth: Dictionary = authorization(peer_id,instance_id,service_id)
 	if not auth.ok: return {"ok":false,"error":auth.error}
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
-	var operation := services.economy().upgrade_operation(player.player_id, auth.recipe, uid, revision)
+	var operation := services.economy().upgrade_operation(player.player_id, auth.recipe, uid, revision, operation_id)
 	if operation.new_commit:
 		# Commit + wallet RAM are complete; cache refresh precedes fan-out.
 		_world.inventory_endpoint.accept_committed_change(peer_id)
 		_world.currency_endpoint.accept_committed_change(peer_id)
+	elif operation.receipt_replay:
+		_world.inventory_endpoint.resynchronize(peer_id)
+		_world.currency_endpoint.resynchronize(peer_id)
 	return operation.response()
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
@@ -79,14 +82,14 @@ func publish(peer_id: int) -> void:
 		receive_state.rpc_id(peer_id,snapshot)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
-func request_upgrade(action: String, instance_id: String, service_id: String, uid: String, revision: int, command_id: String) -> void:
-	if not GameMode.is_world_server() or command_id.length() > 80 or instance_id.length() > 80 or service_id.length() > 64 or not ItemInstance.valid_uid(uid) or revision < 0: return
+func request_upgrade(action: String, instance_id: String, service_id: String, uid: String, revision: int, command_id: String, operation_id: String = "") -> void:
+	if not GameMode.is_world_server() or command_id.length() > 80 or instance_id.length() > 80 or service_id.length() > 64 or not ItemInstance.valid_uid(uid) or revision < 0 or operation_id.length() > 96: return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id): return
 	var result: Dictionary
 	match action:
 		"select": result = select_for_peer(peer_id,instance_id,StringName(service_id),uid,revision)
-		"upgrade": result = upgrade_for_peer(peer_id,instance_id,StringName(service_id),uid,revision,Time.get_ticks_msec())
+		"upgrade": result = upgrade_for_peer(peer_id,instance_id,StringName(service_id),uid,revision,Time.get_ticks_msec(),operation_id)
 		_: result = {"ok":false,"error":"request"}
 	# Selection changes only the quote; a stale revision also repairs Inventory.
 	if action == "upgrade" and not result.ok:

@@ -263,6 +263,7 @@ const textFocus = reportTextFocus(bridge);
 const upgrade = mountUpgrade(upgradeRoot, {
   select: (payload) => bridge.request('upgrade.select', payload),
   execute: (payload) => bridge.request('upgrade.execute', payload),
+  retry: () => bridge.request('upgrade.retry', {}),
   manager,
   drag,
   resolveItemIcon,

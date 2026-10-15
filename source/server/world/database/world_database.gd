@@ -235,11 +235,11 @@ func storage_operation(owner_id: int, uid: String, revision: int, source: String
 func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> Dictionary:
 	return storage_operation(owner_id, uid, revision, source, destination, position).response()
 
-func upgrade_operation(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> EconomyOperationResult:
-	return _economy().upgrade_operation(owner_id, recipe, uid, revision)
+func upgrade_operation(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String = "") -> EconomyOperationResult:
+	return _economy().upgrade_operation(owner_id, recipe, uid, revision, operation_id)
 
-func upgrade_item(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> Dictionary:
-	return upgrade_operation(owner_id, recipe, uid, revision).response()
+func upgrade_item(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String = "") -> Dictionary:
+	return upgrade_operation(owner_id, recipe, uid, revision, operation_id).response()
 
 func release_wallet(character_id: int) -> void:
 	var owner_id := wallet_account_id(character_id)

@@ -443,3 +443,84 @@ test('Inventory drop on world NPC selects through explicit command and releases 
   manager.dispose();
   host.close();
 });
+
+test('Unresolved Upgrade can retry after authoritative +1 without a new execution or affordability check', async () => {
+  const { manager, host } = environment(),
+    root = target();
+  document.body.append(root);
+  const drag = new ItemDragRuntime({
+    scale: () => 1,
+    onRegionsChanged: () => {},
+  });
+  let retries = 0,
+    executions = 0;
+  const view = mountUpgrade(root, {
+    manager,
+    drag,
+    resolveItemIcon: () => null,
+    onClose: () => {},
+    execute: async () => {
+      executions++;
+      return { ok: true };
+    },
+    retry: async () => {
+      retries++;
+      return { ok: true };
+    },
+  });
+  const pendingQuote = {
+    ...quote,
+    upgradePending: true,
+    materialOwned: 0,
+    candidate: {
+      id: sword.id,
+      revision: 1,
+      level: 1,
+      attack: 12,
+      nextAttack: 14,
+    },
+  } as const;
+  view.setNpcState(npc);
+  view.setInventory({
+    columns: 5,
+    rows: 9,
+    pages: 4,
+    items: [{ ...sword, revision: 1, name: 'Sword +1', upgrade_level: 1 }],
+  });
+  view.setWallet({ ready: true, balance: 0 });
+  view.setState(pendingQuote);
+  const button = (label: string) =>
+    Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+      (n) => n.textContent === label,
+    )!;
+  assert.equal(button('Upgrade').disabled, true);
+  assert.equal(button('Retry upgrade').hidden, false);
+  assert.equal(button('Retry upgrade').disabled, false);
+  button('Retry upgrade').click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(retries, 1);
+  assert.equal(
+    executions,
+    0,
+    'Retry uses the adapter intention, not the current +1 item',
+  );
+  view.setState({ ...pendingQuote, upgradePending: false });
+  assert.equal(button('Retry upgrade').hidden, true);
+  const store = new DomainStore();
+  assert.equal(
+    store.apply({ v: 1, type: 'upgrade.updated', payload: pendingQuote }),
+    true,
+  );
+  assert.equal(
+    store.apply({
+      v: 1,
+      type: 'upgrade.updated',
+      payload: { ...pendingQuote, upgradePending: 'yes' },
+    }),
+    false,
+  );
+  view.dispose();
+  drag.dispose();
+  manager.dispose();
+  host.close();
+});
