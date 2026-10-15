@@ -1,6 +1,6 @@
 # Experimental lightweight player movement (flat arena only)
 
-Branch: `experiment/world-player-lightweight-motion`, based on the combined headless capacity + AOI baseline. **No production player movement or network changes.**
+Consolidated branch: `experiment/world-headless-capacity-baseline` (original development branch: `experiment/world-player-lightweight-motion`). **No production player movement or network changes from the lightweight controller; it is test-only.**
 
 ## Question
 
@@ -52,3 +52,15 @@ Success for this spike means significant lower cost **and** correct flat-arena
 blocking/contact/knockback. It does not justify merging into `main`. If it
 fails to beat the baseline, discard the prototype rather than weakening
 gameplay to chase performance.
+
+## Consolidation and roadmap
+
+This experiment is consolidated with the headless World benchmark, World3D AOI
+prototype, and mob movement/respawn hotpaths in the single Draft PR #18. The
+former performance source PR #22 contained a scripted player/mob collision
+index that regressed dense-load performance and was intentionally removed.
+
+Keep this branch experimental. The planned order is: Economy rework, small
+Clean Code / separation-of-concerns refactor, then revisit world movement
+optimization and production parity. Do not merge benchmark-only controller
+into production movement without terrain, collision and real-client tests.
