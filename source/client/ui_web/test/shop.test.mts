@@ -585,3 +585,35 @@ test('Pending exact purchase can be retried from Shop despite an occupied target
     f.cleanup();
   }
 });
+
+test('Closed NPC recovery view exposes only receipt confirmation, never a catalog', async () => {
+  const f = fixture();
+  try {
+    const recovery: ShopSnapshot = {
+      ...shop,
+      name: 'Purchase confirmation',
+      offers: [],
+      purchasePending: true,
+      recoveryOnly: true,
+    };
+    const store = new DomainStore();
+    assert.equal(store.apply(message('shop.updated', recovery)), true);
+    assert.equal(
+      store.apply(
+        message('shop.updated', { ...recovery, offers: shop.offers }),
+      ),
+      false,
+    );
+    f.view.setState(recovery);
+    assert.equal(f.shopRoot.hidden, false);
+    assert.equal(f.shopRoot.querySelectorAll('.shop-offer').length, 0);
+    const retry = f.shopRoot.querySelector<HTMLButtonElement>('.shop-retry')!;
+    assert.equal(retry.hidden, false);
+    retry.click();
+    await flush();
+    assert.equal(f.retryCount(), 1);
+    assert.equal(f.commands.length, 0);
+  } finally {
+    f.cleanup();
+  }
+});

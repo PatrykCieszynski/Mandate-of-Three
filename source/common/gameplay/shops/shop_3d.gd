@@ -8,6 +8,7 @@ var _world: Node3D
 var _open: Dictionary[int, Dictionary] = {}
 var _published: Dictionary[int, Dictionary] = {}
 var _last_buy: Dictionary[int, int] = {}
+var _last_receipt: Dictionary[int, int] = {}
 
 func _ready() -> void:
 	_world = get_parent()
@@ -47,6 +48,19 @@ func buy_for_peer(peer_id: int, instance_id: String, service_id: StringName, off
 		_world.currency_endpoint.resynchronize(peer_id)
 	return operation.response()
 
+func receipt_for_peer(peer_id: int, operation_id: String, now: int) -> Dictionary:
+	if now - _last_receipt.get(peer_id, -1000) < 100: return {"ok":false,"error":"too_fast"}
+	_last_receipt[peer_id] = now
+	var player: PlayerResource = services.player_for_peer(peer_id)
+	if player == null: return {"ok":false,"error":"unknown_player"}
+	if services.economy() == null: return {"ok":false,"error":"storage"}
+	var operation := services.economy().shop_purchase_receipt(player.player_id, operation_id)
+	var result := operation.response()
+	if result.ok:
+		_world.inventory_endpoint.resynchronize(peer_id)
+		_world.currency_endpoint.resynchronize(peer_id)
+	return result
+
 func snapshot_for_peer(peer_id: int) -> Dictionary:
 	if not _open.has(peer_id): return {"active":false}
 	var opening: Dictionary = _open[peer_id]
@@ -78,6 +92,7 @@ func request_shop(action: String, instance_id: String, service_id: String, offer
 	var result: Dictionary
 	match action:
 		"open": result = open_for_peer(peer_id, instance_id, StringName(service_id))
+		"receipt": result = receipt_for_peer(peer_id, operation_id, Time.get_ticks_msec())
 		"buy": result = buy_for_peer(peer_id, instance_id, StringName(service_id), StringName(offer_id), position, Time.get_ticks_msec(), operation_id)
 		_: result = {"ok":false, "error":"request"}
 	_publish(peer_id)
@@ -88,6 +103,7 @@ func remove_peer(peer_id: int) -> void:
 	_open.erase(peer_id)
 	_published.erase(peer_id)
 	_last_buy.erase(peer_id)
+	_last_receipt.erase(peer_id)
 
 @rpc("authority", "call_remote", "reliable", 1)
 func receive_shop(snapshot: Dictionary) -> void:

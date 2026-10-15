@@ -30,7 +30,12 @@ export function mountShop(root, options) {
         },
         scrollBorder: 2,
         hideHorizontalOverflow: true,
-        onClose: options.onClose,
+        onClose: () => {
+            if (state.active && state.recoveryOnly)
+                options.dismissRecovery?.();
+            else
+                options.onClose();
+        },
         canDrag: () => !options.drag.active,
         onCancel: () => options.drag.cancel(),
         ...(options.onRegionsChanged
@@ -74,7 +79,7 @@ export function mountShop(root, options) {
         service_disabled: 'Shop is unavailable.',
         too_fast: 'Wait before buying again.',
         storage: 'Purchase could not be confirmed. Retry the same purchase.',
-        purchase_pending: 'Purchase not confirmed. Reopen the original shop and use Retry purchase.',
+        purchase_pending: 'Purchase not confirmed. Use Retry purchase; if no result was recorded, return to the original shop.',
         request: 'Invalid placement.',
         no_pending_purchase: 'No purchase needs confirmation.',
     };
@@ -122,6 +127,7 @@ export function mountShop(root, options) {
     }
     async function buyOffer(subject, position) {
         if (!state.active ||
+            state.recoveryOnly ||
             pending ||
             subject.npcInstanceId !== state.npcInstanceId ||
             subject.serviceId !== state.serviceId ||
@@ -167,6 +173,7 @@ export function mountShop(root, options) {
         tabList.replaceChildren();
         tabList.hidden = true;
         root.hidden = !state.active;
+        offers.hidden = !!(state.active && state.recoveryOnly);
         updateRetry();
         if (state.active) {
             const catalog = state;
@@ -209,7 +216,7 @@ export function mountShop(root, options) {
                 sources.push(options.drag.registerSource({
                     element: entry,
                     payload: () => {
-                        if (pending)
+                        if (pending || catalog.recoveryOnly)
                             return null;
                         tip.hide();
                         return shopOfferPayload(subject, ITEM_SLOT_SIZE, options.resolveItemIcon);

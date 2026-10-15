@@ -135,6 +135,10 @@ function isShop(value) {
         return false;
     if ('purchasePending' in value && typeof value.purchasePending !== 'boolean')
         return false;
+    if ('recoveryOnly' in value && typeof value.recoveryOnly !== 'boolean')
+        return false;
+    if (value.recoveryOnly && (!value.purchasePending || value.offers.length !== 0))
+        return false;
     const seen = new Set();
     for (const offer of value.offers) {
         if (!isObject(offer) || !id(offer.offerId) || typeof offer.offerId !== 'string' || seen.has(offer.offerId) || !id(offer.itemDefinitionId) || typeof offer.name !== 'string' || !offer.name || offer.name.length > 128 || typeof offer.iconId !== 'string' || offer.iconId.length > 64 || !integerRange(offer.height, 1, 3) || !integerRange(offer.quantity, 1) || !integerRange(offer.price, 1, MAX_YANG) || ('description' in offer && typeof offer.description !== 'string') || ('tooltip' in offer && !isItemTooltipDetails(offer.tooltip)) || 'uid' in offer || 'revision' in offer)

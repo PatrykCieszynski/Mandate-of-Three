@@ -21,6 +21,7 @@ export type ShopSnapshot =
       currency: 'yang';
       offers: ShopOfferPresentation[];
       purchasePending?: boolean;
+      recoveryOnly?: boolean;
     };
 export type ShopBuyCommand = {
   npc_instance_id: string;

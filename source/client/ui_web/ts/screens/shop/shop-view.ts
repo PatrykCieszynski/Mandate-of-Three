@@ -27,6 +27,7 @@ export function mountShop(
     resolveItemIcon: ResolveItemIcon;
     buy: (command: ShopBuyCommand) => Promise<CommandResult>;
     retry?: () => Promise<CommandResult>;
+    dismissRecovery?: () => void;
     onClose: () => void;
     onRegionsChanged?: () => void;
   },
@@ -55,7 +56,10 @@ export function mountShop(
     },
     scrollBorder: 2,
     hideHorizontalOverflow: true,
-    onClose: options.onClose,
+    onClose: () => {
+      if (state.active && state.recoveryOnly) options.dismissRecovery?.();
+      else options.onClose();
+    },
     canDrag: () => !options.drag.active,
     onCancel: () => options.drag.cancel(),
     ...(options.onRegionsChanged
@@ -101,7 +105,7 @@ export function mountShop(
     too_fast: 'Wait before buying again.',
     storage: 'Purchase could not be confirmed. Retry the same purchase.',
     purchase_pending:
-      'Purchase not confirmed. Reopen the original shop and use Retry purchase.',
+      'Purchase not confirmed. Use Retry purchase; if no result was recorded, return to the original shop.',
     request: 'Invalid placement.',
     no_pending_purchase: 'No purchase needs confirmation.',
   };
@@ -153,6 +157,7 @@ export function mountShop(
   ): Promise<void> {
     if (
       !state.active ||
+      state.recoveryOnly ||
       pending ||
       subject.npcInstanceId !== state.npcInstanceId ||
       subject.serviceId !== state.serviceId ||
@@ -197,6 +202,7 @@ export function mountShop(
     tabList.replaceChildren();
     tabList.hidden = true;
     root.hidden = !state.active;
+    offers.hidden = !!(state.active && state.recoveryOnly);
     updateRetry();
     if (state.active) {
       const catalog = state;
@@ -249,7 +255,7 @@ export function mountShop(
             options.drag.registerSource({
               element: entry,
               payload: () => {
-                if (pending) return null;
+                if (pending || catalog.recoveryOnly) return null;
                 tip.hide();
                 return shopOfferPayload(
                   subject,

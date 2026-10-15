@@ -221,9 +221,39 @@ and button do not grant authority: normal server NPC/service/range checks remain
 
 **Recovery limit:** the adapter and unresolved ID survive browser reload within
 the running client, not full client exit/relog. SQLite receipts survive restart,
-but automatic discovery/client journaling and receipt-only resolution outside NPC
-range are not implemented here. This is synchronous single-World receipt safety,
+but automatic discovery/client journaling were not implemented in this slice.
+Receipt-only resolution outside NPC range is added in the ninth slice below. This is synchronous single-World receipt safety,
 not full durable C2 admission/distributed recovery or durable rejection policy.
+
+## Ninth slice: receipt-only NPC purchase recovery
+
+`shop_purchase_receipt` is a read-only Economy entry point. It fetches only a
+successful `npc_shop.buy` result matching the authenticated account and original
+receiving character. Unknown IDs, another character/account or another command
+kind return `unknown_command`. The lookup does not admit a purchase, write a
+receipt, settle Yang or create an item. Its typed result is neither `new_commit`
+nor mutation `receipt_replay`; successful lookup repairs current caller views
+without mutation facts or replacing wallet RAM with the historical result.
+
+Shop3D exposes this through its authenticated `receipt` RPC action, with a bounded
+per-peer read rate. It requires the live authenticated character but no NPC
+interaction/range, since it cannot change the economy. Purchase RPC authorization
+is unchanged. Retry now checks this read-only result first; if it is unknown,
+the adapter may resubmit only its original ID/payload through the existing
+NPC-authorized purchase path. An unknown outcome is never silently treated as a
+new intention or economic failure.
+
+If NPC context closes while the intention remains uncertain, the adapter keeps
+a small `Purchase confirmation` view (`recoveryOnly`, empty offers) with Retry.
+It cannot advertise/buy from a stale catalog. Closing that view hides presentation
+only and retains the intention; reopening a Shop exposes recovery again. A
+confirmed receipt clears the pending intention and closes the confirmation view.
+`ui.ready` restores that view from current client state. Browser commands cannot
+supply another receipt ID or replace the original purchase payload.
+
+This adds no schema, worker, generic command abstraction or client disk journal.
+Full client exit/relog discovery remains deferred. It does not broaden mutation
+authorization or claim distributed C2 admission/session fencing.
 
 ## Regression evidence
 
@@ -309,6 +339,16 @@ clicking Retry invokes only the empty-payload recovery action. This closes the
 coverage gap left by calling the Godot adapter directly. Review checks passed:
 full configured Prettier format check, smoke (10 Godot fixtures, 79 Web contracts)
 and the two-client NPC Shop flow. Generated JavaScript matches TypeScript.
+
+For the ninth slice, existing shop_purchase checks receipt-only result semantics,
+unknown-ID non-mutation and character/account/kind isolation. The two-client Shop
+fixture closes the NPC context and moves the buyer away after losing the committed
+response: a fresh buy remains unauthorized, an absent receipt creates nothing,
+and Web retry recovers the earlier result without a second charge or mutation fact.
+The Web fixture checks a recovery view with no offers, a usable Retry action and
+rejection of a recovery snapshot containing a catalog. Smoke (10 Godot fixtures,
+80 Web contracts), two-client NPC Shop and full configured Prettier format check
+passed on 2026-10-15. No native window was launched.
 
 Relevant commands, run sequentially where they share port 18098:
 

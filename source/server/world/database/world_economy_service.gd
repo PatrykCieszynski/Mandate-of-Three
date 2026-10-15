@@ -61,6 +61,14 @@ func inventory_operation(character_id: int, action: String, uid: String, revisio
 	return EconomyOperationResult.capture(character_id, account, "inventory." + action, "",
 		response, committed, [account] if committed else [])
 
+func shop_purchase_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
+	var response := {"ok":false,"error":"storage"}
+	if _runtime.db != null:
+		response = ShopStoreSqlite.new(_runtime.db).purchase_receipt(character_id, operation_id)
+	# Lookup is read-only, not another mutation or mutation receipt replay.
+	return EconomyOperationResult.capture(character_id, _runtime.wallet_account_id(character_id),
+		"npc_shop.receipt", operation_id, response, false)
+
 func purchase_shop_operation(character_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1, operation_id: String = "") -> EconomyOperationResult:
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary

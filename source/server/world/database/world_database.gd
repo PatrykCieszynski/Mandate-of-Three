@@ -176,6 +176,9 @@ func accept_committed_wallet_balance(character_id: int, balance: int) -> void:
 func inventory_operation(owner_id: int, action: String, uid: String, revision: int, position: int = -1) -> EconomyOperationResult:
 	return _economy().inventory_operation(owner_id, action, uid, revision, position)
 
+func shop_purchase_receipt(owner_id: int, operation_id: String) -> EconomyOperationResult:
+	return _economy().shop_purchase_receipt(owner_id, operation_id)
+
 func purchase_shop_operation(owner_id: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1, operation_id: String = "") -> EconomyOperationResult:
 	return _economy().purchase_shop_operation(owner_id, shop, offer_id, requested_position, operation_id)
 

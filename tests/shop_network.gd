@@ -75,10 +75,26 @@ func run_server() -> void:
 	set_phase("BUY_EXACT",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error == "purchase_pending" and replies[hero].has_purchase and replies[hero].wallet == 1500, "lost purchase response leaves a committed item and unresolved client intention")
+	set_phase("CLOSE", hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(replies[hero].ok and not replies[hero].shop_active and not replies[hero].npc_active, "NPC context closes while purchase remains unresolved")
+	world.characters[hero].position = Vector3(12,0,12)
+	await get_tree().create_timer(0.12).timeout
+	set_phase("STALE", hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(not replies[hero].ok and replies[hero].error in ["out_of_range", "no_interaction"] and server.database.wallet_balance(owner) == 1500, "closed/out-of-range context cannot execute a new purchase")
+	set_phase("MISSING_RECEIPT", hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(not replies[hero].ok and replies[hero].error == "unknown_command" and server.database.item_store.inventory(owner).items.size() == before.items.size() + 1, "missing receipt outside NPC does not create an item")
 	await get_tree().create_timer(0.12).timeout
 	set_phase("RETRY_EXACT", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
-	check(replies[hero].ok and replies[hero].has_purchase and replies[hero].wallet == 1500, "adapter retries the same purchase after lost response without a second charge")
+	check(replies[hero].ok and replies[hero].has_purchase and replies[hero].wallet == 1500 and not replies[hero].shop_active, "receipt-only recovery outside the NPC confirms the original purchase without another charge")
+	world.characters[hero].position = npc.position + Vector3(0,0,2)
+	for command: String in ["INTERACT", "SELECT", "OPEN"]:
+		set_phase(command, hero)
+		await wait_until(func() -> bool: return replies.has(hero))
+		check(replies[hero].ok, "reopen after result recovery " + command)
 	check(server.database.runtime_wallets[server.database.wallet_account_id(owner)].pending_currency_delta==0 and not server.database.dirty_wallet.has(server.database.wallet_account_id(owner)), "RPC commit clears pending income")
 	await get_tree().create_timer(0.12).timeout
 	set_phase("OCCUPIED",hero)
@@ -160,6 +176,7 @@ func _process(delta: float) -> void:
 		"RETRY_EXACT": _retry_from_web()
 		"OCCUPIED": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",10,"shop-exact", "occupied-intention")
 		"BUY_AUTO": _adapter_purchase(false, false)
+		"MISSING_RECEIPT": world.shop_endpoint.request_shop.rpc_id(1,"receipt","","","",-1,"missing-receipt","not-admitted")
 		"FUNDS","FOREIGN","STALE": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",-1,"shop-auto", "npc-" + phase_name)
 		"BACK": world.npc_endpoint.request_interaction.rpc_id(1,"clear_service","","","shop-back")
 		"CLOSE": world.npc_endpoint.request_interaction.rpc_id(1,"close","","","shop-close")
@@ -191,10 +208,12 @@ func _retry_from_web() -> void:
 	var listener := func(json: String) -> void:
 		var message: Dictionary = JSON.parse_string(json)
 		if message.type == "command.result" and message.id == "retry-from-web": received.result = message.payload
-		if message.type == "ui.snapshot": received.pending_purchase = message.payload.shop.get("purchasePending", false)
+		if message.type == "ui.snapshot":
+			received.pending_purchase = message.payload.shop.get("purchasePending", false)
+			received.recovery_only = message.payload.shop.get("recoveryOnly", false)
 	shop_bridge.outgoing.connect(listener)
 	shop_bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
-	check(received.get("pending_purchase", false), "ui.ready exposes unresolved purchase so Retry remains available after browser reload")
+	check(received.get("pending_purchase", false) and received.get("recovery_only", false), "ui.ready exposes receipt confirmation after the NPC context has closed")
 	shop_bridge.receive('{"v":1,"type":"shop.retry","id":"retry-from-web","payload":{}}')
 	await wait_until(func() -> bool: return received.has("result"))
 	shop_bridge.outgoing.disconnect(listener)

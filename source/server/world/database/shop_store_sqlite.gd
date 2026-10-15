@@ -36,5 +36,23 @@ func purchase(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: 
 	if not inserted.ok: return _rollback(str(inserted.error))
 	return _transaction.commit({"ok":true, "balance":spent.balance, "uid":inserted.uid, "position":inserted.position})
 
+func purchase_receipt(owner_id: int, operation_id: String) -> Dictionary:
+	if operation_id.is_empty() or operation_id.length() > 96: return {"ok":false,"error":"request"}
+	var account_id := WorldStoreSqlite.new(db).resolve_account_id(owner_id)
+	if account_id <= 0: return {"ok":false,"error":"owner"}
+	# Read only: an unknown ID cannot admit or execute a purchase. Kind/account
+	# filtering plus the stored receiving character prevent cross-context recovery.
+	if not db.query_with_bindings("SELECT request_json,result_json FROM market_commands WHERE account_id=? AND command_id=? AND kind='npc_shop.buy';", [account_id,operation_id]): return {"ok":false,"error":"storage"}
+	if db.query_result.is_empty(): return {"ok":false,"error":"unknown_command"}
+	var row: Dictionary = db.query_result[0]
+	var args: Variant = JSON.parse_string(row.request_json)
+	if not args is Array or args.size() != 4: return {"ok":false,"error":"storage"}
+	if int(args[0]) != owner_id: return {"ok":false,"error":"unknown_command"}
+	var result: Variant = JSON.parse_string(row.result_json)
+	if not result is Dictionary or not result.get("ok", false): return {"ok":false,"error":"storage"}
+	for field: String in ["balance", "position"]:
+		if result.has(field): result[field] = int(result[field])
+	return result
+
 func _rollback(error: String) -> Dictionary:
 	return _transaction.rollback(error)
