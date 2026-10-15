@@ -32,6 +32,6 @@ static func seed(db: SQLite, owner: int, distributed_owners: bool = false) -> vo
 			cells.append("(%d,%d,'%s'),(%d,%d,'%s')" % [shop+1,position,uid,shop+1,position+20,uid])
 		assert(db.query("INSERT INTO item_instances VALUES "+",".join(instances)+";"))
 		assert(db.query("INSERT INTO item_custody VALUES "+",".join(custody)+";"))
-		assert(db.query("INSERT INTO shop_offers VALUES "+",".join(offers)+";"))
+		assert(db.query("INSERT INTO shop_offers(offer_id,shop_id,account_id,item_uid,position,price_yang,revision) VALUES "+",".join(offers)+";"))
 		assert(db.query("INSERT INTO shop_cells VALUES "+",".join(cells)+";"))
 	assert(db.query("COMMIT;"))
