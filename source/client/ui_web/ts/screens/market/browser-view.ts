@@ -159,7 +159,12 @@ export function mountMarketBrowser(
   buy.disabled = true;
   const retry = button('Retry same purchase', () => void purchase(true));
   retry.hidden = true;
-  visitor.contentRoot.append(shopName, shopGridRoot, offerInfo, buy, retry);
+  // Placeholder only: private messages have no server command yet.
+  const whisper = button('Whisper seller (soon)', () => {});
+  whisper.disabled = true;
+  whisper.title = 'Private messages are not implemented yet.';
+  whisper.hidden = true;
+  visitor.contentRoot.append(shopName, shopGridRoot, offerInfo, buy, whisper, retry);
   function input(label: string) {
     const n = document.createElement('input');
     n.type = 'text';
@@ -239,6 +244,7 @@ export function mountMarketBrowser(
       (!selected || !('active' in state.shop) || !state.shop.active)
     )
       return;
+    if (!replay && selected?.price === null) return;
     if (!replay && selected && 'shopId' in state.shop)
       buyIntent = {
         command_id: marketCommandId(),
@@ -276,14 +282,17 @@ export function mountMarketBrowser(
         !selected ||
         !state.active ||
         !('status' in state.shop) ||
-        state.shop.status !== 'active';
+        state.shop.status !== 'active' ||
+        selected?.price === null;
     }
   }
   function choose(offer: MarketOffer) {
     selected = offer;
     offerInfo.textContent =
-      offer.item.name + ' · ' + offer.price.toLocaleString('en-US') + ' Yang';
+      offer.item.name + ' · ' + (offer.price === null ? 'Do negocjacji' : offer.price.toLocaleString('en-US') + ' Yang');
+    whisper.hidden = offer.price !== null;
     buy.disabled =
+      offer.price === null ||
       pending ||
       !state.active ||
       !('status' in state.shop) ||
@@ -354,7 +363,7 @@ export function mountMarketBrowser(
       row.append(cell);
       for (const text of [
         String(result.item.quantity),
-        result.price.toLocaleString('en-US'),
+        result.price === null ? 'Do negocjacji' : result.price.toLocaleString('en-US'),
         result.shopName,
       ]) {
         const c = document.createElement('td');
@@ -409,6 +418,7 @@ export function mountMarketBrowser(
         state.shop.offers.find((x) => x.id === highlight);
       selected = undefined;
       buy.disabled = true;
+      whisper.hidden = true;
       if (openedShop) visitor.handle.activate();
       if (chosen) choose(chosen);
       else if (state.highlight)

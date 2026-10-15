@@ -19,7 +19,7 @@ export function isMarketSnapshot(v) {
             typeof o.id === 'string' &&
             /^[a-f0-9]{32}$/.test(o.id) &&
             integer(o.revision) &&
-            integer(o.price, 1) &&
+            (o.price === null || integer(o.price, 1)) &&
             isItem(o.item) &&
             isObject(o.item) &&
             integer(o.item.x, 0, 4) &&
