@@ -9,6 +9,20 @@ var web_results: Dictionary = {}
 var web_snapshots: Array[Dictionary] = []
 var running: bool = false
 var inventory_facts: Dictionary = {}
+var journal_directory := ""
+
+func _ready() -> void:
+	var args := OS.get_cmdline_args()
+	var probe := args.find("--inventory-journal-probe")
+	if probe >= 0:
+		var journal = preload("res://source/client/ui_web/local_economy_journal.gd").new("inventory-",args[probe+1])
+		var loaded: Dictionary = journal.configure({"authority_id":args[probe+2],"account_id":int(args[probe+3]),"character_id":int(args[probe+4])})
+		if loaded.ok and loaded.entry.get("id", "") == args[probe+5] and ItemUiAdapter.valid_intent(loaded.entry.payload):
+			print("INVENTORY_JOURNAL_PROCESS_OK")
+			get_tree().quit()
+		else: get_tree().quit(1)
+		return
+	super._ready()
 
 func run_server() -> void:
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
@@ -22,7 +36,7 @@ func run_server() -> void:
 		check(snapshot.items.size() == 2 and snapshot.stats.attack == 10 and snapshot.equipment.is_empty(), "private exact inventory after moves")
 		check(snapshot.items.all(func(i: Dictionary) -> bool: return i.location == "bag" and i.bag_position >= 0), "RPC equipment cycle persisted")
 		check(server.runtime_attack(owner) == 10, "runtime attack reconciled")
-		check(int(inventory_facts.get(owner, 0)) == 9, "only nine real mutations publish facts; no-op and rejected commands still repair snapshots")
+		check(int(inventory_facts.get(owner, 0)) == 10, "nine original mutations plus one explicit unsent-intent retry publish facts; replays/no-ops/rejections do not")
 	var before: Array = []
 	for id: int in world.characters: before.append(server.database.item_store.inventory(server.connected_players[id].player_id))
 	db.close_db()
@@ -50,22 +64,16 @@ func command(type: String, payload: Dictionary) -> Dictionary:
 	return web_results.get(id, {"ok": false})
 
 func run_client() -> void:
-	web = CoreUiController.new()
-	web.host = HeadlessUiHost.new()
-	world.add_child(web)
-	web.setup(world)
-	web.bridge.outgoing.connect(func(json: String) -> void:
-		var message: Dictionary = JSON.parse_string(json)
-		if message.type == "command.result" and str(message.id).begins_with("fixture-"): web_results[str(message.id)] = message.payload
-		if message.type == "ui.snapshot": web_snapshots.append(message.payload))
-	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+	var context: Dictionary = world.inventory_endpoint.state.economic_context
+	journal_directory = "res://.godot/verification/inventory-journal-network-" + str(context.authority_id) + "-" + str(context.character_id)
+	_compose_web()
 	register_ready.rpc_id(1)
 	await wait_until(func() -> bool: return phase_name == "GO")
 	var endpoint: InventoryEndpoint3D = world.inventory_endpoint
 	var entry_projection := endpoint.state.duplicate(true)
 	check(int(entry_projection.get("projection_version", 0)) > 0, "entry snapshot hydrates a versioned inventory/equipment projection")
 	var item: Dictionary = endpoint.state.items[0].duplicate(true)
-	var result: Dictionary = await command("inventory.move_item", {"id":item.uid,"revision":item.revision,"x":0,"y":3,"page":0})
+	var result: Dictionary = await lost_command("inventory.move_item", {"id":item.uid,"revision":item.revision,"x":0,"y":3,"page":0},true)
 	check(result.ok, "web command waits for committed move RPC")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 15 and i.revision == 1), "snapshot after move")
 	var moved_projection := endpoint.state.duplicate(true)
@@ -95,14 +103,14 @@ func run_client() -> void:
 	var before_activation: Dictionary = endpoint.state.duplicate(true)
 	result = await command("item.activate", {"id":item.uid,"revision":current.revision - 1})
 	check(not result.ok and result.error == "stale" and endpoint.state.items == before_activation.items and endpoint.state.equipment == before_activation.equipment and endpoint.state.stats == before_activation.stats, "stale activation preserves authoritative snapshot")
-	result = await command("item.activate", {"id":item.uid,"revision":current.revision})
+	result = await lost_command("item.activate", {"id":item.uid,"revision":current.revision},false)
 	check(result.ok and endpoint.state.equipment.get("weapon") == item.uid, "Web activation commits and publishes equipment")
 	check(not endpoint.state.items.any(func(i: Dictionary) -> bool: return i.has("primary_action")), "action stays outside presentation snapshots")
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
 	check(current.location == "equipment", "equipped item leaves bag")
 	var equipped_projection := endpoint.state.duplicate(true)
 	unchanged = endpoint.state.items.duplicate(true)
-	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
+	result = await lost_command("equipment.equip", {"id":item.uid,"revision":current.revision},false)
 	check(result.ok and endpoint.state.items == unchanged and endpoint.state.stats.attack > 10, "repeat Web equip preserves equipment and runtime-derived stats")
 	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision - 1})
 	check(not result.ok and result.error == "stale", "Web unequip rejects stale revision")
@@ -114,10 +122,10 @@ func run_client() -> void:
 	check(endpoint.state == unequipped_projection and endpoint.public_weapons.get(world.local_peer) == "", "delayed equipment snapshot and public weapon cannot restore an unequipped sword")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.location == "bag"), "unequip returns to free bag cells")
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
-	result = await command("equipment.equip", {"id":item.uid,"revision":current.revision})
+	result = await lost_command("equipment.equip", {"id":item.uid,"revision":current.revision},false)
 	check(result.ok and endpoint.state.equipment.get("weapon") == item.uid, "explicit equip still commits")
 	current = endpoint.state.items.filter(func(i: Dictionary) -> bool: return i.uid == item.uid)[0]
-	result = await command("equipment.unequip", {"id":item.uid,"revision":current.revision,"x":2,"y":3,"page":1})
+	result = await lost_command("equipment.unequip", {"id":item.uid,"revision":current.revision,"x":2,"y":3,"page":1},true)
 	check(result.ok and endpoint.state.stats.attack == 10, "exact unequip restores runtime stats")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid == item.uid and i.bag_position == 62 and i.revision == current.revision + 1), "Web exact unequip publishes selected cell and page")
 	# A browser transport reload must replay the current accepted domain state,
@@ -143,7 +151,86 @@ func run_client() -> void:
 	result = await command("storage.transfer",transfer_payload)
 	check(result.ok and endpoint.state.storage.items.is_empty(),"Web quick withdrawal clears Storage")
 	check(endpoint.state.items.any(func(i: Dictionary) -> bool: return i.uid==item.uid and i.revision==current.revision+2),"withdrawal publishes revised Inventory")
+	await absent_intent_recovery()
+	_cleanup_journal()
 	if not failed: print("WEB_INVENTORY_CLIENT_OK: ", client_number)
 	finished.rpc_id(1)
 	await get_tree().create_timer(0.4).timeout
 	get_tree().quit(1 if failed else 0)
+
+func _compose_web() -> void:
+	web = CoreUiController.new()
+	web.host = HeadlessUiHost.new()
+	world.add_child(web)
+	web.items.journal.directory = journal_directory
+	web.setup(world)
+	web.bridge.outgoing.connect(func(json: String) -> void:
+		var message: Dictionary = JSON.parse_string(json)
+		if message.type == "command.result" and str(message.id).begins_with("fixture-"): web_results[str(message.id)] = message.payload
+		if message.type == "ui.snapshot": web_snapshots.append(message.payload))
+	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+
+func lost_command(type: String, payload: Dictionary, restart: bool) -> Dictionary:
+	var endpoint := world.inventory_endpoint
+	endpoint.operation_finished.disconnect(web.session.finish)
+	var result := await command(type,payload)
+	endpoint.operation_finished.connect(web.session.finish)
+	check(not result.ok and result.error == "inventory_pending","lost "+type+" response retains original intent")
+	var loaded: Dictionary = web.items.journal.load_pending()
+	check(loaded.ok and not loaded.entry.is_empty(),"pending intent is on disk before teardown")
+	var changed := payload.duplicate()
+	changed.revision = int(changed.revision)+1
+	var action: String = "move" if type == "inventory.move_item" else type.get_slice(".",1)
+	check((await web.items._submit(changed,action)).error == "inventory_pending","changed payload cannot replace unresolved "+type)
+	var state := endpoint.state.duplicate(true)
+	if restart:
+		var context: Dictionary = state.economic_context
+		var output: Array = []
+		var status := OS.execute(OS.get_executable_path(),["--headless","--path",ProjectSettings.globalize_path("res://"),"--mode=client","res://tests/web_inventory.tscn","--inventory-journal-probe",journal_directory,str(context.authority_id),str(context.account_id),str(context.character_id),loaded.entry.id],output)
+		check(status == 0 and str(output).contains("INVENTORY_JOURNAL_PROCESS_OK"),"independent process restores original Inventory ID/action")
+		web._stop("teardown")
+		web.queue_free()
+		await get_tree().process_frame
+		_compose_web()
+		check(web_snapshots[-1].inventory.get("recoveryPending",false),"ui.ready exposes journal recovery before lookup finishes")
+		await wait_until(func() -> bool: return web.items.journal.load_pending().entry.is_empty())
+		result = {"ok":true}
+	else:
+		web.bridge.reset_transport()
+		web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+		check(web_snapshots[-1].inventory.get("recoveryPending",false),"reload exposes explicit Inventory retry")
+		result = await command("inventory.retry",{})
+	check(result.ok and endpoint.state.items == state.items and endpoint.state.equipment == state.equipment and endpoint.state.stats == state.stats,"recovery confirms current state without applying "+type+" twice")
+	check(web.items.journal.load_pending().entry.is_empty(),"confirmation clears only resolved journal entry")
+	await get_tree().create_timer(0.12).timeout
+	return result
+
+func absent_intent_recovery() -> void:
+	var endpoint := world.inventory_endpoint
+	var current: Dictionary = endpoint.state.items[0]
+	var intent := {"action":"move","item":{"id":current.uid,"revision":current.revision,"x":4,"y":3,"page":2}}
+	var operation_id := "inventory-" + Crypto.new().generate_random_bytes(16).hex_encode()
+	check(web.items.journal.save_pending(operation_id,intent),"seed crash-before-send intention")
+	var before := endpoint.state.duplicate(true)
+	web._stop("teardown")
+	web.queue_free()
+	await get_tree().process_frame
+	var results: Array[Dictionary] = []
+	var observe := func(_id: String,result: Dictionary) -> void: results.append(result)
+	endpoint.operation_finished.connect(observe)
+	_compose_web()
+	await wait_until(func() -> bool: return not results.is_empty())
+	await get_tree().create_timer(0.25).timeout
+	check(results.size() == 1 and results[0].get("error", "") == "unknown_command" and web.items.journal.load_pending().entry.get("id", "") == operation_id,"restart performs one lookup and never auto-executes absent intent")
+	check(endpoint.state.items == before.items and endpoint.state.equipment == before.equipment,"absent discovery leaves current placement untouched")
+	endpoint.operation_finished.disconnect(observe)
+	var result := await command("inventory.retry",{})
+	var position := 2 * InventoryGrid.PAGE_CELLS + 3 * InventoryGrid.COLUMNS + 4
+	check(result.ok and endpoint.state.items.any(func(item: Dictionary) -> bool: return item.uid == current.uid and item.revision == current.revision+1 and item.bag_position == position),"explicit unknown-receipt retry executes original saved action exactly once")
+	check(web.items.journal.load_pending().entry.is_empty(),"confirmed first execution clears saved intent")
+	check((await command("inventory.retry",{})).error == "no_pending_inventory","resolved intent cannot execute again via Retry")
+
+func _cleanup_journal() -> void:
+	var context: Dictionary = world.inventory_endpoint.state.economic_context
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory).path_join(("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text()))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory))

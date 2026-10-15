@@ -186,8 +186,11 @@ func accept_committed_wallet_balance(character_id: int, balance: int) -> void:
 	runtime_wallets[owner_id].pending_currency_delta = 0
 	dirty_wallet.erase(owner_id)
 
-func inventory_operation(owner_id: int, action: String, uid: String, revision: int, position: int = -1) -> EconomyOperationResult:
-	return _economy().inventory_operation(owner_id, action, uid, revision, position)
+func inventory_receipt(owner_id: int, operation_id: String) -> EconomyOperationResult:
+	return _economy().inventory_receipt(owner_id,operation_id)
+
+func inventory_operation(owner_id: int, action: String, uid: String, revision: int, position: int = -1, operation_id: String = "") -> EconomyOperationResult:
+	return _economy().inventory_operation(owner_id, action, uid, revision, position, operation_id)
 
 func shop_purchase_receipt(owner_id: int, operation_id: String) -> EconomyOperationResult:
 	return _economy().shop_purchase_receipt(owner_id, operation_id)

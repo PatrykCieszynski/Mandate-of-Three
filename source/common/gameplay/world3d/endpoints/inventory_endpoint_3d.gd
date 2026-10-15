@@ -11,6 +11,7 @@ var _authoritative_snapshots: Dictionary[int, Dictionary] = {}
 var state: Dictionary = {}
 var public_weapons: Dictionary[int, String] = {}
 var _last_action_ms: Dictionary[int, int] = {}
+var _last_receipt_ms: Dictionary[int, int] = {}
 # Delivery versions belong to this live map endpoint, not durable item revisions.
 # Full snapshots may skip versions (including updates for other characters).
 var _next_projection_version := 0
@@ -42,19 +43,20 @@ func remove_peer(peer_id: int) -> void:
 	public_weapons.erase(peer_id)
 	_weapon_versions.erase(peer_id)
 	_last_action_ms.erase(peer_id)
+	_last_receipt_ms.erase(peer_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
-func request_equipment(action: String, uid: String, revision: int, command_id: String = "", requested_position: int = -1) -> void:
-	_handle_command(action, uid, revision, requested_position, command_id)
+func request_equipment(action: String, uid: String, revision: int, command_id: String = "", requested_position: int = -1, operation_id: String = "") -> void:
+	_handle_command(action, uid, revision, requested_position, command_id, operation_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
-func request_activate_item(uid: String, revision: int, command_id: String) -> void:
-	_handle_command("activate", uid, revision, -1, command_id)
+func request_activate_item(uid: String, revision: int, command_id: String, operation_id: String = "") -> void:
+	_handle_command("activate", uid, revision, -1, command_id, operation_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
-func request_move_item(uid: String, revision: int, x: int, y: int, page: int, command_id: String) -> void:
+func request_move_item(uid: String, revision: int, x: int, y: int, page: int, command_id: String, operation_id: String = "") -> void:
 	var position: int = page * InventoryGrid.PAGE_CELLS + y * InventoryGrid.COLUMNS + x if x >= 0 and x < InventoryGrid.COLUMNS and y >= 0 and y < InventoryGrid.ROWS and page >= 0 and page < InventoryGrid.PAGES else -1
-	_handle_command("move", uid, revision, position, command_id)
+	_handle_command("move", uid, revision, position, command_id, operation_id)
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 # Storage is intentionally available everywhere in this MVP. Authentication,
@@ -94,8 +96,8 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 			_send_state(other_peer) # Explicit repair; no committed-change fact.
 	if command_id != "": receive_operation.rpc_id(peer_id,command_id,result)
 
-func _handle_command(action: String, uid: String, revision: int, position: int, command_id: String) -> void:
-	if not GameMode.is_world_server() or command_id.length() > 80:
+func _handle_command(action: String, uid: String, revision: int, position: int, command_id: String, operation_id: String) -> void:
+	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96:
 		return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id) or _store() == null:
@@ -108,7 +110,7 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 	else:
 		_last_action_ms[peer_id] = now
 		var resource: PlayerResource = services.player_for_peer(peer_id)
-		var operation := services.economy().inventory_operation(resource.player_id, action, uid, revision, position)
+		var operation := services.economy().inventory_operation(resource.player_id, action, uid, revision, position, operation_id)
 		result = operation.response()
 		committed = operation.new_commit
 	if committed:
@@ -117,6 +119,21 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 		resynchronize(peer_id, "" if result.ok else str(result.error))
 	if command_id != "":
 		receive_operation.rpc_id(peer_id, command_id, result)
+
+@rpc("any_peer", "call_remote", "reliable", 1)
+func request_inventory_receipt(operation_id: String, command_id: String) -> void:
+	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96: return
+	var peer_id := multiplayer.get_remote_sender_id()
+	if not _world.characters.has(peer_id) or _store() == null: return
+	var now := Time.get_ticks_msec()
+	var result: Dictionary = {"ok":false,"error":"too_fast"}
+	if now - _last_receipt_ms.get(peer_id,-1000) >= 100:
+		_last_receipt_ms[peer_id] = now
+		var player := services.player_for_peer(peer_id)
+		if player == null: return
+		result = services.economy().inventory_receipt(player.player_id,operation_id).response()
+		if result.ok: resynchronize(peer_id) # Repair current state, never a commit fact.
+	receive_operation.rpc_id(peer_id,command_id,result)
 
 @rpc("authority", "call_remote", "reliable", 1)
 func receive_operation(command_id: String, result: Dictionary) -> void:

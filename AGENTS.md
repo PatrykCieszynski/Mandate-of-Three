@@ -25,6 +25,9 @@ PostgreSQL or multi-process hosting has already been implemented.
 - When the user asks to publish, push the integrated `main`. Push topic branches only when explicitly requested.
 - After merging, delete the local topic branch. Delete the remote topic branch only after the merge is published. Never delete unmerged branches.
 - Keep runtime databases, accounts, logs, engine binaries and reference checkouts in ignored locations.
+- Scope PRs around a complete behavioral guarantee, including server, client retry/recovery and relevant failure tests when they are part of that guarantee.
+- Group operations that share the same proven pattern; avoid splitting one vertical flow into separate implementation-layer PRs.
+- Keep independent economic risks separate. Concurrency, custody, distributed caches and multi-World changes still deserve narrow review scopes; account-shared Storage is separate from character-local Inventory.
 
 ## Architecture principles
 

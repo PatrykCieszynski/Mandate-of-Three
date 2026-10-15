@@ -47,7 +47,7 @@ func wait_inventory() -> void:
 func action(command: String, item: Dictionary, expected_error: String = "") -> void:
 	await get_tree().create_timer(0.15).timeout
 	var before: int = updates
-	world.inventory_endpoint.request_equipment.rpc_id(1, command, str(item.uid), int(item.revision))
+	world.inventory_endpoint.request_equipment.rpc_id(1, command, str(item.uid), int(item.revision), "", -1, "session-"+Crypto.new().generate_random_bytes(8).hex_encode())
 	while updates == before:
 		await get_tree().process_frame
 	if str(world.inventory_endpoint.state.get("error", "")) != expected_error:

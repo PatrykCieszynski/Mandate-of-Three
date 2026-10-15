@@ -45,21 +45,23 @@ func storage_operation(character_id: int, uid: String, revision: int, source: St
 	return EconomyOperationResult.capture(character_id, account, "storage.transfer", "",
 		response, committed, [account] if committed else [])
 
-func inventory_operation(character_id: int, action: String, uid: String, revision: int, position: int = -1) -> EconomyOperationResult:
+func inventory_operation(character_id: int, action: String, uid: String, revision: int, position: int = -1, operation_id: String = "") -> EconomyOperationResult:
 	var account := _runtime.wallet_account_id(character_id)
-	var response: Dictionary = {"ok":false, "error":"storage"}
+	var response: Dictionary = {"ok":false,"error":"storage"}
 	var committed := false
+	var replay := false
 	if _runtime.db != null:
 		var items := ItemStoreSqlite.new(_runtime.db)
-		match action:
-			"activate": response = items.activate_item(character_id, uid, revision)
-			"move": response = items.move_bag_item(character_id, uid, revision, position)
-			_: response = items.change_equipment(character_id, uid, revision, action, position)
+		response = items.inventory_command(character_id,action,uid,revision,position,operation_id)
 		committed = items.committed
-	# UID/revision checks remain in the transaction. These operations have no
-	# durable receipts; an already-satisfied placement is a successful no-op.
-	return EconomyOperationResult.capture(character_id, account, "inventory." + action, "",
-		response, committed, [account] if committed else [])
+		replay = items.receipt_replay
+	return EconomyOperationResult.capture(character_id,account,"inventory."+action,operation_id,
+		response,committed,[account] if committed else [],replay)
+
+func inventory_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
+	var response: Dictionary = {"ok":false,"error":"storage"}
+	if _runtime.db != null: response = ItemStoreSqlite.new(_runtime.db).inventory_receipt(character_id,operation_id)
+	return EconomyOperationResult.capture(character_id,_runtime.wallet_account_id(character_id),"inventory.receipt",operation_id,response,false)
 
 func shop_purchase_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
 	var response := {"ok":false,"error":"storage"}

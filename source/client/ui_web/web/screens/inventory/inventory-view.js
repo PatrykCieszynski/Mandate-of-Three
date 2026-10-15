@@ -3,13 +3,14 @@ import { firstFittingPlacement } from './placement.js';
 import { ownedItemPayload, itemGridPreview, itemWindowControls, } from '../../game-ui/items/item-drag-policy.js';
 import { element as findElement } from '../../core/dom.js';
 import { errorMessage } from '../../protocol.js';
+import { UiButton } from '../../core/primitives/ui-button.js';
 import { UiTab } from '../../core/primitives/ui-tab.js';
 import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
 import { UiWindow } from '../../core/window/ui-window.js';
-export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem, receiveEquipped, buyShopOffer, resolveItemIcon = () => null, moveItem, activateItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
+export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem, receiveEquipped, buyShopOffer, resolveItemIcon = () => null, moveItem, retry, activateItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
     const shell = new UiWindow(root, {
         id: 'inventory',
         title: 'Inventory',
@@ -55,12 +56,45 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
         pages: 4,
         items: [],
     }, page = 0, pending = false, disposed = false;
+    const retryButton = UiButton({
+        label: 'Retry inventory action',
+        onClick: () => void retryIntent(),
+    });
+    status.after(retryButton.element);
+    async function retryIntent() {
+        if (disposed || pending || !inventory.recoveryPending || !retry)
+            return;
+        pending = true;
+        retryButton.setDisabled(true);
+        try {
+            const result = await retry();
+            if (!disposed)
+                status.textContent = result.ok
+                    ? 'Inventory action confirmed.'
+                    : 'Inventory action not confirmed. Retry to check its result.';
+        }
+        catch {
+            if (!disposed)
+                status.textContent =
+                    'Inventory action not confirmed. Retry to check its result.';
+        }
+        finally {
+            pending = false;
+            if (!disposed)
+                retryButton.setDisabled(false);
+        }
+    }
     const sourceBindings = [];
     const bindings = itemWindowControls(drag, root);
     const cell = () => parseFloat(getComputedStyle(grid).getPropertyValue('--slot-size'));
     const positionWindow = () => shell.refresh();
     const gridView = UiItemGrid(grid, { slotSize: cell });
     function render() {
+        retryButton.element.hidden = !inventory.recoveryPending || !retry;
+        retryButton.setDisabled(pending);
+        if (inventory.recoveryPending)
+            status.textContent =
+                'Inventory action not confirmed. Use Retry; the original action is saved.';
         for (const binding of sourceBindings)
             binding.dispose();
         sourceBindings.length = 0;
@@ -75,7 +109,7 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
                 sourceBindings.push(drag.registerSource({
                     element: node,
                     payload: (event) => {
-                        if (pending)
+                        if (pending || inventory.recoveryPending)
                             return null;
                         shell.handle.activate();
                         tip.hide();
@@ -112,8 +146,15 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
         drag?.cancel();
         tip.hide();
     }
+    function unconfirmedMessage(result) {
+        return result.error === 'inventory_pending'
+            ? 'Inventory action not confirmed. Use Retry; the original action is saved.'
+            : result.error === 'journal_unavailable'
+                ? 'Inventory confirmation storage is unavailable. Further actions are blocked.'
+                : null;
+    }
     async function activate(item) {
-        if (!activateItem)
+        if (!activateItem || inventory.recoveryPending)
             return;
         pending = true;
         tooltip.hidden = true;
@@ -126,7 +167,8 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
             if (!disposed)
                 status.textContent = result.ok
                     ? ''
-                    : `Activation rejected: ${result.error || 'request'}`;
+                    : (unconfirmedMessage(result) ??
+                        `Activation rejected: ${result.error || 'request'}`);
         }
         catch (error) {
             if (!disposed)
@@ -137,7 +179,7 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
         }
     }
     async function move(item, preview) {
-        if (pending)
+        if (pending || inventory.recoveryPending)
             return;
         pending = true;
         status.textContent = 'Moving…';
@@ -152,7 +194,8 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
             if (!disposed)
                 status.textContent = result.ok
                     ? ''
-                    : `Move rejected: ${result.error || 'request'}`;
+                    : (unconfirmedMessage(result) ??
+                        `Move rejected: ${result.error || 'request'}`);
         }
         catch (error) {
             if (!disposed)
@@ -163,6 +206,7 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
         }
     }
     if (drag) {
+        bindings.push(drag.registerControl(retryButton.element, 'cancel'));
         bindings.push(drag.registerControl(findElement(root, '.inventory-tabs', 'nav'), 'preserve'));
         bindings.push(drag.registerTarget({
             element: grid,
@@ -175,7 +219,7 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
                     return { ...preview, valid };
                 }
                 const preview = itemGridPreview(grid, inventory, page, cell(), payload, pointer);
-                if (pending || !preview.data) {
+                if (pending || inventory.recoveryPending || !preview.data) {
                     preview.visual?.element.classList.add('invalid');
                     return { ...preview, valid: false };
                 }
@@ -282,6 +326,7 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
             tabs.forEach((tab) => tab.dispose());
             tip.dispose();
             currency.dispose();
+            retryButton.dispose();
             gridView.dispose();
         },
     };

@@ -80,6 +80,8 @@ function isEquipmentItem(value) {
     return isItem(value) && isObject(value) && typeof value.slot === 'string';
 }
 function isInventory(value) {
+    if (isObject(value) && 'recoveryPending' in value && typeof value.recoveryPending !== 'boolean')
+        return false;
     if (!isObject(value) || !integerRange(value.columns, 1, MAX_COLUMNS) || !integerRange(value.rows, 1, MAX_ROWS) ||
         !integerRange(value.pages, 1, MAX_PAGES) || !Array.isArray(value.items) ||
         value.items.length > value.columns * value.rows * value.pages || !value.items.every(isInventoryItem))

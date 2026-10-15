@@ -129,6 +129,8 @@ func run() -> void:
 	check(store.inventory(dev_owner).stats.attack == 1,"practice weapon sets total attack to one")
 	check(store.change_equipment(dev_owner,granted.uid,1,"unequip").ok and store.inventory(dev_owner).stats.attack == 10,"unequip restores base attack")
 	_check_inventory_boundary(db, legacy)
+	_check_inventory_receipts(db, legacy)
+	await _check_inventory_client_journal()
 	db.close_db()
 	if not failed:
 		print("ITEM_INSTANCES_OK: distinct UID/rolls, exact equip, ownership, revisions, rollback, database reopen, legacy save isolation")
@@ -204,26 +206,109 @@ func _check_inventory_boundary(database: SQLite, legacy: WorldStoreSqlite) -> vo
 	var items := ItemStoreSqlite.new(database)
 	check(items.initialize_character(owner).ok, "boundary starter fixture")
 	var candidate: Dictionary = items.inventory(owner).items[0]
-	var operation := persistence.inventory_operation(owner, "activate", candidate.uid, 0)
+	var operation := persistence.inventory_operation(owner, "activate", candidate.uid, 0, -1, "inventory-test-1")
 	check(operation.response().ok and operation.new_commit and not operation.receipt_replay, "activation reports a new mutation")
-	check(operation.character_id == owner and operation.account_id == legacy.resolve_account_id(owner) and operation.changed_accounts == PackedInt64Array([operation.account_id]) and operation.operation_id.is_empty(), "inventory result has trusted context without fabricated receipt identity")
+	check(operation.character_id == owner and operation.account_id == legacy.resolve_account_id(owner) and operation.changed_accounts == PackedInt64Array([operation.account_id]) and not operation.operation_id.is_empty(), "inventory result has trusted context and explicit receipt identity")
 	var equipped := items.inventory(owner)
-	operation = persistence.inventory_operation(owner, "equip", candidate.uid, 1)
+	operation = persistence.inventory_operation(owner, "equip", candidate.uid, 1, -1, "inventory-test-2")
 	check(operation.response().ok and not operation.new_commit and not operation.receipt_replay and operation.changed_accounts.is_empty() and items.inventory(owner) == equipped, "repeat equip is an unchanged success, not a receipt replay")
-	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 0)
+	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 0, -1, "inventory-test-3")
 	check(operation.response().error == "stale" and not operation.new_commit and not operation.receipt_replay and items.inventory(owner) == equipped, "stale retry preserves equipped state")
-	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 1, 15)
+	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 1, 15, "inventory-test-4")
 	check(operation.response().ok and operation.new_commit, "boundary exact unequip commits")
 	var before := items.inventory(owner)
-	operation = persistence.inventory_operation(owner, "move", candidate.uid, 2, 15)
+	operation = persistence.inventory_operation(owner, "move", candidate.uid, 2, 15, "inventory-test-5")
 	check(operation.response().ok and not operation.new_commit and not operation.receipt_replay and items.inventory(owner) == before, "same-cell move preserves revision without commit fact")
-	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 2)
+	operation = persistence.inventory_operation(owner, "unequip", candidate.uid, 2, -1, "inventory-test-6")
 	check(operation.response().ok and not operation.new_commit and not operation.receipt_replay, "already-bag unequip is a no-op")
 	check(database.query("CREATE TEMP TRIGGER fail_boundary_revision BEFORE UPDATE ON item_instances BEGIN SELECT RAISE(ABORT,'boundary failure'); END;"), "inject boundary failure")
-	operation = persistence.inventory_operation(owner, "move", candidate.uid, 2, 20)
+	operation = persistence.inventory_operation(owner, "move", candidate.uid, 2, 20, "inventory-test-7")
 	check(operation.response().error == "storage" and not operation.new_commit and operation.changed_accounts.is_empty() and items.inventory(owner) == before, "boundary rolls back placement and revision without a commit fact")
 	check(database.query("DROP TRIGGER fail_boundary_revision;"), "remove boundary failure")
 	check(items.move_bag_item(owner, candidate.uid, 2, 20).ok and items.committed, "shared store mutation commits")
 	check(items.move_bag_item(owner, candidate.uid, 3, 20).ok and not items.committed, "shared store resets commit outcome for no-op")
 	check(items.activate_item(owner, "invalid", 3).error == "request" and not items.committed, "shared store rejects without stale commit outcome")
 	persistence.free()
+
+# Receipt, replay and lost-response risks are additional to legacy placement tests.
+func _check_inventory_receipts(database: SQLite, legacy: WorldStoreSqlite) -> void:
+	var persistence := WorldDatabase.new()
+	persistence.db = database
+	persistence.store = legacy
+	var owner := EconomyFixture.create_character(legacy,"inventory_receipts",{"name":"Receipts","skin":1})
+	var alternate := EconomyFixture.create_character(legacy,"inventory_receipts",{"name":"Alternate","skin":1})
+	var stranger := EconomyFixture.create_character(legacy,"inventory_stranger",{"name":"Stranger","skin":1})
+	var items := ItemStoreSqlite.new(database)
+	check(items.initialize_character(owner).ok,"receipt starter kit")
+	var uid: String = items.inventory(owner).items[0].uid
+	check(persistence.inventory_operation(owner,"move",uid,0,15).response().error == "request","missing intention ID cannot mutate Inventory")
+	var revision := 0
+	var first_id := ""
+	for action: String in ["move","equip","unequip","activate"]:
+		var position := 15 if action in ["move","unequip"] else -1
+		var id := "inventory-contract-"+action
+		if first_id.is_empty(): first_id = id
+		var before := items.inventory(owner)
+		check(database.query("CREATE TEMP TRIGGER fail_inventory_receipt BEFORE INSERT ON market_commands WHEN NEW.kind='inventory' BEGIN SELECT RAISE(ABORT,'inventory receipt fault'); END;"),"inject receipt fault")
+		var operation := persistence.inventory_operation(owner,action,uid,revision,position,id)
+		check(operation.response().error == "storage" and not operation.new_commit and items.inventory(owner)==before,"receipt failure rolls back "+action)
+		check(persistence.inventory_receipt(owner,id).response().error == "unknown_command","failed mutation cannot leave a success receipt")
+		check(database.query("DROP TRIGGER fail_inventory_receipt;"),"remove receipt fault")
+		operation = persistence.inventory_operation(owner,action,uid,revision,position,id)
+		check(operation.response().ok and operation.new_commit and not operation.receipt_replay,"same-ID retry commits "+action)
+		var after := items.inventory(owner)
+		operation = persistence.inventory_operation(owner,action,uid,revision,position,id)
+		check(operation.response().ok and not operation.new_commit and operation.receipt_replay and operation.changed_accounts.is_empty() and items.inventory(owner)==after,"durable replay confirms without another mutation: "+action)
+		check(persistence.inventory_operation(owner,action,uid,revision+1,position,id).response().error == "command_conflict","changed revision conflicts: "+action)
+		revision += 1
+	var final := items.inventory(owner)
+	check(persistence.inventory_operation(owner,"move",uid,0,15,first_id).receipt_replay and items.inventory(owner)==final,"old move receipt cannot restore historical placement after later equip")
+	var lookup := persistence.inventory_receipt(owner,first_id)
+	check(lookup.response().ok and not lookup.new_commit and not lookup.receipt_replay and lookup.changed_accounts.is_empty(),"result lookup has read-only semantics")
+	check(persistence.inventory_receipt(alternate,first_id).response().error == "unknown_command" and persistence.inventory_receipt(stranger,first_id).response().error == "unknown_command","receipt lookup isolates character/account")
+	check(persistence.inventory_operation(alternate,"move",uid,0,15,first_id).response().error == "command_conflict","alternate character cannot reuse fingerprint")
+	check(persistence.inventory_operation(stranger,"move",uid,0,15,first_id).response().error == "owner","another account cannot replay another owner's item")
+	check(persistence.inventory_operation(owner,"unequip",uid,0,-1,first_id).response().error == "command_conflict","action is part of original fingerprint")
+	check(persistence.inventory_receipt(owner,"missing").response().error == "unknown_command" and items.inventory(owner)==final,"unknown receipt never admits a mutation")
+	check(database.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[legacy.resolve_account_id(owner),"other-inventory-kind","upgrade","[]",JSON.stringify({"ok":true})]),"seed other command kind")
+	check(persistence.inventory_receipt(owner,"other-inventory-kind").response().error == "unknown_command","receipt lookup cannot expose another command kind")
+	# Successful no-op is durable but has no new mutation fact, including replay.
+	var noop := persistence.inventory_operation(owner,"equip",uid,revision,-1,"inventory-noop")
+	check(noop.response().ok and not noop.new_commit and not noop.receipt_replay,"new no-op is not labelled a replay")
+	check(persistence.inventory_operation(owner,"equip",uid,revision,-1,"inventory-noop").receipt_replay,"no-op retry has a durable outcome")
+	var swapping: Dictionary = final.items.filter(func(item: Dictionary) -> bool: return item.uid != uid)[0]
+	check(database.query("CREATE TEMP TRIGGER fail_inventory_receipt BEFORE INSERT ON market_commands WHEN NEW.kind='inventory' BEGIN SELECT RAISE(ABORT,'swap receipt fault'); END;"),"inject swap receipt fault")
+	check(persistence.inventory_operation(owner,"equip",swapping.uid,swapping.revision,-1,"inventory-swap").response().error == "storage" and items.inventory(owner)==final,"receipt failure restores both sides of equipment swap and revisions")
+	check(database.query("DROP TRIGGER fail_inventory_receipt;"),"remove swap receipt fault")
+	check(persistence.inventory_operation(owner,"equip",swapping.uid,swapping.revision,-1,"inventory-swap").new_commit,"retry commits complete swap")
+	final = items.inventory(owner)
+	check(database.close_db() and database.open_db(),"reopen receipt database")
+	check(persistence.inventory_operation(owner,"move",uid,0,15,first_id).receipt_replay and items.inventory(owner)==final,"receipt and final placement survive reopen")
+	persistence.free()
+
+func _check_inventory_client_journal() -> void:
+	var adapter := ItemUiAdapter.new()
+	var directory := "res://.godot/verification/inventory-journal-unit-" + Crypto.new().generate_random_bytes(8).hex_encode()
+	adapter.journal.directory = directory
+	var context := {"authority_id":"a".repeat(32),"account_id":1,"character_id":2}
+	adapter.accept_context({"ok":true,"economic_context":context})
+	var folder := ProjectSettings.globalize_path(directory).path_join(("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text())
+	DirAccess.remove_absolute(folder)
+	var file := FileAccess.open(folder,FileAccess.WRITE)
+	file.close()
+	var item := {"id":"b".repeat(32),"revision":0}
+	check((await adapter._submit(item,"equip")).error == "journal_unavailable","failed journal write blocks Inventory before RPC/session")
+	DirAccess.remove_absolute(folder)
+	var script = preload("res://source/client/ui_web/local_economy_journal.gd")
+	var journal = script.new("inventory-",directory)
+	check(journal.configure(context).ok,"configure owned journal fixture")
+	var payload := {"action":"equip","item":item}
+	var id := "inventory-" + "c".repeat(32)
+	check(journal.save_pending(id,payload),"persist original action and item identity")
+	var fresh = script.new("inventory-",directory)
+	var loaded: Dictionary = fresh.configure(context)
+	check(loaded.ok and loaded.entry.id == id and ItemUiAdapter.valid_intent(loaded.entry.payload),"fresh reader validates original Inventory intention")
+	check(not ItemUiAdapter.valid_intent({"action":"storage.transfer","item":item}),"Inventory journal cannot route Storage")
+	check(fresh.clear_pending(id),"clear owned fixture intention")
+	DirAccess.remove_absolute(folder)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(directory))

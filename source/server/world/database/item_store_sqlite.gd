@@ -8,6 +8,7 @@ const ITEM_SELECT: String = "SELECT i.*, p.location, p.bag_position, p.equipment
 var db: SQLite
 # Last standalone transaction outcome; successful no-ops do not mutate items.
 var committed := false
+var receipt_replay := false
 
 func _init(database: SQLite) -> void:
 	db = database
@@ -122,8 +123,64 @@ func inventory(owner_id: int) -> Dictionary:
 		if item.uid == equipment.get("weapon","") and item.definition_id == "dev_trace_sword": stats["attack"] = 1.0
 	return {"ok": true, "items": items, "equipment": equipment, "stats": stats}
 
+# Legacy standalone/tooling APIs retain their behavior, sharing mutation rules
+# with receipt-backed production commands. No nested transaction is permitted.
 func activate_item(owner_id: int, uid: String, expected_revision: int) -> Dictionary:
 	committed = false
+	if not db.query("BEGIN IMMEDIATE;"): return _error("storage")
+	return _finish_inventory_change(_activate_in_transaction(owner_id,uid,expected_revision))
+
+func change_equipment(owner_id: int, uid: String, expected_revision: int, action: String, requested_position: int = -1) -> Dictionary:
+	committed = false
+	if not db.query("BEGIN IMMEDIATE;"): return _error("storage")
+	return _finish_inventory_change(_equipment_in_transaction(owner_id,uid,expected_revision,action,requested_position))
+
+func move_bag_item(owner_id: int, uid: String, expected_revision: int, position: int) -> Dictionary:
+	committed = false
+	if not db.query("BEGIN IMMEDIATE;"): return _error("storage")
+	return _finish_inventory_change(_move_in_transaction(owner_id,uid,expected_revision,position))
+
+func _finish_inventory_change(result: Dictionary) -> Dictionary:
+	if not result.ok: return _rollback(str(result.error))
+	return _commit(bool(result.mutated))
+
+func inventory_command(owner_id: int, action: String, uid: String, revision: int, position: int, operation_id: String) -> Dictionary:
+	committed = false
+	receipt_replay = false
+	if action not in ["move","equip","unequip","activate"] or not ItemInstance.valid_uid(uid) or revision < 0: return _error("request")
+	if (action in ["activate","equip"] and position != -1) or position < -1 or position >= BAG_CAPACITY: return _error("request")
+	var transaction := EconomyCommandSqlite.new(db)
+	# Original action is part of the fingerprint; activate resolves only after lookup.
+	if not transaction.begin(owner_id,operation_id,"inventory",[owner_id,action,uid,revision,position]):
+		receipt_replay = bool(transaction.cached.get("ok",false))
+		return transaction.cached
+	var result: Dictionary
+	match action:
+		"activate": result = _activate_in_transaction(owner_id,uid,revision)
+		"move": result = _move_in_transaction(owner_id,uid,revision,position)
+		_: result = _equipment_in_transaction(owner_id,uid,revision,action,position)
+	if not result.ok: return transaction.rollback(str(result.error))
+	var mutated := bool(result.mutated)
+	result = transaction.commit({"ok":true})
+	# A new no-op has a durable success receipt, but is not a mutation/replay fact.
+	committed = transaction.committed and mutated
+	return result
+
+func inventory_receipt(owner_id: int, operation_id: String) -> Dictionary:
+	if operation_id.is_empty() or operation_id.length() > 96: return _error("request")
+	var account := WorldStoreSqlite.new(db).resolve_account_id(owner_id)
+	if account <= 0: return _error("owner")
+	if not db.query_with_bindings("SELECT request_json,result_json FROM market_commands WHERE account_id=? AND command_id=? AND kind='inventory';",[account,operation_id]): return _error("storage")
+	if db.query_result.is_empty(): return _error("unknown_command")
+	var row: Dictionary = db.query_result[0]
+	var args: Variant = JSON.parse_string(row.request_json)
+	if not args is Array or args.size() != 5: return _error("storage")
+	if int(args[0]) != owner_id: return _error("unknown_command")
+	var result: Variant = JSON.parse_string(row.result_json)
+	if not result is Dictionary or not result.get("ok",false): return _error("storage")
+	return result
+
+func _activate_in_transaction(owner_id: int, uid: String, expected_revision: int) -> Dictionary:
 	if not ItemInstance.valid_uid(uid) or expected_revision < 0: return _error("request")
 	if not db.query_with_bindings(ITEM_SELECT + "WHERE i.uid=? AND i.owner_character_id=? AND p.owner_character_id=?;", [uid,owner_id,owner_id]): return _error("storage")
 	if db.query_result.is_empty(): return _error("owner")
@@ -134,87 +191,80 @@ func activate_item(owner_id: int, uid: String, expected_revision: int) -> Dictio
 	if definition == null: return _error("unknown_definition")
 	match definition.primary_action:
 		ItemDefinition.PrimaryAction.EQUIP:
-			# Synchronous dispatch; the existing equip transaction rechecks ownership
-			# and revision and remains the single implementation of equipment rules.
-			return change_equipment(owner_id,uid,expected_revision,"equip")
+			# Same transaction and mutation rules as explicit equip.
+			return _equipment_in_transaction(owner_id,uid,expected_revision,"equip")
 		ItemDefinition.PrimaryAction.USE:
 			return _error("unsupported")
 		_:
 			return _error("no_action")
 
-func change_equipment(owner_id: int, uid: String, expected_revision: int, action: String, requested_position: int = -1) -> Dictionary:
-	committed = false
+func _equipment_in_transaction(owner_id: int, uid: String, expected_revision: int, action: String, requested_position: int = -1) -> Dictionary:
 	if action not in ["equip", "unequip"] or not ItemInstance.valid_uid(uid) or expected_revision < 0 or requested_position < -1 or requested_position >= InventoryGrid.CAPACITY or (action != "unequip" and requested_position != -1):
 		return _error("request")
-	if not db.query("BEGIN IMMEDIATE;"):
-		return _error("storage")
 	if not db.query_with_bindings(ITEM_SELECT + "WHERE i.uid=? AND i.owner_character_id=? AND p.owner_character_id=?;", [uid, owner_id, owner_id]):
-		return _rollback("storage")
+		return _error("storage")
 	if db.query_result.is_empty():
-		return _rollback("owner")
+		return _error("owner")
 	var item: ItemInstance = ItemInstance.from_row(db.query_result[0])
 	if item == null:
-		return _rollback("invalid_item")
+		return _error("invalid_item")
 	if item.revision != expected_revision:
-		return _rollback("stale")
+		return _error("stale")
 	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
 	if definition == null or definition.equipment_slot == &"":
-		return _rollback("slot")
-	if action == "unequip" and item.location == "bag" and requested_position != -1: return _rollback("placement")
+		return _error("slot")
+	if action == "unequip" and item.location == "bag" and requested_position != -1: return _error("placement")
 	if (action == "equip" and item.location == "equipment") or (action == "unequip" and item.location == "bag"):
-		return _commit(false)
+		return {"ok":true,"mutated":false}
 	if action == "unequip":
 		var receiving: Dictionary = resolve_inventory_position(owner_id, definition.inventory_height, requested_position)
-		if not receiving.ok: return _rollback("bag_full" if receiving.error == "inventory_full" else str(receiving.error))
+		if not receiving.ok: return _error("bag_full" if receiving.error == "inventory_full" else str(receiving.error))
 		var position: int = receiving.position
 		if not _remove_placement(uid) or not _place(uid, owner_id, "bag", position, "") or not _increment_revision(uid, owner_id):
-			return _rollback("storage")
+			return _error("storage")
 	else:
 		if not db.query_with_bindings("SELECT p.item_uid,i.definition_id FROM item_placements p JOIN item_instances i ON i.uid=p.item_uid WHERE p.owner_character_id=? AND p.location='equipment' AND p.equipment_slot=?;", [owner_id, str(definition.equipment_slot)]):
-			return _rollback("storage")
+			return _error("storage")
 		var previous_uid: String = "" if db.query_result.is_empty() else str(db.query_result[0].item_uid)
 		var previous_position: int = item.bag_position
 		if previous_uid != "":
 			var previous_definition: ItemDefinition = ItemDefinitions.get_definition(StringName(db.query_result[0].definition_id))
-			if previous_definition == null: return _rollback("unknown_definition")
+			if previous_definition == null: return _error("unknown_definition")
 			if not _fits_position(owner_id, previous_position, previous_definition.inventory_height, [uid]):
 				previous_position = _free_bag_position(owner_id, previous_definition.inventory_height, [uid])
-				if previous_position < 0: return _rollback("bag_full" if previous_position == -1 else "storage")
+				if previous_position < 0: return _error("bag_full" if previous_position == -1 else "storage")
 		# Remove placements, never item records. Unique indexes stay valid during
 		# the swap, and rollback restores both locations if any statement fails.
 		if not _remove_placement(uid):
-			return _rollback("storage")
+			return _error("storage")
 		if previous_uid != "":
 			if not _remove_placement(previous_uid) or not _place(previous_uid, owner_id, "bag", previous_position, "") or not _increment_revision(previous_uid, owner_id):
-				return _rollback("storage")
+				return _error("storage")
 		if not _place(uid, owner_id, "equipment", -1, str(definition.equipment_slot)) or not _increment_revision(uid, owner_id):
-			return _rollback("storage")
-	return _commit()
+			return _error("storage")
+	return {"ok":true,"mutated":true}
 
-func move_bag_item(owner_id: int, uid: String, expected_revision: int, position: int) -> Dictionary:
-	committed = false
+func _move_in_transaction(owner_id: int, uid: String, expected_revision: int, position: int) -> Dictionary:
 	if not ItemInstance.valid_uid(uid) or expected_revision < 0 or position < 0 or position >= BAG_CAPACITY:
 		return _error("request")
-	if not db.query("BEGIN IMMEDIATE;"):
-		return _error("storage")
 	if not db.query_with_bindings(ITEM_SELECT + "WHERE i.uid=? AND i.owner_character_id=? AND p.owner_character_id=?;", [uid, owner_id, owner_id]):
-		return _rollback("storage")
+		return _error("storage")
 	if db.query_result.is_empty():
-		return _rollback("owner")
+		return _error("owner")
 	var item: ItemInstance = ItemInstance.from_row(db.query_result[0])
 	if item == null or item.location != "bag":
-		return _rollback("placement")
+		return _error("placement")
 	if item.revision != expected_revision:
-		return _rollback("stale")
+		return _error("stale")
 	if item.bag_position == position:
-		return _commit(false)
+		return {"ok":true,"mutated":false}
 	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
-	if definition == null: return _rollback("unknown_definition")
+	if definition == null: return _error("unknown_definition")
 	var receiving: Dictionary = resolve_inventory_position(owner_id, definition.inventory_height, position, [uid])
-	if not receiving.ok: return _rollback(str(receiving.error))
+	if not receiving.ok: return _error(str(receiving.error))
 	if not db.query_with_bindings("UPDATE item_placements SET bag_position=? WHERE item_uid=? AND owner_character_id=? AND location='bag';", [position, uid, owner_id]) or not _increment_revision(uid, owner_id):
-		return _rollback("storage")
-	return _commit()
+		return _error("storage")
+	return {"ok":true,"mutated":true}
 
 func _occupied(owner_id: int, excluded: Array = []) -> Dictionary:
 	if not db.query_with_bindings(ITEM_SELECT + "WHERE i.owner_character_id=? AND p.owner_character_id=? AND p.location='bag';", [owner_id, owner_id]): return {"error": true}
