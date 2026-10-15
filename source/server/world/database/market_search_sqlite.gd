@@ -62,8 +62,8 @@ func search(p: Dictionary) -> Dictionary:
 
 static func build_query(p: Dictionary) -> Dictionary:
 	if not valid(p): return {"ok":false,"error":"request"}
-	var where := "s.status='active' AND i.definition_id=:definition AND i.upgrade_level BETWEEN :upgrade_min AND :upgrade_max AND ((o.offer_only=0 AND o.price_yang BETWEEN :price_min AND :price_max) OR (o.offer_only=1 AND :price_min=0 AND :price_max=9000000000000000))"
-	var params := {"definition":p.definition_id,"upgrade_min":int(p.upgrade_min),"upgrade_max":int(p.upgrade_max),"price_min":int(p.price_min),"price_max":int(p.price_max)}
+	var where := "s.status='active' AND i.definition_id=:definition AND i.upgrade_level BETWEEN :upgrade_min AND :upgrade_max AND ((o.offer_only=0 AND o.price_yang BETWEEN :price_min AND :price_max) OR (o.offer_only=1 AND :negotiable_min=0 AND :negotiable_max=9000000000000000))"
+	var params := {"definition":p.definition_id,"upgrade_min":int(p.upgrade_min),"upgrade_max":int(p.upgrade_max),"price_min":int(p.price_min),"price_max":int(p.price_max),"negotiable_min":int(p.price_min),"negotiable_max":int(p.price_max)}
 	for index: int in p.affix_filters.size():
 		where += " AND EXISTS(SELECT 1 FROM item_affix_index a WHERE a.uid=i.uid AND a.stat_id=:stat_%d AND a.value>=:minimum_%d)" % [index,index]
 		params["stat_%d" % index] = p.affix_filters[index].stat_id
