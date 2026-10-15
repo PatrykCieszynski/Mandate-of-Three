@@ -68,3 +68,28 @@ The test constructs session bindings directly. It does not prove real Master
 handoff/reconnect; A1 identity/session coverage and the existing authentication
 path remain separate. The shallow 3D admission map does not test rendering or AI;
 the existing production two-client PvE suite covers actual 3D gameplay.
+
+
+## Delayed disconnect / last-login-wins review fix
+
+Peer-local dungeon/rate-limit cleanup remains keyed to the departing peer.
+Character cleanup first checks both current ownership maps. A superseded peer is
+removed from `connected_players` without saving/mutating the newer character,
+clearing its reverse mapping/current_peer_id, combat cache or block list, releasing
+its wallet, or reporting its account disconnected to Master. Missing/duplicate
+peer callbacks are safe. Current-owner cleanup retains normal persistence and
+only sends the account-level Master notification if no other current character
+of that account remains on this World.
+
+The RPC fixture now delivers an old disconnect after installing the new binding,
+for both a shared PlayerResource and distinct resources with the same character
+ID. The new peer must still complete a real progression RPC, keep runtime stats
+and produce no Master disconnect notification. This tests the completed-auth
+state boundary directly, not a full Master login exchange. Existing populated
+SQLite identity coverage also checks normal current-owner save/cleanup, another
+active character on the same account, final notification and duplicate callback.
+
+After foreign legacy entry, the server explicitly confirms no foreign actor,
+joined membership or pending assignment appeared, and that the legitimate actor,
+assignment and character owner remain intact. The client awaits this confirmation
+before reporting success.

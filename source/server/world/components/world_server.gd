@@ -165,9 +165,14 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	# Drop rate-limit counters so a reconnect starts with a clean window.
 	RateLimiter.forget(peer_id)
 
-	world_manager.player_disconnected.rpc_id(1, connected_players[peer_id].account_name)
 	var player: PlayerResource = connected_players.get(peer_id)
-	if not player:
+	if player == null:
+		return
+	# Last-login-wins may already have installed a newer peer, sometimes sharing
+	# this very PlayerResource. Retire only the old peer entry, never its current
+	# character authority, progression timestamp, combat cache or account status.
+	if player_id_to_peer_id.get(player.player_id, 0) != peer_id or player.current_peer_id != peer_id:
+		connected_players.erase(peer_id)
 		return
 
 	# Bank the elapsed session time before persisting. Stored as a flat key on
@@ -191,10 +196,26 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	player.current_peer_id = 0
 	connected_players.erase(peer_id)
 	var shared_wallet_in_use := false
+	var account_still_connected := false
 	var account_id := database.wallet_account_id(player.player_id)
-	for other: PlayerResource in connected_players.values():
-		if database.wallet_account_id(other.player_id) == account_id: shared_wallet_in_use = true
+	for other_peer: int in connected_players:
+		var other: PlayerResource = connected_players[other_peer]
+		if other.current_peer_id != other_peer or player_id_to_peer_id.get(other.player_id, 0) != other_peer:
+			continue
+		if database.wallet_account_id(other.player_id) == account_id:
+			shared_wallet_in_use = true
+		if other.account_name == player.account_name:
+			account_still_connected = true
 	if not shared_wallet_in_use: database.release_wallet(player.player_id)
+	# Another character can have replaced this account's login too. Stale peer
+	# entries neither keep a wallet alive nor count as an active account at Master.
+	if not account_still_connected:
+		_notify_master_disconnected(player.account_name)
+
+
+
+func _notify_master_disconnected(account_name: String) -> void:
+	world_manager.player_disconnected.rpc_id(1, account_name)
 
 
 func _on_peer_authenticating(peer_id: int) -> void:

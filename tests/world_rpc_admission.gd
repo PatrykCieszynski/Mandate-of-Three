@@ -4,6 +4,9 @@ extends Node
 ## only admission setup and map rendering are controlled, with no database.
 class Session extends WorldServer:
 	var answers: Dictionary = {}
+	var master_disconnects: Array[String] = []
+	func _notify_master_disconnected(account_name: String) -> void:
+		master_disconnects.append(account_name)
 	@rpc("authority", "call_remote", "reliable", 1)
 	func _data_response(id: int, _type: String, data: Dictionary) -> void:
 		answers[id] = data
@@ -82,6 +85,7 @@ func set_context(mode: String) -> void:
 		instance.players_by_peer_id[peer] = actor
 	var player: PlayerResource = session.connected_players[peer]
 	instance.players_by_peer_id[peer].player_resource = PlayerResource.new() if mode == "wrong_actor" else player
+	player.current_instance = id
 	player.current_peer_id = 0 if mode == "wrong_peer" else peer
 	session.player_id_to_peer_id[player.player_id] = 0 if mode == "wrong_owner" else peer
 	instance.connected_peers.erase(peer)
@@ -101,6 +105,25 @@ func set_context(mode: String) -> void:
 			var body := PlayerActor3D.new()
 			bodies.append(body)
 			world.characters[peer] = body
+	if mode in ["relogin_shared", "relogin_distinct"]:
+		# Mirror the completed authentication boundary: the new peer owns the
+		# character before an old peer's queued disconnect is delivered.
+		var old_peer := 100
+		while session.connected_players.has(old_peer): old_peer += 1
+		var old_player: PlayerResource = player if mode == "relogin_shared" else player.duplicate()
+		old_player.current_peer_id = old_peer
+		session.connected_players[old_peer] = old_player
+		session.player_id_to_peer_id[player.player_id] = old_peer
+		session.connected_players[peer] = player
+		player.current_peer_id = peer
+		session.player_id_to_peer_id[player.player_id] = peer
+		session.runtime_equipment[player.player_id] = {"stats": {"attack": 37}}
+		var disconnect_count := session.master_disconnects.size()
+		session._on_peer_disconnected(old_peer)
+		session._on_peer_disconnected(old_peer) # duplicate/unknown disconnect is safe.
+		assert(not session.connected_players.has(old_peer))
+		assert(session.runtime_attack(player.player_id) == 37, "old disconnect invalidated new combat stats")
+		assert(session.master_disconnects.size() == disconnect_count, "old peer disconnected the new account session at Master")
 	context_ready.rpc_id(peer, mode, id)
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -141,6 +164,11 @@ func run_client() -> void:
 	await change_context("joined")
 	result = await query(&"progression.get")
 	assert(result.get("level") == expected_level)
+	# A delayed old disconnect must not invalidate a newly installed session.
+	for mode: String in ["relogin_shared", "relogin_distinct"]:
+		await change_context(mode)
+		result = await query(&"progression.get")
+		assert(result.get("level") == expected_level, "new session lost RPC authority after old disconnect")
 	# 3D requests require actual map actor membership, not just connected_peers.
 	await change_context("3d_missing_actor")
 	result = await query(&"chat.typing.set")
@@ -152,6 +180,7 @@ func run_client() -> void:
 	var other := manager.get_instance_server_by_id("Two" if own_instance == "One" else "One")
 	other.ready_to_enter_instance.rpc_id(1)
 	finished.rpc_id(1)
+	while context != "entry_denied_confirmed": await get_tree().process_frame
 	print("WORLD_RPC_CLIENT_OK identity/operation/instance admission and recovery")
 	await get_tree().create_timer(0.2).timeout
 	get_tree().quit()
@@ -159,9 +188,22 @@ func run_client() -> void:
 @rpc("any_peer", "call_remote", "reliable", 0)
 func finished() -> void:
 	if not GameMode.is_world_server(): return
-	finished_peers[multiplayer.get_remote_sender_id()] = true
+	var peer := multiplayer.get_remote_sender_id()
+	var id: String = assignments[peer]
+	var own := manager.get_instance_server_by_id(id)
+	var other := manager.get_instance_server_by_id("Two" if id == "One" else "One")
+	var player: PlayerResource = session.connected_players[peer]
+	assert(not other.players_by_peer_id.has(peer), "unauthorized legacy spawn created a foreign actor")
+	assert(not other.connected_peers.has(peer) and not other.awaiting_peers.has(peer), "denied entry changed foreign membership/assignment")
+	assert(own.connected_peers.has(peer) and not own.awaiting_peers.has(peer), "denied entry changed the legitimate assignment")
+	assert(player.current_instance == id, "denied entry changed the character's assigned instance")
+	assert(player.current_peer_id == peer and session.player_id_to_peer_id.get(player.player_id) == peer)
+	assert(own.get_node("GameWorld").characters.has(peer), "denied entry removed the legitimate 3D actor")
+	context_ready.rpc_id(peer, "entry_denied_confirmed", id)
+	finished_peers[peer] = true
 	if finished_peers.size() != 2: return
 	for actor: Player in actors: actor.free()
 	for body: PlayerActor3D in bodies: body.free()
 	print("WORLD_RPC_SERVER_OK two isolated clients, real production ingress/handlers")
+	await get_tree().create_timer(0.3).timeout
 	get_tree().quit()
