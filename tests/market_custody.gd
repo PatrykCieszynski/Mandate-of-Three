@@ -68,8 +68,23 @@ func _ready() -> void:
 		assert(market.cancel_offer(alt,"cancel_fault",listed.offer_id,0).error=="storage")
 		assert(market.mine(first).offers.size()==1 and market.mine(first).claims.is_empty())
 		assert(db.query("DROP TRIGGER fail_cancel;"))
-	assert(market.cancel_offer(alt,"cancel_a",listed.offer_id,0).ok)
-	assert(market.cancel_offer(alt,"cancel_a",listed.offer_id,0).ok,"cancel retry cannot duplicate claim")
+	# A full receiving Inventory must not create account_claim or remove the offer.
+	while items._free_bag_position(alt,ItemDefinitions.IRON_SWORD.inventory_height)>=0:
+		var position := items._free_bag_position(alt,ItemDefinitions.IRON_SWORD.inventory_height)
+		assert(EconomyFixture.insert_item(items,ItemInstance.create(ItemDefinitions.IRON_SWORD,alt,[]),position))
+	assert(market.cancel_offer(alt,"full_cancel",listed.offer_id,0).error=="inventory_full")
+	assert(market.mine(first).offers.size()==1 and market.mine(first).claims.is_empty(),"full bag leaves shop escrow and offer intact")
+	var freed: Dictionary = items.inventory(alt).items[0]
+	assert(EconomyFixture.destroy_item(db,freed.uid))
+	var withdrawn := market.cancel_offer(alt,"cancel_a",listed.offer_id,0)
+	assert(withdrawn.ok and market.cancel_offer(alt,"cancel_a",listed.offer_id,0)==withdrawn,"same command replays the withdrawal without moving the UID twice")
+	assert(market.mine(first).offers.is_empty() and market.mine(first).claims.is_empty(),"withdrawal never creates an account claim")
+	assert(items.inventory(alt).items.any(func(i: Dictionary) -> bool: return i.uid==item.uid and i.owner_character_id==alt),"withdrawal restores the original UID to the receiving character bag")
+	# Legacy account claims remain used by Exchange withdrawals. Seed a claim
+	# deliberately to preserve their independent ownership/capacity test.
+	assert(db.query("BEGIN IMMEDIATE;"))
+	assert(db.query_with_bindings("UPDATE item_custody SET location='account_claim',owner_id=?,position=-1,container_id=0,offer_id=NULL WHERE uid=? AND location='bag' AND owner_id=?;",[store.resolve_account_id(alt),item.uid,alt]))
+	assert(db.query("COMMIT;"))
 	var claim: Dictionary = market.mine(alt).claims[0]
 	assert(claim.uid==item.uid and claim.affixes==item.affixes and claim.sockets==item.sockets)
 	assert(market.claim_item(foreign,"foreign_claim",item.uid,claim.revision).error=="owner")
@@ -124,5 +139,5 @@ func _ready() -> void:
 	assert(MarketStoreSqlite.new(db,negatives).claim_item(alt,"claim_a",item.uid,claim.revision+1).error=="command_conflict","durable fingerprint remains authoritative")
 	assert(db.close_db())
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path))
-	print("MARKET_CUSTODY_OK migration/retry/rollback, SQL single location, escrow/claims, alt ownership, durable receipts")
+	print("MARKET_CUSTODY_OK migration/retry/rollback, SQL single location, direct withdrawal/claims, alt ownership, durable receipts")
 	get_tree().quit()

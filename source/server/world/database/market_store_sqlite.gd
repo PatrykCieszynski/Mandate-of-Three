@@ -141,16 +141,25 @@ func list_item(character_id: int, command_id: String, uid: String, revision: int
 	return _transaction.commit({"ok":true,"offer_id":offer_id,"uid":uid,"revision":0,"shop_id":shop_id})
 
 func cancel_offer(character_id: int, command_id: String, offer_id: String, revision: int) -> Dictionary:
+	# Keep the existing account-scoped receipt fingerprint for old successful retries.
 	if not _transaction.begin(character_id,command_id,"cancel",[offer_id,revision]): return _transaction.cached
-	if not db.query_with_bindings("SELECT * FROM shop_offers WHERE offer_id=? AND account_id=?;",[offer_id,_transaction.account_id]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("SELECT o.*,i.definition_id FROM shop_offers o JOIN item_instances i ON i.uid=o.item_uid WHERE o.offer_id=? AND o.account_id=?;",[offer_id,_transaction.account_id]): return _transaction.rollback("storage")
 	if db.query_result.is_empty(): return _transaction.commit({"ok":false,"error":"unavailable"})
 	var offer: Dictionary = db.query_result[0].duplicate(true)
 	if int(offer.revision)!=revision: return _transaction.commit({"ok":false,"error":"stale"})
+	var definition := ItemDefinitions.get_definition(StringName(offer.definition_id))
+	if definition == null: return _transaction.commit({"ok":false,"error":"unknown_definition"})
+	# A shop withdrawal is not a second claim vault. Resolve the receiving
+	# character's footprint before changing custody or deleting the offer.
+	var receiving := ItemStoreSqlite.new(db).resolve_inventory_position(character_id,definition.inventory_height,-1)
+	if not receiving.ok: return _transaction.commit({"ok":false,"error":receiving.error})
 	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
-	if not db.query_with_bindings("UPDATE item_custody SET location='account_claim',position=-1,container_id=0,offer_id=NULL WHERE uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
+	# Move the item owner before switching to bag custody: the custody trigger
+	# requires the owning character to match the item instance.
+	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id,offer.item_uid]): return _transaction.rollback("storage")
+	if not db.query_with_bindings("UPDATE item_custody SET location='bag',owner_id=?,position=?,container_id=0,offer_id=NULL WHERE uid=?;",[character_id,receiving.position,offer.item_uid]): return _transaction.rollback("storage")
 	if not db.query_with_bindings("DELETE FROM shop_offers WHERE offer_id=?;",[offer_id]): return _transaction.rollback("storage")
-	if not db.query_with_bindings("UPDATE item_instances SET revision=revision+1 WHERE uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
-	return _transaction.commit({"ok":true,"uid":offer.item_uid})
+	return _transaction.commit({"ok":true,"uid":offer.item_uid,"position":int(receiving.position)})
 
 func claim_item(character_id: int, command_id: String, uid: String, revision: int, requested_position: int = -1) -> Dictionary:
 	if not _transaction.begin(character_id,command_id,"claim",[character_id,uid,revision,requested_position]): return _transaction.cached

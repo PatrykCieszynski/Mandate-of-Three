@@ -96,7 +96,7 @@ export function mountMarket(root: HTMLElement, options: Options) {
   const actions = document.createElement('div');
   actions.className = 'market-actions';
   const confirm = button('List item', () => void submitSelection()),
-    cancel = button('Cancel offer', () => void cancelSelection());
+    cancel = button('Withdraw to Inventory', () => void cancelSelection());
   actions.append(price, confirm, cancel);
   const claims = document.createElement('div');
   claims.className = 'market-claims';

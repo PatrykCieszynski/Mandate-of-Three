@@ -51,7 +51,7 @@ export function mountMarket(root, options) {
     price.setAttribute('aria-label', 'Whole stack price in Yang');
     const actions = document.createElement('div');
     actions.className = 'market-actions';
-    const confirm = button('List item', () => void submitSelection()), cancel = button('Cancel offer', () => void cancelSelection());
+    const confirm = button('List item', () => void submitSelection()), cancel = button('Withdraw to Inventory', () => void cancelSelection());
     actions.append(price, confirm, cancel);
     const claims = document.createElement('div');
     claims.className = 'market-claims';
