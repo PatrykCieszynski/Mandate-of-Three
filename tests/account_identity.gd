@@ -1,5 +1,10 @@
 extends Node
 ## New risk: verified identity handoff and additive migration are not covered by item suites.
+class SessionServer extends WorldServer:
+	var master_disconnects: Array[String] = []
+	func _notify_master_disconnected(account_name: String) -> void:
+		master_disconnects.append(account_name)
+
 var db := SQLite.new()
 
 func _ready() -> void:
@@ -35,7 +40,7 @@ func _ready() -> void:
 	database.db = db
 	database.store = store
 	assert(database.prepare_account_wallets({"alpha":21,"beta":22}).ok)
-	var server := WorldServer.new()
+	var server := SessionServer.new()
 	server.database = database
 	assert(server.accept_master_handoff("a0","alpha",characters[0],21))
 	assert(server.accept_master_handoff("a1","alpha",characters[1],21))
@@ -63,6 +68,35 @@ func _ready() -> void:
 	var audit := store.audit_account_identities({"alpha":21,"beta":999,"unbound":23})
 	assert(audit.ok and audit.unbound==["unbound"] and audit.mismatched==["beta"] and audit.orphaned.is_empty())
 	assert(store.audit_account_identities({"alpha":21}).orphaned.size()==2,"deleted Master accounts are reported without remapping")
+	# Current-owner disconnect must still persist/clean its own character. Another
+	# current character of that account must not be reported offline at Master.
+	server.connected_players.clear()
+	var first := store.get_player(characters[0])
+	var second := store.get_player(characters[1])
+	first.current_peer_id = 600
+	second.current_peer_id = 601
+	first.level = 3
+	assert(database.load_wallet(first.player_id))
+	server.connected_players[600] = first
+	server.connected_players[601] = second
+	server.player_id_to_peer_id[first.player_id] = 600
+	server.player_id_to_peer_id[second.player_id] = 601
+	server.runtime_equipment[first.player_id] = {"stats": {"attack": 37}}
+	server._on_peer_disconnected(600)
+	assert(first.current_peer_id == 0 and not server.player_id_to_peer_id.has(first.player_id))
+	assert(not server.connected_players.has(600) and server.runtime_attack(first.player_id) == -1)
+	assert(store.get_player(first.player_id).level == 3, "current owner's disconnect still saves")
+	assert(server.master_disconnects.is_empty() and server.connected_players[601] == second)
+	server._on_peer_disconnected(600) # Unknown/duplicate callbacks never notify Master.
+	assert(database.wallet_balance(second.player_id) >= 0, "other current session keeps the shared wallet")
+	var stale := second.duplicate() as PlayerResource
+	stale.current_peer_id = 599
+	server.connected_players[599] = stale
+	server._on_peer_disconnected(601)
+	assert(database.wallet_balance(second.player_id) == -1, "stale peer must not retain the last session's clean wallet")
+	server._on_peer_disconnected(599)
+	assert(second.current_peer_id == 0 and not server.player_id_to_peer_id.has(second.player_id))
+	assert(server.connected_players.is_empty() and server.master_disconnects == ["alpha"])
 	var gateway := preload("res://source/server/gateway/http_server.gd").new()
 	var token := gateway.create_session({"name":"alpha","id":21})
 	assert(gateway.verified_session({"t-id":token,"a-u":"alpha","a-id":22}).id==21)

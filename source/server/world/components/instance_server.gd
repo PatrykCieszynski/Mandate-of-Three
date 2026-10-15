@@ -165,6 +165,11 @@ func _warp_after_dwell(player: Player, warper: Warper) -> void:
 @rpc("any_peer", "call_remote", "reliable", 0)
 func ready_to_enter_instance() -> void:
 	var peer_id: int = multiplayer.get_remote_sender_id()
+	# Only the server's pending assignment may enter this instance. Authentication
+	# alone does not grant access to every replicated ServerInstance RPC path.
+	var resource: PlayerResource = world_server.connected_players.get(peer_id)
+	if resource == null or resource.current_peer_id != peer_id or not awaiting_peers.has(peer_id):
+		return
 	# Ignore duplicate/spam requests so a client can't spawn ghost copies of itself.
 	if players_by_peer_id.has(peer_id):
 		return

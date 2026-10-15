@@ -1,6 +1,7 @@
 # Development and verification
 
 - [Testing policy](testing.md) — supported suites, fixture expectations, runtime acceptance.
+- [World RPC admission](world-rpc-admission.md) — A2 authorization contract and network checks.
 - [CI](ci.md) — scope and limitations of automated validation.
 - [Local visual asset staging](local-dev-visuals.md) and [Warrior compatibility workflow](warrior-compatibility.md).
 - [CEF root addon](../ui/cef-addon-integration.md) — install/export.

@@ -231,8 +231,11 @@ func unload_unused_instances() -> void:
 
 
 func get_instance_server_by_id(id: String) -> ServerInstance:
-	if self.has_node(id):
-		return self.get_node(id)
+	# IDs name direct instance children. Never interpret client input as NodePath
+	# (ancestor traversal, absolute paths, unique-name aliases or subresources).
+	for child: Node in get_children():
+		if child is ServerInstance and str(child.name) == id:
+			return child as ServerInstance
 	return null
 
 
