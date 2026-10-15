@@ -81,6 +81,7 @@ export function mountShop(root, options) {
         storage: 'Purchase could not be confirmed. Retry the same purchase.',
         purchase_pending: 'Purchase not confirmed. Use Retry purchase; if no result was recorded, return to the original shop.',
         request: 'Invalid placement.',
+        journal_unavailable: 'Purchase confirmation storage is unavailable. Buying is blocked to protect pending purchases.',
         no_pending_purchase: 'No purchase needs confirmation.',
     };
     function updateRetry() {

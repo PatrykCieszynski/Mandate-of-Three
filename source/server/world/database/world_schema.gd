@@ -78,6 +78,11 @@ static func ensure_schema(db: SQLite) -> void:
 		push_error("Could not migrate account identity schema v17; previous data retained.")
 		return
 
+	# Stable identity for this SQLite economy, including dev reset isolation.
+	# Existing meta table; one additive key, preserved by database backup/restore.
+	if not db.query_with_bindings("INSERT OR IGNORE INTO meta(key,value) VALUES('economy_authority_id',?);", [Crypto.new().generate_random_bytes(16).hex_encode()]):
+		push_error("Could not initialize economy authority identity.")
+
 static func migrate_account_identity(db: SQLite) -> bool:
 	if not db.query("BEGIN IMMEDIATE;"): return false
 	if not db.query("PRAGMA table_info(accounts);"):

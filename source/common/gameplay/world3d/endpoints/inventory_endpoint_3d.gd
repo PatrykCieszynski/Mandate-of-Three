@@ -135,6 +135,7 @@ func refresh_authoritative_state(peer_id: int) -> void:
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
 	services.update_runtime_equipment(resource.player_id, snapshot)
 	snapshot["storage"] = services.economy().storage_snapshot(resource.player_id)
+	snapshot["economic_context"] = services.economy().economic_context(resource.player_id)
 	_next_projection_version += 1
 	snapshot["projection_version"] = _next_projection_version
 	_authoritative_snapshots[peer_id] = snapshot

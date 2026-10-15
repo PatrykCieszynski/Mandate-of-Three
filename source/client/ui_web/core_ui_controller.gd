@@ -56,6 +56,8 @@ func setup(game_world: GameWorld3D) -> void:
 	upgrades.attach(world.upgrade_endpoint, dispatcher, session, get_tree())
 	shop.state_updated.connect(_shop_state)
 	shop.attach(world.shop_endpoint, dispatcher, session, get_tree())
+	world.inventory_endpoint.state_changed.connect(shop.accept_context)
+	shop.accept_context(world.inventory_endpoint.state)
 	world.market_endpoint.operation_finished.connect(session.finish)
 	world.market_endpoint.query_finished.connect(session.finish)
 	market.attach(world.market_endpoint,dispatcher,session,get_tree())

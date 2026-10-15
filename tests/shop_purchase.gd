@@ -9,6 +9,7 @@ func balance(db: SQLite, owner: int) -> int:
 	check(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);",[owner]), "balance query")
 	return int(db.query_result[0].yang)
 func _ready() -> void:
+	await _test_journal()
 	var shop: ShopDefinition = ShopDefinitions.BLACKSMITH_WEAPONS
 	var offer: ShopOfferDefinition = shop.offers[0]
 	var bad: ShopOfferDefinition = offer.duplicate(true)
@@ -29,6 +30,14 @@ func _ready() -> void:
 	var owner: int = EconomyFixture.create_character(persistence.store,"shop_fixture", {"name":"Buyer", "skin":1})
 	EconomyFixture.prepare(persistence)
 	check(persistence.load_wallet(owner), "load wallet")
+	var context := persistence.economic_context(owner)
+	var another_binding := WorldDatabase.new()
+	another_binding.db = db
+	another_binding.store = persistence.store
+	check(context == another_binding.economic_context(owner) and ItemInstance.valid_uid(context.authority_id), "economy identity is persistent across bindings")
+	WorldSchema.ensure_schema(db)
+	check(db.query("SELECT value FROM meta WHERE key='economy_authority_id';") and db.query_result[0].value == context.authority_id, "schema initialization preserves economy identity")
+	another_binding.free()
 	check(db.query_with_bindings("UPDATE account_wallets SET yang=400 WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);",[owner]), "seed wallet")
 	persistence.runtime_wallets.erase(persistence.wallet_account_id(owner))
 	check(persistence.load_wallet(owner) and persistence.add_yang(owner,1700), "pending income")
@@ -111,3 +120,45 @@ func _ready() -> void:
 	if not failed:
 		print("SHOP_PURCHASE_OK: authoritative offers, exact/first-fit, capacity, stack limits, pending income, rollback and durability")
 		get_tree().quit()
+
+# Disk journal contract: no scene layout or private adapter state assertions.
+func _test_journal() -> void:
+	var script = preload("res://source/client/ui_web/npc_purchase_journal.gd")
+	var journal = script.new()
+	journal.directory = "res://.godot/verification/npc-journal-fixture-" + Crypto.new().generate_random_bytes(8).hex_encode()
+	var context := {"authority_id":"a".repeat(32),"account_id":1,"character_id":2}
+	check(journal.configure(context).ok, "create isolated journal")
+	var id := "npc-buy-" + "b".repeat(32)
+	var payload := {"npc_instance_id":"blacksmith","service_id":"weapon_shop","offer_id":"iron_sword","x":0,"y":2,"page":0}
+	check(journal.save_pending(id,payload), "intention persisted before send")
+	check(not journal.save_pending("npc-buy-" + "c".repeat(32),payload), "cannot replace unresolved intention")
+	var fresh = script.new()
+	fresh.directory = journal.directory
+	var restored: Dictionary = fresh.configure(context)
+	check(restored.ok and restored.entry.id == id and ShopUiAdapter.valid_buy(restored.entry.payload), "new instance restores exact valid payload")
+	for field: String in ["authority_id","account_id","character_id"]:
+		var other := context.duplicate()
+		other[field] = "d".repeat(32) if field == "authority_id" else 9
+		check(fresh.configure(other).entry.is_empty(), "journal isolated by " + field)
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(journal.directory).path_join(("%s:%d:%d" % [other.authority_id,other.account_id,other.character_id]).sha256_text()))
+	check(journal.clear_pending(id) and journal.load_pending().entry.is_empty(), "confirmed intention removed")
+	# Corrupt files must block writes, never be silently discarded.
+	var scope := ("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text()
+	var folder := ProjectSettings.globalize_path(journal.directory).path_join(scope)
+	var corrupt := folder.path_join(id + ".json")
+	var file := FileAccess.open(corrupt,FileAccess.WRITE)
+	file.store_string("broken")
+	file.close()
+	check(not journal.load_pending().ok and not journal.save_pending(id,payload), "corruption blocks new admission")
+	DirAccess.remove_absolute(corrupt)
+	var adapter := ShopUiAdapter.new()
+	adapter.journal.directory = journal.directory
+	adapter.accept_context({"ok":true,"economic_context":context})
+	DirAccess.remove_absolute(folder)
+	# Replace only the owned fixture folder with a file to simulate I/O failure.
+	file = FileAccess.open(folder,FileAccess.WRITE)
+	file.close()
+	var refused: Dictionary = await adapter._submit("buy",payload)
+	check(refused.get("error", "") == "journal_unavailable", "journal failure blocks purchase before any RPC/session use")
+	DirAccess.remove_absolute(folder)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal.directory))

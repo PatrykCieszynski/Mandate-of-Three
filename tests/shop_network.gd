@@ -4,8 +4,24 @@ var listening: bool = false
 var shop_adapter := ShopUiAdapter.new()
 var shop_session := UiCommandSession.new()
 var shop_bridge: WebUiBridge
+var shop_dispatcher: UiCommandDispatcher
+var journal_directory := ""
 var committed_inventory_changes: int = 0
 var committed_wallet_changes: int = 0
+
+func _ready() -> void:
+	var args := OS.get_cmdline_args()
+	var probe := args.find("--journal-probe")
+	if probe >= 0:
+		var journal = preload("res://source/client/ui_web/npc_purchase_journal.gd").new()
+		journal.directory = args[probe + 1]
+		var loaded: Dictionary = journal.configure({"authority_id":args[probe + 2],"account_id":int(args[probe + 3]),"character_id":int(args[probe + 4])})
+		if loaded.ok and loaded.entry.get("id", "") == args[probe + 5]:
+			print("NPC_JOURNAL_PROCESS_OK")
+			get_tree().quit()
+		else: get_tree().quit(1)
+		return
+	super._ready()
 
 class CountingItemStore extends ItemStoreSqlite:
 	var inventory_reads: int = 0
@@ -27,6 +43,7 @@ func phase(command: String, uid: String) -> void:
 			print("SHOP_CLIENT_OK: ", client_number, " private shop, wallet, inventory and close")
 			finished.rpc_id(1)
 			await get_tree().create_timer(0.3).timeout
+			_cleanup_journal()
 			world.process_mode = Node.PROCESS_MODE_DISABLED
 			peer.close()
 			get_tree().quit()
@@ -87,7 +104,7 @@ func run_server() -> void:
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error == "unknown_command" and server.database.item_store.inventory(owner).items.size() == before.items.size() + 1, "missing receipt outside NPC does not create an item")
 	await get_tree().create_timer(0.12).timeout
-	set_phase("RETRY_EXACT", hero)
+	set_phase("RESTORE", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok and replies[hero].has_purchase and replies[hero].wallet == 1500 and not replies[hero].shop_active, "receipt-only recovery outside the NPC confirms the original purchase without another charge")
 	world.characters[hero].position = npc.position + Vector3(0,0,2)
@@ -110,6 +127,9 @@ func run_server() -> void:
 	set_phase("FUNDS",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(not replies[hero].ok and replies[hero].error=="funds" and server.database.item_store.inventory(owner)==purchased, "funds rejection leaves items intact")
+	set_phase("RESTORE_ABSENT",hero)
+	await wait_until(func() -> bool: return replies.has(hero))
+	check(replies[hero].ok and server.database.wallet_balance(owner)==500 and server.database.item_store.inventory(owner)==purchased, "missing journal receipt never automatically executes a purchase")
 	set_phase("BACK",hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok and not replies[hero].shop_active and replies[hero].npc_active and replies[hero].selected=="", "clear service closes Shop but retains NPC context")
@@ -137,8 +157,8 @@ func run_server() -> void:
 		get_tree().quit()
 
 func _report_operation(_id: String, result: Dictionary) -> void:
-	if phase_name in ["BUY_EXACT","RETRY_EXACT","BUY_AUTO"] and result.ok:
-		var expected_balance: int = 1500 if phase_name in ["BUY_EXACT","RETRY_EXACT"] else 500
+	if phase_name in ["BUY_EXACT","RESTORE","BUY_AUTO"] and result.ok:
+		var expected_balance: int = 1500 if phase_name in ["BUY_EXACT","RESTORE"] else 500
 		await wait_until(func() -> bool: return world.currency_endpoint.state.get("balance",-1)==expected_balance)
 	var shop_state: Dictionary = world.shop_endpoint.state
 	var npc_state: Dictionary = world.npc_endpoint.state
@@ -159,12 +179,9 @@ func _process(delta: float) -> void:
 		listening=true
 		world.npc_endpoint.operation_finished.connect(_report_operation)
 		world.shop_endpoint.operation_finished.connect(_report_operation)
-		var dispatcher := UiCommandDispatcher.new()
-		add_child(dispatcher)
-		shop_bridge = WebUiBridge.new()
-		add_child(shop_bridge)
-		dispatcher.attach(shop_bridge)
-		shop_adapter.attach(world.shop_endpoint, dispatcher, shop_session, get_tree())
+		var context: Dictionary = world.inventory_endpoint.state.economic_context
+		journal_directory = "res://.godot/verification/npc-journal-network-" + str(context.authority_id) + "-" + str(context.character_id)
+		_attach_shop_adapter()
 		register_ready.rpc_id(1)
 	if phase_name in ["WAIT","DONE"] or attempted: return
 	attempted=true
@@ -173,7 +190,8 @@ func _process(delta: float) -> void:
 		"SELECT": world.npc_endpoint.request_interaction.rpc_id(1,"select",drop_uid,"weapon_shop","shop-select")
 		"OPEN": world.shop_endpoint.request_shop.rpc_id(1,"open",drop_uid,"weapon_shop","",-1,"shop-open")
 		"BUY_EXACT": _adapter_purchase(true)
-		"RETRY_EXACT": _retry_from_web()
+		"RESTORE": _restore_purchase()
+		"RESTORE_ABSENT": _restore_absent_purchase()
 		"OCCUPIED": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",10,"shop-exact", "occupied-intention")
 		"BUY_AUTO": _adapter_purchase(false, false)
 		"MISSING_RECEIPT": world.shop_endpoint.request_shop.rpc_id(1,"receipt","","","",-1,"missing-receipt","not-admitted")
@@ -199,23 +217,79 @@ func _adapter_purchase(lose_response: bool, exact: bool = true) -> void:
 	world.shop_endpoint.operation_finished.connect(_report_operation)
 	await _report_operation("", result)
 
-# Result recovery enters through the same explicit empty-payload Web command as
-# the Retry button. The committed sword already occupies the requested cell.
-func _retry_from_web() -> void:
-	check(world.inventory_endpoint.state.items.any(func(item: Dictionary) -> bool: return item.location == "bag" and item.bag_position == 10), "retry target is occupied by the committed purchase")
+func _attach_shop_adapter() -> void:
+	shop_dispatcher = UiCommandDispatcher.new()
+	add_child(shop_dispatcher)
+	shop_bridge = WebUiBridge.new()
+	add_child(shop_bridge)
+	shop_dispatcher.attach(shop_bridge)
+	shop_adapter.journal.directory = journal_directory
+	shop_adapter.attach(world.shop_endpoint, shop_dispatcher, shop_session, get_tree())
+	world.inventory_endpoint.state_changed.connect(shop_adapter.accept_context)
+	shop_adapter.accept_context(world.inventory_endpoint.state)
+
+func _restore_purchase() -> void:
+	check(world.inventory_endpoint.state.items.any(func(item: Dictionary) -> bool: return item.location == "bag" and item.bag_position == 10), "restart target is already occupied by committed sword")
 	world.shop_endpoint.operation_finished.disconnect(_report_operation)
+	var context: Dictionary = world.inventory_endpoint.state.economic_context
+	var loaded: Dictionary = shop_adapter.journal.load_pending()
+	check(loaded.ok and not loaded.entry.is_empty(), "uncertain intention remains on disk")
+	# Independent Godot process, same file; no adapter/session RAM is shared.
+	var output: Array = []
+	var status := OS.execute(OS.get_executable_path(), ["--headless","--path",ProjectSettings.globalize_path("res://"),"--mode=client","res://tests/shop_network.tscn","--journal-probe",journal_directory,str(context.authority_id),str(context.account_id),str(context.character_id),loaded.entry.id], output)
+	check(status == 0 and str(output).contains("NPC_JOURNAL_PROCESS_OK"), "fresh process restores original intention identity")
+	world.inventory_endpoint.state_changed.disconnect(shop_adapter.accept_context)
+	shop_adapter.dispose()
+	shop_session.close("disconnected")
+	shop_dispatcher.queue_free()
+	shop_bridge.queue_free()
+	shop_adapter = ShopUiAdapter.new()
+	shop_session = UiCommandSession.new()
 	var received := {}
-	var listener := func(json: String) -> void:
+	var listener := func(_id: String, result: Dictionary) -> void: received.result = result
+	world.shop_endpoint.operation_finished.connect(listener)
+	_attach_shop_adapter()
+	var snapshots := {}
+	var view_listener := func(json: String) -> void:
 		var message: Dictionary = JSON.parse_string(json)
-		if message.type == "command.result" and message.id == "retry-from-web": received.result = message.payload
-		if message.type == "ui.snapshot":
-			received.pending_purchase = message.payload.shop.get("purchasePending", false)
-			received.recovery_only = message.payload.shop.get("recoveryOnly", false)
-	shop_bridge.outgoing.connect(listener)
+		if message.type == "ui.snapshot": snapshots.shop = message.payload.shop
+	shop_bridge.outgoing.connect(view_listener)
 	shop_bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
-	check(received.get("pending_purchase", false) and received.get("recovery_only", false), "ui.ready exposes receipt confirmation after the NPC context has closed")
-	shop_bridge.receive('{"v":1,"type":"shop.retry","id":"retry-from-web","payload":{}}')
+	check(snapshots.shop.get("purchasePending", false) and snapshots.shop.get("recoveryOnly", false), "fresh UI exposes journal recovery without old catalog")
 	await wait_until(func() -> bool: return received.has("result"))
-	shop_bridge.outgoing.disconnect(listener)
+	await wait_until(func() -> bool: return shop_adapter.journal.load_pending().entry.is_empty())
+	check((await shop_adapter.retry_purchase()).error == "no_pending_purchase", "successful automatic receipt lookup releases pending intention")
+	world.shop_endpoint.operation_finished.disconnect(listener)
+	shop_bridge.outgoing.disconnect(view_listener)
 	world.shop_endpoint.operation_finished.connect(_report_operation)
 	await _report_operation("", received.result)
+
+func _cleanup_journal() -> void:
+	if journal_directory.is_empty(): return
+	var context: Dictionary = world.inventory_endpoint.state.economic_context
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory).path_join(("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text()))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory))
+
+func _restore_absent_purchase() -> void:
+	world.shop_endpoint.operation_finished.disconnect(_report_operation)
+	var intention := "npc-buy-" + Crypto.new().generate_random_bytes(16).hex_encode()
+	check(shop_adapter.journal.save_pending(intention,{"npc_instance_id":drop_uid,"service_id":"weapon_shop","offer_id":"iron_sword"}), "seed never-sent intention as a crash-before-RPC case")
+	world.inventory_endpoint.state_changed.disconnect(shop_adapter.accept_context)
+	shop_adapter.dispose()
+	shop_session.close("disconnected")
+	shop_dispatcher.queue_free()
+	shop_bridge.queue_free()
+	shop_adapter = ShopUiAdapter.new()
+	shop_session = UiCommandSession.new()
+	var results: Array[Dictionary] = []
+	var listener := func(_id: String, result: Dictionary) -> void: results.append(result)
+	world.shop_endpoint.operation_finished.connect(listener)
+	_attach_shop_adapter()
+	await wait_until(func() -> bool: return not results.is_empty())
+	await get_tree().create_timer(0.25).timeout
+	check(results.size() == 1 and results[0].get("error", "") == "unknown_command" and shop_adapter.journal.load_pending().entry.get("id", "") == intention, "automatic discovery sends one read and retains absent result, without buy fallback")
+	# Fixture knows this ID was never sent as a mutation; production cannot infer it.
+	check(shop_adapter.journal.clear_pending(intention), "remove owned crash-before-send fixture")
+	world.shop_endpoint.operation_finished.disconnect(listener)
+	world.shop_endpoint.operation_finished.connect(_report_operation)
+	await _report_operation("", {"ok":true})

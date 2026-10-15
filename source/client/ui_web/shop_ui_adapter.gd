@@ -6,8 +6,12 @@ var _endpoint: Shop3D
 var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
 var _tree: SceneTree
-# One unresolved purchase per adapter. Survives browser reload, not client exit.
+# One unresolved purchase per economy/account/character, journaled before send.
 # Business identity is independent of the native/browser RPC correlation IDs.
+const PurchaseJournal = preload("res://source/client/ui_web/npc_purchase_journal.gd")
+var journal = PurchaseJournal.new()
+var _context: Dictionary = {}
+var _journal_ready := false
 var _purchase: Dictionary = {}
 var _buy_in_flight := false
 var _disposed := false
@@ -29,6 +33,37 @@ func attach(endpoint: Shop3D, dispatcher: UiCommandDispatcher, session: UiComman
 	endpoint.state_changed.connect(publish)
 	endpoint.operation_finished.connect(session.finish)
 	publish(endpoint.state)
+
+# Only the authenticated private Inventory projection supplies this context.
+func accept_context(snapshot: Dictionary) -> void:
+	if _disposed or not snapshot.get("ok", false): return
+	var context: Dictionary = snapshot.get("economic_context", {})
+	if context.is_empty() or context == _context: return
+	# An adapter belongs to one world entry. Never retarget an unresolved intent.
+	if not _context.is_empty():
+		_journal_ready = false
+		return
+	_context = context.duplicate(true)
+	var restored: Dictionary = journal.configure(context)
+	if not restored.ok: return
+	if not restored.entry.is_empty() and not valid_buy(restored.entry.payload): return
+	_journal_ready = true
+	if restored.entry.is_empty(): return
+	_purchase = restored.entry.duplicate(true)
+	_purchase.uncertain = true
+	var p: Dictionary = _purchase.payload
+	_last_catalog = {"active":true,"npcInstanceId":p.npc_instance_id,"serviceId":p.service_id,"shopId":"purchase_confirmation","name":"Purchase confirmation","currency":"yang","offers":[]}
+	publish(_endpoint.state)
+	# Discovery can confirm a receipt, never automatically execute a purchase.
+	retry_purchase.call_deferred(false)
+
+func _release_purchase() -> bool:
+	if not journal.clear_pending(_purchase.id):
+		_purchase.uncertain = true
+		publish(_endpoint.state)
+		return false
+	_purchase.clear()
+	return true
 
 func dispose() -> void:
 	_disposed = true
@@ -58,7 +93,9 @@ static func valid_buy(p: Dictionary) -> bool:
 	if p.size() == 3: return true
 	return p.has_all(["x", "y", "page"]) and WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < InventoryGrid.COLUMNS and p.y >= 0 and p.y < InventoryGrid.ROWS and p.page >= 0 and p.page < InventoryGrid.PAGES
 
-func retry_purchase() -> Dictionary:
+func retry_purchase(allow_purchase: bool = true) -> Dictionary:
+	if _disposed: return _session.closed_result()
+	if not _journal_ready: return {"ok":false,"error":"journal_unavailable"}
 	if _purchase.is_empty(): return {"ok":false,"error":"no_pending_purchase"}
 	if _buy_in_flight: return {"ok":false,"error":"too_fast"}
 	var id := _session.begin()
@@ -69,10 +106,10 @@ func retry_purchase() -> Dictionary:
 	if _disposed: return result
 	_buy_in_flight = false
 	if result.ok:
-		_purchase.clear()
+		if not _release_purchase(): return {"ok":false,"error":"journal_unavailable"}
 		publish(_endpoint.state)
 		return result
-	if result.get("error", "") == "unknown_command":
+	if result.get("error", "") == "unknown_command" and allow_purchase:
 		# Absence is not economic failure. A retry may execute only through the
 		# original mutation path, which reauthorizes the NPC/service/range.
 		return await _submit("buy", _purchase.payload.duplicate(true))
@@ -82,14 +119,19 @@ func retry_purchase() -> Dictionary:
 
 func _submit(action: String, p: Dictionary) -> Dictionary:
 	if action == "buy":
+		if not _journal_ready: return {"ok":false,"error":"journal_unavailable"}
 		if _buy_in_flight: return {"ok":false,"error":"too_fast"}
 		if not _purchase.is_empty() and _purchase.payload != p: return {"ok":false,"error":"purchase_pending"}
+	if action == "buy" and _purchase.is_empty():
+		var intention := "npc-buy-" + Crypto.new().generate_random_bytes(16).hex_encode()
+		if not journal.save_pending(intention, p):
+			_journal_ready = false
+			return {"ok":false,"error":"journal_unavailable"}
+		_purchase = {"id":intention,"payload":p.duplicate(true),"uncertain":false}
 	var id: String = _session.begin()
 	if id.is_empty(): return _session.closed_result()
 	var operation_id := ""
 	if action == "buy":
-		if _purchase.is_empty():
-			_purchase = {"id":"npc-buy-" + Crypto.new().generate_random_bytes(16).hex_encode(), "payload":p.duplicate(true), "uncertain":false}
 		operation_id = _purchase.id
 		_buy_in_flight = true
 	var position: int = int(p.page) * InventoryGrid.PAGE_CELLS + int(p.y) * InventoryGrid.COLUMNS + int(p.x) if p.has("x") else -1
@@ -101,7 +143,7 @@ func _submit(action: String, p: Dictionary) -> Dictionary:
 		if result.ok or result.get("error", "") in ["funds", "occupied", "inventory_full", "unknown_offer", "request"]:
 			# These store rejections follow receipt lookup. A prior committed purchase
 			# would have replayed success, so a definitive rejection can be released.
-			_purchase.clear()
+			if not _release_purchase(): return {"ok":false,"error":"journal_unavailable"}
 		elif bool(_purchase.uncertain) or result.get("error", "") in ["timeout", "ui_reload", "disconnected", "storage"]:
 			# An authorization/transport failure on retry is not proof that the
 			# earlier purchase failed. Reopen that service and retry the same item.
@@ -109,6 +151,6 @@ func _submit(action: String, p: Dictionary) -> Dictionary:
 			publish(_endpoint.state)
 			return {"ok":false,"error":"purchase_pending"}
 		else:
-			_purchase.clear()
+			if not _release_purchase(): return {"ok":false,"error":"journal_unavailable"}
 		publish(_endpoint.state)
 	return result
