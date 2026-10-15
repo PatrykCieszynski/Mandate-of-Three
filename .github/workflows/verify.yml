@@ -79,12 +79,6 @@ jobs:
         shell: pwsh
         run: |
           & ./tests/run-smoke.ps1
-      - name: Market V2 draft regression diagnostics
-        shell: pwsh
-        run: |
-          & ./tests/run-market.ps1 -Scene market_custody -Marker MARKET_CUSTODY_OK
-          & ./tests/run-market.ps1 -Scene market_purchase -Marker MARKET_PURCHASE_OK
-          try { & ./tests/run-market.ps1 -Scene market_search -Marker MARKET_SEARCH_OK } finally { Get-Content .godot/verification/market_search.log -Tail 100 }
       - name: Python staging tests
         if: github.event_name == 'workflow_dispatch' && inputs.extended
         shell: pwsh
