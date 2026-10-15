@@ -21,6 +21,11 @@ var mob_count := 200
 var warmup_seconds := 3.0
 var measurement_seconds := 12.0
 var include_per_peer_encode := false
+var skip_overlap := false
+var no_mob_slide := false
+var wide_arena := false
+var ai_period_ms := 0
+var pack_size := 1
 var _sampling := false
 var _previous_tick := 0
 var _started_tick := 0
@@ -44,6 +49,11 @@ func _ready() -> void:
 	warmup_seconds = clampf(float(args.get("bench-warmup", "3")), 1.0, 30.0)
 	measurement_seconds = clampf(float(args.get("bench-seconds", "12")), 3.0, 120.0)
 	include_per_peer_encode = str(args.get("bench-encode-per-peer", "0")) == "1"
+	skip_overlap = str(args.get("bench-no-overlap", "0")) == "1"
+	no_mob_slide = str(args.get("bench-no-mob-slide", "0")) == "1"
+	wide_arena = str(args.get("bench-wide", "0")) == "1"
+	ai_period_ms = clampi(int(args.get("bench-ai-ms", "0")), 0, 1000)
+	pack_size = clampi(int(args.get("bench-pack-size", "1")), 1, 100)
 	var api := multiplayer as SceneMultiplayer
 	api.server_relay = false
 	if peer.create_server(PORT, "127.0.0.1") != OK:
@@ -63,6 +73,7 @@ func _ready() -> void:
 	add_child(host)
 	world = host.get_node("GameWorld") as GameWorld3D
 	world.set("encode_per_peer", include_per_peer_encode)
+	world.call("configure_profile", skip_overlap, no_mob_slide, ai_period_ms)
 	# The five-second calendar RPC would target synthetic, nonexistent peers.
 	world.world_time.set_process(false)
 	# The test owns the mob tick: CombatEndpoint skips simulation when there is
@@ -85,6 +96,8 @@ func _position_for(index: int) -> Vector3:
 	# Inside the existing 32x32 physics arena, with deterministic density.
 	var column := index % 30
 	var line := int(index / 30)
+	if wide_arena:
+		return Vector3(-120.0 + float(column) * 8.0, 0.15, -120.0 + float(line) * 8.0)
 	return Vector3(-13.0 + float(column) * 0.85, 0.15, -13.0 + float(line) * 0.85)
 
 func _build_players() -> void:
@@ -103,22 +116,25 @@ func _build_players() -> void:
 func _build_mobs() -> void:
 	if mob_count == 0:
 		return
-	# No real players means no valid target; that scenario measures idle mobs.
-	for index: int in mob_count:
+	# Baseline pack_size=1 retains the original high-pack-count fixture.
+	for start_index: int in range(0, mob_count, pack_size):
 		var entry := MobSpawnEntry.new()
 		entry.mob = DOG
-		var anchor := _position_for(index % maxi(1, player_count)) + Vector3(0.4, 0.0, 2.0)
+		entry.count = mini(pack_size, mob_count - start_index)
+		var anchor := _position_for(start_index % maxi(1, player_count)) + Vector3(0.4, 0.0, 2.0)
 		var pack: MobPackRuntime = world.mob_system.create_pack([entry], anchor, 0.0, 0.0, 12.0, 0.0)
 		if pack == null:
 			_fail("failed to create mob pack")
 			return
-		var dog: MobActor3D = world.mob_system.mobs[pack.actor_ids[0]]
-		dog.proximity_aggro = false
-		if player_count > 0:
-			dog.target_peer = simulated_ids[index % player_count]
-			dog.ai_state = MobState.Value.CHASE
-			# Exercise real chase/physics without sending combat RPC to a fake peer.
-			dog.last_attack_ms = Time.get_ticks_msec() + 3600000
+		for offset: int in pack.actor_ids.size():
+			var index := start_index + offset
+			var dog: MobActor3D = world.mob_system.mobs[pack.actor_ids[offset]]
+			dog.proximity_aggro = false
+			if player_count > 0:
+				dog.target_peer = simulated_ids[index % player_count]
+				dog.ai_state = MobState.Value.CHASE
+				# No RPC against synthetic peers, no fake economic mutations.
+				dog.last_attack_ms = Time.get_ticks_msec() + 3600000
 
 func _physics_process(delta: float) -> void:
 	if world == null:
@@ -165,6 +181,7 @@ func _run_benchmark() -> void:
 	_previous_tick = 0
 	_started_tick = 0
 	world.call("reset_snapshot_metrics")
+	world.call("reset_profile_metrics")
 	var wall_started := Time.get_ticks_usec()
 	_sampling = true
 	await get_tree().create_timer(measurement_seconds).timeout
@@ -178,6 +195,13 @@ func _run_benchmark() -> void:
 		"mode": "synthetic_world_no_clients",
 		"players": player_count,
 		"mobs": world.mob_system.mobs.size(),
+		"packs": world.mob_system.packs.size(),
+		"wide_arena": wide_arena,
+		"skip_player_overlaps": skip_overlap,
+		"no_mob_slide": no_mob_slide,
+		"ai_period_ms": ai_period_ms,
+		"pack_size": pack_size,
+		"profile": world.call("profile_metrics"),
 		"physics_hz_target": Engine.physics_ticks_per_second,
 		"max_fps": Engine.max_fps,
 		"warmup_seconds": warmup_seconds,
@@ -192,7 +216,7 @@ func _run_benchmark() -> void:
 		"estimated_outbound_mib_per_second": float(world.get("estimated_wire_bytes")) / (1048576.0 * maxf(0.001, wall_seconds)),
 		"encode_per_peer_proxy": include_per_peer_encode,
 		"static_memory_mib": float(Performance.get_monitor(Performance.MEMORY_STATIC)) / 1048576.0,
-		"caveat": "No network sockets per synthetic player, real RPC encode, client CPU, DB or economy; proxy must not be quoted as connected-client capacity."
+		"caveat": "No real clients or RPC, DB or economy. Ablations change behavior; these results are not production capacity."
 	}
 	print("WORLD_LOAD_RESULT ", JSON.stringify(result))
 	peer.close()
