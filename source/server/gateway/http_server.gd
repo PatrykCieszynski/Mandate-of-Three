@@ -3,6 +3,15 @@ extends "res://addons/httpserver/http_server.gd"
 
 const CredentialsUtils: GDScript = preload("res://source/common/utils/credentials_utils.gd")
 
+# Fixed lifetime uses monotonic time; activity does not extend credentials forever.
+@export_range(1, 86400) var session_ttl_seconds: int = 28800
+@export_range(1, 65536) var max_pending_requests: int = 1024
+@export_range(1, 65536) var max_sessions: int = 10000
+var _session_expiry: Dictionary[String, int] = {}
+var _request_sessions: Dictionary[int, String] = {}
+var _request_deadlines: Dictionary[int, int] = {}
+var _next_prune_ms: int = 0
+
 var next_request_id: int
 var sessions: Dictionary[String, Dictionary]
 var pending_requests: Dictionary[int, NetRequest]
@@ -52,24 +61,62 @@ func _ready() -> void:
 		&"/v1/handshake",
 		handle_handshake
 	)
+	router.register_route(HTTPClient.Method.METHOD_POST, &"/v1/logout", handle_logout)
 	server.listen(8088, "127.0.0.1")
 	
-	gateway_manager_client.response_received.connect(
-		_on_gateway_manager_client_response_received
-	)
+	_bind_master_lifecycle()
+
+
+func _bind_master_lifecycle() -> void:
+	gateway_manager_client.response_received.connect(_on_gateway_manager_client_response_received)
+	gateway_manager_client.connection_lost.connect(_on_master_connection_lost)
+
+
+func _physics_process(delta: float) -> void:
+	super._physics_process(delta)
+	_expire_requests()
+	if Time.get_ticks_msec() >= _next_prune_ms:
+		_next_prune_ms = Time.get_ticks_msec() + 1000
+		prune_sessions()
 
 
 func create_session(account: Dictionary) -> String:
-	var crypto := Crypto.new()
-	var bytes: PackedByteArray = crypto.generate_random_bytes(32)
-	var session_id: String = Marshalls.raw_to_base64(bytes)
-	#session_id
-	#account_id
-	#created_at
-	#last_seen_at
-	#expires_at
-	sessions[session_id] = account
+	prune_sessions()
+	if int(account.get("id", 0)) <= 0 or str(account.get("name", "")).is_empty():
+		return ""
+	# New credential verification replaces previous Gateway credentials for this account.
+	for token: String in sessions.keys():
+		if sessions[token].get("id") == account.id:
+			revoke_session(token)
+	if sessions.size() >= max_sessions:
+		return ""
+	var session_id := Marshalls.raw_to_base64(Crypto.new().generate_random_bytes(32))
+	# Never retain the mutable HTTP response (including guest password or session_id).
+	sessions[session_id] = {"name": str(account.name), "id": int(account.id)}
+	_session_expiry[session_id] = Time.get_ticks_msec() + session_ttl_seconds * 1000
 	return session_id
+
+
+func prune_sessions() -> void:
+	var now := Time.get_ticks_msec()
+	for token: String in sessions.keys():
+		if now >= _session_expiry.get(token, 0):
+			revoke_session(token)
+
+
+func revoke_session(token: String) -> void:
+	sessions.erase(token)
+	_session_expiry.erase(token)
+	for request_id: int in _request_sessions.keys():
+		if _request_sessions.get(request_id, "") == token:
+			_finish_request(request_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS})
+
+
+func handle_logout(payload: Dictionary) -> Dictionary:
+	if verified_session(payload).is_empty():
+		return {"error": GatewayAPI.ERR_BAD_CREDENTIALS}
+	revoke_session(payload[GatewayAPI.KEY_TOKEN_ID])
+	return {"ok": true}
 
 
 func send_request(action: String, data: Dictionary, timeout_sec: float = 5.0) -> Dictionary:
@@ -85,44 +132,81 @@ func send_request(action: String, data: Dictionary, timeout_sec: float = 5.0) ->
 	if not gateway_manager_client.master_connected:
 		return {"error": Error.ERR_TIMEOUT, "msg": "gateway not ready"}
 
+	if pending_requests.size() >= max_pending_requests:
+		return {"error": GatewayAPI.ERR_RATE_LIMITED, "msg": "gateway busy"}
+	data = data.duplicate(true)
 	var request_id: int = next_request_id
 	next_request_id += 1
 
 	var request: NetRequest = NetRequest.new()
-	request.token_id = data.get(GatewayAPI.KEY_TOKEN_ID, 0)
 	pending_requests[request_id] = request
+	_request_deadlines[request_id] = Time.get_ticks_msec() + maxi(1, int(timeout_sec * 1000))
+	if action in ["create_character", "get_characters", "enter_world"]:
+		_request_sessions[request_id] = data[GatewayAPI.KEY_TOKEN_ID]
 	
 	data.merge({GatewayAPI.KEY_REQUEST_ID: request_id, "action": action}, true)
 	
-	gateway_manager_client.gateway_request.rpc_id(1, request_id, data)
+	_send_to_master(request_id, data)
 	
-	get_tree().create_timer(timeout_sec).timeout.connect(
-		_on_request_timeout.bind(request_id)
-	)
-	
+	# Also tolerate a synchronous transport rejection/completion.
+	if request.is_done:
+		return request.response
 	return await request.completed
+
+
+func _send_to_master(request_id: int, data: Dictionary) -> void:
+	gateway_manager_client.gateway_request.rpc_id(1, request_id, data)
 
 ## Only the Gateway's credential-verified session may supply account identity.
 func verified_session(data: Dictionary) -> Dictionary:
 	var token: Variant = data.get(GatewayAPI.KEY_TOKEN_ID)
 	if not token is String or not sessions.has(token): return {}
+	if Time.get_ticks_msec() >= _session_expiry.get(token, 0):
+		revoke_session(token)
+		return {}
 	var session: Dictionary = sessions[token]
 	if str(data.get(GatewayAPI.KEY_ACCOUNT_USERNAME,"")) != str(session.get("name","")): return {}
 	return session
 
 
-func _on_request_timeout(request_id: int) -> void:
-	var request: NetRequest = pending_requests.get(request_id, null)
-	if not request:
+func _finish_request(request_id: int, response: Dictionary) -> void:
+	var request: NetRequest = pending_requests.get(request_id)
+	if request == null:
 		return
-	request.resolve({"error": Error.ERR_TIMEOUT, "msg": "request timeout"})
+	var token: String = _request_sessions.get(request_id, "")
+	# Erase before emitting: resumed callers may revoke sessions or enqueue work.
+	pending_requests.erase(request_id)
+	_request_deadlines.erase(request_id)
+	_request_sessions.erase(request_id)
+	if not token.is_empty() and (not sessions.has(token) or Time.get_ticks_msec() >= _session_expiry.get(token, 0)):
+		response = {"error": GatewayAPI.ERR_BAD_CREDENTIALS}
+	request.resolve(response)
+
+
+func _expire_requests() -> void:
+	var now := Time.get_ticks_msec()
+	for request_id: int in _request_deadlines.keys():
+		if now >= _request_deadlines.get(request_id, now + 1):
+			_on_request_timeout(request_id)
+
+
+func _on_request_timeout(request_id: int) -> void:
+	_finish_request(request_id, {"error": Error.ERR_TIMEOUT, "msg": "request timeout"})
 
 
 func _on_gateway_manager_client_response_received(request_id: int, response: Dictionary) -> void:
-	var request: NetRequest = pending_requests.get(request_id, null)
-	if not request:
+	if _request_deadlines.has(request_id) and Time.get_ticks_msec() >= _request_deadlines[request_id]:
+		_on_request_timeout(request_id)
 		return
-	request.resolve(response)
+	_finish_request(request_id, response)
+
+
+func _on_master_connection_lost() -> void:
+	# No old authenticated work or credential survives a Master reconnection.
+	for request_id: int in pending_requests.keys():
+		_finish_request(request_id, {"error": Error.ERR_CONNECTION_ERROR, "msg": "master disconnected"})
+	for token: String in sessions.keys():
+		revoke_session(token)
 
 
 # Per-IP throttle for the brute-forceable / spammable auth endpoints. __ip__ is the
@@ -181,7 +265,10 @@ func handle_login(payload: Dictionary) -> Dictionary:
 	if error != OK:
 		return result
 	
-	result["session_id"] = create_session(result)
+	var token := create_session(result)
+	if token.is_empty():
+		return {"error": GatewayAPI.ERR_RATE_LIMITED, "msg": "gateway session capacity"}
+	result["session_id"] = token
 	return result
 
 
@@ -193,7 +280,10 @@ func handle_guest(payload: Dictionary) -> Dictionary:
 	if error != OK:
 		return {"error": error}
 	
-	result["session_id"] = create_session(result)
+	var token := create_session(result)
+	if token.is_empty():
+		return {"error": GatewayAPI.ERR_RATE_LIMITED, "msg": "gateway session capacity"}
+	result["session_id"] = token
 	return result
 
 

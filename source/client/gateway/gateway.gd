@@ -966,6 +966,7 @@ func _wire_link(button: Button, url: String) -> void:
 ## Forget the saved session and return to the main menu so another account can log
 ## in. The auto-login token lives in session.dat (see save_refresh_token).
 func _logout() -> void:
+	_revoke_gateway_session(session_id, account_name)
 	var file_path: String = "user://%ssession.dat" % local_id
 	if FileAccess.file_exists(file_path):
 		DirAccess.remove_absolute(file_path)
@@ -987,6 +988,21 @@ func _logout() -> void:
 	back_button.hide()
 	if _focus_nav:
 		_focus_first_in(main_panel)
+
+
+## Independent request: logout must not collide with the shared menu HTTPRequest.
+func _revoke_gateway_session(token: String, username: String) -> void:
+	if token.is_empty():
+		return
+	var request := HTTPRequest.new()
+	request.timeout = 5.0
+	add_child(request)
+	request.request_completed.connect(func(_result: int, _code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+		request.queue_free(), CONNECT_ONE_SHOT)
+	var error := request.request(GatewayAPI.logout(), ["Content-Type: application/json"], HTTPClient.METHOD_POST,
+		JSON.stringify({GatewayAPI.KEY_TOKEN_ID: token, GatewayAPI.KEY_ACCOUNT_USERNAME: username}))
+	if error != OK:
+		request.queue_free()
 
 
 func _on_back_button_pressed() -> void:

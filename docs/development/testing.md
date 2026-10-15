@@ -271,3 +271,9 @@ covers an owned process crash during async traffic and reader restart against
 recovered WAL. See [D2 observations and gates](../marketplace-auction-d2.md). Existing
 custody/order suites protect rejection-spam row count, bounded negative cache,
 conflict, rollback and durable replay.
+
+
+Gateway A1 adds the socket-free `gateway_lifecycle` case to
+`run-account-identity.ps1`: bounded pending work, stale reply/timeout cleanup,
+Master disconnect, Gateway credential expiry/replacement/revocation. See
+[Gateway lifecycle](gateway-lifecycle.md) for guarantees and live-test boundaries.

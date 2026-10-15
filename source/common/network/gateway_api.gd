@@ -82,3 +82,7 @@ static func world_enter() -> String:
 
 static func world_create_char() -> String:
 	return get_endpoint("/v1/world/character/create")
+
+
+static func logout() -> String:
+	return get_endpoint("/v1/logout")
