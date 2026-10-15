@@ -177,6 +177,7 @@ const shop = mountShop(shopRoot, {
     drag,
     resolveItemIcon,
     buy: (payload) => bridge.request('shop.buy', payload),
+    retry: () => bridge.request('shop.retry', {}),
     onClose: () => {
         drag.cancel();
         npc.closeIfActive();

@@ -3,6 +3,7 @@ extends "res://tests/pve_network.gd"
 var listening: bool = false
 var shop_adapter := ShopUiAdapter.new()
 var shop_session := UiCommandSession.new()
+var shop_bridge: WebUiBridge
 var committed_inventory_changes: int = 0
 var committed_wallet_changes: int = 0
 
@@ -144,9 +145,9 @@ func _process(delta: float) -> void:
 		world.shop_endpoint.operation_finished.connect(_report_operation)
 		var dispatcher := UiCommandDispatcher.new()
 		add_child(dispatcher)
-		var bridge := WebUiBridge.new()
-		add_child(bridge)
-		dispatcher.attach(bridge)
+		shop_bridge = WebUiBridge.new()
+		add_child(shop_bridge)
+		dispatcher.attach(shop_bridge)
 		shop_adapter.attach(world.shop_endpoint, dispatcher, shop_session, get_tree())
 		register_ready.rpc_id(1)
 	if phase_name in ["WAIT","DONE"] or attempted: return
@@ -155,7 +156,8 @@ func _process(delta: float) -> void:
 		"INTERACT": world.npc_endpoint.request_interaction.rpc_id(1,"interact",drop_uid,"","shop-interact")
 		"SELECT": world.npc_endpoint.request_interaction.rpc_id(1,"select",drop_uid,"weapon_shop","shop-select")
 		"OPEN": world.shop_endpoint.request_shop.rpc_id(1,"open",drop_uid,"weapon_shop","",-1,"shop-open")
-		"BUY_EXACT", "RETRY_EXACT": _adapter_purchase(phase_name == "BUY_EXACT")
+		"BUY_EXACT": _adapter_purchase(true)
+		"RETRY_EXACT": _retry_from_web()
 		"OCCUPIED": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",10,"shop-exact", "occupied-intention")
 		"BUY_AUTO": _adapter_purchase(false, false)
 		"FUNDS","FOREIGN","STALE": world.shop_endpoint.request_shop.rpc_id(1,"buy",drop_uid,"weapon_shop","iron_sword",-1,"shop-auto", "npc-" + phase_name)
@@ -179,3 +181,22 @@ func _adapter_purchase(lose_response: bool, exact: bool = true) -> void:
 		check(not blocked.ok and blocked.error == "purchase_pending", "uncertain purchase prevents another placement/intention until resolved")
 	world.shop_endpoint.operation_finished.connect(_report_operation)
 	await _report_operation("", result)
+
+# Result recovery enters through the same explicit empty-payload Web command as
+# the Retry button. The committed sword already occupies the requested cell.
+func _retry_from_web() -> void:
+	check(world.inventory_endpoint.state.items.any(func(item: Dictionary) -> bool: return item.location == "bag" and item.bag_position == 10), "retry target is occupied by the committed purchase")
+	world.shop_endpoint.operation_finished.disconnect(_report_operation)
+	var received := {}
+	var listener := func(json: String) -> void:
+		var message: Dictionary = JSON.parse_string(json)
+		if message.type == "command.result" and message.id == "retry-from-web": received.result = message.payload
+		if message.type == "ui.snapshot": received.pending_purchase = message.payload.shop.get("purchasePending", false)
+	shop_bridge.outgoing.connect(listener)
+	shop_bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+	check(received.get("pending_purchase", false), "ui.ready exposes unresolved purchase so Retry remains available after browser reload")
+	shop_bridge.receive('{"v":1,"type":"shop.retry","id":"retry-from-web","payload":{}}')
+	await wait_until(func() -> bool: return received.has("result"))
+	shop_bridge.outgoing.disconnect(listener)
+	world.shop_endpoint.operation_finished.connect(_report_operation)
+	await _report_operation("", received.result)

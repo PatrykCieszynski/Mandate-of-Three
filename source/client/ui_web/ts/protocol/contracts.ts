@@ -60,6 +60,7 @@ export interface CommandPayloads {
   'npc.upgrade_item': UpgradeCommand;
   'shop.open': {npc_instance_id:string;service_id:string};
   'shop.buy': ShopBuyCommand;
+  'shop.retry': Record<string, never>;
   'npc.clear_service': Record<string,never>;
   'npc.interact': {npc_instance_id:string};
   'npc.select_service': {npc_instance_id:string;service_id:string};

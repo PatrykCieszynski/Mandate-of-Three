@@ -211,8 +211,13 @@ back and do not add durable receipt rows. Successful receipts are not pruned.
 The purchase RPC gains a separate operation ID; matching client/World builds are
 required. An empty ID rejects instead of silently bypassing idempotency. Browser
 `shop.buy` shape is unchanged because the Godot adapter owns intention identity.
-The status text tells the player to retry the same offer/placement at that shop
-when the outcome is unresolved.
+When unresolved, the Shop view exposes a Retry purchase button. The explicit
+`shop.retry` Web command accepts an empty payload only; ShopUiAdapter resubmits
+the remembered intention and exact original payload. Retry does not pass through
+browser Inventory placement validation, so a committed item occupying its target
+cell cannot block receipt recovery. A `purchasePending` presentation flag is
+republished after state changes and included in `ui.ready` snapshots. The flag
+and button do not grant authority: normal server NPC/service/range checks remain.
 
 **Recovery limit:** the adapter and unresolved ID survive browser reload within
 the running client, not full client exit/relog. SQLite receipts survive restart,
@@ -290,11 +295,20 @@ same-account/different-character conflicts, later pending income, receipt-write
 rollback, retry after rollback, reopen with a full bag and one receipt per actual
 purchase. Existing shop_network deliberately discards the first committed RPC
 response, waits for the real adapter timeout and retries through that same adapter.
+The retry now enters through the explicit Web bridge command while the purchased
+item already occupies the exact target, and ui.ready exposes retry availability.
 A changed unresolved payload is blocked; after resolution, a new purchase creates
 a distinct paid item. The existing two-client flow still requires exactly two
 inventory and wallet mutation facts. No new test suite was added. Smoke
 (10 Godot fixtures, 78 Web contracts) and two-client NPC Shop passed on 2026-10-15.
 No native window was launched.
+
+PR #17 review regression: the Web Shop/Inventory fixture simulates a pending
+exact purchase whose target is now occupied. A repeated drag stays invalid, but
+clicking Retry invokes only the empty-payload recovery action. This closes the
+coverage gap left by calling the Godot adapter directly. Review checks passed:
+full configured Prettier format check, smoke (10 Godot fixtures, 79 Web contracts)
+and the two-client NPC Shop flow. Generated JavaScript matches TypeScript.
 
 Relevant commands, run sequentially where they share port 18098:
 
