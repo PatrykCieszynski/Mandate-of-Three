@@ -61,9 +61,10 @@ def main() -> None:
         environment[key] = str(directory)
 
     results: list[dict] = []
+    mode_label = "encode" if args.encode_per_peer else "simulation"
     for players, mobs in args.scenarios:
         for attempt in range(args.repeats):
-            name = f"players-{players}_mobs-{mobs}_repeat-{attempt + 1}"
+            name = f"{mode_label}_players-{players}_mobs-{mobs}_repeat-{attempt + 1}"
             stdout = logs / f"{name}.out.log"
             stderr = logs / f"{name}.err.log"
             command = [
@@ -110,12 +111,12 @@ def main() -> None:
                      "repeats": args.repeats, "encode_per_peer": args.encode_per_peer},
         "cases": results,
     }
-    (logs / "results.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    (logs / f"results-{mode_label}.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     columns = ["scenario", "players", "mobs", "repeat", "observed_ticks_per_second",
                "static_memory_mib", "estimated_outbound_mib_per_second",
                "physics_p50_ms", "physics_p95_ms", "physics_p99_ms",
                "interval_p95_ms", "interval_p99_ms", "samples_over_budget"]
-    with (logs / "results.csv").open("w", newline="", encoding="utf-8") as stream:
+    with (logs / f"results-{mode_label}.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=columns)
         writer.writeheader()
         for case in results:
@@ -128,7 +129,7 @@ def main() -> None:
                 "interval_p99_ms": case["tick_interval"]["p99_ms"],
                 "samples_over_budget": case["physics_samples_over_16_67_ms"],
             })
-    print(f"Saved: {logs / 'results.json'} and results.csv")
+    print(f"Saved: {logs / f'results-{mode_label}.json'} and {logs / f'results-{mode_label}.csv'}")
 
 
 if __name__ == "__main__":
