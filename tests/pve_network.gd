@@ -27,6 +27,7 @@ var won: bool = false
 var failed: bool = false
 var fixture_checkpoint: String = "entry"
 var aim_fixture_fight: bool = false
+var pickup_mutations: Array[int] = []
 
 func check(ok: bool, description: String) -> void:
 	if not ok:
@@ -145,6 +146,7 @@ func run_server() -> void:
 	aim_fixture_fight = true
 	await wait_until(func() -> bool: return world.characters.size() == 2 and ready_peers.size() == 2)
 	var combat: CombatEndpoint3D = world.combat_endpoint
+	world.inventory_endpoint.inventory_changed.connect(func(owner: int) -> void: pickup_mutations.append(owner))
 	for id: int in world.mob_system.mobs:
 		if id != 1:
 			world.mob_system.mobs[id].ai_state = MobState.Value.DISABLED
@@ -245,6 +247,7 @@ func run_server() -> void:
 	set_phase("REPLAY")
 	await wait_until(func() -> bool: return replies.size() == 2)
 	for result: Dictionary in replies.values(): check(result.get("error", "") == "gone", "replay after despawn denied")
+	check(pickup_mutations == [winner_id], "only the winning durable pickup publishes an inventory mutation; rejection/replay publish none")
 	var persisted: Dictionary = server.database.item_store.inventory(winner_id)
 	check(db.close_db() and db.open_db(), "reopen real DB")
 	check(server.database.item_store.inventory(winner_id) == persisted, "picked item survives database reopen")

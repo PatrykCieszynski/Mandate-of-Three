@@ -3,7 +3,8 @@
 These are narrow parts of the local Economy architecture work. They harden
 the existing WorldDatabase entry points through `WorldEconomyService`, which
 composes MarketplaceService for Shop/Exchange and handles upgrade/NPC purchase
-orchestration, plus Inventory activation/equipment/bag-move commands.
+orchestration, Inventory activation/equipment/bag-move commands, and item
+pickup/account Storage transfers.
 This does not complete Stage 2 or introduce a new
 service process, generic database interface, queue or database migration.
 
@@ -122,6 +123,34 @@ post-commit refresh path. Inventory operations keep empty operation IDs: UID and
 expected revision guard them, without introducing durable intention receipts.
 Storage, initialization and ground pickup have not moved in this slice.
 
+## Sixth slice: Ground item pickup and account Storage
+
+GroundLootSystem now submits the server-prepared item and drop UID through
+`WorldDatabase.claim_ground_item_operation` / WorldEconomyService. World retains
+living-player, loot-rights, expiry, range and line-of-sight authorization plus the
+live drop lifecycle. ItemStoreSqlite still commits the existing unique ground
+claim, ItemInstance and placement together. Failure retains the live drop; success
+or an existing `claimed` receipt removes it, as before. Only a newly committed
+pickup refreshes inventory/combat state and publishes a mutation fact.
+
+The existing durable drop claim is not a full business-result receipt: duplicate
+claims still reject as `claimed` (or `gone` after despawn), including a different
+claimant. They are not represented as successful receipt replay. Operation IDs
+remain empty rather than inventing a new client intention protocol.
+
+`WorldDatabase.storage_operation` routes through the same application boundary;
+`transfer_storage` remains a compatible dictionary facade. AccountStorageSqlite
+retains account membership, ownership/provenance, revision, receiving capacity,
+atomic custody transfer and rollback rules. Its new commit outcome excludes the
+existing same-cell Storage no-op, which still succeeds without a revision bump.
+InventoryEndpoint prepares all affected account peers before publishing and
+emits mutation facts only for a new commit. No-op/failure repairs still send
+current views without mutation facts. Storage availability rules are unchanged.
+
+No schema, RPC, Yang policy or item-generation behavior changed. Transactions
+remain synchronous in the current single World; there is no distributed claim
+flow, generic command framework or new persistence worker.
+
 ## Regression evidence
 
 Existing suites protect rollback, ownership and recovery. Their original wallet
@@ -167,6 +196,17 @@ Both clients retain private state, runtime-stat reconciliation and reopen checks
 Smoke (10 Godot fixtures, 78 Web contracts), Web Inventory, Market purchase and
 Exchange orders passed on 2026-10-15 for this slice. No native window was launched.
 
+For the sixth slice, the existing ground_items partial-write/claim cases exercise
+the application boundary and inspect commit/rejection results. The existing
+Storage membership, ownership transfer, capacity, rollback and reopen cases run
+through the dictionary facade, with a focused same-cell result check. State-only
+coverage did not protect against false mutation facts: Web Inventory adds a
+same-cell Storage request without increasing its expected real mutation count;
+PvE requires exactly one pickup mutation for the winning claimant across failed,
+racing and repeated pickup requests. No new test suite was introduced. Smoke
+(10 Godot fixtures and 78 Web contracts), run-pve.ps1 and run-web-inventory.ps1
+passed for this slice on 2026-10-15.
+
 Relevant commands, run sequentially where they share port 18098:
 
 ```powershell
@@ -177,6 +217,7 @@ Relevant commands, run sequentially where they share port 18098:
 & .\tests\run-combat.ps1 -Scene market_race -MarkerPrefix MARKET_RACE
 & .\tests\run-combat.ps1 -Scene exchange_network -MarkerPrefix EXCHANGE_NETWORK
 & .\tests\run-market-recovery.ps1
+& .\tests\run-pve.ps1
 & .\tests\run-web-inventory.ps1
 & .\tests\run-upgrade.ps1
 & .\tests\run-npc.ps1 -Scenario shop
@@ -200,10 +241,10 @@ are recorded separately. Incidental generated import/UID files were removed.
 
 ## Remaining Stage 2 work
 
-Pickup/Storage and other remaining economic operations have not
-been migrated into this application boundary. Applying the operation result to those
-domains, versioned inventory/equipment snapshots and broader reconciliation remain
-later reviewable slices. Do not infer distributed C2 admission, durable business
+Stable intention IDs and full durable result receipts for non-market operations,
+versioned inventory/equipment snapshots and broader reconciliation remain later
+reviewable slices. Startup/dev grants and checkpoint wallet flows still retain
+their existing entry points. Do not infer distributed C2 admission, durable business
 rejections, session fencing or pending-operation recovery from this change.
 Existing successful receipts remain durable; bounded rejected-command caching
 keeps its current semantics until an explicit persistence change is approved.
