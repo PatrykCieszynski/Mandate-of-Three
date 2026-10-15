@@ -163,6 +163,7 @@ func _compose_web() -> void:
 	web.host = HeadlessUiHost.new()
 	world.add_child(web)
 	web.items.journal.directory = journal_directory
+	web.storage.journal.directory = journal_directory+"-storage"
 	web.setup(world)
 	web.bridge.outgoing.connect(func(json: String) -> void:
 		var message: Dictionary = JSON.parse_string(json)
@@ -234,3 +235,5 @@ func _cleanup_journal() -> void:
 	var context: Dictionary = world.inventory_endpoint.state.economic_context
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory).path_join(("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text()))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory+"-storage").path_join(("%s:%d:%d" % [context.authority_id,context.account_id,context.character_id]).sha256_text()))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(journal_directory+"-storage"))

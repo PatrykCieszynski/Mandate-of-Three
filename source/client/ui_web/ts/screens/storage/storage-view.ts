@@ -26,6 +26,7 @@ import {
   ITEM_SLOT_SIZE,
 } from './storage-model.js';
 import { UiWindow } from '../../core/window/ui-window.js';
+import { UiButton } from '../../core/primitives/ui-button.js';
 import { UiTab } from '../../core/primitives/ui-tab.js';
 import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
@@ -36,6 +37,7 @@ interface StorageOptions {
   onClose: () => void;
   onItemAction?: (event: PointerEvent, item: InventoryItem) => void;
   drag?: ItemDragRuntime;
+  retry?: () => Promise<CommandResult>;
   transfer?: (command: StorageTransferCommand) => Promise<CommandResult>;
   onRegionsChanged?: () => void;
 }
@@ -91,6 +93,37 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
   let pending = false;
   let page = 0,
     disposed = false;
+  const retry = UiButton({
+    label: 'Retry Storage action',
+    onClick: () => void retryIntent(),
+  });
+  shell.contentRoot.append(retry.element);
+  if (options.drag)
+    bindings.push(options.drag.registerControl(retry.element, 'cancel'));
+  async function retryIntent() {
+    if (disposed || pending || !state.recoveryPending || !options.retry) return;
+    pending = true;
+    retry.setDisabled(true);
+    try {
+      const result = await options.retry();
+      if (!disposed)
+        setStatus(
+          result.ok
+            ? 'Storage action confirmed.'
+            : result.error === 'storage_pending'
+              ? 'Storage action not confirmed. Retry to check its result.'
+              : result.error === 'journal_unavailable'
+                ? 'Storage confirmation storage is unavailable. Further transfers are blocked.'
+                : `Transfer rejected: ${result.error ?? 'request'}`,
+        );
+    } catch {
+      if (!disposed)
+        setStatus('Storage action not confirmed. Retry to check its result.');
+    } finally {
+      pending = false;
+      if (!disposed) retry.setDisabled(false);
+    }
+  }
   const tabs = ['I', 'II'].map((label, index) => {
     const tab = UiTab({
       label,
@@ -105,6 +138,12 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
     return tab;
   });
   function render() {
+    retry.element.hidden = !state.recoveryPending || !options.retry;
+    retry.setDisabled(pending);
+    if (state.recoveryPending)
+      setStatus(
+        'Storage action not confirmed. Use Retry; the original transfer is saved.',
+      );
     sourceBindings.forEach((binding) => binding.dispose());
     sourceBindings.length = 0;
     tooltip.hide();
@@ -125,7 +164,7 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
             options.drag.registerSource({
               element: node,
               payload: (event) => {
-                if (pending) return null;
+                if (pending || state.recoveryPending) return null;
                 shell.handle.activate();
                 tooltip.hide();
                 if (event.ctrlKey) {
@@ -172,7 +211,8 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
     item: ItemPresentation,
     position?: Placement,
   ) {
-    if (pending || disposed || !options.transfer) return;
+    if (pending || state.recoveryPending || disposed || !options.transfer)
+      return;
     pending = true;
     setStatus('Transferring…');
     try {
@@ -188,12 +228,19 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
       });
       if (!disposed)
         setStatus(
-          result.ok ? '' : `Transfer rejected: ${result.error ?? 'request'}`,
+          result.ok
+            ? ''
+            : result.error === 'storage_pending'
+              ? 'Storage action not confirmed. Use Retry.'
+              : result.error === 'journal_unavailable'
+                ? 'Storage confirmation storage is unavailable. Further transfers are blocked.'
+                : `Transfer rejected: ${result.error ?? 'request'}`,
         );
     } catch (error) {
       if (!disposed) setStatus(`Transfer failed: ${errorMessage(error)}`);
     } finally {
       pending = false;
+      if (!disposed) retry.setDisabled(false);
     }
   }
   function receiveFromInventory(item: ItemPresentation, position?: Placement) {
@@ -224,6 +271,7 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
           const valid =
             preview.valid &&
             !pending &&
+            !state.recoveryPending &&
             !!options.transfer &&
             preview.data?.subject.container !== 'equipment';
           if (!valid) preview.visual?.element.classList.add('invalid');
@@ -248,7 +296,14 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
     setStatus,
     receiveFromInventory,
     tryQuickDeposit(item: ItemPresentation): Promise<void> | null {
-      if (root.hidden || pending || disposed || !options.transfer) return null;
+      if (
+        root.hidden ||
+        pending ||
+        state.recoveryPending ||
+        disposed ||
+        !options.transfer
+      )
+        return null;
       return receiveFromInventory(item);
     },
     withdrawToInventory,
@@ -266,6 +321,7 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
       tabs.forEach((tab) => tab.dispose());
       tooltip.dispose();
       grid.dispose();
+      retry.dispose();
     },
   };
 }

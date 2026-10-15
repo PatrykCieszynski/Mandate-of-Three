@@ -176,6 +176,8 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
         }
         finally {
             pending = false;
+            if (!disposed)
+                retryButton.setDisabled(false);
         }
     }
     async function move(item, preview) {
@@ -203,6 +205,8 @@ export function mountInventory(root, { manager, drag, quickDeposit, withdrawItem
         }
         finally {
             pending = false;
+            if (!disposed)
+                retryButton.setDisabled(false);
         }
     }
     if (drag) {
