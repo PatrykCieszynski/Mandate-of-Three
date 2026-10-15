@@ -2,7 +2,8 @@
 
 These are narrow parts of the local Economy architecture work. They harden
 the existing WorldDatabase entry points through `WorldEconomyService`, which
-composes MarketplaceService for Shop/Exchange and handles upgrade orchestration.
+composes MarketplaceService for Shop/Exchange and handles upgrade/NPC purchase
+orchestration.
 This does not complete Stage 2 or introduce a new
 service process, generic database interface, queue or database migration.
 
@@ -84,6 +85,22 @@ not silently promoted to durable economic identity. A repeated stale upgrade
 still returns `stale`, unlike a Shop/Exchange successful receipt replay. Adding
 stable upgrade intention IDs and durable receipts is a later explicit change.
 
+## Fourth slice: NPC Shop purchase
+
+`WorldDatabase.purchase_shop_operation` delegates to WorldEconomyService and
+returns the same local result model; `purchase_shop_offer` remains a dictionary
+compatibility method. Shop3D still authorizes NPC/service/range and resolves the
+catalog on the server. Only `new_commit` triggers its inventory and wallet facts.
+
+ShopStoreSqlite is unchanged: it resolves the offer, checks exact/first-fit bag
+capacity before wallet writes, then commits pending income, price and item
+creation atomically. Wallet RAM is accepted only after successful COMMIT.
+
+NPC purchases have no durable receipts yet. Their operation ID is empty and every
+successful call creates a distinct paid item, even for the same offer. Neither
+the offer ID nor UI transport correlation is treated as durable intention identity.
+This slice does not add retry/idempotency guarantees to that existing behavior.
+
 ## Regression evidence
 
 Existing suites protect rollback, ownership and recovery. Their original wallet
@@ -113,6 +130,12 @@ one wallet mutation fact, selection privacy and range reauthorization. The
 transaction suite passed as a baseline before moving orchestration, then these
 same contracts passed through the new boundary. No new suite was added.
 
+Likewise, `shop_purchase` passed before its orchestration move. Its existing
+rollback, exact-placement, full-bag, pending income and reopen cases remain, with
+focused checks for typed commit/failure results and two distinct paid item UIDs.
+`run-npc.ps1 -Scenario shop` checks two real clients, private snapshots, NPC/range
+authorization and exactly two inventory/wallet facts for two successful purchases.
+
 Relevant commands, run sequentially where they share port 18098:
 
 ```powershell
@@ -124,6 +147,7 @@ Relevant commands, run sequentially where they share port 18098:
 & .\tests\run-combat.ps1 -Scene exchange_network -MarkerPrefix EXCHANGE_NETWORK
 & .\tests\run-market-recovery.ps1
 & .\tests\run-upgrade.ps1
+& .\tests\run-npc.ps1 -Scenario shop
 & .\tests\run-smoke.ps1
 ```
 
@@ -144,7 +168,7 @@ are recorded separately. Incidental generated import/UID files were removed.
 
 ## Remaining Stage 2 work
 
-Pickup/equip, NPC Shop purchase and other remaining economic operations have not
+Pickup/equip and other remaining economic operations have not
 been migrated into this application boundary. Applying the operation result to those
 domains, versioned inventory/equipment snapshots and broader reconciliation remain
 later reviewable slices. Do not infer distributed C2 admission, durable business
