@@ -40,9 +40,12 @@ Branch: `experiment/world3d-spatial-aoi`. **Draft; do not deploy before network 
    invalid viewers and local self are checked.
 2. Existing network tests (especially `spike3d_network`, `pve_network`,
    `shop_network`, `market_network`) still pass across clients.
-3. Add a 2-client **large-map** fixture in follow-up: cross 48/56m boundary,
-   verify spawn/despawn and re-entry weapon state, mob entry/exit, and reconnect
-   no stale entities. Existing 32x32 tests do not exercise AOI boundaries.
+3. Run `tests/aoi_network.tscn` as a three-process integration case
+   (`tests/run-combat.ps1 -Scene aoi_network -MarkerPrefix AOI` on Windows).
+   It teleports one of two **real transport clients** across the AOI boundary
+   and checks roster visibility exit/re-entry and self-visibility.
+   Extend coverage for weapon state, mob entry/exit, and reconnect
+   before merging. Existing 32x32 tests do not exercise AOI boundaries.
 4. Instrument actual outgoing bytes and server tick CPU for comparison to
    the unfiltered baseline; do not confuse client count with entity count.
 5. Evaluate reliable mob snapshot channel and global combat events before
