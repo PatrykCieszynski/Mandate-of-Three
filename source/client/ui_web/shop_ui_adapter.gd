@@ -11,6 +11,8 @@ var _tree: SceneTree
 var _purchase: Dictionary = {}
 var _buy_in_flight := false
 var _disposed := false
+var _last_catalog: Dictionary = {"active":false}
+var _recovery_hidden := false
 
 func attach(endpoint: Shop3D, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree) -> void:
 	_endpoint = endpoint
@@ -20,6 +22,10 @@ func attach(endpoint: Shop3D, dispatcher: UiCommandDispatcher, session: UiComman
 	dispatcher.register_command("shop.open", NpcUiAdapter.valid_service, func(p: Dictionary) -> Dictionary: return await _submit("open", p))
 	dispatcher.register_command("shop.buy", valid_buy, func(p: Dictionary) -> Dictionary: return await _submit("buy", p))
 	dispatcher.register_command("shop.retry", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary: return await retry_purchase())
+	dispatcher.register_command("shop.dismiss_recovery", func(p: Dictionary) -> bool: return p.is_empty(), func(_p: Dictionary) -> Dictionary:
+		_recovery_hidden = true
+		publish(_endpoint.state)
+		return {"ok":true})
 	endpoint.state_changed.connect(publish)
 	endpoint.operation_finished.connect(session.finish)
 	publish(endpoint.state)
@@ -33,7 +39,16 @@ func dispose() -> void:
 func publish(snapshot: Dictionary) -> void:
 	if _disposed: return
 	var view := snapshot.duplicate(true)
-	if view.get("active", false): view["purchasePending"] = not _purchase.is_empty() and bool(_purchase.uncertain)
+	var unresolved := not _purchase.is_empty() and bool(_purchase.uncertain)
+	if view.get("active", false):
+		_last_catalog = snapshot.duplicate(true)
+		_recovery_hidden = false
+	elif unresolved and not _recovery_hidden and _last_catalog.get("active", false):
+		view = _last_catalog.duplicate(true)
+		view.name = "Purchase confirmation"
+		view.offers = [] # Recovery presentation never advertises a usable catalog.
+		view["recoveryOnly"] = true
+	if view.get("active", false): view["purchasePending"] = unresolved
 	_dispatcher.set_domain("shop", view)
 	state_updated.emit(view)
 
@@ -45,8 +60,25 @@ static func valid_buy(p: Dictionary) -> bool:
 
 func retry_purchase() -> Dictionary:
 	if _purchase.is_empty(): return {"ok":false,"error":"no_pending_purchase"}
-	# Retry uses only the adapter-owned original payload, not browser placement.
-	return await _submit("buy", _purchase.payload.duplicate(true))
+	if _buy_in_flight: return {"ok":false,"error":"too_fast"}
+	var id := _session.begin()
+	if id.is_empty(): return _session.closed_result()
+	_buy_in_flight = true
+	_endpoint.request_shop.rpc_id(1, "receipt", "", "", "", -1, id, _purchase.id)
+	var result := await _session.wait(id, _tree)
+	if _disposed: return result
+	_buy_in_flight = false
+	if result.ok:
+		_purchase.clear()
+		publish(_endpoint.state)
+		return result
+	if result.get("error", "") == "unknown_command":
+		# Absence is not economic failure. A retry may execute only through the
+		# original mutation path, which reauthorizes the NPC/service/range.
+		return await _submit("buy", _purchase.payload.duplicate(true))
+	_purchase.uncertain = true
+	publish(_endpoint.state)
+	return {"ok":false,"error":"purchase_pending"}
 
 func _submit(action: String, p: Dictionary) -> Dictionary:
 	if action == "buy":
