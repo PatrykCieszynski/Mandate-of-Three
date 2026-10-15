@@ -181,46 +181,42 @@ func purchase_shop_offer(owner_id: int, shop: ShopDefinition, offer_id: StringNa
 	return result
 
 func upgrade_candidate(owner_id: int, uid: String, revision: int, recipe: UpgradeDefinition) -> Dictionary:
-	if db == null: return {"ok":false,"error":"storage"}
-	return UpgradeStoreSqlite.new(db).candidate(owner_id,uid,revision,recipe)
+	return _economy().upgrade_candidate(owner_id, uid, revision, recipe)
 
 func storage_snapshot(owner_id: int) -> Dictionary:
 	if db == null: return {"ok":false,"error":"storage"}
 	return AccountStorageSqlite.new(db).snapshot(owner_id)
 
 func market_snapshot(character_id: int) -> Dictionary:
-	return _marketplace().snapshot(character_id)
+	return _economy().market_snapshot(character_id)
 
 signal market_account_changed(account_id: int)
-var _marketplace_service: MarketplaceService
+var _economy_service: WorldEconomyService
 
-func _marketplace() -> MarketplaceService:
-	if _marketplace_service==null:
-		_marketplace_service=MarketplaceService.new(self)
-		_marketplace_service.account_changed.connect(market_account_changed.emit)
-	return _marketplace_service
+func _economy() -> WorldEconomyService:
+	if _economy_service == null:
+		_economy_service = WorldEconomyService.new(self)
+		_economy_service.market_account_changed.connect(market_account_changed.emit)
+	return _economy_service
 
 func market_operation(character_id: int, action: String, payload: Dictionary) -> EconomyOperationResult:
-	return _marketplace().execute(character_id, action, payload)
+	return _economy().market_operation(character_id, action, payload)
 
 func market_command(character_id: int, action: String, payload: Dictionary) -> Dictionary:
 	return market_operation(character_id, action, payload).response()
 
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
-	return _marketplace().query(character_id,action,payload)
+	return _economy().market_query(character_id,action,payload)
 
 func transfer_storage(owner_id: int, uid: String, revision: int, source: String, destination: String, position: int) -> Dictionary:
 	if db == null: return {"ok":false,"error":"storage"}
 	return AccountStorageSqlite.new(db).transfer(owner_id,uid,revision,source,destination,position)
 
+func upgrade_operation(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> EconomyOperationResult:
+	return _economy().upgrade_operation(owner_id, recipe, uid, revision)
+
 func upgrade_item(owner_id: int, recipe: UpgradeDefinition, uid: String, revision: int) -> Dictionary:
-	var account_id := wallet_account_id(owner_id)
-	if db == null or not runtime_wallets.has(account_id): return {"ok":false, "error":"storage"}
-	if recipe == null or not recipe.validation_errors().is_empty(): return {"ok":false, "error":"invalid_definition"}
-	if wallet_available(owner_id) < recipe.yang_cost: return {"ok":false, "error":"funds"}
-	var result: Dictionary = UpgradeStoreSqlite.new(db).upgrade(owner_id,int(runtime_wallets[account_id].pending_currency_delta),recipe,uid,revision)
-	if result.ok: accept_committed_wallet_balance(owner_id,int(result.balance))
-	return result
+	return upgrade_operation(owner_id, recipe, uid, revision).response()
 
 func release_wallet(character_id: int) -> void:
 	var owner_id := wallet_account_id(character_id)
