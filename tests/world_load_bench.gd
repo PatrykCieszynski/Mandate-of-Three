@@ -22,6 +22,7 @@ var warmup_seconds := 3.0
 var measurement_seconds := 12.0
 var include_per_peer_encode := false
 var skip_overlap := false
+var light_player := false
 var no_mob_slide := false
 var wide_arena := false
 var ai_period_ms := 0
@@ -50,6 +51,7 @@ func _ready() -> void:
 	measurement_seconds = clampf(float(args.get("bench-seconds", "12")), 3.0, 120.0)
 	include_per_peer_encode = str(args.get("bench-encode-per-peer", "0")) == "1"
 	skip_overlap = str(args.get("bench-no-overlap", "0")) == "1"
+	light_player = str(args.get("bench-light-player", "0")) == "1"
 	no_mob_slide = str(args.get("bench-no-mob-slide", "0")) == "1"
 	wide_arena = str(args.get("bench-wide", "0")) == "1"
 	ai_period_ms = clampi(int(args.get("bench-ai-ms", "0")), 0, 1000)
@@ -73,7 +75,7 @@ func _ready() -> void:
 	add_child(host)
 	world = host.get_node("GameWorld") as GameWorld3D
 	world.set("encode_per_peer", include_per_peer_encode)
-	world.call("configure_profile", skip_overlap, no_mob_slide, ai_period_ms)
+	world.call("configure_profile", skip_overlap, no_mob_slide, ai_period_ms, light_player)
 	# The five-second calendar RPC would target synthetic, nonexistent peers.
 	world.world_time.set_process(false)
 	# The test owns the mob tick: CombatEndpoint skips simulation when there is
@@ -198,6 +200,7 @@ func _run_benchmark() -> void:
 		"packs": world.mob_system.packs.size(),
 		"wide_arena": wide_arena,
 		"skip_player_overlaps": skip_overlap,
+		"experimental_light_player": light_player,
 		"no_mob_slide": no_mob_slide,
 		"ai_period_ms": ai_period_ms,
 		"pack_size": pack_size,

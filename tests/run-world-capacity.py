@@ -40,6 +40,7 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--encode-per-peer", action="store_true", help="Encode full roster once per synthetic peer (CPU proxy, not RPC)")
     parser.add_argument("--no-overlap", action="store_true", help="Ablation: return no overlapping mobs (changes collisions)")
+    parser.add_argument("--light-player", action="store_true", help="Experimental 2D swept-capsule player movement on a flat arena; not production terrain parity")
     parser.add_argument("--no-mob-slide", action="store_true", help="Ablation: skip mob move_and_slide (changes gameplay)")
     parser.add_argument("--wide", action="store_true", help="Use a large sparse physics floor instead of the dense arena")
     parser.add_argument("--ai-ms", type=int, default=0, help="Ablation: recompute mob AI every N milliseconds (0=baseline)")
@@ -72,6 +73,7 @@ def main() -> None:
     mode_label = "_".join(
         ["encode" if args.encode_per_peer else "simulation"] +
         (["no_overlap"] if args.no_overlap else []) +
+        (["light_player"] if args.light_player else []) +
         (["no_mob_slide"] if args.no_mob_slide else []) +
         (["wide"] if args.wide else []) +
         ([f"ai_{args.ai_ms}"] if args.ai_ms else []) +
@@ -89,6 +91,7 @@ def main() -> None:
                 f"--bench-warmup={args.warmup}", f"--bench-seconds={args.seconds}",
                 f"--bench-encode-per-peer={int(args.encode_per_peer)}",
                 f"--bench-no-overlap={int(args.no_overlap)}",
+                f"--bench-light-player={int(args.light_player)}",
                 f"--bench-no-mob-slide={int(args.no_mob_slide)}",
                 f"--bench-wide={int(args.wide)}",
                 f"--bench-ai-ms={args.ai_ms}",
@@ -129,7 +132,8 @@ def main() -> None:
                  "logical_cpu_count": os.cpu_count(), "godot": str(args.godot.resolve())},
         "settings": {"warmup": args.warmup, "seconds": args.seconds,
                      "repeats": args.repeats, "encode_per_peer": args.encode_per_peer,
-                     "no_overlap": args.no_overlap, "no_mob_slide": args.no_mob_slide,
+                     "no_overlap": args.no_overlap, "light_player": args.light_player,
+                     "no_mob_slide": args.no_mob_slide,
                      "wide": args.wide, "ai_ms": args.ai_ms, "pack_size": args.pack_size},
         "cases": results,
     }

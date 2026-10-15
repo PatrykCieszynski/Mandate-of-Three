@@ -18,6 +18,7 @@ $taskCases = [ordered]@{
     yang_wallet = 'WALLET_OK'
     mob_packs = 'MOB_PACKS_OK'
     mob_hotpaths = 'MOB_HOTPATHS_OK'
+    player_lightweight_motion = 'PLAYER_LIGHTWEIGHT_MOTION_OK'
     hit_reactions = 'HIT_REACTIONS_OK'
 }
 foreach ($taskCase in $taskCases.GetEnumerator()) {

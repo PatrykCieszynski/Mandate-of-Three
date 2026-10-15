@@ -5,6 +5,7 @@ const BENCH_PLAYERS := preload("res://tests/fixtures/bench_player_actor.gd")
 const BENCH_MOBS := preload("res://tests/fixtures/bench_mob_actor.gd")
 const BENCH_SYSTEM := preload("res://tests/fixtures/bench_mob_system.gd")
 var skip_overlap := false
+var use_light_player := false
 var wide_arena := OS.get_environment("MANDATE_BENCH_WIDE") == "1"
 
 func _init() -> void:
@@ -16,8 +17,9 @@ func _build_arena() -> void:
 	else:
 		super._build_arena()
 
-func configure_profile(skip: bool, no_slide: bool, ai_period_ms: int) -> void:
+func configure_profile(skip: bool, no_slide: bool, ai_period_ms: int, light_player: bool = false) -> void:
 	skip_overlap = skip
+	use_light_player = light_player
 	mob_system.no_slide = no_slide
 	mob_system.ai_period_ms = ai_period_ms
 
@@ -26,6 +28,7 @@ func _add_character(peer_id: int, display_name: String) -> PlayerActor3D:
 	body.name = "Character_%d" % peer_id
 	body.setup(display_name, Color.from_hsv(float(peer_id % 360) / 360.0, 0.55, 0.9))
 	body.skip_overlap = skip_overlap
+	body.lightweight_motion = use_light_player
 	add_child(body)
 	characters[peer_id] = body
 	return body
