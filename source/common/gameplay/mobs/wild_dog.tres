@@ -3,6 +3,11 @@
 [resource]
 script = ExtResource("1")
 mob_key = &"wild_dog"
+category = &"beast"
+family = &"dogs"
+rank = &"normal"
+min_loot_rolls = 1
+max_loot_rolls = 3
 display_name = "Wild Dog"
 max_hp = 120
 attack_damage = 6

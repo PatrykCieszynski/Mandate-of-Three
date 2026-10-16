@@ -35,6 +35,7 @@ func select_for_peer(peer_id: int, instance_id: String, service_id: StringName, 
 	return {"ok":true}
 
 func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName, uid: String, revision: int, now: int, operation_id: String = "") -> Dictionary:
+	if not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
 	if now - _last_upgrade.get(peer_id,-1000) < 100: return {"ok":false,"error":"too_fast"}
 	_last_upgrade[peer_id] = now
 	var auth: Dictionary = authorization(peer_id,instance_id,service_id)

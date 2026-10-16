@@ -9,6 +9,43 @@ func _ready() -> void:
 	var wild: MobDefinition = preload("res://source/common/gameplay/mobs/wild_dog.tres")
 	var feral: MobDefinition = preload("res://source/common/gameplay/mobs/feral_dog.tres")
 	assert(wild.valid() and feral.valid())
+	var profile_keys: Dictionary[StringName, bool] = {}
+	for definition: MobDefinition in [
+		MobDefinitions.FOREST_WOLF, MobDefinitions.DIRE_WOLF, MobDefinitions.WOLF_ALPHA,
+		MobDefinitions.ROAD_BANDIT, MobDefinitions.BANDIT_RAIDER, MobDefinitions.BANDIT_CAPTAIN_3D
+	]:
+		assert(definition.valid() and MobDefinitions.is_registered(definition))
+		assert(not profile_keys.has(definition.mob_key), "Duplicate mob family key")
+		profile_keys[definition.mob_key] = true
+		assert(VisualResolver.paths(definition.visual_id).size() == 3, "Optional local model must have owned placeholder")
+	assert(profile_keys.size() == 6)
+	assert(wild.category == &"beast" and feral.family == &"dogs")
+	var invalid_category := wild.duplicate() as MobDefinition
+	invalid_category.category = &"mystic"
+	assert(not invalid_category.valid())
+	invalid_category.category = &"beast"
+	invalid_category.rank = &"rare"
+	assert(not invalid_category.valid())
+	invalid_category.rank = &"normal"
+	invalid_category.family = &""
+	assert(not invalid_category.valid())
+	invalid_category.family = &"dogs"
+	invalid_category.min_loot_rolls = 0
+	assert(not invalid_category.valid())
+	invalid_category.min_loot_rolls = 4
+	invalid_category.max_loot_rolls = 3
+	assert(not invalid_category.valid())
+	invalid_category.min_loot_rolls = 1
+	invalid_category.max_loot_rolls = 5
+	assert(not invalid_category.valid())
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 777
+	var seen_counts: Dictionary[int,bool] = {}
+	for iteration: int in 120:
+		var count: int = wild.sample_spawn_loot_rolls(rng)
+		assert(count >= 1 and count <= 3)
+		seen_counts[count] = true
+	assert(seen_counts.size() == 3, "Spawn count includes both range ends and the middle")
 	assert(entry(wild,1).valid() and MobDefinitions.is_registered(wild))
 	assert(not MobDefinitions.is_registered(null))
 	var unregistered := wild.duplicate() as MobDefinition
@@ -50,6 +87,7 @@ func _ready() -> void:
 		assert(mob.mob_instance_id == id and mob.pack_instance_id == pack.pack_instance_id and mob.home == pack.anchor)
 		assert(mob.presentation == null and mob.name_label == null and mob.hp_label == null and mob.find_children("*","Label3D",true,false).is_empty(), "World actors contain no presentation labels")
 		assert(mob.definition.valid() and mob.move_speed == mob.definition.move_speed and mob.hp == mob.definition.max_hp)
+		assert(mob.spawn_base_loot_rolls >= mob.definition.min_loot_rolls and mob.spawn_base_loot_rolls <= mob.definition.max_loot_rolls)
 		assert(world.mob_system.horizontal_distance(mob.position,pack.anchor) <= pack.spawn_radius)
 		assert(mob.find_children("*","NavigationAgent3D",true,false).is_empty() and mob.collision_mask == 16)
 		if mob.mob_key == wild.mob_key: wild_count += 1
@@ -95,7 +133,9 @@ func _ready() -> void:
 	member.target_peer = 1
 	hero.position = Vector3(30,0,0)
 	member.position = Vector3(8,0,0)
+	var pre_aggro_loot_rolls: int = member.spawn_base_loot_rolls
 	world.mob_system.tick_mob(member,1.0/60,3)
+	assert(member.spawn_base_loot_rolls == pre_aggro_loot_rolls, "Leash must not reroll loot count")
 	assert(member.ai_state == MobState.Value.RETURN, "Target outside pack leash triggers return")
 	world.characters.clear()
 	for mob: MobActor3D in world.mob_system.mobs.values(): mob.ai_enabled = false
@@ -107,6 +147,7 @@ func _ready() -> void:
 	assert(pack.replacements.size() == 1)
 	world.mob_system.die(member,101)
 	assert(deaths.size() == 1 and deaths[0].mob_id == killed_id and deaths[0].mob_key == member.mob_key, "death fact freezes identity once")
+	assert(deaths[0].spawn_base_loot_rolls == pre_aggro_loot_rolls and deaths[0].category == &"beast" and deaths[0].family == &"dogs", "Death freezes the spawn budget")
 	var captured: Dictionary = deaths[0].contributions.duplicate()
 	member.contributions.clear()
 	assert(deaths[0].contributions == captured and deaths[0].timestamp_ms == 100 and deaths[0].experience_reward == member.definition.experience_reward, "death result survives actor contribution cleanup")
@@ -118,6 +159,7 @@ func _ready() -> void:
 	var fresh := world.mob_system.mobs[fresh_id]
 	assert(not ids.has(fresh_id) and fresh.pack_instance_id == pack.pack_instance_id and fresh.hp == fresh.max_hp)
 	assert(fresh.definition == member.definition and world.mob_system.horizontal_distance(fresh.position,pack.anchor) <= pack.spawn_radius)
+	assert(fresh.spawn_base_loot_rolls >= 1 and fresh.spawn_base_loot_rolls <= 3 and fresh.mob_instance_id != killed_id)
 	for id: int in ids.slice(1): assert(world.mob_system.mobs[id].hp > 0, "Other members survive replacement")
 	world.mob_system.tick(1.0/60,6100)
 	assert(not world.mob_system.mobs.has(killed_id) and pack.actor_ids.size() == 14)

@@ -5,6 +5,11 @@
 script = ExtResource("1")
 reaction_profile = ExtResource("2")
 mob_key = &"metin_hound_elite"
+category = &"beast"
+family = &"dogs"
+rank = &"elite"
+min_loot_rolls = 3
+max_loot_rolls = 4
 display_name = "Metin Elite"
 max_hp = 300
 attack_damage = 12

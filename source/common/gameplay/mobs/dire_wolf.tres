@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="MobDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+mob_key = &"dire_wolf"
+display_name = "Dire Wolf"
+category = &"beast"
+family = &"wolves"
+rank = &"strong"
+max_hp = 220
+attack_damage = 11
+move_speed = 3.2
+visual_id = &"wolf"
+proximity_aggro = false
+min_loot_rolls = 2
+max_loot_rolls = 3

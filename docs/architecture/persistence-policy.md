@@ -56,6 +56,11 @@ Graceful shutdown through the master is cancelled if a checkpoint fails.
 Dirty references remain available for retry after disconnect. 3D process transfer
 is not implemented; future handoff must wait for a successful checkpoint before
 transferring ownership.
+Local same-process public CH transfer now waits for both checkpoints before
+removing the source actor. Failure aborts with the source intact; after fencing,
+a stalled destination load disconnects normally and can recover via relog.
+It does not serialize the full profile merely to change CH. See
+[local transfer](../development/local-channel-transfer.md).
 
 The older full-profile serializer still handles independent legacy data, normal
 session saving and backups. XP ticks/kills do not invoke it. Its existing schedule
