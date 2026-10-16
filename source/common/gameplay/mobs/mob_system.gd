@@ -83,40 +83,32 @@ func aggro_pack(pack_id: int, peer_id: int) -> void:
 		dog.target_peer = peer_id
 		dog.ai_state = MobState.Value.CHASE
 
-## Horn recruits whole idle packs; it never steals combat targets or exceeds cap.
-func taunt_nearby_packs(peer_id: int, range_m: float, mob_limit: int) -> int:
+## Select closest idle mobs without recruiting their entire packs.
+func taunt_nearby_mobs(peer_id: int, range_m: float, mob_limit: int) -> int:
 	if not GameMode.is_world_server() or mob_limit <= 0 or range_m <= 0.0:
 		return 0
 	if _endpoint == null or not _endpoint.is_player_alive(peer_id) or not _world.characters.has(peer_id):
 		return 0
-	var position: Vector3 = _world.characters[peer_id].position
+	var origin: Vector3 = _world.characters[peer_id].position
 	var candidates: Array[Dictionary] = []
-	for pack_id: int in packs:
-		var pack: MobPackRuntime = packs[pack_id]
-		if horizontal_distance(position, pack.anchor) > pack.leash_radius:
+	for mob: MobActor3D in mobs.values():
+		if mob.ai_state not in [MobState.Value.IDLE, MobState.Value.WANDER]:
 			continue
-		var count: int = 0
-		var nearest: float = INF
-		var eligible: bool = true
-		for id: int in pack.actor_ids:
-			var mob: MobActor3D = mobs.get(id)
-			if mob == null or mob.ai_state not in [MobState.Value.IDLE, MobState.Value.WANDER]:
-				eligible = false
-				break
-			count += 1
-			nearest = minf(nearest, horizontal_distance(position, mob.position))
-		if eligible and count > 0 and count <= mob_limit and nearest <= range_m:
-			candidates.append({"id": pack_id, "count": count, "distance": nearest})
+		var pack: MobPackRuntime = packs.get(mob.pack_instance_id)
+		if pack == null or horizontal_distance(origin, pack.anchor) > pack.leash_radius:
+			continue
+		var distance: float = horizontal_distance(origin, mob.position)
+		if distance <= range_m:
+			candidates.append({"id": mob.mob_instance_id, "distance": distance})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if a.distance == b.distance:
 			return a.id < b.id
 		return a.distance < b.distance)
-	var attracted: int = 0
-	for candidate: Dictionary in candidates:
-		if attracted + int(candidate.count) > mob_limit:
-			continue
-		aggro_pack(int(candidate.id), peer_id)
-		attracted += int(candidate.count)
+	var attracted: int = mini(mob_limit, candidates.size())
+	for index: int in attracted:
+		var mob: MobActor3D = mobs[int(candidates[index].id)]
+		mob.target_peer = peer_id
+		mob.ai_state = MobState.Value.CHASE
 	return attracted
 
 static func horizontal_distance(a: Vector3, b: Vector3) -> float:
