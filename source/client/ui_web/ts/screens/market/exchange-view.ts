@@ -40,7 +40,7 @@ export function mountExchange(root: HTMLElement, o: Options) {
   const balances = document.createElement('div'),
     deposit = document.createElement('div');
   deposit.className = 'exchange-deposit';
-  deposit.textContent = 'Drop plain Ore from Inventory or Storage.';
+  deposit.textContent = 'Drop a tradeable material from Inventory or Storage.';
   const depositAmount = input('Deposit amount', '1'),
     depositButton = button('Deposit', () => {
       if (candidate)
@@ -86,14 +86,14 @@ export function mountExchange(root: HTMLElement, o: Options) {
   have.dataset.uiText = want.dataset.uiText = '';
   have.setAttribute('aria-label', 'Have asset');
   want.setAttribute('aria-label', 'Want asset');
-  const quantity = input('Ore quantity', '100'),
+  const quantity = input('Material quantity', '100'),
     numerator = input('Yang numerator', '10'),
-    denominator = input('Ore denominator', '1');
+    denominator = input('Material denominator', '1');
   const orderRow = document.createElement('div');
   orderRow.className = 'exchange-controls';
   const label = document.createElement('p');
   label.textContent =
-    'Limit: Yang numerator / Ore denominator. Whole Ore quantity; no fees.';
+    'Limit: Yang numerator / Material denominator. Whole Material quantity; no fees.';
   orderRow.append(
     have,
     want,
@@ -171,7 +171,7 @@ export function mountExchange(root: HTMLElement, o: Options) {
       status.textContent = r.ok ? 'Committed.' : (r.error ?? 'Rejected');
       if (r.ok && action === 'deposit') {
         candidate = undefined;
-        deposit.textContent = 'Drop plain Ore from Inventory or Storage.';
+        deposit.textContent = 'Drop a tradeable material from Inventory or Storage.';
       }
     } catch {
       if (!disposed)
@@ -231,14 +231,17 @@ export function mountExchange(root: HTMLElement, o: Options) {
       new Option('Yang', 'yang'),
       ...state.assets.map((a) => new Option(a.name, a.asset_id)),
     );
+    const previousWithdrawAsset = withdrawAsset.value;
     withdrawAsset.replaceChildren(
       ...state.assets.map((a) => new Option(a.name, a.asset_id)),
     );
+    if (state.assets.some((a) => a.asset_id === previousWithdrawAsset))
+      withdrawAsset.value = previousWithdrawAsset;
     have.value = hv || 'yang';
     want.value = wv || state.assets[0]?.asset_id || '';
     depth.replaceChildren();
     const title = document.createElement('p');
-    title.textContent = 'Orderbook · Yang / Ore';
+    title.textContent = 'Orderbook · Yang / materials';
     depth.append(title);
     for (const d of state.depth) {
       const p = document.createElement('p');
