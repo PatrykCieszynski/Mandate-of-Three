@@ -15,6 +15,9 @@ runtime execution remain unimplemented; no production backend switch is made.
 The native-only `commit-failure` fixture currently terminates the pinned Windows
 SOCI process on a deferred COMMIT error. This is a blocking driver/adoption gate;
 successful core wallet parity does not waive it.
+Follow-up isolated tests pass with upstream v0.4.2, which already fixes MSVC
+exception ABI configuration. Mandate's v0.4.1 pin remains unchanged pending a
+separate verified dependency adoption.
 
 **Placement:** After the current single-World Economy hardening/SoC and local **MapInstance / CH** lifecycle, and **before** admitting two independent World Processes to the same realm economy. Preparatory contract tests may start earlier, but the plan does not require PostgreSQL for local CH or interrupt [World performance work](world-server-optimization.md). Do not combine it with gameplay/visual changes.
 

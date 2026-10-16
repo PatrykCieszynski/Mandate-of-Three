@@ -107,6 +107,37 @@ No native binary, dependency pin or addon code is changed here. There is no raw
 suite is not reported as an expected success. Core parity and this failure gate
 are separate explicit commands so the successful scenarios remain inspectable.
 
+### Follow-up: existing fix verified in v0.4.2
+
+The user-authorized source investigation fetched `N:/godot-soci` at
+`222cfec77acbdb15fa7cd6f6c97d7064126a947a` (tag v0.4.2). Its CMake already disables
+`GODOTCPP_DISABLE_EXCEPTIONS` on MSVC: merely adding `/EHsc` in v0.4.1 did not undo
+the inherited `_HAS_EXCEPTIONS=0` STL definition. The upstream source explicitly
+identifies that mismatch as breaking SOCI exception ABI/virtual dispatch.
+
+A controlled isolated-project comparison, using fresh owned PostgreSQL clusters:
+
+| Payload | Deferred COMMIT failure / rollback |
+| --- | --- |
+| Unchanged pinned v0.4.1 Windows debug | FAIL, same native process exit |
+| Published v0.4.2 Windows debug | PASS |
+| Published v0.4.2 Windows release | PASS |
+| Local symbol-enabled build of 222cfec | PASS |
+
+The expanded upstream PostgreSQL regression uses a DEFERRABLE foreign key to fail
+COMMIT after a successful update. It also verifies the restored value, a new
+successful transaction, and close/reopen after another failed COMMIT. The published
+debug/release payloads pass; the same regression terminates v0.4.1. The release ZIP
+was verified against GitHub's SHA-256:
+`f597edbb6aae906de676dc50d98a625d0f8c9ba209a5d178a4eab83debc291e4`.
+
+No new C++ patch was required. This narrows the blocker to the old dependency pin,
+not an unresolved failure on current upstream. **Mandate remains pinned to v0.4.1**;
+adoption still requires an explicit dependency update and rerunning the complete
+wallet/readiness/auction regressions on that installed payload. These isolated
+results do not establish whole-game compatibility, Linux behavior or safe retry
+after actual connection loss.
+
 The existing `yang_wallet` smoke remains responsible for authoritative RAM,
 30-second dirty batching, disconnect/relog and shutdown behavior on the current
 SQLite runtime. The new fixture is opt-in; default smoke/CI gains no PostgreSQL

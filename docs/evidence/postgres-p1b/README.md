@@ -38,3 +38,24 @@ Local user-owned combat resource UID warnings are unrelated to this database-onl
 failure; the minimal reproducer uses no combat or wallet operations. No raw logs,
 connection strings, generated passwords, native payloads or fixture databases are
 committed. No dependency pin/binary is patched to hide the failure.
+
+## Source investigation and v0.4.2 comparison
+
+Fetched upstream 222cfec (v0.4.2). It already contains the MSVC exception-ABI
+configuration fix (`GODOTCPP_DISABLE_EXCEPTIONS=OFF`, avoiding inherited
+`_HAS_EXCEPTIONS=0`). No new native fix was necessary.
+
+An isolated minimal Godot project tested the same deferred-COMMIT path on fresh
+owned clusters: pinned v0.4.1 FAIL; official v0.4.2 debug PASS; official v0.4.2
+release PASS; current local symbol-enabled source build PASS. The new upstream
+PostgreSQL regression additionally covers a deferred FK, rollback of earlier
+writes, a successful next transaction, and close/reopen after failed COMMIT. Both
+official v0.4.2 variants pass it; v0.4.1 terminates at COMMIT.
+
+Published archive SHA-256 (matched GitHub release metadata):
+`f597edbb6aae906de676dc50d98a625d0f8c9ba209a5d178a4eab83debc291e4`.
+Local compilation succeeded with symbols, but its reused VS cache emitted an
+LNK4098 CRT-library warning; it is not a production distribution artifact. The
+published-payload A/B is the adoption evidence. No native debugger was installed;
+the ABI diagnosis uses the upstream source fix plus this controlled A/B, not a
+captured C++ exception stack. Mandate's pin and installed files remain unchanged.
