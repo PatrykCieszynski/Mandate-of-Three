@@ -5,6 +5,8 @@ extends RefCounted
 signal account_changed(account_id: int)
 var _runtime: WorldDatabase
 var rejected_commands := MarketRejectedCommands.new()
+# Opt-in measurement hook for the existing load fixture; not a gameplay signal.
+var observe: Callable
 
 func _init(runtime: WorldDatabase) -> void:
 	_runtime = runtime
@@ -29,23 +31,33 @@ func execute(character_id: int, action: String, payload: Dictionary) -> EconomyO
 		return _operation(character_id, action, payload, {"ok":false,"error":"storage"})
 	var result: Dictionary
 	var committed := false
+	var commit_usec := 0
+	var started := Time.get_ticks_usec() if observe.is_valid() else 0
 	if action in ["order", "cancel_order", "deposit", "withdraw"]:
 		var exchange := ExchangeStoreSqlite.new(_runtime.db, rejected_commands)
 		result = _exchange_command(exchange, character_id, action, payload)
 		committed = exchange.committed
+		commit_usec = exchange.commit_usec
 	else:
 		var market := MarketStoreSqlite.new(_runtime.db, rejected_commands)
 		result = _market_command(market, character_id, action, payload)
 		committed = market.committed
+		commit_usec = market.commit_usec
+	if observe.is_valid():
+		observe.call({"kind":"store","action":action,"cost_us":Time.get_ticks_usec()-started,"commit_us":commit_usec,"committed":committed})
 	# A successful receipt replay is a successful response, not another commit.
 	# Do not consume newer pending income or publish another account change.
 	if not result.ok or not committed: return _operation(character_id, action, payload, result)
+	started = Time.get_ticks_usec() if observe.is_valid() else 0
 	if result.has("wallet_states"): _reconcile_wallets(result.wallet_states)
 	var affected: Array = result.get("affected_accounts", [_runtime.wallet_account_id(character_id)])
 	if action == "buy": affected = [int(result.buyer_account), int(result.seller_account)]
 	var operation := _operation(character_id, action, payload, result, true, affected)
+	if observe.is_valid(): observe.call({"kind":"reconcile","action":action,"cost_us":Time.get_ticks_usec()-started})
+	started = Time.get_ticks_usec() if observe.is_valid() else 0
 	for account: int in operation.changed_accounts:
 		account_changed.emit(account)
+	if observe.is_valid(): observe.call({"kind":"account_fanout","action":action,"cost_us":Time.get_ticks_usec()-started})
 	return operation
 
 func _pending_wallet_deltas() -> Dictionary:

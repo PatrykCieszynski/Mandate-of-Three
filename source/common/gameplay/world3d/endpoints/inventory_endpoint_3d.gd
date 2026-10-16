@@ -1,6 +1,7 @@
 class_name InventoryEndpoint3D
 extends Node
 var services: MandateWorldServices
+var observe: Callable # Opt-in load diagnostics; absent during normal gameplay.
 ## UID commands and private inventory snapshots share the authenticated map path.
 
 signal state_changed(state: Dictionary)
@@ -173,10 +174,16 @@ func refresh_authoritative_state(peer_id: int) -> void:
 	# Also used to prepare every account peer before Storage fan-out.
 	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null or _store() == null: return
+	var started := Time.get_ticks_usec() if observe.is_valid() else 0
 	var snapshot: Dictionary = _store().inventory(resource.player_id)
+	if observe.is_valid(): observe.call({"kind":"inventory_snapshot","cost_us":Time.get_ticks_usec()-started})
+	started = Time.get_ticks_usec() if observe.is_valid() else 0
 	var accepted := services.update_runtime_equipment(resource.player_id, snapshot)
+	if observe.is_valid(): observe.call({"kind":"combat_cache","cost_us":Time.get_ticks_usec()-started})
 	if snapshot.get("ok",false) and not accepted: return
+	started = Time.get_ticks_usec() if observe.is_valid() else 0
 	snapshot["storage"] = services.economy().storage_snapshot(resource.player_id)
+	if observe.is_valid(): observe.call({"kind":"storage_snapshot","cost_us":Time.get_ticks_usec()-started})
 	snapshot["economic_context"] = services.economy().economic_context(resource.player_id)
 	_next_projection_version += 1
 	snapshot["projection_version"] = _next_projection_version
@@ -202,14 +209,20 @@ func _inventory_changed(owner_id: int) -> void:
 func _send_state(peer_id: int, error: String = "") -> void:
 	# Publication consumes prepared state; it never refreshes combat stats.
 	if not _authoritative_snapshots.has(peer_id): return
+	var started := Time.get_ticks_usec() if observe.is_valid() else 0
 	var snapshot: Dictionary = _authoritative_snapshots[peer_id].duplicate(true)
 	if error != "": snapshot["error"] = error
 	receive_inventory.rpc_id(peer_id, snapshot)
+	if observe.is_valid(): observe.call({"kind":"inventory_rpc_enqueue","cost_us":Time.get_ticks_usec()-started})
+	started = Time.get_ticks_usec() if observe.is_valid() else 0
 	if _world.upgrade_endpoint != null: _world.upgrade_endpoint.publish(peer_id)
+	if observe.is_valid(): observe.call({"kind":"upgrade_projection","cost_us":Time.get_ticks_usec()-started})
 	if not snapshot.ok: return
+	started = Time.get_ticks_usec() if observe.is_valid() else 0
 	var definition_id: String = public_weapons.get(peer_id, "")
 	for observer: int in _world.characters:
 		receive_weapon.rpc_id(observer, peer_id, definition_id, _weapon_versions[peer_id])
+	if observe.is_valid(): observe.call({"kind":"weapon_rpc_fanout","cost_us":Time.get_ticks_usec()-started})
 
 @rpc("authority", "call_remote", "reliable", 1)
 func receive_inventory(snapshot: Dictionary) -> void:

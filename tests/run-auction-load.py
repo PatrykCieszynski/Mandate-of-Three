@@ -17,6 +17,8 @@ import time
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--godot', required=True, type=Path)
+    parser.add_argument('--without-projection-indexes', action='store_true',
+                        help='A/B baseline: remove only the new read indexes in the disposable fixture')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     logs = root / '.godot/verification/auction-d2'
@@ -42,6 +44,8 @@ def main():
             handles.extend([out, err])
             command = [str(args.godot.resolve()), '--headless', '--path', str(root),
                        f'--mode={mode}', 'res://tests/market_load.tscn', f'--test-client={number}']
+            if args.without_projection_indexes:
+                command.append('--without-projection-indexes')
             process = subprocess.Popen(command, cwd=root, env=env, stdout=out, stderr=err,
                                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
             processes.append((role, process))

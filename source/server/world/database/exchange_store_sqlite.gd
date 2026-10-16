@@ -5,6 +5,8 @@ var db: SQLite
 var _transaction: EconomyCommandSqlite
 var committed: bool:
 	get: return _transaction.committed
+var commit_usec: int:
+	get: return _transaction.commit_usec
 var rejected: MarketRejectedCommands:
 	get: return _transaction.rejected
 func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:

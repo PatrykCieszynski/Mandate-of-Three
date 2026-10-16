@@ -10,6 +10,9 @@ var _kind := ""
 var _request := ""
 var cached: Dictionary = {}
 var committed := false
+# Last native COMMIT wall time, separate from validation/receipt work. Diagnostic
+# only; never included in receipts or used to decide transaction success.
+var commit_usec := 0
 var rejected: MarketRejectedCommands
 func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
 	db = database
@@ -21,6 +24,7 @@ func rollback(error: String) -> Dictionary:
 
 func begin(character_id: int, command_id: String, kind: String, args: Array) -> bool:
 	committed = false
+	commit_usec = 0
 	cached = {}
 	var valid_command := not command_id.is_empty() and command_id.length()<=96
 	for character: String in command_id:
@@ -66,7 +70,10 @@ func commit(result: Dictionary) -> Dictionary:
 	result["item_state"] = preload("res://source/server/world/database/item_state_revision_sqlite.gd").read(db,_character_id)
 	if result.item_state.is_empty(): return rollback("storage")
 	if not db.query_with_bindings("INSERT INTO market_commands(account_id,command_id,kind,request_json,result_json) VALUES(?,?,?,?,?);",[account_id,_command,_kind,_request,_encode_result(result)]): return rollback("storage")
-	if not db.query("COMMIT;"): return rollback("storage")
+	var started := Time.get_ticks_usec()
+	var success := db.query("COMMIT;")
+	commit_usec = Time.get_ticks_usec() - started
+	if not success: return rollback("storage")
 	committed = true
 	return result
 

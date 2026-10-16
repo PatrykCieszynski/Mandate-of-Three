@@ -327,3 +327,10 @@ facts, atomic revision rollback, reservation-only changes, migration/retry and
 int64 receipts. The existing Yang network flow also rejects stale durable state
 with newer delivery, stale same-revision display and wrong account scope. These
 are contract tests; no new suite, pixel baseline or exact timing assertion is added.
+
+The optional auction load runner also records economic COMMIT, projection and
+RPC enqueue stage costs. `--without-projection-indexes` selects an A/B baseline
+only in the disposable fixture; run it sequentially with the default indexed
+cohort. Existing `market_custody` verifies additive read-index failure/retry and
+reopen. See [projection budget evidence](economy-projection-budget.md); no timing
+threshold or additional default test suite is introduced.

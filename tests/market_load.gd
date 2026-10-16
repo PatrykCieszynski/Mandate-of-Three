@@ -17,6 +17,7 @@ var end_to_end: Array[int] = []
 var depths: Array[int] = []
 var errors: Dictionary = {}
 var write_costs: Dictionary = {}
+var economy_costs: Dictionary = {}
 var per_account: Dictionary = {}
 var sources: Array[int] = []
 var source_sequence := 0
@@ -37,6 +38,7 @@ var income := 0
 var wallet_total := 0
 var lifecycle := {}
 var reports: Array[Dictionary] = []
+var snapshot_plans: Dictionary = {}
 var query_replies: Array[Dictionary] = []
 var queries_started := false
 var client_searching := false
@@ -75,6 +77,9 @@ func role(number: int) -> void:
 
 func run_server() -> void:
 	await wait_until(func()->bool:return world.characters.size()==2 and ready_peers.size()==2 and roles.size()==2)
+	server.database._economy()._marketplace.observe = observe_economy
+	world.market_endpoint.observe = observe_economy
+	world.inventory_endpoint.observe = observe_economy
 	for id: int in roles:
 		if roles[id]==1: hero=id
 		else: merchant=id
@@ -88,6 +93,14 @@ func run_server() -> void:
 		var character:=EconomyFixture.create_character(persistence.store,"load%d" % n,{"name":"Load%d" % n,"skin":1})
 		sources.append(persistence.store.resolve_account_id(character))
 	EconomyFixture.prepare(persistence)
+	# A/B only in this owned disposable database, before reader startup. Never a
+	# production feature flag and never applied to runtime/player stores.
+	if OS.get_cmdline_args().has("--without-projection-indexes"):
+		check(db.query("DROP INDEX shop_offers_shop_position; DROP INDEX custody_account_claim_owner;"),"remove fixture indexes for A/B baseline")
+	for label: String in ["offers","claims"]:
+		var sql := "SELECT i.*,c.location,o.offer_id FROM shop_offers o JOIN item_custody c ON c.uid=o.item_uid JOIN item_instances i ON i.uid=o.item_uid WHERE o.shop_id=? ORDER BY o.position;" if label=="offers" else "SELECT i.*,c.location FROM item_custody c JOIN item_instances i ON i.uid=c.uid WHERE c.location='account_claim' AND c.owner_id=? ORDER BY c.uid LIMIT 200;"
+		check(db.query_with_bindings("EXPLAIN QUERY PLAN "+sql,[1 if label=="offers" else 1000]),"snapshot plan observable")
+		snapshot_plans[label] = db.query_result.duplicate(true)
 	check(await persistence.start_auction_queries(),"native readonly startup after migrations")
 	persistence.auction_queries.observation.connect(observe)
 	for id: int in [hero,merchant]:
@@ -131,7 +144,7 @@ func run_server() -> void:
 			check(end_to_end.max()<2001000,"successful deadline includes queue, within 1ms clock precision")
 			check(depths.max()<=AuctionQueryService.MAX_PENDING,"bounded global backlog")
 			if mode in ["combat_search_writes","combat_search_write_burst"]: check(cycles>=3,"listing/edit/buy/replay run concurrently")
-		var result:={"phase":mode,"offered_duration_ms":6000,"measured_duration_ms":(Time.get_ticks_usec()-phase_started)/1000.0,"write_operations":write_summary(),"offers":10000,"simulated_sources":16,"network_clients":2,"physics_hz":Engine.physics_ticks_per_second,"max_fps":Engine.max_fps,"source_limit_per_second":8,"completed_ok":accepted,"errors":errors.duplicate(),"per_account_ok":per_account.duplicate(),"attacks":attacks,"physics_work":summary(costs),"tick_interval":summary(intervals),"e2e":summary(end_to_end),"queue_wait":summary(queue_waits),"worker_roundtrip":summary(worker_times),"native_sql":null,"poll_including_callbacks":summary(poll_costs),"projection":summary(projection_costs),"max_pending":depths.max() if not depths.is_empty() else 0,"economy_cycles":cycles}
+		var result:={"phase":mode,"offered_duration_ms":6000,"measured_duration_ms":(Time.get_ticks_usec()-phase_started)/1000.0,"write_operations":write_summary(),"economy_stages":economy_summary(),"offers":10000,"simulated_sources":16,"network_clients":2,"mobs":world.mob_system.mobs.size(),"physics_hz":Engine.physics_ticks_per_second,"max_fps":Engine.max_fps,"source_limit_per_second":8,"completed_ok":accepted,"errors":errors.duplicate(),"per_account_ok":per_account.duplicate(),"attacks":attacks,"physics_work":summary(costs),"tick_interval":summary(intervals),"e2e":summary(end_to_end),"queue_wait":summary(queue_waits),"worker_roundtrip":summary(worker_times),"native_sql":null,"poll_including_callbacks":summary(poll_costs),"projection":summary(projection_costs),"max_pending":depths.max() if not depths.is_empty() else 0,"economy_cycles":cycles}
 		reports.append(result);print("AUCTION_D2_BENCH ",JSON.stringify(result))
 	# Lifecycle with normal sixteen-source traffic and combat still running.
 	reset_metrics()
@@ -191,7 +204,7 @@ func run_server() -> void:
 	set_phase("DONE")
 	await wait_until(func()->bool:return done_peers.size()==2)
 	check(await persistence.auction_queries.pause(),"clean reader drain before writer close")
-	var output:={"platform":OS.get_name(),"godot":Engine.get_version_info().string,"soci":"0.4.1","phases":reports,"lifecycle":lifecycle,"economy":{"cycles":cycles,"added_income":income,"yang_total":wallet_total+income,"unique_uid":true,"material_total":10,"rollback_and_receipt_replay":true},"native_sql_timing":"unavailable in public v0.4.1 API; worker round-trip is not SQL time"}
+	var output:={"platform":OS.get_name(),"godot":Engine.get_version_info().string,"soci":"0.4.1","projection_indexes":not OS.get_cmdline_args().has("--without-projection-indexes"),"snapshot_plans":snapshot_plans,"phases":reports,"lifecycle":lifecycle,"economy":{"cycles":cycles,"added_income":income,"yang_total":wallet_total+income,"unique_uid":true,"material_total":10,"rollback_and_receipt_replay":true},"native_sql_timing":"unavailable in public v0.4.1 API; worker round-trip is not SQL time"}
 	var file:=FileAccess.open("res://.godot/verification/auction-d2/results.json",FileAccess.WRITE)
 	check(file!=null,"report writable");file.store_string(JSON.stringify(output,"\t"));file.close()
 	print("AUCTION_D2_LIFECYCLE ",JSON.stringify(lifecycle))
@@ -201,7 +214,7 @@ func run_server() -> void:
 	get_tree().quit(1 if failed else 0)
 
 func reset_metrics() -> void:
-	intervals.clear();costs.clear();poll_costs.clear();projection_costs.clear();queue_waits.clear();worker_times.clear();end_to_end.clear();depths.clear();errors.clear();per_account.clear();write_costs.clear()
+	intervals.clear();costs.clear();poll_costs.clear();projection_costs.clear();queue_waits.clear();worker_times.clear();end_to_end.clear();depths.clear();errors.clear();per_account.clear();write_costs.clear();economy_costs.clear()
 	accepted=0;attacks=0;seen_damage=false;previous_tick_us=0;next_burst_ms=0;next_economy_ms=0
 
 func observe(sample: Dictionary) -> void:
@@ -226,6 +239,24 @@ func write_summary() -> Dictionary:
 	for action: String in write_costs:
 		var samples: Array[int]=[];samples.assign(write_costs[action])
 		result[action]=summary(samples)
+	return result
+
+func observe_economy(sample: Dictionary) -> void:
+	if not measuring: return
+	var key: String = sample.kind
+	if not economy_costs.has(key): economy_costs[key] = []
+	economy_costs[key].append(int(sample.cost_us))
+	if key == "store" and sample.committed:
+		if not economy_costs.has("commit"): economy_costs.commit = []
+		economy_costs.commit.append(int(sample.commit_us))
+
+func economy_summary() -> Dictionary:
+	var result := {}
+	for key: String in economy_costs:
+		var samples: Array[int] = []
+		samples.assign(economy_costs[key])
+		result[key] = summary(samples)
+		result[key]["total_ms"] = samples.reduce(func(total: int, cost: int) -> int: return total+cost, 0)/1000.0
 	return result
 
 func measured_mutation(id: int, action: String, payload: Dictionary) -> Dictionary:

@@ -830,9 +830,11 @@ needed for the existing CEF balance view.
 ## Remaining architecture work
 
 Local item/wallet ordering and existing synchronous reconciliation are implemented;
-this is not completion of distributed C4. Bounded invalidation/coalescing and
-loaded World tick measurements remain a separate local pass where evidence
-justifies changes. Stage 3 Shop product contracts and later MapInstance/handoff
+this is not completion of distributed C4. The
+[projection budget pass](economy-projection-budget.md) measures loaded tick tails
+and separates native COMMIT, snapshots and fanout. It adds two targeted read
+indexes instead of changing cache/publication scheduling; larger fanout and
+coalescing remain evidence-driven follow-ups. Stage 3 Shop product contracts and later MapInstance/handoff
 work remain on the roadmap. Extraction still requires admitted-operation barriers,
 fencing, durable earning-batch reconciliation and cross-process cache recovery.
 Existing successful receipts remain durable; rejected-command caching and current
