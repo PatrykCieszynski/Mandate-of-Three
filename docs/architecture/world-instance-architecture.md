@@ -52,6 +52,11 @@ growth for that map is not enabled by this implementation.
 The [initial channel selector](../development/initial-channel-selection.md) now
 exposes an authenticated public catalogue and pre-spawn choice on the existing
 transition screen. Joined characters still cannot switch CH through this API.
+The separate [local channel transfer](../development/local-channel-transfer.md)
+now reserves an already loaded public copy of the same map, runs a cancellable
+server countdown, checkpoints and fences the source, then activates the target
+once. It carries HP/position/combat options and retains economic receipt recovery.
+This remains one-process session state, not cross-host or durable C5 fencing.
 
 - Final player UX: dynamic public CH is preferred; hidden layers are optional, not committed content.
 - Per-map versus realm-wide channel numbering, channel persistence across map transitions, and limits/cooldowns for switching.

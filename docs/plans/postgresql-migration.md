@@ -2,6 +2,11 @@
 
 **Status:** Proposed implementation sequence (2026-10-16), **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
+**P1 progress:** [P1a readiness](../development/postgres-readiness.md) adds a
+disposable Godot/SOCI PostgreSQL probe and a sanitized SQLite schema/source audit.
+Domain backend/schema parity and runtime extraction remain unimplemented; this
+preparatory package does not complete P1 or change the game's SQLite backend.
+
 **Placement:** After the current single-World Economy hardening/SoC and local **MapInstance / CH** lifecycle, and **before** admitting two independent World Processes to the same realm economy. Preparatory contract tests may start earlier, but the plan does not require PostgreSQL for local CH or interrupt [World performance work](world-server-optimization.md). Do not combine it with gameplay/visual changes.
 
 ## Target and non-goals

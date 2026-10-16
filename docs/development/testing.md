@@ -84,12 +84,28 @@ These tests intentionally protect persistence and authority, not prototype visua
 
 ## Optional integration
 
+PostgreSQL P1a is opt-in: `python tools/postgres/run_readiness.py` starts only a
+fresh owned loopback cluster, checks native SOCI transaction/type/independent-session
+contracts and stops/removes its data directory. Install binaries with
+`python tools/postgres/setup.py` or pass `--pg-bin`; pinned SOCI must be installed.
+It does not use port 18098 or player data, and is absent from default smoke/CI.
+See [setup, safety and verification limits](postgres-readiness.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
 changes; do not run all of them after CSS edits. They share port 18098: run
 sequentially. `run-items.ps1 -WithSession` requires normal gateway/master/world
 roles and writes guest fixture accounts; use it for actual session/login changes.
+
+`run-combat.ps1 -Scene local_map_instances -MarkerPrefix LOCAL_MAP` also covers
+local CH transfer: reservation/cancel, combat/movement/drain and checkpoint abort,
+new Inventory/currency mutation gates, real two-client map recreation with retained
+HP/options/XP/Yang and lost-response Inventory journal/receipt recovery across CH.
+The `MANDATE_TEST_RESERVED_ENTRY=1` variant checks that private source copies cannot
+use public handoff. `world_session_admission` covers actual native relog during a
+countdown and bounded post-fence loading failure/relogin. No new default suite or
+timing/balance assertion is added.
 
 `run-first-region.ps1` loads the production graybox scene headlessly and checks
 connected navigation to NPC/pack/Metin sites, safe hub spawns, authored composition

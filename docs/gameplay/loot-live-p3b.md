@@ -1,6 +1,6 @@
 # Loot V2 P3b — first production item drops
 
-**Dependent integration branch:** merges P1 (#45), P2 (#46) and P3a (#48) as prerequisites without changes to main. **Do not merge this before all three foundations** (and rerun CI after their final main merges). The wolf/bandit content PR (#47) can be integrated separately afterward.
+**Integration:** P1 (#45), P2 (#46), P3a (#48) and wolf/bandit content (#47) are integrated in `main`. P3b builds on those foundations; verification runs against their combined production region and the current channel-transfer pickup guard.
 
 ## Active gameplay behavior
 

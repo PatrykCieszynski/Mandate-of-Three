@@ -247,6 +247,47 @@ func run() -> void:
 	manager.maintain_instances()
 	await wait_for(func()->bool:return chooser.ended and server.connected_players.is_empty())
 	assert(server.notifications.back().retired and host.population()==0 and host.get_node("GameWorld").characters.is_empty(),"expired chooser retires session without actor/reservation")
+	# Presentation is deliberately a non-loading client. Seed only its source
+	# actor; the real native session/disconnect and handoff deadline run unchanged.
+	var second_host:=manager.charge_instance(map,2)
+	await wait_for(func()->bool:return second_host.is_node_ready())
+	var source_world: GameWorld3D=host.get_node("GameWorld")
+	source_world.process_mode=Node.PROCESS_MODE_DISABLED
+	second_host.get_node("GameWorld").process_mode=Node.PROCESS_MODE_DISABLED
+	assert(issue("transfer-alpha","alpha",characters[0],21))
+	var transferring:=connect_client("transfer-alpha")
+	await wait_for(func()->bool:return not transferring.get_node("Instances").assignment.is_empty())
+	var transfer_peer:=transferring.multiplayer_api.get_unique_id()
+	host.awaiting_peers.erase(transfer_peer);host.connected_peers.append(transfer_peer)
+	source_world._add_character(transfer_peer,"Transfer")
+	assert(manager.transfers.start(transfer_peer,2).ok)
+	assert(second_host.awaiting_peers.has(transfer_peer))
+	assert(issue("transfer-replacement","alpha",characters[0],21))
+	var transfer_replacement:=connect_client("transfer-replacement")
+	await wait_for(func()->bool:return transferring.ended and not transfer_replacement.get_node("Instances").assignment.is_empty())
+	var transfer_new_peer:=transfer_replacement.multiplayer_api.get_unique_id()
+	assert(not manager.transfers.attempts.has(transfer_peer) and not second_host.awaiting_peers.has(transfer_peer),"native relog releases old countdown and reservation")
+	server._on_peer_disconnected(transfer_peer)
+	assert(server.connected_players.has(transfer_new_peer) and host.awaiting_peers.has(transfer_new_peer),"late source disconnect cannot remove replacement assignment")
+	host.awaiting_peers.erase(transfer_new_peer);host.connected_peers.append(transfer_new_peer)
+	source_world._add_character(transfer_new_peer,"Replacement")
+	player=server.connected_players[transfer_new_peer]
+	assert(database.load_wallet(player.player_id) and database.add_yang(player.player_id,11))
+	final_yang=database.wallet_balance(player.player_id)
+	assert(manager.transfers.start(transfer_new_peer,2).ok)
+	manager.transfers.tick(Time.get_ticks_msec()+6000)
+	assert(manager.transfers.snapshot(transfer_new_peer).phase=="loading" and source_world.characters.is_empty(),"post-fence loading has no source actor")
+	assert(not manager.transfers.cancel(transfer_new_peer,manager.transfers.snapshot(transfer_new_peer).attempt,manager.transfers.snapshot(transfer_new_peer).epoch).ok,"post-fence cancel cannot restore source")
+	second_host.awaiting_peers[transfer_new_peer].expires_at_ms=Time.get_ticks_msec()-1
+	manager.maintain_instances()
+	await wait_for(func()->bool:return transfer_replacement.ended and server.connected_players.is_empty())
+	assert(host.population()==0 and second_host.population()==0 and not manager.transfers.attempts.has(transfer_new_peer),"stalled handoff disconnect releases target and gate")
+	assert(database.load_wallet(characters[0]) and database.wallet_balance(characters[0])==final_yang,"failed load retains pre-fence checkpoint")
+	assert(issue("transfer-recovery","alpha",characters[0],21))
+	var transfer_recovery:=connect_client("transfer-recovery")
+	await wait_for(func()->bool:return not transfer_recovery.get_node("Instances").assignment.is_empty())
+	server.peer.disconnect_peer(transfer_recovery.multiplayer_api.get_unique_id())
+	await wait_for(func()->bool:return transfer_recovery.ended and server.connected_players.is_empty())
 
 	for client: WireClient in clients:
 		client.peer.close()

@@ -1,0 +1,444 @@
+{
+  "meta": [
+    {
+      "key": "item_state_revision_schema",
+      "value": "2"
+    },
+    {
+      "key": "schema_version",
+      "value": "24"
+    },
+    {
+      "key": "wallet_revision_schema",
+      "value": "2"
+    }
+  ],
+  "objects": [
+    {
+      "name": "account_master_identity",
+      "sql": "CREATE UNIQUE INDEX account_master_identity ON accounts(master_account_id)",
+      "tbl_name": "accounts",
+      "type": "index"
+    },
+    {
+      "name": "affix_item_lookup",
+      "sql": "CREATE INDEX affix_item_lookup ON item_affix_index(uid,stat_id,value)",
+      "tbl_name": "item_affix_index",
+      "type": "index"
+    },
+    {
+      "name": "affix_search",
+      "sql": "CREATE INDEX affix_search ON item_affix_index(stat_id,value,uid)",
+      "tbl_name": "item_affix_index",
+      "type": "index"
+    },
+    {
+      "name": "custody_account_claim_owner",
+      "sql": "CREATE INDEX custody_account_claim_owner ON item_custody(owner_id,uid) WHERE location='account_claim'",
+      "tbl_name": "item_custody",
+      "type": "index"
+    },
+    {
+      "name": "custody_bag_position",
+      "sql": "CREATE UNIQUE INDEX custody_bag_position ON item_custody(owner_id,position) WHERE location='bag'",
+      "tbl_name": "item_custody",
+      "type": "index"
+    },
+    {
+      "name": "custody_equipment_slot",
+      "sql": "CREATE UNIQUE INDEX custody_equipment_slot ON item_custody(owner_id,equipment_slot) WHERE location='equipment'",
+      "tbl_name": "item_custody",
+      "type": "index"
+    },
+    {
+      "name": "custody_offer_identity",
+      "sql": "CREATE UNIQUE INDEX custody_offer_identity ON item_custody(offer_id) WHERE offer_id IS NOT NULL",
+      "tbl_name": "item_custody",
+      "type": "index"
+    },
+    {
+      "name": "custody_shop_position",
+      "sql": "CREATE UNIQUE INDEX custody_shop_position ON item_custody(container_id,position) WHERE location='shop_escrow'",
+      "tbl_name": "item_custody",
+      "type": "index"
+    },
+    {
+      "name": "custody_storage_position",
+      "sql": "CREATE UNIQUE INDEX custody_storage_position ON item_custody(owner_id,position) WHERE location='account_storage'",
+      "tbl_name": "item_custody",
+      "type": "index"
+    },
+    {
+      "name": "exchange_account",
+      "sql": "CREATE INDEX exchange_account ON exchange_orders(account_id,status,sequence)",
+      "tbl_name": "exchange_orders",
+      "type": "index"
+    },
+    {
+      "name": "exchange_pair",
+      "sql": "CREATE INDEX exchange_pair ON exchange_orders(base_asset,quote_asset,status,side,sequence)",
+      "tbl_name": "exchange_orders",
+      "type": "index"
+    },
+    {
+      "name": "idx_guild_log_guild_time",
+      "sql": "CREATE INDEX idx_guild_log_guild_time ON guild_log(guild_id, log_id DESC)",
+      "tbl_name": "guild_log",
+      "type": "index"
+    },
+    {
+      "name": "idx_guild_members_pk",
+      "sql": "CREATE UNIQUE INDEX idx_guild_members_pk ON guild_members(guild_id, player_id)",
+      "tbl_name": "guild_members",
+      "type": "index"
+    },
+    {
+      "name": "idx_guilds_name",
+      "sql": "CREATE UNIQUE INDEX idx_guilds_name ON guilds(guild_name)",
+      "tbl_name": "guilds",
+      "type": "index"
+    },
+    {
+      "name": "idx_mail_recipient",
+      "sql": "CREATE INDEX idx_mail_recipient ON mail(recipient_id, created_at_ms DESC)",
+      "tbl_name": "mail",
+      "type": "index"
+    },
+    {
+      "name": "idx_mail_state_pk",
+      "sql": "CREATE UNIQUE INDEX idx_mail_state_pk ON mail_state(player_id, mail_id)",
+      "tbl_name": "mail_state",
+      "type": "index"
+    },
+    {
+      "name": "idx_messages_conv_time",
+      "sql": "CREATE INDEX idx_messages_conv_time ON messages(conversation_id, time_ms)",
+      "tbl_name": "messages",
+      "type": "index"
+    },
+    {
+      "name": "idx_messages_pk",
+      "sql": "CREATE UNIQUE INDEX idx_messages_pk ON messages(conversation_id, msg_id)",
+      "tbl_name": "messages",
+      "type": "index"
+    },
+    {
+      "name": "idx_messages_sender_time",
+      "sql": "CREATE INDEX idx_messages_sender_time ON messages(sender_id, time_ms)",
+      "tbl_name": "messages",
+      "type": "index"
+    },
+    {
+      "name": "item_owner",
+      "sql": "CREATE INDEX item_owner ON item_instances(owner_character_id)",
+      "tbl_name": "item_instances",
+      "type": "index"
+    },
+    {
+      "name": "market_item_search",
+      "sql": "CREATE INDEX market_item_search ON item_instances(definition_id,upgrade_level,uid)",
+      "tbl_name": "item_instances",
+      "type": "index"
+    },
+    {
+      "name": "market_price_search",
+      "sql": "CREATE INDEX market_price_search ON shop_offers(price_yang,offer_id)",
+      "tbl_name": "shop_offers",
+      "type": "index"
+    },
+    {
+      "name": "shop_offers_shop_position",
+      "sql": "CREATE INDEX shop_offers_shop_position ON shop_offers(shop_id,position)",
+      "tbl_name": "shop_offers",
+      "type": "index"
+    },
+    {
+      "name": "account_item_revisions",
+      "sql": "CREATE TABLE account_item_revisions(account_name TEXT PRIMARY KEY NOT NULL,revision INTEGER NOT NULL CHECK(typeof(revision)='integer' AND revision>=0))",
+      "tbl_name": "account_item_revisions",
+      "type": "table"
+    },
+    {
+      "name": "account_shop_revenue",
+      "sql": "CREATE TABLE account_shop_revenue(account_id INTEGER PRIMARY KEY REFERENCES accounts(master_account_id),yang INTEGER NOT NULL DEFAULT 0 CHECK(typeof(yang)='integer' AND yang>=0))",
+      "tbl_name": "account_shop_revenue",
+      "type": "table"
+    },
+    {
+      "name": "account_shops",
+      "sql": "CREATE TABLE account_shops (shop_id INTEGER PRIMARY KEY AUTOINCREMENT,account_id INTEGER UNIQUE NOT NULL REFERENCES accounts(master_account_id),display_name TEXT NOT NULL DEFAULT 'My Shop' CHECK(length(display_name) BETWEEN 1 AND 40),status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','paused')),revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0))",
+      "tbl_name": "account_shops",
+      "type": "table"
+    },
+    {
+      "name": "account_wallets",
+      "sql": "CREATE TABLE account_wallets (account_id INTEGER PRIMARY KEY NOT NULL REFERENCES accounts(master_account_id), yang INTEGER NOT NULL DEFAULT 0 CHECK(typeof(yang)='integer' AND yang>=0 AND yang<=9000000000000000), wallet_revision INTEGER NOT NULL DEFAULT 0 CHECK(typeof(wallet_revision)='integer' AND wallet_revision>=0), reserved_yang INTEGER NOT NULL DEFAULT 0 CHECK(typeof(reserved_yang)='integer' AND reserved_yang>=0 AND reserved_yang<=yang))",
+      "tbl_name": "account_wallets",
+      "type": "table"
+    },
+    {
+      "name": "accounts",
+      "sql": "CREATE TABLE accounts (account_name text PRIMARY KEY NOT NULL, master_account_id INTEGER CHECK(master_account_id > 0))",
+      "tbl_name": "accounts",
+      "type": "table"
+    },
+    {
+      "name": "conversations",
+      "sql": "CREATE TABLE conversations (conversation_id text PRIMARY KEY NOT NULL,type text NOT NULL,meta_json text NOT NULL)",
+      "tbl_name": "conversations",
+      "type": "table"
+    },
+    {
+      "name": "exchange_assets",
+      "sql": "CREATE TABLE exchange_assets(account_id INTEGER NOT NULL REFERENCES accounts(master_account_id),asset_id TEXT NOT NULL,free INTEGER NOT NULL DEFAULT 0 CHECK(typeof(free)='integer' AND free>=0),reserved INTEGER NOT NULL DEFAULT 0 CHECK(typeof(reserved)='integer' AND reserved>=0),PRIMARY KEY(account_id,asset_id),CHECK(free+reserved<=9000000000000000))",
+      "tbl_name": "exchange_assets",
+      "type": "table"
+    },
+    {
+      "name": "exchange_fills",
+      "sql": "CREATE TABLE exchange_fills(fill_id INTEGER PRIMARY KEY AUTOINCREMENT,maker_id TEXT NOT NULL REFERENCES exchange_orders(order_id),taker_id TEXT NOT NULL REFERENCES exchange_orders(order_id),base_quantity INTEGER NOT NULL CHECK(typeof(base_quantity)='integer' AND base_quantity>0),yang_amount INTEGER NOT NULL CHECK(typeof(yang_amount)='integer' AND yang_amount>0 AND yang_amount<=9000000000000000))",
+      "tbl_name": "exchange_fills",
+      "type": "table"
+    },
+    {
+      "name": "exchange_orders",
+      "sql": "CREATE TABLE exchange_orders(sequence INTEGER PRIMARY KEY AUTOINCREMENT,order_id TEXT UNIQUE NOT NULL,account_id INTEGER NOT NULL REFERENCES accounts(master_account_id),base_asset TEXT NOT NULL,quote_asset TEXT NOT NULL CHECK(quote_asset='yang'),side TEXT NOT NULL CHECK(side IN ('buy','sell')),quantity INTEGER NOT NULL CHECK(typeof(quantity)='integer' AND quantity>0 AND quantity<=9000000000000000),remaining INTEGER NOT NULL CHECK(typeof(remaining)='integer' AND remaining>=0 AND remaining<=quantity),price_num INTEGER NOT NULL CHECK(typeof(price_num)='integer' AND price_num BETWEEN 1 AND 1000000000),price_den INTEGER NOT NULL CHECK(typeof(price_den)='integer' AND price_den BETWEEN 1 AND 1000000000),reserved_amount INTEGER NOT NULL CHECK(typeof(reserved_amount)='integer' AND reserved_amount>=0 AND reserved_amount<=9000000000000000),received INTEGER NOT NULL DEFAULT 0 CHECK(typeof(received)='integer' AND received>=0 AND received<=9000000000000000),revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),status TEXT NOT NULL CHECK(status IN ('active','filled','cancelled')),CHECK(quantity%price_den=0 AND remaining%price_den=0),CHECK((side='sell' AND reserved_amount=remaining) OR (side='buy' AND reserved_amount=(remaining/price_den)*price_num)),CHECK((status='active' AND remaining>0) OR (status<>'active' AND remaining=0)))",
+      "tbl_name": "exchange_orders",
+      "type": "table"
+    },
+    {
+      "name": "flags",
+      "sql": "CREATE TABLE flags (flag_id INTEGER PRIMARY KEY NOT NULL,owner_guild_id INTEGER NOT NULL,last_capture_ms INTEGER NOT NULL)",
+      "tbl_name": "flags",
+      "type": "table"
+    },
+    {
+      "name": "ground_item_claims",
+      "sql": "CREATE TABLE ground_item_claims (drop_uid TEXT PRIMARY KEY NOT NULL, owner_character_id INTEGER NOT NULL)",
+      "tbl_name": "ground_item_claims",
+      "type": "table"
+    },
+    {
+      "name": "guild_log",
+      "sql": "CREATE TABLE guild_log (log_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,guild_id INTEGER NOT NULL,time_ms INTEGER NOT NULL,event text NOT NULL,actor_name text NOT NULL,target_name text NOT NULL,data_json text NOT NULL)",
+      "tbl_name": "guild_log",
+      "type": "table"
+    },
+    {
+      "name": "guild_members",
+      "sql": "CREATE TABLE guild_members (guild_id INTEGER NOT NULL,player_id INTEGER NOT NULL,rank INTEGER NOT NULL)",
+      "tbl_name": "guild_members",
+      "type": "table"
+    },
+    {
+      "name": "guilds",
+      "sql": "CREATE TABLE guilds (guild_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,guild_name text NOT NULL,leader_id INTEGER NOT NULL,data_json text NOT NULL)",
+      "tbl_name": "guilds",
+      "type": "table"
+    },
+    {
+      "name": "item_affix_index",
+      "sql": "CREATE TABLE item_affix_index(uid TEXT NOT NULL REFERENCES item_instances(uid) ON DELETE CASCADE,ordinal INTEGER NOT NULL,stat_id TEXT NOT NULL,value REAL NOT NULL,PRIMARY KEY(uid,ordinal))",
+      "tbl_name": "item_affix_index",
+      "type": "table"
+    },
+    {
+      "name": "item_custody",
+      "sql": "CREATE TABLE item_custody (uid TEXT PRIMARY KEY NOT NULL,location TEXT NOT NULL CHECK(location IN ('bag','equipment','account_storage','shop_escrow','account_claim')),owner_id INTEGER NOT NULL CHECK(owner_id>0),position INTEGER NOT NULL,equipment_slot TEXT NOT NULL DEFAULT '',container_id INTEGER NOT NULL DEFAULT 0,offer_id TEXT,FOREIGN KEY(uid) REFERENCES item_instances(uid) DEFERRABLE INITIALLY DEFERRED,FOREIGN KEY(offer_id) REFERENCES shop_offers(offer_id) DEFERRABLE INITIALLY DEFERRED,UNIQUE(uid,offer_id,container_id,owner_id,position),UNIQUE(uid,container_id),CHECK((location='bag' AND position BETWEEN 0 AND 179 AND equipment_slot='' AND container_id=0 AND offer_id IS NULL) OR (location='equipment' AND position=-1 AND equipment_slot<>'' AND container_id=0 AND offer_id IS NULL) OR (location='account_storage' AND position BETWEEN 0 AND 269 AND equipment_slot='' AND container_id=0 AND offer_id IS NULL) OR (location='shop_escrow' AND position BETWEEN 0 AND 39 AND equipment_slot='' AND container_id>0 AND offer_id IS NOT NULL) OR (location='account_claim' AND position=-1 AND equipment_slot='' AND container_id=0 AND offer_id IS NULL)))",
+      "tbl_name": "item_custody",
+      "type": "table"
+    },
+    {
+      "name": "item_initializations",
+      "sql": "CREATE TABLE item_initializations (owner_character_id INTEGER PRIMARY KEY NOT NULL)",
+      "tbl_name": "item_initializations",
+      "type": "table"
+    },
+    {
+      "name": "item_instances",
+      "sql": "CREATE TABLE item_instances (uid TEXT PRIMARY KEY NOT NULL,owner_character_id INTEGER NOT NULL CHECK(owner_character_id>0),definition_id TEXT NOT NULL,amount INTEGER NOT NULL CHECK(amount>0),upgrade_level INTEGER NOT NULL DEFAULT 0 CHECK(upgrade_level BETWEEN 0 AND 9),affixes_json TEXT NOT NULL,sockets_json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),FOREIGN KEY(uid) REFERENCES item_custody(uid) DEFERRABLE INITIALLY DEFERRED)",
+      "tbl_name": "item_instances",
+      "type": "table"
+    },
+    {
+      "name": "mail",
+      "sql": "CREATE TABLE mail (mail_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,recipient_id INTEGER NOT NULL,sender_name text NOT NULL,subject text NOT NULL,body text NOT NULL,attachments_json text NOT NULL,created_at_ms INTEGER NOT NULL)",
+      "tbl_name": "mail",
+      "type": "table"
+    },
+    {
+      "name": "mail_state",
+      "sql": "CREATE TABLE mail_state (player_id INTEGER NOT NULL,mail_id INTEGER NOT NULL,read_at_ms INTEGER,claimed_at_ms INTEGER,deleted_at_ms INTEGER)",
+      "tbl_name": "mail_state",
+      "type": "table"
+    },
+    {
+      "name": "market_commands",
+      "sql": "CREATE TABLE market_commands (account_id INTEGER NOT NULL REFERENCES accounts(master_account_id),command_id TEXT NOT NULL,kind TEXT NOT NULL,request_json TEXT NOT NULL,result_json TEXT NOT NULL,PRIMARY KEY(account_id,command_id))",
+      "tbl_name": "market_commands",
+      "type": "table"
+    },
+    {
+      "name": "messages",
+      "sql": "CREATE TABLE messages (conversation_id text NOT NULL,msg_id INTEGER NOT NULL,time_ms INTEGER NOT NULL,sender_id INTEGER NOT NULL,sender_name text NOT NULL,text text NOT NULL)",
+      "tbl_name": "messages",
+      "type": "table"
+    },
+    {
+      "name": "meta",
+      "sql": "CREATE TABLE meta (key text PRIMARY KEY NOT NULL,value text NOT NULL)",
+      "tbl_name": "meta",
+      "type": "table"
+    },
+    {
+      "name": "players",
+      "sql": "CREATE TABLE players (player_id INTEGER PRIMARY KEY NOT NULL,account_name text NOT NULL,display_name text NOT NULL,skin_id INTEGER NOT NULL,level INTEGER NOT NULL,experience INTEGER NOT NULL,available_attributes_points INTEGER NOT NULL,profile_status text NOT NULL,profile_animation text NOT NULL,attributes_json text NOT NULL,inventory_json text NOT NULL,equipment_json text NOT NULL,skills_json text NOT NULL,quests_json text NOT NULL,friends_json text NOT NULL,server_roles_json text NOT NULL,stats_json text NOT NULL,titles_json text NOT NULL,dailies_json text NOT NULL,active_guild_id INTEGER,joined_guild_ids_json text NOT NULL,led_guild_id INTEGER, blocked_ids_json TEXT NOT NULL DEFAULT '[]', mastery_json TEXT NOT NULL DEFAULT '{}', dungeon_lockouts_json TEXT NOT NULL DEFAULT '{}', owned_skins_json TEXT NOT NULL DEFAULT '[]', redeemed_codes_json TEXT NOT NULL DEFAULT '[]', wardstones_json TEXT NOT NULL DEFAULT '[]')",
+      "tbl_name": "players",
+      "type": "table"
+    },
+    {
+      "name": "shop_cells",
+      "sql": "CREATE TABLE shop_cells (shop_id INTEGER NOT NULL,position INTEGER NOT NULL CHECK(position BETWEEN 0 AND 39),item_uid TEXT NOT NULL,PRIMARY KEY(shop_id,position),FOREIGN KEY(item_uid,shop_id) REFERENCES item_custody(uid,container_id) DEFERRABLE INITIALLY DEFERRED)",
+      "tbl_name": "shop_cells",
+      "type": "table"
+    },
+    {
+      "name": "shop_offers",
+      "sql": "CREATE TABLE shop_offers (offer_id TEXT PRIMARY KEY NOT NULL,shop_id INTEGER NOT NULL REFERENCES account_shops(shop_id),account_id INTEGER NOT NULL REFERENCES accounts(master_account_id),item_uid TEXT UNIQUE NOT NULL,position INTEGER NOT NULL CHECK(position BETWEEN 0 AND 39),price_yang INTEGER NOT NULL CHECK(typeof(price_yang)='integer' AND price_yang>0 AND price_yang<=9000000000000000),revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0), offer_only INTEGER NOT NULL DEFAULT 0 CHECK(offer_only IN (0,1)),FOREIGN KEY(item_uid,offer_id,shop_id,account_id,position) REFERENCES item_custody(uid,offer_id,container_id,owner_id,position) DEFERRABLE INITIALLY DEFERRED)",
+      "tbl_name": "shop_offers",
+      "type": "table"
+    },
+    {
+      "name": "account_wallet_revision",
+      "sql": "CREATE TRIGGER account_wallet_revision AFTER UPDATE ON account_wallets WHEN OLD.yang IS NOT NEW.yang OR OLD.reserved_yang IS NOT NEW.reserved_yang BEGIN UPDATE account_wallets SET wallet_revision=wallet_revision+1 WHERE account_id=NEW.account_id; END",
+      "tbl_name": "account_wallets",
+      "type": "trigger"
+    },
+    {
+      "name": "custody_owner_insert",
+      "sql": "CREATE TRIGGER custody_owner_insert BEFORE INSERT ON item_custody BEGIN SELECT CASE WHEN NEW.location IN ('bag','equipment') AND NOT EXISTS(SELECT 1 FROM item_instances i JOIN players p ON p.player_id=NEW.owner_id WHERE i.uid=NEW.uid AND i.owner_character_id=NEW.owner_id) THEN RAISE(ABORT,'custody character owner') WHEN NEW.location IN ('account_storage','shop_escrow','account_claim') AND NOT EXISTS(SELECT 1 FROM accounts WHERE master_account_id=NEW.owner_id) THEN RAISE(ABORT,'custody account owner') WHEN NEW.location='shop_escrow' AND NOT EXISTS(SELECT 1 FROM account_shops WHERE shop_id=NEW.container_id AND account_id=NEW.owner_id) THEN RAISE(ABORT,'custody shop owner') END; END",
+      "tbl_name": "item_custody",
+      "type": "trigger"
+    },
+    {
+      "name": "custody_owner_update",
+      "sql": "CREATE TRIGGER custody_owner_update BEFORE UPDATE ON item_custody BEGIN SELECT CASE WHEN NEW.location IN ('bag','equipment') AND NOT EXISTS(SELECT 1 FROM item_instances i JOIN players p ON p.player_id=NEW.owner_id WHERE i.uid=NEW.uid AND i.owner_character_id=NEW.owner_id) THEN RAISE(ABORT,'custody character owner') WHEN NEW.location IN ('account_storage','shop_escrow','account_claim') AND NOT EXISTS(SELECT 1 FROM accounts WHERE master_account_id=NEW.owner_id) THEN RAISE(ABORT,'custody account owner') WHEN NEW.location='shop_escrow' AND NOT EXISTS(SELECT 1 FROM account_shops WHERE shop_id=NEW.container_id AND account_id=NEW.owner_id) THEN RAISE(ABORT,'custody shop owner') END; END",
+      "tbl_name": "item_custody",
+      "type": "trigger"
+    },
+    {
+      "name": "item_affix_insert",
+      "sql": "CREATE TRIGGER item_affix_insert AFTER INSERT ON item_instances BEGIN INSERT INTO item_affix_index SELECT NEW.uid,j.key,json_extract(j.value,'$.stat'),json_extract(j.value,'$.value') FROM json_each(NEW.affixes_json) j; END",
+      "tbl_name": "item_instances",
+      "type": "trigger"
+    },
+    {
+      "name": "item_affix_update",
+      "sql": "CREATE TRIGGER item_affix_update AFTER UPDATE OF affixes_json ON item_instances BEGIN DELETE FROM item_affix_index WHERE uid=NEW.uid; INSERT INTO item_affix_index SELECT NEW.uid,j.key,json_extract(j.value,'$.stat'),json_extract(j.value,'$.value') FROM json_each(NEW.affixes_json) j; END",
+      "tbl_name": "item_instances",
+      "type": "trigger"
+    },
+    {
+      "name": "item_owner_update",
+      "sql": "CREATE TRIGGER item_owner_update BEFORE UPDATE OF owner_character_id ON item_instances WHEN EXISTS(SELECT 1 FROM item_custody WHERE uid=OLD.uid AND location IN ('bag','equipment') AND owner_id<>NEW.owner_character_id) BEGIN SELECT RAISE(ABORT,'placed item owner'); END",
+      "tbl_name": "item_instances",
+      "type": "trigger"
+    },
+    {
+      "name": "item_revision_item_custody_delete",
+      "sql": "CREATE TRIGGER item_revision_item_custody_delete AFTER DELETE ON item_custody BEGIN INSERT INTO account_item_revisions(account_name,revision) SELECT account_name,1 FROM (SELECT account_name FROM players WHERE OLD.location IN ('bag','equipment') AND player_id=OLD.owner_id UNION SELECT account_name FROM accounts WHERE OLD.location IN ('account_storage','shop_escrow','account_claim') AND master_account_id=OLD.owner_id) WHERE true ON CONFLICT(account_name) DO UPDATE SET revision=revision+1; END",
+      "tbl_name": "item_custody",
+      "type": "trigger"
+    },
+    {
+      "name": "item_revision_item_custody_insert",
+      "sql": "CREATE TRIGGER item_revision_item_custody_insert AFTER INSERT ON item_custody BEGIN INSERT INTO account_item_revisions(account_name,revision) SELECT account_name,1 FROM (SELECT account_name FROM players WHERE NEW.location IN ('bag','equipment') AND player_id=NEW.owner_id UNION SELECT account_name FROM accounts WHERE NEW.location IN ('account_storage','shop_escrow','account_claim') AND master_account_id=NEW.owner_id) WHERE true ON CONFLICT(account_name) DO UPDATE SET revision=revision+1; END",
+      "tbl_name": "item_custody",
+      "type": "trigger"
+    },
+    {
+      "name": "item_revision_item_custody_update",
+      "sql": "CREATE TRIGGER item_revision_item_custody_update AFTER UPDATE ON item_custody WHEN OLD.uid IS NOT NEW.uid OR OLD.location IS NOT NEW.location OR OLD.owner_id IS NOT NEW.owner_id OR OLD.position IS NOT NEW.position OR OLD.equipment_slot IS NOT NEW.equipment_slot OR OLD.container_id IS NOT NEW.container_id OR OLD.offer_id IS NOT NEW.offer_id BEGIN INSERT INTO account_item_revisions(account_name,revision) SELECT account_name,1 FROM (SELECT account_name FROM players WHERE OLD.location IN ('bag','equipment') AND player_id=OLD.owner_id UNION SELECT account_name FROM accounts WHERE OLD.location IN ('account_storage','shop_escrow','account_claim') AND master_account_id=OLD.owner_id UNION SELECT account_name FROM players WHERE NEW.location IN ('bag','equipment') AND player_id=NEW.owner_id UNION SELECT account_name FROM accounts WHERE NEW.location IN ('account_storage','shop_escrow','account_claim') AND master_account_id=NEW.owner_id) WHERE true ON CONFLICT(account_name) DO UPDATE SET revision=revision+1; END",
+      "tbl_name": "item_custody",
+      "type": "trigger"
+    },
+    {
+      "name": "item_revision_item_instances_delete",
+      "sql": "CREATE TRIGGER item_revision_item_instances_delete AFTER DELETE ON item_instances BEGIN INSERT INTO account_item_revisions(account_name,revision) SELECT account_name,1 FROM (SELECT account_name FROM players WHERE player_id=OLD.owner_character_id) WHERE true ON CONFLICT(account_name) DO UPDATE SET revision=revision+1; END",
+      "tbl_name": "item_instances",
+      "type": "trigger"
+    },
+    {
+      "name": "item_revision_item_instances_insert",
+      "sql": "CREATE TRIGGER item_revision_item_instances_insert AFTER INSERT ON item_instances BEGIN INSERT INTO account_item_revisions(account_name,revision) SELECT account_name,1 FROM (SELECT account_name FROM players WHERE player_id=NEW.owner_character_id) WHERE true ON CONFLICT(account_name) DO UPDATE SET revision=revision+1; END",
+      "tbl_name": "item_instances",
+      "type": "trigger"
+    },
+    {
+      "name": "item_revision_item_instances_update",
+      "sql": "CREATE TRIGGER item_revision_item_instances_update AFTER UPDATE ON item_instances WHEN OLD.uid IS NOT NEW.uid OR OLD.owner_character_id IS NOT NEW.owner_character_id OR OLD.definition_id IS NOT NEW.definition_id OR OLD.amount IS NOT NEW.amount OR OLD.upgrade_level IS NOT NEW.upgrade_level OR OLD.affixes_json IS NOT NEW.affixes_json OR OLD.sockets_json IS NOT NEW.sockets_json OR OLD.revision IS NOT NEW.revision BEGIN INSERT INTO account_item_revisions(account_name,revision) SELECT account_name,1 FROM (SELECT account_name FROM players WHERE player_id=OLD.owner_character_id UNION SELECT account_name FROM players WHERE player_id=NEW.owner_character_id) WHERE true ON CONFLICT(account_name) DO UPDATE SET revision=revision+1; END",
+      "tbl_name": "item_instances",
+      "type": "trigger"
+    },
+    {
+      "name": "placements_delete",
+      "sql": "CREATE TRIGGER placements_delete INSTEAD OF DELETE ON item_placements BEGIN DELETE FROM item_custody WHERE uid=OLD.item_uid; END",
+      "tbl_name": "item_placements",
+      "type": "trigger"
+    },
+    {
+      "name": "placements_insert",
+      "sql": "CREATE TRIGGER placements_insert INSTEAD OF INSERT ON item_placements BEGIN INSERT INTO item_custody(uid,location,owner_id,position,equipment_slot) VALUES(NEW.item_uid,NEW.location,NEW.owner_character_id,NEW.bag_position,NEW.equipment_slot); END",
+      "tbl_name": "item_placements",
+      "type": "trigger"
+    },
+    {
+      "name": "placements_update",
+      "sql": "CREATE TRIGGER placements_update INSTEAD OF UPDATE ON item_placements BEGIN UPDATE item_custody SET location=NEW.location,owner_id=NEW.owner_character_id,position=NEW.bag_position,equipment_slot=NEW.equipment_slot WHERE uid=OLD.item_uid; END",
+      "tbl_name": "item_placements",
+      "type": "trigger"
+    },
+    {
+      "name": "storage_delete",
+      "sql": "CREATE TRIGGER storage_delete INSTEAD OF DELETE ON account_storage BEGIN DELETE FROM item_custody WHERE uid=OLD.item_uid; END",
+      "tbl_name": "account_storage",
+      "type": "trigger"
+    },
+    {
+      "name": "storage_insert",
+      "sql": "CREATE TRIGGER storage_insert INSTEAD OF INSERT ON account_storage BEGIN INSERT INTO item_custody(uid,location,owner_id,position) VALUES(NEW.item_uid,'account_storage',(SELECT master_account_id FROM accounts WHERE account_name=NEW.account_name),NEW.position); END",
+      "tbl_name": "account_storage",
+      "type": "trigger"
+    },
+    {
+      "name": "storage_update",
+      "sql": "CREATE TRIGGER storage_update INSTEAD OF UPDATE ON account_storage BEGIN UPDATE item_custody SET owner_id=(SELECT master_account_id FROM accounts WHERE account_name=NEW.account_name),position=NEW.position WHERE uid=OLD.item_uid; END",
+      "tbl_name": "account_storage",
+      "type": "trigger"
+    },
+    {
+      "name": "account_claims",
+      "sql": "CREATE VIEW account_claims AS SELECT uid AS item_uid,owner_id AS account_id FROM item_custody WHERE location='account_claim'",
+      "tbl_name": "account_claims",
+      "type": "view"
+    },
+    {
+      "name": "account_storage",
+      "sql": "CREATE VIEW account_storage AS SELECT c.uid AS item_uid,a.account_name,c.position FROM item_custody c JOIN accounts a ON a.master_account_id=c.owner_id WHERE c.location='account_storage'",
+      "tbl_name": "account_storage",
+      "type": "view"
+    },
+    {
+      "name": "item_placements",
+      "sql": "CREATE VIEW item_placements AS SELECT uid AS item_uid,owner_id AS owner_character_id,location,position AS bag_position,equipment_slot FROM item_custody WHERE location IN ('bag','equipment')",
+      "tbl_name": "item_placements",
+      "type": "view"
+    },
+    {
+      "name": "shop_escrow",
+      "sql": "CREATE VIEW shop_escrow AS SELECT uid AS item_uid,owner_id AS account_id,container_id AS shop_id,position,offer_id FROM item_custody WHERE location='shop_escrow'",
+      "tbl_name": "shop_escrow",
+      "type": "view"
+    }
+  ]
+}

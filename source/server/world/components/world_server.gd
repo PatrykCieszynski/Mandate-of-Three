@@ -524,6 +524,7 @@ func can_join_map_instance(peer_id: int, instance: ServerInstance) -> bool:
 	if peer_id<=1 or player==null or player.player_id<=0 or player.current_peer_id!=peer_id or player_id_to_peer_id.get(player.player_id,0)!=peer_id: return false
 	if instance==null or not instance.awaiting_peers.has(peer_id) or instance.connected_peers.has(peer_id): return false
 	if instance.awaiting_peers[peer_id].get("session")!=player: return false
+	if instance.awaiting_peers[peer_id].has("transfer_attempt") and (instance_manager==null or not instance_manager.transfers.permits_join(peer_id,instance)): return false
 	if instance_manager!=null:
 		if instance_manager.get_instance_server_by_id(str(instance.name))!=instance or instance_manager.find_instance_for_peer(peer_id)!=null: return false
 		if not instance_manager.has_valid_entry(instance,peer_id,player): return false
@@ -531,6 +532,8 @@ func can_join_map_instance(peer_id: int, instance: ServerInstance) -> bool:
 
 
 func dispatch_data_request(peer_id: int, type: StringName, args: Dictionary, instance_id: String = "") -> Dictionary:
+	if instance_manager!=null and instance_manager.transfers.gated(peer_id):
+		return {"ok":false,"error":ERR_BUSY}
 	var instance := request_instance(peer_id, instance_id)
 	if instance == null:
 		return {"ok": false, "error": ERR_UNAUTHORIZED}

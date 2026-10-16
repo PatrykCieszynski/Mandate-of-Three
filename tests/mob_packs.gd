@@ -9,6 +9,16 @@ func _ready() -> void:
 	var wild: MobDefinition = preload("res://source/common/gameplay/mobs/wild_dog.tres")
 	var feral: MobDefinition = preload("res://source/common/gameplay/mobs/feral_dog.tres")
 	assert(wild.valid() and feral.valid())
+	var profile_keys: Dictionary[StringName, bool] = {}
+	for definition: MobDefinition in [
+		MobDefinitions.FOREST_WOLF, MobDefinitions.DIRE_WOLF, MobDefinitions.WOLF_ALPHA,
+		MobDefinitions.ROAD_BANDIT, MobDefinitions.BANDIT_RAIDER, MobDefinitions.BANDIT_CAPTAIN_3D
+	]:
+		assert(definition.valid() and MobDefinitions.is_registered(definition))
+		assert(not profile_keys.has(definition.mob_key), "Duplicate mob family key")
+		profile_keys[definition.mob_key] = true
+		assert(VisualResolver.paths(definition.visual_id).size() == 3, "Optional local model must have owned placeholder")
+	assert(profile_keys.size() == 6)
 	assert(wild.category == &"beast" and feral.family == &"dogs")
 	var invalid_category := wild.duplicate() as MobDefinition
 	invalid_category.category = &"mystic"
