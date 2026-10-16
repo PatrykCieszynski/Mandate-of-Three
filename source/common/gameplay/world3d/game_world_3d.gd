@@ -62,7 +62,7 @@ func _ready() -> void:
 	add_child(currency_endpoint)
 	# Production region enables authored loot; the legacy test arena keeps its
 	# equipment/pickup regression fixture until those scripts are migrated.
-	kill_rewards.setup(services,ground_loot,currency_endpoint,&"first_region" if region != null else &"")
+	kill_rewards.setup(services,ground_loot,currency_endpoint,region.loot_region_key if region != null else &"")
 	mob_system.mob_died.connect(kill_rewards.handle_mob_death)
 	if _server and services.progression()!=null:
 		services.progression().experience_awarded.connect(combat_endpoint.publish_experience)
