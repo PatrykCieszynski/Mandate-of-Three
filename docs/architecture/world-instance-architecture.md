@@ -36,9 +36,9 @@
 
 Initial local baseline: [MapInstance admission and isolation](../development/local-map-instances.md)
 introduced two configured First Region copies in one World, distinct routing/content/
-channel/host/realm labels, isolated simulation and shared SQLite economy. It is a
-finite first slice: it did not add dynamic scaling, a CH selector, active-character handoff,
-multi-realm database allocation or cross-host ownership is implied.
+channel/host/realm labels, isolated simulation and shared SQLite economy. That
+finite baseline did not implement dynamic scaling, a CH selector, active-character
+handoff, multi-realm database allocation or cross-host ownership.
 The local [admission/lifecycle follow-up](../development/instance-admission-lifecycle.md)
 adds bounded pending entries, capacity and safe draining/idle retirement; it does
 not implement automatic channel scaling or active-character transfer.
