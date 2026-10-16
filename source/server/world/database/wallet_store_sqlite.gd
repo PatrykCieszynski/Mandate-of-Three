@@ -100,7 +100,8 @@ func _rollback(reason: String) -> Dictionary:
 	db.query("ROLLBACK;")
 	return {"ok": false, "error": reason}
 
-## Critical account credit. A future item sale must call this inside its own transaction.
+## Critical account credit, including explicit Shop revenue collection. The caller
+## owns the transaction; player sales themselves credit separate Shop revenue.
 func credit_in_transaction(account_id: int, pending_income: int, amount: int) -> Dictionary:
 	if amount <= 0 or pending_income < 0 or amount > MAX_YANG-pending_income: return {"ok":false,"error":"request"}
 	var result := _apply_income(account_id,pending_income+amount)

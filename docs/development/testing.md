@@ -334,3 +334,12 @@ only in the disposable fixture; run it sequentially with the default indexed
 cohort. Existing `market_custody` verifies additive read-index failure/retry and
 reopen. See [projection budget evidence](economy-projection-budget.md); no timing
 threshold or additional default test suite is introduced.
+
+Shop revenue extends existing market_purchase (sale/partial collection, pending
+income, int64 display, atomic SQL faults and replay/reopen), market_network (lost
+response, fresh UI, independent-process journal and unknown-receipt explicit
+retry), market_recovery (sale and partial collection recovered from WAL), and
+market_load (explicit collection plus wallet/revenue conservation). The existing
+headless Chrome market_browser milestone checks exact decimal display and Collect
+/ Retry commands with the normal scale matrix. No new default suite or native CEF
+coverage is implied. See [Shop revenue](shop-revenue.md).

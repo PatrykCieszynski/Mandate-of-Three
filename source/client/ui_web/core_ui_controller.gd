@@ -65,6 +65,8 @@ func setup(game_world: GameWorld3D) -> void:
 	world.market_endpoint.operation_finished.connect(session.finish)
 	world.market_endpoint.query_finished.connect(session.finish)
 	market.attach(world.market_endpoint,dispatcher,session,get_tree())
+	world.inventory_endpoint.state_changed.connect(market.accept_context)
+	market.accept_context(world.inventory_endpoint.state)
 	market_browser.attach(world.market_endpoint,dispatcher,session,get_tree())
 	exchange.attach(world.market_endpoint,dispatcher,session,get_tree())
 	exchange.state_updated.connect(func(_snapshot: Dictionary)->void:
@@ -260,6 +262,7 @@ func _stop(reason: String) -> void:
 	if Client.connection_changed.is_connected(_connection_changed): Client.connection_changed.disconnect(_connection_changed)
 	if ClientState.settings.setting_changed.is_connected(_setting_changed): ClientState.settings.setting_changed.disconnect(_setting_changed)
 	if is_instance_valid(world):
+		if is_instance_valid(world.inventory_endpoint) and world.inventory_endpoint.state_changed.is_connected(market.accept_context): world.inventory_endpoint.state_changed.disconnect(market.accept_context)
 		if is_instance_valid(world.market_endpoint):
 			if world.market_endpoint.operation_finished.is_connected(session.finish): world.market_endpoint.operation_finished.disconnect(session.finish)
 			if world.market_endpoint.query_finished.is_connected(session.finish): world.market_endpoint.query_finished.disconnect(session.finish)

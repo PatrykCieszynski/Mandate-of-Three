@@ -55,6 +55,8 @@ export interface CommandPayloads {
   'market.configure': MarketCommand;
   'market.receipt': MarketCommand;
   'market.close': Record<string,never>;
+  'market.collect_revenue': Record<string,never>;
+  'market.retry_revenue': Record<string,never>;
   'storage.retry': Record<string,never>;
   'inventory.retry': Record<string,never>;
   'upgrade.select': UpgradeCommand;

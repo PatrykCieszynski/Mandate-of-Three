@@ -13,6 +13,14 @@
 
 ## Integration decision
 
+**Implementation update, 2026-10-16:** the table above records the historical
+PR #1 baseline. Capacity-backed withdrawal and Offer Only are now integrated.
+The current Shop revenue slice adds the separate ledger and manual collection;
+the user approved partial collection up to existing wallet capacity, retaining
+all remainder. See [runtime policy and recovery](../development/shop-revenue.md).
+Exchange keeps its own settlement rules. Other sale sources and future cap
+changes remain separate decisions.
+
 Do **not** silently combine these product changes with a mechanical merge of PR #1. First update `shop` with current `main`, re-run its existing tests, then either:
 
 1. Merge the currently verified Marketplace vertical slice and implement these differences in dedicated follow-up PR(s); **or**
@@ -25,7 +33,7 @@ The current recommendation is **option 1 for internal development**: preserve a 
 - Full inventory → shop withdrawal rejected with UID and offer unchanged; free slot → item placed and listing removed together; same item cannot be traded in two places.
 - Removing the fixed price leaves a visible negotiable listing; attempts to buy it for 0 Yang or via the previous fixed-price RPC fail.
 - Sale while seller offline → UID moves exactly once; seller receives claimable income exactly once; no hidden direct-credit duplication.
-- Claimable Yang overflow/partial-claim policy must be decided before implementing the claim action. Preserve the full amount in the ledger whatever UI policy is chosen.
+- The approved local partial claim must retain all remainder in the ledger and count pending income against wallet capacity.
 - Existing buy vs edit vs cancel races, stale revisions and request replay still behave correctly.
 
-**Known open choices:** numerical caps, partial-claim policy, future player-to-player offer system, seller contact UI, and whether a player can actively advertise items while in dungeon/combat. These should not be inferred from the current SQL model.
+**Known remaining choices:** future numerical caps, additional revenue sources, player-to-player offers, seller contact UI, and whether a player can actively advertise items while in dungeon/combat. These should not be inferred from the current SQL model. Local partial collection was approved explicitly on 2026-10-16.

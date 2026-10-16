@@ -2,6 +2,19 @@ extends "res://tests/web_inventory.gd"
 ## Existing real bridge/session harness, new marketplace ownership/reload contracts.
 var rpc_answers: Dictionary={}
 
+func _ready() -> void:
+	var args := OS.get_cmdline_args()
+	var probe := args.find("--revenue-journal-probe")
+	if probe>=0:
+		var journal = preload("res://source/client/ui_web/local_economy_journal.gd").new("shop-revenue-",args[probe+1])
+		var loaded: Dictionary = journal.configure({"authority_id":args[probe+2],"account_id":int(args[probe+3]),"character_id":int(args[probe+4])})
+		if loaded.ok and loaded.entry.get("id","")==args[probe+5] and loaded.entry.payload.is_empty():
+			print("REVENUE_JOURNAL_PROCESS_OK")
+			get_tree().quit()
+		else: get_tree().quit(1)
+		return
+	super._ready()
+
 func verify_query_retries() -> void:
 	await wait_until(func()->bool:return phase_name=="RPC_RETRY")
 	world.market_endpoint.query_finished.connect(func(id: String, answer: Dictionary)->void:
@@ -40,7 +53,7 @@ func verify_query_retries() -> void:
 	check(rpc_answers.review_cursor_first.size()==1 and rpc_answers.review_cursor_first[0].error=="cursor","service cursor rejection uses the same single-response boundary")
 	report.rpc_id(1,{"duplicates_ok":true})
 
-func run_client() -> void:
+func compose_market() -> void:
 	web = CoreUiController.new()
 	web.host = HeadlessUiHost.new()
 	world.add_child(web)
@@ -49,6 +62,9 @@ func run_client() -> void:
 		var message: Dictionary = JSON.parse_string(json)
 		if message.type=="command.result": web_results[str(message.id)] = message.payload)
 	web.bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+
+func run_client() -> void:
+	compose_market()
 	register_ready.rpc_id(1)
 	await verify_query_retries()
 	await wait_until(func() -> bool: return phase_name=="GO")
@@ -59,6 +75,42 @@ func run_client() -> void:
 	check((await command("market.browser.search",params)).error=="cursor","invalid cursor rejected before SQL")
 	web.market_browser.close()
 	check((await web.market.open()).ok,"open own account shop")
+	check(world.market_endpoint.state.claimable_yang=="120","private shop exposes exact collectable income")
+	var original_balance: int = world.currency_endpoint.state.balance
+	world.market_endpoint.operation_finished.disconnect(web.session.finish)
+	var missing := await command("market.collect_revenue",{})
+	world.market_endpoint.operation_finished.connect(web.session.finish)
+	check(missing.error=="revenue_pending","lost collection response retains original stable operation")
+	var saved: Dictionary = web.market.journal.load_pending()
+	check(saved.ok and not saved.entry.is_empty(),"revenue intention persisted before send")
+	check((await web.market.collect_revenue()).error=="revenue_pending","unresolved collection cannot be replaced by a new ID")
+	var context: Dictionary = world.inventory_endpoint.state.economic_context
+	var output: Array = []
+	var status := OS.execute(OS.get_executable_path(),["--headless","--path",ProjectSettings.globalize_path("res://"),"--mode=client","res://tests/market_network.tscn","--revenue-journal-probe",web.market.journal.directory,str(context.authority_id),str(context.account_id),str(context.character_id),saved.entry.id],output)
+	check(status==0 and str(output).contains("REVENUE_JOURNAL_PROCESS_OK"),"independent process restores collection identity")
+	web._stop("teardown")
+	web.queue_free()
+	await get_tree().process_frame
+	compose_market()
+	await wait_until(func()->bool:return web.market.journal.load_pending().entry.is_empty())
+	check((await web.market.open()).ok,"recreated UI restores current shop after read-only receipt discovery")
+	check(world.market_endpoint.state.claimable_yang=="0" and world.currency_endpoint.state.balance==original_balance+120,"recovery does not collect twice")
+	# Crash-before-send: discovery must retain an unknown ID, never collect new income.
+	var unsent := "shop-revenue-"+Crypto.new().generate_random_bytes(16).hex_encode()
+	check(web.market.journal.save_pending(unsent,{}),"persist an intention before simulated pre-send crash")
+	web._stop("teardown")
+	web.queue_free()
+	await get_tree().process_frame
+	var discovery: Array[Dictionary] = []
+	var observed := func(_id: String, answer: Dictionary)->void: discovery.append(answer)
+	world.market_endpoint.operation_finished.connect(observed)
+	compose_market()
+	await wait_until(func()->bool:return discovery.any(func(answer: Dictionary)->bool:return answer.get("error","")=="unknown_command") and not web.market._revenue_busy)
+	world.market_endpoint.operation_finished.disconnect(observed)
+	check(not web.market.journal.load_pending().entry.is_empty() and world.currency_endpoint.state.balance==original_balance+120,"unknown receipt recovery is read-only")
+	check((await command("market.retry_revenue",{})).error=="nothing_to_claim","explicit Retry executes original unknown intention through authoritative path")
+	check(web.market.journal.load_pending().entry.is_empty(),"definitive empty-ledger result releases intention")
+	check((await web.market.open()).ok,"shop remains usable after recovery")
 	var original: Dictionary = world.inventory_endpoint.state.items[0].duplicate(true)
 	check((await command("market.list",{"command_id":"list_a","uid":original.uid,"revision":original.revision,"position":0,"price":100})).ok,"real bridge lists bag item")
 	await wait_until(func() -> bool: return world.market_endpoint.state.offers.size()==1)
@@ -92,6 +144,10 @@ func run_server() -> void:
 	check(db.query("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;"),"network fixture uses production WAL/FULL configuration")
 	check(await server.database.start_auction_queries(),"native reader startup after account migration")
 	for dog: MobActor3D in world.mob_system.mobs.values(): dog.ai_enabled=false
+	check(db.query("BEGIN IMMEDIATE;"),"fixture revenue transaction")
+	for id: int in world.characters:
+		check(MarketStoreSqlite.new(db)._credit_revenue(server.database.wallet_account_id(server.connected_players[id].player_id),120).ok,"seed fixture income")
+	check(db.query("COMMIT;"),"fixture income committed")
 	# Hold only service polling so the accepted request stays pending while RPC
 	# duplicates, malformed payloads and the real peer limiter are exercised.
 	server.database.auction_queries.set_process(false)

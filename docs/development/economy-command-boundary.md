@@ -30,9 +30,11 @@ service process, generic database interface, queue or database migration.
   income or publishing another commit. The requesting endpoint still responds and
   refreshes its current views through its existing request flow.
 
-Public response dictionaries, command IDs, SQL schemas and current product rules
-are unchanged. In particular, this does not implement the accepted future
-claimable-Yang, withdrawal-capacity or Offer Only marketplace changes.
+These initial structural slices kept the then-current product rules. Subsequent
+Marketplace V2 changes implemented capacity-backed withdrawal and Offer Only;
+[Shop revenue](shop-revenue.md) adds the separate ledger and partial collection
+with client retry/recovery. The original slices should not be read as the current
+product backlog.
 
 ## Second slice: explicit operation results and World effects
 
@@ -764,7 +766,10 @@ the exact pending-income prefix consumed by that transaction, not all future RAM
 income. Critical spend/credit, NPC Shop, Upgrade, player purchase and Exchange
 settlement use this state; checkpoint batches return the same form for their
 original dirty deltas. Exchange captures every Yang counterpart after matching;
-player purchases include both buyer and seller. Offline counterparts stay offline
+player purchases originally included both buyer and seller. The later
+[Shop revenue slice](shop-revenue.md) captures only the buyer wallet on sale and
+captures the collector wallet on manual revenue collection; seller revenue is
+settled separately in the same sale transaction. Offline counterparts stay offline
 in RAM. Application services reconcile all loaded affected wallets before account
 change facts are published, with no fallible post-COMMIT SQL read.
 
