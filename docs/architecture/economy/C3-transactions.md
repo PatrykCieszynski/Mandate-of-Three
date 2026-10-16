@@ -49,7 +49,7 @@ Critical ItemInstance ownership/custody, trade, equipment, purchase, escrow, Yan
 
 ## Accepted transaction/recovery invariants — implementation choices deferred
 
-The principles below are architectural requirements, not a rollout plan. Suggested numeric caps, UI behavior and claim-overflow policy remain explicitly unapproved implementation/gameplay options.
+The principles below are architectural requirements, not a rollout plan. Future numeric caps and additional UI/product behavior remain open except for the explicitly approved local partial-collection policy above.
 
 - **Economic transaction boundary:** item pickup/ownership/placement, Shop purchase, exchange/escrow settlement, direct trade, upgrade, and seller-revenue collection each commit all affected monetary and item facts together with the idempotent outcome/receipt. Partial settlement is never exposed. Capacity, custody, prices, revisions and account balances are checked against authoritative state at commit, not inferred from World UI caches.
 - **Crash/timeout reconciliation:** after an ambiguous response, look up the original operation and/or reload authoritative state. Never debit/refund/grant a second time with a fresh ID to "fix" uncertainty. A new World may resume only after the C2/C4/C5 in-flight-operation discovery and state-reconciliation barrier ensures **no unresolved previously admitted command can silently invalidate gameplay being resumed**. A single snapshot alone is insufficient while an old admitted command may later commit.

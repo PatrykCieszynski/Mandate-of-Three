@@ -289,7 +289,7 @@ func edit_offer(character_id: int, command_id: String, offer_id: String, revisio
 	return _transaction.commit({"ok":true,"revision":revision+1})
 
 
-## Same transaction owns both wallets, live offer removal and UID transfer.
+## One transaction owns buyer wallet, seller revenue, live offer removal and UID transfer.
 func purchase(character_id: int, command_id: String, shop_id: int, offer_id: String, revision: int, price: int, pending: Dictionary) -> Dictionary:
 	if not _transaction.begin(character_id,command_id,"buy",[character_id,shop_id,offer_id,revision,price]): return _transaction.cached
 	if not db.query_with_bindings("SELECT o.*,s.status,i.definition_id FROM shop_offers o JOIN account_shops s ON s.shop_id=o.shop_id JOIN item_instances i ON i.uid=o.item_uid WHERE o.offer_id=? AND o.shop_id=?;",[offer_id,shop_id]): return _transaction.rollback("storage")

@@ -766,7 +766,10 @@ the exact pending-income prefix consumed by that transaction, not all future RAM
 income. Critical spend/credit, NPC Shop, Upgrade, player purchase and Exchange
 settlement use this state; checkpoint batches return the same form for their
 original dirty deltas. Exchange captures every Yang counterpart after matching;
-player purchases include both buyer and seller. Offline counterparts stay offline
+player purchases originally included both buyer and seller. The later
+[Shop revenue slice](shop-revenue.md) captures only the buyer wallet on sale and
+captures the collector wallet on manual revenue collection; seller revenue is
+settled separately in the same sale transaction. Offline counterparts stay offline
 in RAM. Application services reconcile all loaded affected wallets before account
 change facts are published, with no fallible post-COMMIT SQL read.
 

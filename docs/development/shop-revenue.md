@@ -41,3 +41,11 @@ journal. Re-entry discovers a receipt without automatic mutation; an unresolved
 intention blocks replacement. Definitive empty/full rejections release it;
 transport/storage failures retain it. Public shop visits/searches expose no
 private revenue. Existing receipts from direct-credit sales are not re-applied.
+
+Validation on 2026-10-16: standard smoke, market custody/purchase/search, Exchange
+orders, two-client Marketplace recovery, process-crash/WAL recovery and auction
+load with collection all passed. Headless Chrome passed the existing ten
+viewport/scale cases plus exact int64 decimal display and Collect/Retry commands.
+The topic also integrates the newer main Marketplace uncertain-buy guard; smoke,
+Marketplace network and browser checks are rerun on that combined tree. No real
+player databases or visible game windows are used.
