@@ -13,6 +13,23 @@ func _ready() -> void:
 	assert(MarketSearchSqlite.ensure_schema(db))
 	var catalog:=MarketSearchSqlite.catalog("miecz")
 	assert(catalog.items.size()==1 and catalog.items[0].definition_id=="iron_sword")
+	# A newly registered tradeable material must be discoverable by both
+	# its item name and stable ID, and selectable by the Auction browser.
+	var materials: Array[ItemDefinition] = [
+		ItemDefinitions.FOREST_RESIN, ItemDefinitions.BEAST_HIDE,
+		ItemDefinitions.WOLF_FANG, ItemDefinitions.BANDIT_TOKEN
+	]
+	for definition: ItemDefinition in materials:
+		var item_id := str(definition.definition_id)
+		for query: String in [definition.item_name, item_id]:
+			var matching := MarketSearchSqlite.catalog(query)
+			assert(matching.ok and matching.items.size() == 1)
+			assert(matching.items[0].definition_id == item_id and matching.items[0].name == definition.item_name)
+		assert(MarketRequestRules.valid_search({"definition_id":item_id, "upgrade_min":0,
+			"upgrade_max":9, "price_min":0, "price_max":WalletStoreSqlite.MAX_YANG,
+			"affix_filters":[], "sort":"price_asc", "cursor":"", "limit":50}))
+	assert(MarketSearchSqlite.catalog("").items.size() == 6, "only tradeable definitions are browsable")
+	assert(MarketSearchSqlite.catalog("dev_trace_sword").items.is_empty(), "untradeable development equipment stays hidden")
 	assert(MarketSearchSqlite.normalize("ŻELAZNY MIECZ")=="zelazny miecz")
 	var search:=MarketSearchSqlite.new(db)
 	var p: Dictionary={"definition_id":"iron_sword","upgrade_min":7,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[{"stat_id":"monster_damage","minimum":10},{"stat_id":"critical_chance","minimum":5}],"sort":"price_asc","cursor":"","limit":50}
