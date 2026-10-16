@@ -1,5 +1,9 @@
 # PostgreSQL readiness (P1a)
 
+The original P1a evidence below used SOCI v0.4.1. The current dependency is
+[v0.4.2](soci-dependency.md), with the readiness fixture rerun on that installed
+payload. Historical evidence is retained with its original version labels.
+
 ## Contract before implementation
 
 This first Stage 6 / P1 package inventories the SQLite boundary and verifies the

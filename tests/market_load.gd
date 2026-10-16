@@ -204,7 +204,8 @@ func run_server() -> void:
 	set_phase("DONE")
 	await wait_until(func()->bool:return done_peers.size()==2)
 	check(await persistence.auction_queries.pause(),"clean reader drain before writer close")
-	var output:={"platform":OS.get_name(),"godot":Engine.get_version_info().string,"soci":"0.4.1","projection_indexes":not OS.get_cmdline_args().has("--without-projection-indexes"),"snapshot_plans":snapshot_plans,"phases":reports,"lifecycle":lifecycle,"economy":{"cycles":cycles,"added_income":income,"yang_total":wallet_total+income,"unique_uid":true,"material_total":10,"rollback_and_receipt_replay":true},"native_sql_timing":"unavailable in public v0.4.1 API; worker round-trip is not SQL time"}
+	var release: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tools/soci/release.json"))
+	var output:={"platform":OS.get_name(),"godot":Engine.get_version_info().string,"soci":str(release.tag).trim_prefix("v"),"projection_indexes":not OS.get_cmdline_args().has("--without-projection-indexes"),"snapshot_plans":snapshot_plans,"phases":reports,"lifecycle":lifecycle,"economy":{"cycles":cycles,"added_income":income,"yang_total":wallet_total+income,"unique_uid":true,"material_total":10,"rollback_and_receipt_replay":true},"native_sql_timing":"not collected by this fixture; worker round-trip is not SQL time"}
 	var file:=FileAccess.open("res://.godot/verification/auction-d2/results.json",FileAccess.WRITE)
 	check(file!=null,"report writable");file.store_string(JSON.stringify(output,"\t"));file.close()
 	print("AUCTION_D2_LIFECYCLE ",JSON.stringify(lifecycle))

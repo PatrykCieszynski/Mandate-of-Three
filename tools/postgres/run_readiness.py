@@ -48,6 +48,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure"), default="readiness")
     args = parser.parse_args()
     extension = ".exe" if os.name == "nt" else ""
     binaries = {name: args.pg_bin.resolve() / (name + extension)
@@ -78,7 +79,8 @@ def main():
     env["PGPASSWORD"] = password
     control_log = directory / "control.log"
     summary = {"result": "FAIL", "cluster": "owned disposable loopback", "port": port,
-               "soci": "v0.4.1", "started_at_unix": int(time.time())}
+               "soci": json.loads((ROOT / "tools/soci/release.json").read_text(encoding="utf-8"))["tag"],
+               "suite": args.suite, "started_at_unix": int(time.time())}
     initialized = False
     try:
         run([binaries["initdb"], "-D", data, "-U", "mandate_bootstrap", "--encoding=UTF8",
@@ -98,11 +100,16 @@ def main():
         env["MANDATE_PG_FIXTURE"] = "owned-local-cluster"
         env["MANDATE_PG_FIXTURE_DIR"] = "res://" + directory.relative_to(ROOT).as_posix()
         env["MANDATE_PG_FIXTURE_CONNECTION"] = f"host=127.0.0.1 port={port} dbname=mandate_readiness user=mandate_fixture password={password} connect_timeout=3"
+        scene, marker = {
+            "readiness": ("postgres_readiness", "POSTGRES_READINESS_OK"),
+            "wallet": ("postgres_wallet", "POSTGRES_WALLET_OK"),
+            "commit-failure": ("postgres_commit_failure", "POSTGRES_COMMIT_FAILURE_OK"),
+        }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
-             "res://tests/postgres_readiness.tscn", "--quit-after", "1200"],
+             f"res://tests/{scene}.tscn", "--quit-after", "1200"],
             env=env, log=directory / "godot.log", timeout=60)
         output = (directory / "godot.log").read_text(encoding="utf-8", errors="replace")
-        if "POSTGRES_READINESS_OK" not in output or any(word in output for word in ("SCRIPT ERROR", "Parse Error", "POSTGRES_READINESS_FAILED")):
+        if marker not in output or any(word in output for word in ("SCRIPT ERROR", "Parse Error", "POSTGRES_READINESS_FAILED")):
             raise RuntimeError("Godot readiness contract failed; see " + str(directory.relative_to(ROOT) / "godot.log"))
         summary["result"] = "PASS"
     finally:
@@ -128,7 +135,7 @@ def main():
         if not stopped:
             raise RuntimeError("Owned cluster stop not confirmed; retained data for inspection")
         print("OWNED_POSTGRES_STOPPED", directory.relative_to(ROOT))
-    print("POSTGRES_READINESS_PASS", directory.relative_to(ROOT))
+    print(marker.removesuffix("_OK") + "_PASS", directory.relative_to(ROOT))
 
 
 if __name__ == "__main__":
