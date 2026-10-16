@@ -8,6 +8,8 @@ var db: SQLite
 var _transaction: EconomyCommandSqlite
 var committed: bool:
 	get: return _transaction.committed
+var commit_usec: int:
+	get: return _transaction.commit_usec
 var rejected: MarketRejectedCommands:
 	get: return _transaction.rejected
 func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
@@ -19,7 +21,7 @@ static func ensure_schema(database: SQLite) -> bool:
 	if not database.query("PRAGMA foreign_keys=ON;"): return false
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
 	var version := int(database.query_result[0].value)
-	if version >= 19: return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database)
+	if version >= 19: return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database) and _ensure_projection_indexes(database)
 	if version < 18 or not database.query("BEGIN IMMEDIATE;"): return false
 	if not database.query("SELECT i.uid FROM item_instances i LEFT JOIN item_placements p ON p.item_uid=i.uid LEFT JOIN account_storage s ON s.item_uid=i.uid WHERE (p.item_uid IS NOT NULL)+(s.item_uid IS NOT NULL)<>1 LIMIT 1;") or not database.query_result.is_empty():
 		database.query("ROLLBACK;")
@@ -67,7 +69,21 @@ static func ensure_schema(database: SQLite) -> bool:
 		if not database.query(statement):
 			database.query("ROLLBACK;")
 			return false
-	return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database)
+	return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database) and _ensure_projection_indexes(database)
+
+## Local account projections must not scan the realm-wide catalogue. Additive,
+## idempotent startup work; no custody/receipt/schema-version semantics change.
+static func _ensure_projection_indexes(database: SQLite) -> bool:
+	if not database.query("BEGIN IMMEDIATE;"): return false
+	for statement: String in [
+		"CREATE INDEX IF NOT EXISTS shop_offers_shop_position ON shop_offers(shop_id,position);",
+		"CREATE INDEX IF NOT EXISTS custody_account_claim_owner ON item_custody(owner_id,uid) WHERE location='account_claim';",
+		"COMMIT;"
+	]:
+		if not database.query(statement):
+			database.query("ROLLBACK;")
+			return false
+	return true
 
 ## Explicit no-price mode without rebuilding the FK-linked shop_offers table.
 static func _ensure_offer_only_column(database: SQLite) -> bool:
