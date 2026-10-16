@@ -46,12 +46,14 @@ static func normalize(text: String) -> String:
 	return result
 static func catalog(query: String) -> Dictionary:
 	if query.length()>80: return {"ok":false,"error":"request"}
-	var result: Array=[]
+	var result: Array = []
+	var needle: String = normalize(query)
 	for definition: ItemDefinition in ItemDefinitions.all_definitions():
 		# Match the Shop's sellable policy; never expose dev/quest-bound items.
 		if not definition.tradeable:
 			continue
-		if normalize(query) in normalize(definition.item_name) or normalize(query) in normalize(str(definition.definition_id)):
+		# Empty query is the browser's full tradeable catalog/selector source.
+		if needle.is_empty() or needle in normalize(definition.item_name) or needle in normalize(str(definition.definition_id)):
 			result.append({"definition_id":str(definition.definition_id),"name":definition.item_name,"icon_id":str(definition.icon_id)})
 	return {"ok":true,"items":result,"stats":STATS.duplicate(true)}
 static func valid(p: Dictionary) -> bool: return MarketRequestRules.valid_search(p)
