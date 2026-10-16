@@ -17,17 +17,25 @@ not a new behavior tree, generic spawning framework, or economy refactor.
    zone nor an aggro/AI mode. Future vs-category damage bonuses may use
    these IDs; **do not implement damage bonuses in this roadmap**.
 3. **Loot sources:** optional global, map/region, category, and exact mob.
-   Sources **add independent rolls**, not implicit overrides. An empty
-   or missing source simply contributes nothing. Rank/level influence
-   tables only through explicitly authored content; there is no hidden
-   multiplier.
+   Sources contribute entries to **one consolidated item pool**, not
+   four independent rolls. For a normal mob, do **one weighted item
+   selection per kill**, including a possible no-drop outcome. An empty
+   or missing source contributes nothing. Rank/level influence only
+   explicitly authored content; there is no hidden multiplier.
 4. **Models from external reference games remain on the developer's
    machine only** as throwaway prototype assets. No such models, textures,
    animations, binary imports, exported packs or their derived data may be
    committed/distributed. Keep client asset lookup via the existing
-   optional `VisualResolver` path; missing local assets fall back to
-   repo-owned placeholders. Use original/licensed visuals for public
-   builds. No borrowed game-specific UI, item or mob nomenclature.
+   optional `VisualResolver` path, **exactly as the current mob model
+   integration works**: `MobDefinition.visual_id` -> curated logical
+   `VisualResolver.MOB_IDS` -> optional local
+   `res://dev_assets/legacy/mobs/<visual_id>/<visual_id>.glb` ->
+   repo-owned `mob_placeholder.tscn` when the local file is absent.
+   The existing optional `res://assets/final/mobs/<visual_id>.tscn`
+   path remains for eventual original/licensed replacements. Add IDs,
+   not binary assets; never preload missing local scenes in content.
+   Use original/licensed visuals for public builds. No borrowed
+   game-specific UI, item or mob nomenclature.
 5. **Refactoring prototype reward systems is authorized where needed.**
    The purpose is real non-weapon and stackable drop support, not a
    rewrite of World wallets, the inventory transaction service or
@@ -85,8 +93,11 @@ to render them.
 
 Use compact authored `LootTable` and `LootEntry` Resources (or equivalent
 explicit structures). Each item entry identifies a canonical
-`ItemDefinition`, **probability in [0,1]**, and a bounded integer
-quantity range. Item quantities must obey the definition's
+`ItemDefinition`, an **absolute item probability budget in basis points
+(0..10000; 10000 = 100%)**, and a bounded integer quantity range.
+Do **not** normalize or dilute entries when additional scopes are
+included: an entry with 100 basis points remains at 1% in every valid
+combined pool. Item quantities must obey the definition's
 `stack_limit`; nonstackable items have quantity one. Equipment affix
 rolls are explicit, optional and defined separately from a material
 quantity; no implicit +1..+9 attack affix on all drops.
@@ -100,25 +111,54 @@ One authoritative resolver combines the following in stable order:
 | Category | Beast hide | `beast` table reused in every region |
 | Mob | Wolf fang | Exact stable `mob_key` table |
 
-Each table performs **independent** item probability rolls. Several
-sources may succeed on one death. There is no automatic replacement,
-multiplication of chances or combinatorial cross-product. For the first
-content pack keep entry counts and per-kill item spawn budget small and
-explicitly validated; verify observed drops per kill rather than silently
-discarding successful rolls. The RNG is supplied/injectable for
-reproducible tests, but owned by World in production.
+**One selection for standard mob item loot:**
+
+1. Gather entries from the four scopes in the deterministic order above.
+   Preserve source metadata for balancing/debugging; duplicates of the same
+   item ID are allowed only as deliberately distinct authored entries.
+2. Add each entry's absolute basis-point weight. The total across **all
+   four scopes combined must not exceed 10000**. Validate authored
+   World region/category/mob combinations before admitting content.
+   Reject an invalid combination explicitly: do not normalize,
+   silently clip, roll partially, or alter existing entry odds.
+3. The unused budget `10000 - sum(weights)` represents **no item
+   drop**. Draw one integer `r` uniformly from `[0,9999]`. Walk
+   entries cumulatively; choose at most one entry, or no drop when
+   `r` is in the remainder. This is one item-selection roll,
+   **not four independent draws**.
+4. If the chosen entry has variable quantity or explicit equipment
+   affixes, those values may require separate *property rolls*;
+   they do not select additional items. Resolve all properties before
+   creating the immutable ground entry. Rerunning a pickup never
+   rerolls item identity/quantity/stats.
+
+Example: global ore 0.5% (50 bp), region resin 3% (300 bp),
+category hide 8% (800 bp), mob fang 2% (200 bp). The combined
+pool produces at most one stack: 0.5% ore, 3% resin, 8% hide,
+2% fang or **86.5% no item**. Adding a fifth entry changes only
+the no-drop remainder, provided the combined sum stays <= 10000.
+
+Dense packs intentionally get at most one ordinary item stack per mob
+kill. Scripted Metin/boss guaranteed rewards remain a **separate explicit
+encounter reward contract**, not a hidden second category roll.
+Do not build a configurable multi-roll/drop-slot framework in this
+phase. The World owns RNG in production; tests inject a seeded RNG
+and verify fixed absolute odds and no unexpected extra drops.
 
 Yang is **one separate reward policy per kill**, not another Yang pile
-from each item-loot layer. Configure its chance/range explicitly, with
-zero supported and documented bounds. XP is still awarded by the existing
-progression path, exactly once. Do not couple item probability to
-wallet/grind delta semantics.
+from each item-loot layer. It may have its own chance/amount roll; the
+**one-roll rule refers specifically to ordinary item selection**, not
+to quantity/affix/Yang randomization. Configure Yang chance/range
+explicitly, with zero supported and documented bounds. XP is still
+awarded by the existing progression path, exactly once. Do not couple
+item probability to wallet/grind delta semantics.
 
 ### Frozen reward and pickup (L2)
 
 Capture/carry the authoritative region/category/mob context when the
 mob dies, before the actor is removed or a new definition can replace
-it. Resolve one immutable list of item outcomes plus one Yang outcome.
+it. Resolve zero or one ordinary item outcome (plus any explicitly
+authored, separate encounter reward) and one Yang outcome.
 Create ground entries representing item type, quantity and optional
 valid item rolls. The eventual `ItemInstance` receives the same stable
 UID and amount on pickup; never reroll the item during a retry.
@@ -167,11 +207,15 @@ extra generic event bus or drop persistence table for this phase.
 - Implement `LootEntry`, `LootTable` and pure/configurable
   `LootResolver` with global/region/category/mob inputs and a
   reproducible RNG in tests.
-- Decide and document a small item-spawn budget before authoring
-  content. Define explicit Yang ranges separate from item tables.
-- Tests: absent and independent tables, 0/1 probabilities, quantity
-  bounds, invalid resource rejection, exactly one reward resolution,
-  deterministic sample output and finite worst-case spawn count.
+- Assemble the **single** weighted pool from four optional scopes,
+  with a fixed 10000 bp budget and implicit no-drop remainder. Validate
+  every authored region + category + mob combination; reject overflow
+  and never silently renormalize chances. Define Yang separately.
+- Tests: absent tables, entry probability 0 and 10000 bp, combined
+  budget exactly 10000 and >10000 rejection, unchanged odds after
+  adding another valid source, deterministic one-roll selection,
+  zero or one item, quantity bounds, invalid resource rejection,
+  and no fourfold roll amplification.
 - **Exit:** testable outcome objects; no production ground
   item behavior change.
 
@@ -196,10 +240,16 @@ extra generic event bus or drop persistence table for this phase.
   canonical definitions; replace some dog packs instead of adding
   actor count blindly. Preserve the existing straight-line chase,
   pass-through obstacles, pack aggro and no mob-to-mob collision.
-- Add a few **region/category/mob** drops on the first map. Keep
-  starter rewards intentionally sparse; use local-only temporary
-  visuals or repo-owned placeholders and verify no third-party models
-  appear in git diff/export.
+- Add a few **region/category/mob** entries to the first region's
+  consolidated pool. Keep starter rewards intentionally sparse;
+  validate the sum of absolute drop probabilities for every authored
+  mob+region combination, and verify the expected no-drop rate.
+- Reuse `VisualResolver` IDs already supported (`wolf`,
+  `wild_boar`, `barbarian_soldier`, etc.) for local prototype GLBs.
+  If more families require new IDs, add only curated ID/path mappings
+  and repo-owned fallbacks; do not commit externally sourced models,
+  their imports or derived textures. Confirm no such binary appears
+  in git diff or distributed exports.
 - Run bounded seeded loot simulations, 10-15 minute play sessions,
   headless packs/network/Metin tests and a frame-time/density check.
   Measure item entities per kill, rare material yield, progression,
