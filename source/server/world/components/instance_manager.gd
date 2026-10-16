@@ -73,22 +73,29 @@ func charge_new_instance(_map_path: String, _instance_id: String, _identity: Dic
 
 ## Every login uses the technical map; no Ekonia tutorial/hub routing.
 func _on_peer_connected(peer_id: int) -> void:
-	var result := reserve_entry(peer_id, default_instance)
+	var result := admit_peer(peer_id, default_instance)
 	if not result.ok:
 		_reject_initial_entry(peer_id, world_server.connected_players.get(peer_id), result.error)
-		return
+
+
+## Called by trusted initial-entry routing only, never directly by an RPC.
+func admit_peer(peer_id: int, resource: InstanceResource, target: ServerInstance = null) -> Dictionary:
+	var result := reserve_entry(peer_id, resource, target)
+	if not result.ok:
+		return result
 	var instance: ServerInstance = result.instance
 	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
 	if result.get("duplicate", false):
-		return
+		return result
 	if instance.is_node_ready():
 		_publish_entry(peer_id, admitted, instance)
 	else:
 		instance.ready.connect(_publish_entry.bind(peer_id, admitted, instance), CONNECT_ONE_SHOT)
+	return result
 
 
 ## One synchronous admission boundary: validate, select, then reserve before yield.
-func reserve_entry(peer_id: int, resource: InstanceResource) -> Dictionary:
+func reserve_entry(peer_id: int, resource: InstanceResource, target: ServerInstance = null) -> Dictionary:
 	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
 	if not _is_current_session(peer_id, admitted):
 		return {"ok": false, "error": "session"}
@@ -96,18 +103,33 @@ func reserve_entry(peer_id: int, resource: InstanceResource) -> Dictionary:
 		return {"ok": false, "error": "entry_expired"}
 	var joined := find_instance_for_peer(peer_id)
 	if joined != null:
+		if target != null and target != joined:
+			return {"ok": false, "error": "already_joined"}
 		return {"ok": true, "instance": joined, "duplicate": true}
 	if resource == null:
 		return {"ok": false, "error": "map_unavailable"}
 	for existing: ServerInstance in _all_instances():
 		if existing.awaiting_peers.has(peer_id):
 			if has_valid_entry(existing, peer_id, admitted):
+				if target != null and target != existing:
+					return {"ok": false, "error": "entry_pending"}
 				return {"ok": true, "instance": existing, "duplicate": true}
 			# A duplicate at the deadline must fail, never renew its lease.
 			if existing.awaiting_peers[peer_id].get("session") == admitted:
 				return {"ok": false, "error": "entry_expired"}
 			existing.awaiting_peers.erase(peer_id)
-	var instance := select_entry_instance(resource)
+	var instance := target
+	if target != null:
+		if not _instances_for(resource).has(target) or not target.instance_resource.use_3d:
+			return {"ok": false, "error": "map_unavailable"}
+		if target.get_parent() != self and loading_instances.get(str(target.name)) != target:
+			return {"ok": false, "error": "map_unavailable"}
+		if not target.allows_character(admitted.player_id):
+			return {"ok": false, "error": "access_denied"}
+		if not target.accepts_reservation():
+			return {"ok": false, "error": "map_unavailable"}
+	else:
+		instance = select_entry_instance(resource)
 	if instance == null:
 		return {"ok": false, "error": "map_unavailable"}
 	instance.awaiting_peers[peer_id] = {
@@ -132,6 +154,7 @@ func has_valid_entry(instance: ServerInstance, peer_id: int, session: PlayerReso
 	return (
 		not instance.is_queued_for_deletion() and _is_current_session(peer_id, session)
 		and pending.get("session") == session
+		and instance.allows_character(session.player_id)
 		and (not instance.instance_resource.use_3d
 			or int(pending.get("expires_at_ms", 0)) > Time.get_ticks_msec())
 	)
@@ -192,7 +215,7 @@ func maintain_instances() -> void:
 		var resource := instance.instance_resource
 		var draining := instance.admission_state == ServerInstance.AdmissionState.DRAINING
 		if not draining:
-			if resource.load_at_startup:
+			if resource.load_at_startup and instance.access_policy == ServerInstance.AccessPolicy.PUBLIC:
 				continue
 			if now - instance.opened_at_ms < int(resource.minimum_lifetime_seconds * 1000.0):
 				continue
@@ -229,7 +252,10 @@ func _instances_for(resource: InstanceResource) -> Array[ServerInstance]:
 func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 	var selected: ServerInstance
 	var population := 2147483647
-	var instances := _instances_for(resource)
+	var instances: Array[ServerInstance] = []
+	for candidate: ServerInstance in _instances_for(resource):
+		if candidate.access_policy == ServerInstance.AccessPolicy.PUBLIC:
+			instances.append(candidate)
 	for instance: ServerInstance in instances:
 		if resource.use_3d and not instance.accepts_reservation():
 			continue
@@ -239,6 +265,23 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 			population=count
 	# Full/draining copies do not trigger speculative creation or an unbounded queue.
 	return charge_instance(resource) if instances.is_empty() else selected
+
+
+## Loaded public routing only. Never use InstanceResource array order as access.
+func find_public_instance(resource: InstanceResource) -> ServerInstance:
+	if resource == null:
+		return null
+	for instance: ServerInstance in _instances_for(resource):
+		if instance.get_parent() != self or not instance.is_node_ready():
+			continue
+		if instance.access_policy != ServerInstance.AccessPolicy.PUBLIC:
+			continue
+		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
+			continue
+		if resource.use_3d and not instance.accepts_reservation():
+			continue
+		return instance
+	return null
 
 
 func _on_player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper) -> void:
@@ -258,7 +301,7 @@ func _on_player_entered_warper(player: Player, current_instance: ServerInstance,
 		return
 
 	if instance_resource.can_join_instance(player, instance_index):
-		target_instance = instance_resource.get_instance()
+		target_instance = find_public_instance(instance_resource)
 		if target_instance:
 			player_switch_instance(target_instance, warper.target_id, player, current_instance)
 		else:
@@ -289,15 +332,16 @@ func recall_player(peer_id: int) -> void:
 	if current_inst.instance_resource == res:
 		teleport_peer_to(peer_id, current_inst, current_inst.instance_map.get_spawn_position(0))
 		return
-	if res.charged_instances.is_empty():
+	var target := find_public_instance(res)
+	if target == null:
 		queue_charge_instance(res, player_switch_instance.bind(0, player, current_inst))
 	else:
-		player_switch_instance(res.get_instance(), 0, player, current_inst)
+		player_switch_instance(target, 0, player, current_inst)
 
 
 func queue_charge_instance(instance_resource: InstanceResource, callback: Callable) -> void:
 	for pending: ServerInstance in loading_instances.values():
-		if pending.instance_resource==instance_resource:
+		if pending.instance_resource==instance_resource and pending.access_policy == ServerInstance.AccessPolicy.PUBLIC and pending.admission_state == ServerInstance.AdmissionState.ACCEPTING and not pending.is_queued_for_deletion():
 			pending.ready.connect(callback.bind(pending),CONNECT_ONE_SHOT)
 			return
 	var new_instance: ServerInstance = prepare_instance(instance_resource)
@@ -311,15 +355,17 @@ func player_switch_instance(
 	warper_target_id: int,
 	player: Player,
 	current_instance: ServerInstance,
-) -> void:
+) -> bool:
+	if not _can_legacy_transfer(target_instance, player, current_instance):
+		return false
 	var peer_id: int = player.name.to_int()
 	if not world_server.database.flush_character(player.player_resource.player_id):
 		push_error("Instance transfer cancelled: character checkpoints could not be saved.")
-		return
+		return false
 	if current_instance.connected_peers.has(peer_id):
 		current_instance.despawn_player(peer_id, false)
 	else:
-		return
+		return false
 	# Leaving a dungeon run drops this peer from its group.
 	DungeonService.on_player_left(peer_id, current_instance)
 	charge_new_instance.rpc_id(
@@ -329,8 +375,33 @@ func player_switch_instance(
 	)
 	target_instance.awaiting_peers[peer_id] = {
 		"player": player,
+		"session": player.player_resource,
 		"target_id": warper_target_id
 	}
+	return true
+
+
+## Legacy Player/Map handoff is not the future 3D transfer state machine.
+## Reject unsupported or inaccessible targets before checkpoint or despawn.
+func _can_legacy_transfer(target: ServerInstance, player: Player, source: ServerInstance) -> bool:
+	if not is_instance_valid(target) or not is_instance_valid(source) or not is_instance_valid(player):
+		return false
+	if target.get_parent() != self or source.get_parent() != self or not target.is_node_ready():
+		return false
+	if target.is_queued_for_deletion() or source.is_queued_for_deletion():
+		return false
+	if target.instance_resource == null or source.instance_resource == null:
+		return false
+	if target.instance_resource.use_3d or source.instance_resource.use_3d:
+		return false
+	if target.access_policy != ServerInstance.AccessPolicy.PUBLIC or target.admission_state != ServerInstance.AdmissionState.ACCEPTING:
+		return false
+	var peer_id := str(player.name).to_int()
+	if not _is_current_session(peer_id, player.player_resource) or source.get_player(peer_id) != player or not source.connected_peers.has(peer_id):
+		return false
+	if target != source and (target.connected_peers.has(peer_id) or target.awaiting_peers.has(peer_id)):
+		return false
+	return target.instance_resource.can_join_instance(player)
 
 
 func charge_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
@@ -343,7 +414,27 @@ func charge_instance(instance_resource: InstanceResource, channel_id: int = 0) -
 	return new_instance
 
 
-func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
+## A private run uses the same map runtime, never a public channel slot.
+func charge_reserved_instance(instance_resource: InstanceResource, character_ids: PackedInt64Array) -> ServerInstance:
+	var instance := prepare_instance(instance_resource, 0, ServerInstance.AccessPolicy.RESERVED, character_ids)
+	if instance != null:
+		add_child.call_deferred(instance, true)
+	return instance
+
+
+func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
+	access_policy: ServerInstance.AccessPolicy = ServerInstance.AccessPolicy.PUBLIC,
+	character_ids: PackedInt64Array = PackedInt64Array()) -> ServerInstance:
+	if access_policy not in [ServerInstance.AccessPolicy.PUBLIC, ServerInstance.AccessPolicy.RESERVED]:
+		return null
+	if access_policy == ServerInstance.AccessPolicy.RESERVED:
+		if instance_resource == null or not instance_resource.use_3d or channel_id != 0 or character_ids.is_empty():
+			return null
+		for character_id: int in character_ids:
+			if character_id <= 0:
+				return null
+	elif not character_ids.is_empty():
+		return null
 	if instance_resource==null or not ResourceLoader.exists(instance_resource.map_path):
 		push_error("Cannot load map instance: missing map resource")
 		return null
@@ -351,7 +442,9 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0) 
 	if instance_resource.use_3d:
 		instance.free()
 		instance = preload("res://source/server/world/components/world_instance_3d.gd").new()
-	if instance_resource.use_3d and channel_id==0:
+	instance.access_policy = access_policy
+	instance.allowed_character_ids = character_ids.duplicate()
+	if instance_resource.use_3d and channel_id==0 and access_policy == ServerInstance.AccessPolicy.PUBLIC:
 		channel_id=1
 		for existing: ServerInstance in _instances_for(instance_resource): channel_id=maxi(channel_id,int(existing.identity.get("channel_id",0))+1)
 	instance.identity=MapIdentity.create(realm_id,instance_resource.resolved_map_id(),host_id,channel_id)
@@ -455,13 +548,14 @@ func send_player_to_jail(peer_id: int) -> bool:
 	if current_inst.instance_resource == jail_res:
 		return false
 
-	if jail_res.charged_instances.is_empty():
+	var target := find_public_instance(jail_res)
+	if target == null:
 		queue_charge_instance(
 			jail_res,
 			player_switch_instance.bind(0, player, current_inst)
 		)
 	else:
-		player_switch_instance(jail_res.get_instance(), 0, player, current_inst)
+		return player_switch_instance(target, 0, player, current_inst)
 	return true
 
 
@@ -489,7 +583,11 @@ func teleport_peer_to(peer_id: int, dest_instance: ServerInstance, dest_position
 		world_server.data_push.rpc_id(peer_id, &"player.teleport", {"position": dest_position})
 		return true
 
+	if not _can_legacy_transfer(dest_instance, player, current_inst):
+		return false
+	if not world_server.database.flush_character(player.player_resource.player_id):
+		return false
 	current_inst.despawn_player(peer_id, false)
 	charge_new_instance.rpc_id(peer_id, dest_instance.instance_resource.map_path, dest_instance.name)
-	dest_instance.awaiting_peers[peer_id] = {"player": player, "target_position": dest_position}
+	dest_instance.awaiting_peers[peer_id] = {"player": player, "session": player.player_resource, "target_position": dest_position}
 	return true
