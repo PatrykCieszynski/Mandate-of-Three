@@ -5,7 +5,7 @@ extends RefCounted
 const BASIS_POINTS: int = 10000
 const MAX_BASE_ATTEMPTS: int = 4
 
-static func resolve(tables: Array[LootTable], base_attempts: int, luck_chance_bp: int, rng: RandomNumberGenerator) -> Dictionary:
+static func resolve(tables: Array, base_attempts: int, luck_chance_bp: int, rng: RandomNumberGenerator) -> Dictionary:
 	if rng == null or base_attempts < 1 or base_attempts > MAX_BASE_ATTEMPTS:
 		return {"ok": false, "error": "attempts"}
 	if luck_chance_bp < 0 or luck_chance_bp > BASIS_POINTS:
@@ -14,9 +14,12 @@ static func resolve(tables: Array[LootTable], base_attempts: int, luck_chance_bp
 	# Reject the full content set before consuming RNG or producing partial outcomes.
 	var entries: Array[LootEntry] = []
 	var sum_bp: int = 0
-	for table: LootTable in tables:
-		if table == null:
+	for candidate: Variant in tables:
+		if candidate == null:
 			continue # Missing optional scope: e.g. no per-mob table.
+		if not candidate is LootTable:
+			return {"ok": false, "error": "table"}
+		var table: LootTable = candidate as LootTable
 		if not table.valid():
 			return {"ok": false, "error": "entry"}
 		for entry: LootEntry in table.entries:
