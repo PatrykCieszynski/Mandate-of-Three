@@ -64,16 +64,6 @@ func _ready() -> void:
 	# equipment/pickup regression fixture until those scripts are migrated.
 	kill_rewards.setup(services,ground_loot,currency_endpoint,region.loot_region_key if region != null else &"")
 	mob_system.mob_died.connect(kill_rewards.handle_mob_death)
-	if _server:
-		# A coordinator must explicitly configure the world kind and schedule.
-		# Refresh windows once per second, never in the mob-death hot path.
-		var event_clock := Timer.new()
-		event_clock.name = "EventClock"
-		event_clock.wait_time = 1.0
-		event_clock.timeout.connect(func() -> void:
-			kill_rewards.event_drops.refresh(int(Time.get_unix_time_from_system())))
-		add_child(event_clock)
-		event_clock.start()
 	if _server and services.progression()!=null:
 		services.progression().experience_awarded.connect(combat_endpoint.publish_experience)
 	npc_endpoint = NpcInteraction3D.new()
