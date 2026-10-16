@@ -34,6 +34,6 @@ func try_use(peer_id: int, now_ms: int, mob_system: MobSystem, services: Mandate
 	if now_ms < _ready_at.get(peer_id, 0):
 		return {"ok": false, "error": "cooldown"}
 	var cap: int = LIMITS[tier_for(peer_id)]
-	var attracted: int = mob_system.taunt_nearby_packs(peer_id, RANGE_METERS, cap)
+	var attracted: int = mob_system.taunt_nearby_mobs(peer_id, RANGE_METERS, cap)
 	_ready_at[peer_id] = now_ms + COOLDOWN_MS
 	return {"ok": true, "attracted": attracted, "cap": cap, "cooldown_ms": COOLDOWN_MS}
