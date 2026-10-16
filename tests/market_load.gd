@@ -191,7 +191,7 @@ func run_server() -> void:
 	searching=false;measuring=false
 	await wait_until(func()->bool:return persistence.auction_queries.active.is_empty() and persistence.auction_queries.queued.is_empty())
 	check(persistence.flush_wallet(),"final pending income checkpoint")
-	check(db.query("SELECT SUM(yang) AS total,SUM(reserved_yang) AS reserved FROM account_wallets;"),"final wallet sum")
+	check(db.query("SELECT (SELECT SUM(yang) FROM account_wallets)+(SELECT COALESCE(SUM(yang),0) FROM account_shop_revenue) AS total,(SELECT SUM(reserved_yang) FROM account_wallets) AS reserved;"),"final wallet plus unclaimed revenue sum")
 	print("AUCTION_D2_WALLET ",JSON.stringify({"before":wallet_total,"declared_income":income,"actual":db.query_result[0].total,"reserved":db.query_result[0].reserved}))
 	check(int(db.query_result[0].total)==wallet_total+income and int(db.query_result[0].reserved)==0,"Yang conserved across purchases, Exchange, income and reconnect")
 	check(db.query_with_bindings("SELECT COUNT(*) AS n FROM item_instances WHERE uid=?;",[tested_uid]) and int(db.query_result[0].n)==1,"one persistent sword UID")
@@ -291,6 +291,8 @@ func economy_cycle() -> void:
 	var balance:=persistence.wallet_balance(buyer)
 	if staged_writes: await get_tree().physics_frame
 	check(measured_mutation(other,"buy",payload).ok and persistence.wallet_balance(buyer)==balance,"receipt retry never charges twice")
+	if staged_writes: await get_tree().physics_frame
+	check(measured_mutation(item_seller,"claim_revenue",{"command_id":prefix+"collect"}).ok,"explicit atomic collection after sale")
 	item_seller=other;expected_sword_owner=buyer;cycles+=1
 	if cycles==1:
 		if staged_writes: await get_tree().physics_frame

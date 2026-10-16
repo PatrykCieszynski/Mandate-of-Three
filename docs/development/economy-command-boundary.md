@@ -30,9 +30,11 @@ service process, generic database interface, queue or database migration.
   income or publishing another commit. The requesting endpoint still responds and
   refreshes its current views through its existing request flow.
 
-Public response dictionaries, command IDs, SQL schemas and current product rules
-are unchanged. In particular, this does not implement the accepted future
-claimable-Yang, withdrawal-capacity or Offer Only marketplace changes.
+These initial structural slices kept the then-current product rules. Subsequent
+Marketplace V2 changes implemented capacity-backed withdrawal and Offer Only;
+[Shop revenue](shop-revenue.md) adds the separate ledger and partial collection
+with client retry/recovery. The original slices should not be read as the current
+product backlog.
 
 ## Second slice: explicit operation results and World effects
 

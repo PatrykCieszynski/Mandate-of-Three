@@ -4,6 +4,7 @@ extends RefCounted
 const COLUMNS := 5
 const ROWS := 8
 const CAPACITY := COLUMNS*ROWS
+const MAX_REVENUE := 9223372036854775807 # SQLite integer storage ceiling, not wallet capacity.
 var db: SQLite
 var _transaction: EconomyCommandSqlite
 var committed: bool:
@@ -21,7 +22,7 @@ static func ensure_schema(database: SQLite) -> bool:
 	if not database.query("PRAGMA foreign_keys=ON;"): return false
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
 	var version := int(database.query_result[0].value)
-	if version >= 19: return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database) and _ensure_projection_indexes(database)
+	if version >= 19: return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database) and _ensure_projection_indexes(database) and _ensure_revenue_schema(database)
 	if version < 18 or not database.query("BEGIN IMMEDIATE;"): return false
 	if not database.query("SELECT i.uid FROM item_instances i LEFT JOIN item_placements p ON p.item_uid=i.uid LEFT JOIN account_storage s ON s.item_uid=i.uid WHERE (p.item_uid IS NOT NULL)+(s.item_uid IS NOT NULL)<>1 LIMIT 1;") or not database.query_result.is_empty():
 		database.query("ROLLBACK;")
@@ -69,7 +70,39 @@ static func ensure_schema(database: SQLite) -> bool:
 		if not database.query(statement):
 			database.query("ROLLBACK;")
 			return false
-	return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database) and _ensure_projection_indexes(database)
+	return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database) and _ensure_projection_indexes(database) and _ensure_revenue_schema(database)
+
+static func _ensure_revenue_schema(database: SQLite) -> bool:
+	# Old sale receipts already credited wallets. Never reconstruct/backfill them.
+	return database.query("CREATE TABLE IF NOT EXISTS account_shop_revenue(account_id INTEGER PRIMARY KEY REFERENCES accounts(master_account_id),yang INTEGER NOT NULL DEFAULT 0 CHECK(typeof(yang)='integer' AND yang>=0));")
+
+func revenue(account_id: int) -> Dictionary:
+	if not db.query_with_bindings("SELECT yang FROM account_shop_revenue WHERE account_id=?;",[account_id]): return {"ok":false,"error":"storage"}
+	return {"ok":true,"amount":0 if db.query_result.is_empty() else int(db.query_result[0].yang)}
+
+func _credit_revenue(account_id: int, amount: int) -> Dictionary:
+	var current := revenue(account_id)
+	if not current.ok: return current
+	if amount<=0 or int(current.amount)>MAX_REVENUE-amount: return {"ok":false,"error":"revenue_capacity"}
+	var total: int = int(current.amount)+amount
+	if not db.query_with_bindings("INSERT INTO account_shop_revenue(account_id,yang) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET yang=excluded.yang;",[account_id,total]): return {"ok":false,"error":"storage"}
+	return {"ok":true,"amount":total}
+
+func claim_revenue(character_id: int, command_id: String, pending_income: int) -> Dictionary:
+	if not _transaction.begin(character_id,command_id,"claim_revenue",[character_id]): return _transaction.cached
+	var available := revenue(_transaction.account_id)
+	if not available.ok: return _transaction.rollback("storage")
+	if int(available.amount)==0: return _transaction.commit({"ok":false,"error":"nothing_to_claim"})
+	var wallets := WalletStoreSqlite.new(db)
+	var wallet := wallets.load_wallet(_transaction.account_id)
+	if not wallet.ok: return _transaction.rollback(str(wallet.error))
+	if pending_income<0 or pending_income>WalletStoreSqlite.MAX_YANG-int(wallet.balance): return _transaction.rollback("storage")
+	var amount := mini(int(available.amount),WalletStoreSqlite.MAX_YANG-int(wallet.balance)-pending_income)
+	if amount<=0: return _transaction.commit({"ok":false,"error":"wallet_full"})
+	var credited := wallets.credit_in_transaction(_transaction.account_id,pending_income,amount)
+	if not credited.ok: return _transaction.rollback(str(credited.error))
+	if not db.query_with_bindings("UPDATE account_shop_revenue SET yang=yang-? WHERE account_id=?;",[amount,_transaction.account_id]): return _transaction.rollback("storage")
+	return _transaction.commit({"ok":true,"claimed":amount,"claimable_yang":str(int(available.amount)-amount),"wallet_states":[credited.wallet_state]})
 
 ## Local account projections must not scan the realm-wide catalogue. Additive,
 ## idempotent startup work; no custody/receipt/schema-version semantics change.
@@ -142,6 +175,9 @@ func mine(character_id: int) -> Dictionary:
 		if view.is_empty(): return _transaction.rollback("unknown_definition")
 		result.offers.append({"offer_id":row.offer_id,"position":row.position,"price":null if int(row.offer_only)==1 else int(row.price_yang),"revision":row.offer_revision,"item":view})
 	result.claims = []
+	var earnings := revenue(account_id)
+	if not earnings.ok: return _transaction.rollback("storage")
+	result.claimable_yang = str(earnings.amount)
 	if not db.query_with_bindings("SELECT i.*,c.location,-1 AS bag_position,'' AS equipment_slot FROM item_custody c JOIN item_instances i ON i.uid=c.uid WHERE c.location='account_claim' AND c.owner_id=? ORDER BY c.uid LIMIT 200;",[account_id]): return _transaction.rollback("storage")
 	for row: Dictionary in db.query_result.duplicate(true):
 		var view := _item_view(row)
@@ -271,13 +307,13 @@ func purchase(character_id: int, command_id: String, shop_id: int, offer_id: Str
 	var wallets := WalletStoreSqlite.new(db)
 	var spent := wallets.spend_in_transaction(_transaction.account_id,int(pending.get(_transaction.account_id,0)),price)
 	if not spent.ok: return _transaction.rollback(str(spent.error))
-	var credited := wallets.credit_in_transaction(seller,int(pending.get(seller,0)),price)
+	var credited := _credit_revenue(seller,price)
 	if not credited.ok: return _transaction.rollback(str(credited.error))
 	if not db.query_with_bindings("DELETE FROM shop_cells WHERE item_uid=?;",[offer.item_uid]): return _transaction.rollback("storage")
 	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id,offer.item_uid]): return _transaction.rollback("storage")
 	if not db.query_with_bindings("UPDATE item_custody SET location='bag',owner_id=?,position=?,container_id=0,offer_id=NULL WHERE uid=?;",[character_id,receiving.position,offer.item_uid]): return _transaction.rollback("storage")
 	if not db.query_with_bindings("DELETE FROM shop_offers WHERE offer_id=?;",[offer_id]): return _transaction.rollback("storage")
-	return _transaction.commit({"ok":true,"uid":offer.item_uid,"buyer_account":_transaction.account_id,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_balance":int(credited.balance),"wallet_states":[spent.wallet_state,credited.wallet_state],"shop_id":int(offer.shop_id)})
+	return _transaction.commit({"ok":true,"uid":offer.item_uid,"buyer_account":_transaction.account_id,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_claimable_yang":str(credited.amount),"wallet_states":[spent.wallet_state],"shop_id":int(offer.shop_id)})
 
 ## Public read has no claims, credentials or offline player/session dependency.
 func visit(shop_id: int) -> Dictionary:

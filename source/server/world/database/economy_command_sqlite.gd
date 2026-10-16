@@ -90,6 +90,7 @@ func receipt(character_id: int, command_id: String) -> Dictionary:
 # watermark in durable receipts; native RPCs and application results remain ints.
 static func _encode_result(result: Dictionary) -> String:
 	var stored := result.duplicate(true)
+	if stored.has("claimed"): stored.claimed=str(stored.claimed)
 	if stored.has("item_state"):
 		for field: String in ["account_id","character_id","revision"]: stored.item_state[field]=str(stored.item_state[field])
 	for state: Dictionary in stored.get("wallet_states",[]):
@@ -99,6 +100,9 @@ static func _encode_result(result: Dictionary) -> String:
 static func decode_result(json: String) -> Dictionary:
 	var result: Variant = JSON.parse_string(json)
 	if not result is Dictionary: return {"ok":false,"error":"storage"}
+	if result.has("claimed"):
+		if not result.claimed is String or not result.claimed.is_valid_int(): return {"ok":false,"error":"storage"}
+		result.claimed=int(result.claimed)
 	if result.has("item_state"):
 		if not result.item_state is Dictionary: return {"ok":false,"error":"storage"}
 		for field: String in ["account_id","character_id","revision"]:

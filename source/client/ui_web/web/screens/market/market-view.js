@@ -75,7 +75,31 @@ export function mountMarket(root, options) {
     retry.hidden = true;
     const wallet = document.createElement('p');
     wallet.className = 'market-wallet';
-    shell.contentRoot.append(nameRow, gridRoot, selection, actions, claimsTitle, claims, status, retry, wallet);
+    const revenue = document.createElement('p');
+    const collect = button('Collect Yang', () => void collectRevenue());
+    async function collectRevenue() {
+        if (!state.active || pending || disposed || !options.collectRevenue)
+            return;
+        pending = true;
+        collect.disabled = true;
+        try {
+            const result = await options.collectRevenue(Boolean(state.revenuePending));
+            if (!disposed)
+                setStatus(result.ok
+                    ? 'Revenue collected.'
+                    : String(result.error ?? 'Outcome unknown.'));
+        }
+        catch {
+            if (!disposed)
+                setStatus('Outcome unknown. Retry collection.');
+        }
+        finally {
+            pending = false;
+            if (!disposed)
+                render();
+        }
+    }
+    shell.contentRoot.append(nameRow, gridRoot, selection, actions, claimsTitle, claims, status, retry, wallet, revenue, collect);
     let state = { active: false }, inventory = { columns: 5, rows: 9, pages: 4, items: [] };
     let candidate = null, selected = null, pending = false, disposed = false;
     let lastIntent = null;
@@ -279,7 +303,7 @@ export function mountMarket(root, options) {
                 pick(item, position);
         },
     });
-    bindings.push(target, options.drag.registerControl(nameRow, 'cancel'), options.drag.registerControl(actions, 'cancel'));
+    bindings.push(target, options.drag.registerControl(nameRow, 'cancel'), options.drag.registerControl(actions, 'cancel'), options.drag.registerControl(collect, 'cancel'));
     shell.listen(gridRoot, 'pointermove', (event) => {
         const node = event.target instanceof Element
             ? event.target.closest('.ui-item-slot')
@@ -306,6 +330,21 @@ export function mountMarket(root, options) {
             options.onClose();
     });
     function render() {
+        revenue.textContent =
+            'Claimable: ' +
+                (state.active
+                    ? (state.claimableYang ?? '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                    : '0') +
+                ' Yang';
+        collect.textContent =
+            state.active && state.revenuePending
+                ? 'Retry collection'
+                : 'Collect Yang';
+        collect.disabled =
+            pending ||
+                !state.active ||
+                Boolean(state.revenueBusy) ||
+                (!state.revenuePending && (state.claimableYang ?? '0') === '0');
         sources.forEach((s) => s.dispose());
         sources.length = 0;
         tooltip.hide();

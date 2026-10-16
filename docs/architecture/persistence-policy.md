@@ -232,3 +232,12 @@ income display while the durable revision is unchanged. Checkpoint cadence, delt
 writes and the accepted crash window are unchanged. This is synchronous local
 reconciliation, not distributed Yang batch idempotency or multi-writer support.
 See [versioned wallet commits](../development/economy-command-boundary.md#versioned-wallet-commits-and-pending-income-reconciliation).
+
+Player Shop/Auction sales now debit the buyer and credit separate account
+`account_shop_revenue` in the same UID/offer/receipt transaction. They never credit
+the seller wallet or consume seller pending income. Manual collection in My Shop
+transfers only what fits in the current wallet (counting pending income), leaving
+the remainder claimable. Collection is immediate and receipt-backed; its original
+ID survives lost responses and client restart. Revenue is an int64 SQLite ledger
+shown as a decimal string; existing direct-credit sales are never backfilled.
+Exchange settlement remains unchanged. See [Shop revenue](../development/shop-revenue.md).

@@ -87,6 +87,9 @@ try {
       rows: 8,
       offers: [],
       claims: [],
+      claimableYang: '9223372036854775807',
+      revenuePending: false,
+      revenueBusy: false,
     },
     wallet: { balance: 1500, ready: true },
     hud: {
@@ -128,6 +131,16 @@ try {
         rect.y + rect.height <= height + 1,
     );
   }
+  assert.ok(await page.getByText('Claimable: 9,223,372,036,854,775,807 Yang', { exact: true }).isVisible());
+  await page.getByRole('button', { name: 'Collect Yang', exact: true }).click();
+  await page.waitForFunction(() => (window as any).sent.some((m: any) => m.type === 'market.collect_revenue'));
+  state.market.claimableYang = '0';
+  state.market.revenuePending = true;
+  await page.evaluate((s) => (window as any).emit('ui.snapshot', s), state);
+  await page.getByRole('button', { name: 'Retry collection', exact: true }).click();
+  await page.waitForFunction(() => (window as any).sent.some((m: any) => m.type === 'market.retry_revenue'));
+  state.market.revenuePending = false;
+  await page.evaluate((s) => (window as any).emit('ui.snapshot', s), state);
   await page
     .getByRole('textbox', { name: 'Shop name', exact: true })
     .fill('New Shop');

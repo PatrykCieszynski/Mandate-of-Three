@@ -39,6 +39,7 @@ interface Options {
   drag: ItemDragRuntime;
   resolveItemIcon: ResolveItemIcon;
   command: (action: Action, payload: MarketCommand) => Promise<CommandResult>;
+  collectRevenue?: (retry: boolean) => Promise<CommandResult>;
   onClose: () => void;
   onRegionsChanged: () => void;
 }
@@ -119,6 +120,29 @@ export function mountMarket(root: HTMLElement, options: Options) {
   retry.hidden = true;
   const wallet = document.createElement('p');
   wallet.className = 'market-wallet';
+  const revenue = document.createElement('p');
+  const collect = button('Collect Yang', () => void collectRevenue());
+  async function collectRevenue() {
+    if (!state.active || pending || disposed || !options.collectRevenue) return;
+    pending = true;
+    collect.disabled = true;
+    try {
+      const result = await options.collectRevenue(
+        Boolean(state.revenuePending),
+      );
+      if (!disposed)
+        setStatus(
+          result.ok
+            ? 'Revenue collected.'
+            : String(result.error ?? 'Outcome unknown.'),
+        );
+    } catch {
+      if (!disposed) setStatus('Outcome unknown. Retry collection.');
+    } finally {
+      pending = false;
+      if (!disposed) render();
+    }
+  }
   shell.contentRoot.append(
     nameRow,
     gridRoot,
@@ -129,6 +153,8 @@ export function mountMarket(root: HTMLElement, options: Options) {
     status,
     retry,
     wallet,
+    revenue,
+    collect,
   );
   let state: MarketSnapshot = { active: false },
     inventory: InventorySnapshot = { columns: 5, rows: 9, pages: 4, items: [] };
@@ -347,6 +373,7 @@ export function mountMarket(root: HTMLElement, options: Options) {
     target,
     options.drag.registerControl(nameRow, 'cancel'),
     options.drag.registerControl(actions, 'cancel'),
+    options.drag.registerControl(collect, 'cancel'),
   );
   shell.listen(gridRoot, 'pointermove', (event) => {
     const node =
@@ -369,6 +396,21 @@ export function mountMarket(root: HTMLElement, options: Options) {
     else if (event.key === 'Escape') options.onClose();
   });
   function render() {
+    revenue.textContent =
+      'Claimable: ' +
+      (state.active
+        ? (state.claimableYang ?? '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+        : '0') +
+      ' Yang';
+    collect.textContent =
+      state.active && state.revenuePending
+        ? 'Retry collection'
+        : 'Collect Yang';
+    collect.disabled =
+      pending ||
+      !state.active ||
+      Boolean(state.revenueBusy) ||
+      (!state.revenuePending && (state.claimableYang ?? '0') === '0');
     sources.forEach((s) => s.dispose());
     sources.length = 0;
     tooltip.hide();

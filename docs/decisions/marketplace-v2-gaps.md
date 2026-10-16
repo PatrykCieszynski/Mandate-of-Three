@@ -13,6 +13,14 @@
 
 ## Integration decision
 
+**Implementation update, 2026-10-16:** the table above records the historical
+PR #1 baseline. Capacity-backed withdrawal and Offer Only are now integrated.
+The current Shop revenue slice adds the separate ledger and manual collection;
+the user approved partial collection up to existing wallet capacity, retaining
+all remainder. See [runtime policy and recovery](../development/shop-revenue.md).
+Exchange keeps its own settlement rules. Other sale sources and future cap
+changes remain separate decisions.
+
 Do **not** silently combine these product changes with a mechanical merge of PR #1. First update `shop` with current `main`, re-run its existing tests, then either:
 
 1. Merge the currently verified Marketplace vertical slice and implement these differences in dedicated follow-up PR(s); **or**

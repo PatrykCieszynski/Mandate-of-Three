@@ -85,6 +85,10 @@ func _market_command(market: MarketStoreSqlite, character_id: int, action: Strin
 		"list": return market.list_item(character_id, p.command_id, p.uid, int(p.revision), int(p.position), int(p.price))
 		"cancel": return market.cancel_offer(character_id, p.command_id, p.offer_id, int(p.revision))
 		"claim": return market.claim_item(character_id, p.command_id, p.uid, int(p.revision))
+		"claim_revenue":
+			var account := _runtime.wallet_account_id(character_id)
+			if not _runtime.load_wallet(character_id): return {"ok":false,"error":"wallet"}
+			return market.claim_revenue(character_id,p.command_id,int(_runtime.runtime_wallets[account].pending_currency_delta))
 		"configure": return market.configure(character_id, p.command_id, int(p.revision), p.name, p.status)
 		"edit": return market.edit_offer(character_id, p.command_id, p.offer_id, int(p.revision), int(p.position), int(p.price))
 		"buy":
