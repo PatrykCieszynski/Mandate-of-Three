@@ -30,6 +30,14 @@ func _ready() -> void:
 		# native connection must not invalidate committed writer state in the WAL.
 		while load_service.active.is_empty(): await get_tree().process_frame
 		assert(market.configure(owner,"after_checkpoint",0,"Recovered from WAL","active").ok)
+		var buyer:=EconomyFixture.create_character(store,"recovery_buyer",{"name":"RecoveryBuyer","skin":1})
+		var sold:=ItemInstance.create(ItemDefinitions.IRON_SWORD,owner,[])
+		assert(EconomyFixture.insert_item(items,sold,items._free_bag_position(owner,2)))
+		var offer:=market.list_item(owner,"wal_revenue_list",sold.uid,0,10,90)
+		assert(offer.ok and market.purchase(buyer,"wal_revenue_buy",offer.shop_id,offer.offer_id,0,90,{}).ok)
+		assert(db.query_with_bindings("UPDATE account_wallets SET yang=? WHERE account_id=?;",[WalletStoreSqlite.MAX_YANG-50,store.resolve_account_id(owner)]))
+		var collected:=market.claim_revenue(owner,"wal_revenue_collect",0)
+		assert(collected.ok and collected.claimed==50 and market.mine(owner).claimable_yang=="40")
 		assert(FileAccess.file_exists(db.path+"-wal") and FileAccess.open(db.path+"-wal",FileAccess.READ).get_length()>32,"committed WAL survives beyond the prior backup")
 		print("MARKET_RECOVERY_READY")
 		return # Runner terminates only this fixture process, without close_db.
@@ -39,6 +47,10 @@ func _ready() -> void:
 	var market:=MarketStoreSqlite.new(db);var mine:=market.mine(owner)
 	assert(mine.offers.size()==1 and market.receipt(owner,"durable_list").offer_id==mine.offers[0].offer_id)
 	assert(mine.name=="Recovered from WAL" and market.receipt(owner,"after_checkpoint").ok,"recovery includes post-backup WAL commit, not just checkpointed DB")
+	assert(db.query("SELECT player_id FROM players WHERE account_name='recovery_buyer';") and db.query_result.size()==1)
+	assert(mine.claimable_yang=="40" and market.receipt(int(db.query_result[0].player_id),"wal_revenue_buy").ok)
+	var old_claim:=market.receipt(owner,"wal_revenue_collect")
+	assert(old_claim.ok and old_claim.claimed==50 and market.claim_revenue(owner,"wal_revenue_collect",0)==old_claim,"WAL recovery replays collection without consuming remainder")
 	var exchange:=ExchangeStoreSqlite.new(db)
 	assert(exchange.ledger(owner).assets[0].reserved==100 and exchange.orders_snapshot(owner).orders[0].remaining==100)
 	assert(db.query("PRAGMA integrity_check;") and db.query_result[0].values()[0]=="ok")

@@ -38,7 +38,7 @@ static func valid_command(action: String, p: Dictionary) -> bool:
 		"cancel": fields = ["command_id","offer_id","revision"]
 		"claim": fields = ["command_id","uid","revision"]
 		"configure": fields = ["command_id","revision","name","status"]
-		"receipt": fields = ["command_id"]
+		"receipt", "claim_revenue": fields = ["command_id"]
 		_: return false
 	if p.size()!=fields.size() or not p.has_all(fields): return false
 	if p.has("order_id") and (not p.order_id is String or not ItemInstance.valid_uid(p.order_id)): return false

@@ -145,6 +145,8 @@ test('market rejects malformed offers atomically and survives snapshot reload',(
  for(const patch of [{price:0},{revision:-1},{id:'bad'},{item:{...offer.item,y:7}}])rejects('market',{...market,offers:[{...offer,...patch}]});
  rejects('market',{...market,offers:Array(41).fill(offer)});
  rejects('market',{...market,claims:Array(21).fill(bagItem)});
+ assert.ok(readDomainSnapshot({market:{...market,claimableYang:'9223372036854775807',revenuePending:true,revenueBusy:false}}));
+ for(const claimableYang of [123,'01','-1','9223372036854775808','1.5']) rejects('market',{...market,claimableYang});
  const store=new DomainStore();
  assert.ok(store.apply(update('market',market)));
  assert.ok(store.apply(decodeAndValidate({v:1,type:'ui.snapshot',payload:{market}})));

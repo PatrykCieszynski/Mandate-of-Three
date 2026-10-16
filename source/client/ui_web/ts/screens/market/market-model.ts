@@ -19,6 +19,9 @@ export type MarketSnapshot =
       rows: 8;
       offers: MarketOffer[];
       claims: ItemPresentation[];
+      claimableYang?: string;
+      revenuePending?: boolean;
+      revenueBusy?: boolean;
     };
 export interface MarketCommand {
   command_id: string;
@@ -45,6 +48,13 @@ export function isMarketSnapshot(v: unknown): v is MarketSnapshot {
     integer(v.revision) &&
     v.columns === 5 &&
     v.rows === 8 &&
+    (v.claimableYang === undefined ||
+      (typeof v.claimableYang === 'string' &&
+        /^(0|[1-9]\d{0,18})$/.test(v.claimableYang) &&
+        (v.claimableYang.length < 19 ||
+          v.claimableYang <= '9223372036854775807'))) &&
+    (v.revenuePending === undefined || typeof v.revenuePending === 'boolean') &&
+    (v.revenueBusy === undefined || typeof v.revenueBusy === 'boolean') &&
     Array.isArray(v.offers) &&
     v.offers.length <= 40 &&
     v.offers.every(
