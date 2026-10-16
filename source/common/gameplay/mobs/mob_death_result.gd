@@ -8,6 +8,11 @@ var timestamp_ms: int
 var contributions: Dictionary
 var reward_owner: int
 var experience_reward: int
+## Frozen snapshot of classification and the count drawn at World spawn.
+var spawn_base_loot_rolls: int
+var category: StringName
+var family: StringName
+var rank: StringName
 # Recipient fallback belongs to player progression, never the mob runtime.
 var recipient: PlayerResource
 
@@ -29,5 +34,9 @@ static func capture(mob: MobActor3D, now: int, services: MandateWorldServices) -
 	result.contributions = mob.contributions.duplicate()
 	result.reward_owner = owner_for_contributions(result.contributions)
 	result.experience_reward = mob.definition.experience_reward
+	result.spawn_base_loot_rolls = mob.spawn_base_loot_rolls
+	result.category = mob.definition.category
+	result.family = mob.definition.family
+	result.rank = mob.definition.rank
 	result.recipient = services.current_player(result.reward_owner,mob.contribution_players.get(result.reward_owner))
 	return result

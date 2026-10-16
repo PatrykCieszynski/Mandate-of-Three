@@ -51,6 +51,8 @@ func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntim
 	var dog := MobActor3D.new()
 	dog.name = "Mob_%d" % _next_mob_id
 	dog.definition = definition
+	# Freeze only the number of attempts at spawn; not item identities.
+	dog.spawn_base_loot_rolls = definition.sample_spawn_loot_rolls(pack.rng)
 	dog.reaction_profile = definition.reaction_profile
 	dog.mob_key = definition.mob_key
 	dog.max_hp = definition.max_hp

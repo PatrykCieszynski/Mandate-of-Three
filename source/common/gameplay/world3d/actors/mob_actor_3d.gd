@@ -11,6 +11,8 @@ var respawn_enabled: bool = true
 var expires_at: int = 0
 var title: String = "Wild Dog"
 var definition: MobDefinition
+## Server-only spawn-frozen ordinary item draw count; not replicated.
+var spawn_base_loot_rolls: int = 0
 var mob_key: StringName = &"wild_dog"
 var visual_id: StringName = &"stray_dog"
 var move_speed: float = 2.8
