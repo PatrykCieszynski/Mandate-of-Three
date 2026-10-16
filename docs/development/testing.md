@@ -343,3 +343,14 @@ market_load (explicit collection plus wallet/revenue conservation). The existing
 headless Chrome market_browser milestone checks exact decimal display and Collect
 / Retry commands with the normal scale matrix. No new default suite or native CEF
 coverage is implied. See [Shop revenue](shop-revenue.md).
+
+`run-combat.ps1 -Scene local_map_instances -MarkerPrefix LOCAL_MAP` is the opt-in
+live isolation check for two copies of First Region. It uses the production
+InstanceManager, map loader, initial assignment and client entry RPC, real physics
+spaces, foreign/duplicate joins and gameplay RPC attempts, local mobs/Metin waves/
+loot and one cross-copy Marketplace sale against disposable SQLite. It also
+covers session revocation during map loading. This contract was not covered by
+the existing single-map PvE or admission-only fixture. Run sequentially with other
+port-18098 suites. The full `run-items.ps1 -WithSession` compares durable item
+fields across relog; public roster size depends on initial map assignment and
+live delivery versions need not survive re-entry. See [local instances](local-map-instances.md).

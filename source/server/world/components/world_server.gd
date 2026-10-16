@@ -517,6 +517,17 @@ func request_instance(peer_id: int, instance_id: String = "") -> ServerInstance:
 			return null
 	return instance
 
+## Initial 3D join must match both the current session and its server assignment.
+## Standalone hosts use the same session-qualified pending assignment.
+func can_join_map_instance(peer_id: int, instance: ServerInstance) -> bool:
+	var player: PlayerResource = connected_players.get(peer_id)
+	if peer_id<=1 or player==null or player.player_id<=0 or player.current_peer_id!=peer_id or player_id_to_peer_id.get(player.player_id,0)!=peer_id: return false
+	if instance==null or not instance.awaiting_peers.has(peer_id) or instance.connected_peers.has(peer_id): return false
+	if instance.awaiting_peers[peer_id].get("session")!=player: return false
+	if instance_manager!=null:
+		if instance_manager.get_instance_server_by_id(str(instance.name))!=instance or instance_manager.find_instance_for_peer(peer_id)!=null: return false
+	return true
+
 
 func dispatch_data_request(peer_id: int, type: StringName, args: Dictionary, instance_id: String = "") -> Dictionary:
 	var instance := request_instance(peer_id, instance_id)

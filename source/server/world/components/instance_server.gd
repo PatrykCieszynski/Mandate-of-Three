@@ -25,6 +25,7 @@ var last_accessed_time: float
 
 var instance_map: Map
 var instance_resource: InstanceResource
+var identity: Dictionary = {}
 
 var synchronizer_manager: StateSynchronizerManagerServer
 

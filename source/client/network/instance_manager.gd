@@ -26,7 +26,10 @@ func teardown() -> void:
 
 
 @rpc("authority", "call_remote", "reliable", 0)
-func charge_new_instance(map_path: String, instance_id: String) -> void:
+func charge_new_instance(map_path: String, instance_id: String, identity: Dictionary = {}) -> void:
+	if not identity.is_empty() and (not preload("res://source/common/gameplay/maps/instance/map_instance_identity.gd").valid(identity) or identity.instance_id!=instance_id):
+		push_error("Invalid map instance identity")
+		return
 	# Positional banners (sealed portal / level warning) are about the map we're
 	# LEAVING — kill them so they never follow the player into the next biome.
 	Announcer.dismiss_positional()
@@ -36,10 +39,11 @@ func charge_new_instance(map_path: String, instance_id: String) -> void:
 		return
 	var loaded_map: Node = scene.instantiate()
 	if loaded_map is GameWorld3D:
-		_charge_3d_instance(loaded_map, instance_id)
+		_charge_3d_instance(loaded_map, instance_id, identity)
 		return
 	var new_instance: InstanceClient = InstanceClient.new()
 	new_instance.name = instance_id
+	new_instance.identity=identity.duplicate(true)
 	
 	print("Loading new map: %s." % map_path)
 	var map: Map = loaded_map as Map
@@ -75,7 +79,7 @@ func charge_new_instance(map_path: String, instance_id: String) -> void:
 	
 
 
-func _charge_3d_instance(map: Node3D, instance_id: String) -> void:
+func _charge_3d_instance(map: Node3D, instance_id: String, identity: Dictionary = {}) -> void:
 	if current_instance != null:
 		current_instance.queue_free()
 	InstanceClient.local_player = null
@@ -83,6 +87,7 @@ func _charge_3d_instance(map: Node3D, instance_id: String) -> void:
 	ClientState.menu_open = false
 	var instance: InstanceClient = preload("res://source/client/network/world_instance_3d.gd").new()
 	instance.name = instance_id
+	instance.identity=identity.duplicate(true)
 	current_instance = instance
 	instance.add_child(map)
 	add_child(instance, true)

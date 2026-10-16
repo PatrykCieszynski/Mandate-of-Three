@@ -11,7 +11,10 @@ const JAIL_INSTANCE_NAME: String = "jail"
 const RECALL_INSTANCE_NAME: String = "FirstRegion"
 const DEFAULT_INSTANCE_NAME: String = "FirstRegion"
 
-var loading_instances: Dictionary[InstanceResource, ServerInstance]
+var loading_instances: Dictionary[String, ServerInstance]
+@export var realm_id: StringName = &"local"
+@export var host_id: StringName = &"local-world"
+const MapIdentity = preload("res://source/common/gameplay/maps/instance/map_instance_identity.gd")
 var instance_collection: Dictionary[String, InstanceResource]
 var default_instance: InstanceResource
 
@@ -60,7 +63,7 @@ func setup_global_commands_and_roles() -> void:
 
 
 @rpc("authority", "call_remote", "reliable", 0)
-func charge_new_instance(_map_path: String, _instance_id: String) -> void:
+func charge_new_instance(_map_path: String, _instance_id: String, _identity: Dictionary = {}) -> void:
 	pass
 
 
@@ -69,19 +72,52 @@ func _on_peer_connected(peer_id: int) -> void:
 	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
 	if admitted == null or admitted.current_peer_id != peer_id or world_server.player_id_to_peer_id.get(admitted.player_id, 0) != peer_id:
 		return
+	if find_instance_for_peer(peer_id)!=null: return
 	if default_instance == null:
 		push_error("No technical default instance configured.")
 		return
-	var instance: ServerInstance
-	if default_instance.charged_instances.is_empty():
-		instance = charge_instance(default_instance)
-	else:
-		instance = default_instance.get_instance(0)
+	# Duplicate connection notifications must not reserve/spawn a second actor.
+	for existing: ServerInstance in _instances_for(default_instance):
+		if existing.connected_peers.has(peer_id): return
+		if existing.awaiting_peers.has(peer_id):
+			if existing.awaiting_peers[peer_id].get("session")==admitted: return
+			existing.awaiting_peers.erase(peer_id)
+	var instance := select_entry_instance(default_instance)
 	if instance == null:
 		push_error("Could not create the technical default instance.")
 		return
-	instance.awaiting_peers[peer_id] = {}
-	charge_new_instance.rpc_id(peer_id, default_instance.map_path, instance.name)
+	instance.awaiting_peers[peer_id] = {"session":admitted}
+	if instance.is_node_ready():
+		_publish_entry(peer_id,admitted,instance)
+	else:
+		instance.ready.connect(_publish_entry.bind(peer_id,admitted,instance),CONNECT_ONE_SHOT)
+
+func _publish_entry(peer_id: int, admitted: PlayerResource, instance: ServerInstance) -> void:
+	if not is_instance_valid(instance): return
+	if world_server.connected_players.get(peer_id)!=admitted or admitted.current_peer_id!=peer_id or world_server.player_id_to_peer_id.get(admitted.player_id,0)!=peer_id:
+		if instance.awaiting_peers.get(peer_id,{}).get("session")==admitted: instance.awaiting_peers.erase(peer_id)
+		return
+	if instance.awaiting_peers.get(peer_id,{}).get("session")==admitted:
+		charge_new_instance.rpc_id(peer_id,instance.instance_resource.map_path,str(instance.name),instance.identity)
+
+func _instances_for(resource: InstanceResource) -> Array[ServerInstance]:
+	var result: Array[ServerInstance] = []
+	for instance: ServerInstance in loading_instances.values():
+		if is_instance_valid(instance) and instance.instance_resource==resource and not instance.is_queued_for_deletion(): result.append(instance)
+	for instance: ServerInstance in resource.charged_instances:
+		if is_instance_valid(instance) and not instance.is_queued_for_deletion() and not result.has(instance): result.append(instance)
+	result.sort_custom(func(a: ServerInstance,b: ServerInstance)->bool:return int(a.identity.get("channel_id",0))<int(b.identity.get("channel_id",0)))
+	return result
+
+func select_entry_instance(resource: InstanceResource) -> ServerInstance:
+	var selected: ServerInstance
+	var population := 2147483647
+	for instance: ServerInstance in _instances_for(resource):
+		var count := instance.connected_peers.size()+instance.awaiting_peers.size()
+		if count<population:
+			selected=instance
+			population=count
+	return charge_instance(resource) if selected==null else selected
 
 
 func _on_player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper) -> void:
@@ -139,12 +175,12 @@ func recall_player(peer_id: int) -> void:
 
 
 func queue_charge_instance(instance_resource: InstanceResource, callback: Callable) -> void:
-	if loading_instances.has(instance_resource):
-		loading_instances[instance_resource].ready.connect(
-			callback.bind(loading_instances[instance_resource])
-		)
-		return
+	for pending: ServerInstance in loading_instances.values():
+		if pending.instance_resource==instance_resource:
+			pending.ready.connect(callback.bind(pending),CONNECT_ONE_SHOT)
+			return
 	var new_instance: ServerInstance = prepare_instance(instance_resource)
+	if new_instance==null: return
 	new_instance.ready.connect(callback.bind(new_instance), CONNECT_ONE_SHOT)
 	add_child(new_instance, true)
 
@@ -176,30 +212,50 @@ func player_switch_instance(
 	}
 
 
-func charge_instance(instance_resource: InstanceResource) -> ServerInstance:
-	if loading_instances.has(instance_resource):
-		return
-	var new_instance: ServerInstance = prepare_instance(instance_resource)
+func charge_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
+	if channel_id>0:
+		for existing: ServerInstance in _instances_for(instance_resource):
+			if int(existing.identity.get("channel_id",0))==channel_id: return existing
+	var new_instance: ServerInstance = prepare_instance(instance_resource,channel_id)
+	if new_instance==null: return null
 	add_child.call_deferred(new_instance, true)
 	return new_instance
 
 
-func prepare_instance(instance_resource: InstanceResource) -> ServerInstance:
+func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
+	if instance_resource==null or not ResourceLoader.exists(instance_resource.map_path):
+		push_error("Cannot load map instance: missing map resource")
+		return null
 	var instance: ServerInstance = ServerInstance.new()
 	if instance_resource.use_3d:
 		instance.free()
 		instance = preload("res://source/server/world/components/world_instance_3d.gd").new()
-	loading_instances[instance_resource] = instance
-	instance.name = str(instance.get_instance_id())
+	if instance_resource.use_3d and channel_id==0:
+		channel_id=1
+		for existing: ServerInstance in _instances_for(instance_resource): channel_id=maxi(channel_id,int(existing.identity.get("channel_id",0))+1)
+	instance.identity=MapIdentity.create(realm_id,instance_resource.resolved_map_id(),host_id,channel_id)
+	if not MapIdentity.valid(instance.identity):
+		instance.free()
+		push_error("Invalid map instance identity configuration")
+		return null
+	instance.name = instance.identity.instance_id
+	loading_instances[str(instance.name)] = instance
 	instance.instance_resource = instance_resource
+	instance.tree_exiting.connect(func()->void:
+		loading_instances.erase(str(instance.name))
+		instance_resource.charged_instances.erase(instance),CONNECT_ONE_SHOT)
 	instance.player_entered_warper.connect(_on_player_entered_warper)
 	instance.ready.connect(
 		func():
-			loading_instances.erase(instance_resource)
+			loading_instances.erase(str(instance.name))
 			instance_resource.charged_instances.append(instance),
 		CONNECT_ONE_SHOT
 	)
 	instance.load_map(instance_resource.map_path)
+	if instance_resource.use_3d and instance.get_node_or_null("GameWorld")==null:
+		loading_instances.erase(str(instance.name))
+		instance.free()
+		return null
 	return instance
 
 
@@ -216,7 +272,8 @@ func set_instance_collection() -> void:
 			continue
 		var instance_resource: InstanceResource = loaded
 		if instance_resource.load_at_startup:
-			charge_instance(instance_resource)
+			for copy: int in (instance_resource.startup_copies if instance_resource.use_3d else 1):
+				charge_instance(instance_resource,copy+1 if instance_resource.use_3d else 0)
 		if instance_resource.instance_name == DEFAULT_INSTANCE_NAME:
 			default_instance = instance_resource
 		instance_collection.set(instance_resource.instance_name, instance_resource)
@@ -227,7 +284,7 @@ func unload_unused_instances() -> void:
 	for instance: ServerInstance in get_children():
 		if instance.instance_resource.load_at_startup:
 			continue
-		if instance.connected_peers:
+		if instance.connected_peers or not instance.awaiting_peers.is_empty():
 			continue
 		instance.instance_resource.charged_instances.erase(instance)
 		instance.queue_free()

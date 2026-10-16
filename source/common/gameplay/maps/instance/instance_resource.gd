@@ -11,6 +11,9 @@ enum SpawnOverride {
 }
 
 @export var instance_name: StringName
+## Stable content identity. instance_name remains the legacy saved map key.
+@export var map_id: StringName
+@export_range(1, 8) var startup_copies: int = 1
 @export_file("*.tscn") var map_path: String
 @export var load_at_startup: bool = false
 @export var use_3d: bool = false
@@ -36,6 +39,9 @@ enum SpawnOverride {
 
 var loading_instances: Array
 var charged_instances: Array[Node]
+
+func resolved_map_id() -> StringName:
+	return map_id if not map_id.is_empty() else instance_name
 
 
 ## Banner title: explicit zone_title, else the instance_name prettified

@@ -76,7 +76,9 @@ func _ready() -> void:
 			check(db.query_with_bindings("UPDATE account_wallets SET yang=0 WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);", [owner]), "explicit zero wallet fixture")
 			EconomyFixture.prepare(server.database)
 			server.connected_players[id] = server.database.store.get_player(owner)
-			host.awaiting_peers[id] = {})
+			server.connected_players[id].current_peer_id=id
+			server.player_id_to_peer_id[owner]=id
+			host.awaiting_peers[id] = {"session":server.connected_players[id]})
 		call_deferred("run_server")
 	else:
 		check(peer.create_client("ws://127.0.0.1:%d" % PORT) == OK, "client socket")

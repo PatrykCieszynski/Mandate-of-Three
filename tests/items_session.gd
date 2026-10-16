@@ -119,8 +119,8 @@ func run() -> void:
 			await action("equip", item)
 			break
 	var persisted: Dictionary = world.inventory_endpoint.state.duplicate(true)
-	while world.characters.size() < 2:
-		await get_tree().process_frame
+	# Initial routing may place the two clients in separate public copies. The
+	# public model must match actual membership, not an assumed shared map.
 	await get_tree().create_timer(0.5).timeout
 	for peer_id: int in world.characters:
 		if world.characters[peer_id].weapon_definition_id != "iron_sword":
@@ -138,9 +138,10 @@ func run() -> void:
 	if handoff.is_empty(): return
 	Client.connect_to_server(handoff.address, handoff.port, handoff["auth-token"])
 	await wait_inventory()
-	if world.inventory_endpoint.state != persisted:
-		fail("reconnect changed UID, rolls, revision or equipment")
-		return
+	for field: String in ["items","equipment","stats","item_state","economic_context","storage"]:
+		if world.inventory_endpoint.state.get(field)!=persisted.get(field):
+			fail("reconnect changed durable inventory: "+field)
+			return
 	# The other fixture may already have completed and disconnected. Its remote
 	# equipment was verified before logout; relog must reconstruct this actor's
 	# public model, without requiring an unrelated peer to remain online.
