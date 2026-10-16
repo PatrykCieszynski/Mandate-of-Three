@@ -354,3 +354,11 @@ the existing single-map PvE or admission-only fixture. Run sequentially with oth
 port-18098 suites. The full `run-items.ps1 -WithSession` compares durable item
 fields across relog; public roster size depends on initial map assignment and
 live delivery versions need not survive re-entry. See [local instances](local-map-instances.md).
+
+The same local-instance fixture covers capacity including pending places,
+non-renewing deadlines, stale-session callbacks, draining reservations/members and
+idle retirement. `world_session_admission.tscn` additionally uses native authenticated
+sockets to reject a full map, time out a loading client, checkpoint XP/Yang and
+relogin into reclaimed capacity. This controls Master transport and client loading,
+not the actual World authentication/disconnect path. See
+[bounded map admission](instance-admission-lifecycle.md).

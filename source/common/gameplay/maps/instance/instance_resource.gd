@@ -14,6 +14,13 @@ enum SpawnOverride {
 ## Stable content identity. instance_name remains the legacy saved map key.
 @export var map_id: StringName
 @export_range(1, 8) var startup_copies: int = 1
+@export_group("Local 3D admission")
+## Safety limits, not measured hosting capacity. Legacy 2D routing is unchanged.
+@export_range(1, 1024) var max_players: int = 64
+@export_range(1.0, 300.0) var entry_timeout_seconds: float = 30.0
+@export_range(0.0, 3600.0) var idle_timeout_seconds: float = 60.0
+@export_range(0.0, 3600.0) var minimum_lifetime_seconds: float = 60.0
+@export_group("")
 @export_file("*.tscn") var map_path: String
 @export var load_at_startup: bool = false
 @export var use_3d: bool = false

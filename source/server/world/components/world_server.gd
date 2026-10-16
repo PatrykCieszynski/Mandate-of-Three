@@ -526,6 +526,7 @@ func can_join_map_instance(peer_id: int, instance: ServerInstance) -> bool:
 	if instance.awaiting_peers[peer_id].get("session")!=player: return false
 	if instance_manager!=null:
 		if instance_manager.get_instance_server_by_id(str(instance.name))!=instance or instance_manager.find_instance_for_peer(peer_id)!=null: return false
+		if not instance_manager.has_valid_entry(instance,peer_id,player): return false
 	return true
 
 

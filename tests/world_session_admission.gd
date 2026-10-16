@@ -26,6 +26,13 @@ class WireClient extends BaseMultiplayerEndpoint:
 		api.connection_failed.connect(func() -> void: ended = true)
 		api.server_disconnected.connect(func() -> void: ended = true)
 
+## A real client that receives the assignment but never completes map loading.
+class LoadingClient extends InstanceManagerClient:
+	var assignment: Dictionary = {}
+	@rpc("authority", "call_remote", "reliable", 0)
+	func charge_new_instance(_map_path: String, _instance_id: String, identity: Dictionary = {}) -> void:
+		assignment=identity
+
 var db := SQLite.new()
 var database := WorldDatabase.new()
 var server := Session.new()
@@ -62,6 +69,8 @@ func connect_client(token: String, finish: bool = true) -> WireClient:
 	client.finish_auth = finish
 	clients.append(client)
 	add_child(client)
+	if server.instance_manager!=null:
+		var loading:=LoadingClient.new();loading.name="Instances";client.add_child(loading)
 	assert(client.create(BaseMultiplayerEndpoint.Role.CLIENT, "127.0.0.1", 18098) == OK)
 	return client
 
@@ -180,6 +189,49 @@ func run() -> void:
 	await wait_for(func() -> bool: return revoked.ended)
 	assert(not revoked.connected and server.connected_players.is_empty())
 
+	# Capacity rejection and load timeout use the normal native disconnect,
+	# checkpoint and Master retirement path. No browser/game window is needed.
+	var manager:=InstanceManagerServer.new();manager.name="Instances"
+	manager.world_server=server;server.instance_manager=manager;server.add_child(manager)
+	ServerInstance.world_server=server
+	var map:=InstanceResource.new();map.instance_name=&"AdmissionFixture"
+	map.use_3d=true;map.max_players=1;map.load_at_startup=true
+	map.map_path="res://tests/fixtures/world3d/test_arena.tscn"
+	manager.default_instance=map;manager.instance_collection[map.instance_name]=map
+	var host:=manager.charge_instance(map,1)
+	await wait_for(func()->bool:return host.is_node_ready())
+	server.multiplayer_api.peer_connected.connect(manager._on_peer_connected)
+	server.multiplayer_api.peer_disconnected.connect(manager._release_pending_peer)
+	assert(issue("loading-alpha","alpha",characters[0],21))
+	var loading:=connect_client("loading-alpha")
+	await wait_for(func()->bool:return not loading.get_node("Instances").assignment.is_empty())
+	var loading_id:=loading.multiplayer_api.get_unique_id()
+	assert(host.awaiting_peers.has(loading_id) and host.connected_peers.is_empty())
+	assert(issue("full-beta","beta",characters[2],22))
+	var full:=connect_client("full-beta")
+	await wait_for(func()->bool:return full.ended and server.connected_players.size()==1)
+	assert(server.connected_players.has(loading_id) and host.population()==1)
+	assert(server.notifications.back().account=="beta" and server.notifications.back().retired,"capacity rejection retires Master authority")
+	player=server.connected_players[loading_id]
+	player.experience+=3;database.dirty_progression[player.player_id]=player
+	var final_xp:=player.experience
+	assert(database.load_wallet(player.player_id) and database.add_yang(player.player_id,7))
+	var final_yang:=database.wallet_balance(player.player_id)
+	host.awaiting_peers[loading_id].expires_at_ms=Time.get_ticks_msec()-1
+	assert(not server.can_join_map_instance(loading_id,host),"deadline checked before maintenance")
+	manager.maintain_instances()
+	await wait_for(func()->bool:return loading.ended and server.connected_players.is_empty())
+	assert(host.awaiting_peers.is_empty() and host.connected_peers.is_empty())
+	assert(database.store.get_player(characters[0]).experience==final_xp,"timeout checkpoints dirty progression")
+	assert(database.load_wallet(characters[0]) and database.wallet_balance(characters[0])==final_yang,"timeout checkpoints pending Yang")
+	assert(issue("retry-alpha","alpha",characters[0],21))
+	var retry:=connect_client("retry-alpha")
+	await wait_for(func()->bool:return not retry.get_node("Instances").assignment.is_empty())
+	var retry_id:=retry.multiplayer_api.get_unique_id()
+	assert(host.awaiting_peers.has(retry_id) and host.population()==1,"relogin reclaims timed-out capacity")
+	server.peer.disconnect_peer(retry_id)
+	await wait_for(func()->bool:return retry.ended and host.awaiting_peers.is_empty() and server.connected_players.is_empty())
+
 	for client: WireClient in clients:
 		client.peer.close()
 		client.multiplayer_api.auth_callback = Callable()
@@ -197,5 +249,5 @@ func run() -> void:
 	assert(db.close_db())
 	for suffix: String in ["", "-wal", "-shm"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path + suffix))
-	print("WORLD_SESSION_ADMISSION_OK native ticket expiry/replay, replacement, persistence and Master fencing")
+	print("WORLD_SESSION_ADMISSION_OK native ticket expiry/replay, replacement, persistence, Master fencing and bounded map entry/relogin")
 	get_tree().quit()

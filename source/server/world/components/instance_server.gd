@@ -26,8 +26,23 @@ var last_accessed_time: float
 var instance_map: Map
 var instance_resource: InstanceResource
 var identity: Dictionary = {}
-
+enum AdmissionState { ACCEPTING = 0, DRAINING = 1 }
+var admission_state: AdmissionState = AdmissionState.ACCEPTING
+var opened_at_ms: int = 0
+var idle_since_ms: int = -1
 var synchronizer_manager: StateSynchronizerManagerServer
+
+
+func population() -> int:
+	return connected_peers.size() + awaiting_peers.size()
+
+
+func accepts_reservation() -> bool:
+	return (
+		not is_queued_for_deletion()
+		and admission_state == AdmissionState.ACCEPTING
+		and population() < instance_resource.max_players
+	)
 
 
 func _ready() -> void:
