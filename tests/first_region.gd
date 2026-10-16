@@ -7,6 +7,24 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	var region: FirstRegionGraybox = world.region
+	# The production region activates authored loot (the tiny test arena retains
+	# the old guaranteed-sword fixture). Resolve without a DB to check safe RAM drops.
+	assert(world.kill_rewards._region_key == &"first_region")
+	var death := MobDeathResult.new()
+	death.mob_key = &"forest_wolf"
+	death.category = &"beast"
+	death.spawn_base_loot_rolls = 4
+	death.position = Vector3(-14,0,-15)
+	death.reward_owner = 0
+	death.timestamp_ms = Time.get_ticks_msec()
+	for roll_index: int in 30:
+		world.kill_rewards.spawn_ordinary_rewards(death)
+	assert(world.currency_endpoint.ground.size() == 30, "One Yang pile per mob, not per item roll")
+	for uid: String in world.ground_loot.drops:
+		var drop: Dictionary = world.ground_loot.drops[uid]
+		var definition := ItemDefinitions.get_definition(StringName(drop.definition_id))
+		assert(definition != null and drop.amount >= 1 and drop.amount <= definition.stack_limit)
+		assert(GroundLootSystem.prepare_claim_item(uid, 1, drop) != null, "Generated ground item can be claimed using its frozen payload")
 	var points := region.find_children("*","MobSpawnPoint3D",true,false)
 	var expected: int = 0
 	for point: MobSpawnPoint3D in points:
