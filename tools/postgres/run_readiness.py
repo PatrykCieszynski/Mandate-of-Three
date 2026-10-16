@@ -48,7 +48,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory"), default="readiness")
     args = parser.parse_args()
     extension = ".exe" if os.name == "nt" else ""
     binaries = {name: args.pg_bin.resolve() / (name + extension)
@@ -105,6 +105,7 @@ def main():
             "wallet": ("postgres_wallet", "POSTGRES_WALLET_OK"),
             "commit-failure": ("postgres_commit_failure", "POSTGRES_COMMIT_FAILURE_OK"),
             "npc-shop": ("postgres_npc_shop", "POSTGRES_NPC_SHOP_OK"),
+            "inventory": ("postgres_inventory", "POSTGRES_INVENTORY_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
              f"res://tests/{scene}.tscn", "--quit-after", "1200"],

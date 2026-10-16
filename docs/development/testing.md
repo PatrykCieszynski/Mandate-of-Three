@@ -100,6 +100,12 @@ port, including custody/receipts, full bag, exact target replay/reopen, SQL and
 COMMIT failures, and integer watermarks above 2^53. This remains opt-in, with no
 PostgreSQL dependency in default CI. See [NPC purchase parity](postgres-npc-shop-parity.md).
 
+`--suite inventory` compares character-local move/equip/swap/unequip/activate,
+starter initialization and ground pickup against SQLite, including durable
+receipt replay/reopen, full bag, partial-write rollback and native COMMIT faults.
+It is opt-in and does not switch World to PostgreSQL or cover account Storage.
+See [Inventory parity](postgres-inventory-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
