@@ -6,6 +6,7 @@ var _ground: GroundLootSystem
 var _currency: CurrencyEndpoint3D
 var _region_key: StringName = &""
 var _rng := RandomNumberGenerator.new()
+var event_drops := WorldEventDropService.new()
 
 func setup(services: MandateWorldServices, ground: GroundLootSystem, currency: CurrencyEndpoint3D, region_key: StringName = &"") -> void:
 	_services = services
@@ -21,6 +22,7 @@ func handle_mob_death(result: MobDeathResult) -> void:
 		spawn_reward(result.position, result.reward_owner, result.timestamp_ms)
 	else:
 		spawn_ordinary_rewards(result)
+	spawn_event_rewards(result)
 	var player := _services.current_player(result.reward_owner, result.recipient)
 	if result.reward_owner > 0 and player != null and _services.progression() != null:
 		_services.progression().award_experience(player, result.experience_reward)
@@ -45,6 +47,18 @@ func spawn_ordinary_rewards(result: MobDeathResult) -> void:
 				push_error("Resolved loot rejected by ground custody for mob %s" % result.mob_key)
 	# Yang and XP are separate from item attempts, Luck and equipment rarity.
 	_currency.spawn_currency(result.position, result.reward_owner, owner_name, result.timestamp_ms, CurrencyEndpoint3D.DOG_YANG)
+
+## Event drops are independent of ordinary rolls, Yang, XP and Luck.
+func spawn_event_rewards(result: MobDeathResult) -> void:
+	var outcomes: Array[Dictionary] = event_drops.resolve_drops()
+	if outcomes.is_empty():
+		return
+	var owner_name := _ground.owner_name_for_owner(result.reward_owner)
+	for item: Dictionary in outcomes:
+		var uid := _ground.spawn_resolved_item(result.position, result.reward_owner, owner_name,
+			result.timestamp_ms, item.definition_id, item.amount, item.affixes)
+		if uid.is_empty():
+			push_error("Event ground custody rejected item for mob %s" % result.mob_key)
 
 ## Guaranteed legacy encounter reward, intentionally separate from ordinary tables.
 ## Metin stone still grants exactly one prototype sword and the configured Yang.
