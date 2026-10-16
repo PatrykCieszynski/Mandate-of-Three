@@ -82,7 +82,7 @@ def main():
     initialized = False
     try:
         run([binaries["initdb"], "-D", data, "-U", "mandate_bootstrap", "--encoding=UTF8",
-             "--locale=C", "--auth-host=scram-sha-256", "--auth-local=trust",
+             "--locale=C", "--auth-host=scram-sha-256", "--auth-local=scram-sha-256",
              "--pwfile", password_file], log=control_log)
         initialized = True
         password_file.unlink()
