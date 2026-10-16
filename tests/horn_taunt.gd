@@ -1,5 +1,5 @@
 extends Node3D
-## Server horn targets whole eligible packs without stealing aggro.
+## Server horn selects nearest individual mobs without stealing aggro.
 func entry(mob: MobDefinition, count: int) -> MobSpawnEntry:
 	var result := MobSpawnEntry.new()
 	result.mob = mob
@@ -38,17 +38,19 @@ func _ready() -> void:
 	var first := world.mob_system.create_pack([entry(dog, 10)], Vector3(2, 0, 0), 0, 0, 20, 0)
 	var second := world.mob_system.create_pack([entry(dog, 10)], Vector3(5, 0, 0), 0, 0, 20, 0)
 	var third := world.mob_system.create_pack([entry(dog, 10)], Vector3(9, 0, 0), 0, 0, 20, 0)
-	assert(world.mob_system.taunt_nearby_packs(1, 12.0, 15) == 10)
+	assert(world.mob_system.taunt_nearby_mobs(1, 12.0, 15) == 15)
 	for id: int in first.actor_ids:
 		assert(world.mob_system.mobs[id].target_peer == 1)
-	for id: int in second.actor_ids:
+	for id: int in second.actor_ids.slice(0, 5):
+		assert(world.mob_system.mobs[id].target_peer == 1)
+	for id: int in second.actor_ids.slice(5):
 		assert(world.mob_system.mobs[id].target_peer == 0)
 	for id: int in third.actor_ids:
 		assert(world.mob_system.mobs[id].target_peer == 0)
-	assert(world.mob_system.taunt_nearby_packs(1, 12.0, 15) == 10)
-	assert(world.mob_system.taunt_nearby_packs(1, 12.0, 15) == 10)
+	assert(world.mob_system.taunt_nearby_mobs(1, 12.0, 15) == 15)
+	assert(world.mob_system.taunt_nearby_mobs(1, 12.0, 15) == 0)
 	world.free()
 	WorldServer.curr = null
 	server.free()
-	print("HORN_TAUNT_OK: tiers, cap, complete packs and no aggro theft")
+	print("HORN_TAUNT_OK: tiers, cap, individual selection and no aggro theft")
 	get_tree().quit()
