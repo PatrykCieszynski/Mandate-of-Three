@@ -36,6 +36,12 @@ var failed := false
 var number := 0
 var database_path := ""
 var reserved_host: ServerInstance
+var recovery_items: ItemUiAdapter
+var recovery_session: UiCommandSession
+var recovery_dispatcher: UiCommandDispatcher
+var recovery_directory := ""
+var recovery_uid := ""
+var recovery_revision := 0
 
 func check(value: bool, message: String) -> void:
 	if value: return
@@ -86,8 +92,15 @@ func _ready() -> void:
 			check(catalogue.channels.size()==2 and catalogue.channels.all(func(row: Dictionary)->bool:return row.keys().size()==4 and row.channel_id in [1,2]),"public catalogue excludes reserved IDs, sessions and host metadata")
 			client_manager.select_initial_channel(number))
 		client_manager.instance_changed.connect(func(instance: InstanceClient)->void:
+			if recovery_items!=null:
+				recovery_session.close("teardown")
+				recovery_items.dispose()
+				recovery_items=null
+				recovery_dispatcher.dispose()
+				recovery_dispatcher.queue_free()
 			world=instance.get_node("GameWorld");world.input_enabled=false
-			world.market_endpoint.operation_finished.connect(func(id: String,result: Dictionary)->void:operations[id]=result))
+			world.market_endpoint.operation_finished.connect(func(id: String,result: Dictionary)->void:operations[id]=result)
+			world.inventory_endpoint.operation_finished.connect(func(id: String,result: Dictionary)->void:operations[id]=result))
 		check(socket.create_client("ws://127.0.0.1:18098")==OK,"loopback client")
 		api.multiplayer_peer=socket
 
@@ -201,11 +214,18 @@ func run_server() -> void:
 	finish.rpc_id(first,offer.item.uid,false,0)
 	finish.rpc_id(second,offer.item.uid,true,buyer_balance-25)
 	await wait_until(func()->bool:return done.size()==2)
+	if reserved_host==null:
+		await exercise_transfer(first,second,a,b)
+	else:
+		var private_peer: int = first if a==reserved_host else second
+		check(not manager.transfers.start(private_peer,1).ok,"reserved copy cannot use public CH handoff")
 	check(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty(),"shared custody remains integral")
 	check(server.database.flush_wallet(),"dirty checkpoint")
-	print("LOCAL_MAP_SERVER_OK production manager/identity, two First Region copies, physics/roster/mob/Metin/loot isolation, foreign RPC rejection, shared economic settlement")
 	left.process_mode=Node.PROCESS_MODE_DISABLED
 	right.process_mode=Node.PROCESS_MODE_DISABLED
+	shutdown.rpc()
+	await get_tree().create_timer(.2).timeout
+	print("LOCAL_MAP_SERVER_OK production manager/identity, two First Region copies, physics/roster/mob/Metin/loot isolation, foreign RPC rejection, shared economic settlement")
 	socket.close()
 	db.close_db()
 	for suffix: String in ["","-wal","-shm"]: DirAccess.remove_absolute(ProjectSettings.globalize_path(database_path+suffix))
@@ -572,5 +592,164 @@ func finish(uid: String, bought: bool, expected_balance: int) -> void:
 	check(world.characters.size()==1,"private roster remains isolated after trade")
 	print("LOCAL_MAP_CLIENT_OK assigned instance, isolated simulation and shared economy")
 	finished.rpc_id(1)
-	await get_tree().create_timer(.3).timeout
+
+@rpc("authority","call_remote","reliable",0)
+func shutdown() -> void:
+	if recovery_items!=null:
+		recovery_session.close("teardown")
+		recovery_items.dispose()
+		recovery_dispatcher.dispose()
 	get_tree().quit(1 if failed else 0)
+
+## Controlled failure injection plus a real client map recreation/activation.
+## Assert conservation/membership, not the implementation's dictionary layout.
+func exercise_transfer(peer: int, other: int, source: ServerInstance, target: ServerInstance) -> void:
+	var map: GameWorld3D=source.get_node("GameWorld")
+	var destination: GameWorld3D=target.get_node("GameWorld")
+	var session: PlayerResource=server.connected_players[peer]
+	var owner:=session.player_id
+	var channel:=int(target.identity.channel_id)
+	var body: PlayerActor3D=map.characters[peer]
+	var transfer=manager.transfers
+	map.npc_endpoint.close_for_peer(peer)
+	map.intentions[peer].direction=Vector2.ZERO
+	body.hp=73
+	map.combat_endpoint.set_combo_skill_level(peer,1)
+	map.combat_endpoint.set_combo_enabled(peer,true)
+	var capacity:=source.instance_resource.max_players
+	source.instance_resource.max_players=1
+	check(not transfer.start(peer,channel).ok,"full channel rejects without removing source")
+	source.instance_resource.max_players=capacity
+	target.admission_state=ServerInstance.AdmissionState.DRAINING
+	check(not transfer.start(peer,channel).ok,"draining channel rejects transfer")
+	target.admission_state=ServerInstance.AdmissionState.ACCEPTING
+	map.combat_endpoint.last_combat_ms[peer]=Time.get_ticks_msec()
+	check(transfer.start(peer,channel).get("error")=="combat","recent damage/attack cooldown gates transfer")
+	map.combat_endpoint.last_combat_ms.erase(peer)
+	var npc: NeutralNpc3D=map.npc_endpoint.actors.values()[0]
+	var original_position:=body.position
+	body.position=npc.position
+	check(map.npc_endpoint.interact_for_peer(peer,npc.instance_id).ok,"authoritative NPC interaction before transfer")
+	check(transfer.start(peer,channel).get("error")=="interaction","open NPC interaction gates transfer")
+	map.npc_endpoint.close_for_peer(peer)
+	body.position=original_position
+	check(transfer.start(peer,channel).ok,"reserve destination while source remains active")
+	var attempt: Dictionary=transfer.snapshot(peer)
+	check(not server.can_join_map_instance(peer,target),"countdown reservation cannot activate destination")
+	check(transfer.start(peer,channel).ok and transfer.snapshot(peer).attempt==attempt.attempt,"duplicate start retains original attempt")
+	check(not transfer.cancel(peer,attempt.attempt,attempt.epoch+1).ok,"wrong epoch cannot cancel")
+	check(transfer.cancel(peer,attempt.attempt,attempt.epoch).ok and transfer.cancel(peer,attempt.attempt,attempt.epoch).ok,"cancel replay safe")
+	check(not target.awaiting_peers.has(peer) and source.connected_peers.has(peer) and map.characters[peer]==body,"cancel releases only destination")
+	check(transfer.start(peer,channel).ok,"new attempt after cancel")
+	check(not transfer.cancel(peer,attempt.attempt,attempt.epoch).ok,"stale cancel cannot affect new attempt")
+	var balance:=server.database.wallet_balance(owner)
+	var drop:=map.currency_endpoint.spawn_currency(body.position,owner,"transfer",Time.get_ticks_msec(),17)
+	check(map.currency_endpoint.pickup_for_peer(peer,drop,Time.get_ticks_msec()).get("error")=="transfer_pending","autoloot/new currency income gated")
+	check(map.currency_endpoint.spend_for_peer(peer,11,Time.get_ticks_msec()).get("error")=="transfer_pending" and server.database.wallet_balance(owner)==balance,"critical spend gated without debit")
+	probe_transfer.rpc_id(peer)
+	await wait_until(func()->bool:return answers.get(peer)=="transfer_gated")
+	map.currency_endpoint.ground.erase(drop)
+	map.combat_endpoint.hurt_player(peer,1,Time.get_ticks_msec())
+	check(not transfer.gated(peer) and map.characters[peer]==body and transfer.snapshot(peer).error=="damage","actual damage interrupts countdown and preserves source")
+	map.combat_endpoint.last_combat_ms.erase(peer)
+	body.hit_reaction.clear()
+	body.knockback_velocity=Vector3.ZERO
+	body.hp=73
+	check(transfer.start(peer,channel).ok,"restart for movement")
+	body.position.x+=1
+	transfer.tick()
+	check(not transfer.gated(peer) and map.characters[peer]==body,"movement aborts countdown")
+	check(transfer.start(peer,channel).ok,"restart for target loss")
+	target.admission_state=ServerInstance.AdmissionState.DRAINING
+	transfer.tick()
+	check(not transfer.gated(peer) and not target.awaiting_peers.has(peer),"target drain aborts and releases reservation")
+	target.admission_state=ServerInstance.AdmissionState.ACCEPTING
+	check(transfer.start(peer,channel).ok,"restart for checkpoint failure")
+	var real_db:=server.database
+	var failure:=FailedCheckpoint.new()
+	server.database=failure
+	transfer.tick(Time.get_ticks_msec()+6000)
+	server.database=real_db
+	check(failure.calls==1 and not transfer.gated(peer) and map.characters[peer]==body and body.hp==73,"checkpoint failure leaves live source and HP intact")
+	failure.free()
+	prepare_transfer_receipt.rpc_id(peer)
+	await wait_until(func()->bool:return answers.get(peer)=="transfer_receipt")
+	check(real_db.add_yang(owner,37),"dirty Yang before handoff")
+	real_db.award_experience(session,10)
+	var final_xp:=session.experience
+	var final_balance:=real_db.wallet_balance(owner)
+	check(transfer.start(peer,channel).ok,"final controlled handoff admitted")
+	# Exercise start over the real RPC as well: it must replay the same countdown.
+	start_transfer.rpc_id(peer,channel)
+	await wait_until(func()->bool:return answers.get(peer)=="transfer_started")
+	transfer.tick(Time.get_ticks_msec()+6000)
+	check(not map.characters.has(peer) and not source.connected_peers.has(peer),"source fenced before destination activation")
+	await wait_until(func()->bool:return destination.characters.has(peer))
+	check(destination.characters.size()==2 and destination.characters.has(other) and target.connected_peers.count(peer)==1,"exactly one destination actor alongside other client")
+	check(destination.characters[peer].hp==73 and destination.combat_endpoint.combo_state(peer).combo_enabled,"handoff preserves HP/combat options")
+	check(real_db.wallet_balance(owner)==final_balance and real_db.runtime_wallets[real_db.wallet_account_id(owner)].pending_currency_delta==0,"pending Yang checkpointed without loss/duplication")
+	check(real_db.store.get_player(owner).experience==final_xp,"progression checkpointed before handoff")
+	check(transfer.snapshot(peer).phase=="completed" and not transfer.gated(peer),"destination completion opens mutations")
+	check(not transfer.cancel(peer,transfer.snapshot(peer).attempt,transfer.snapshot(peer).epoch).ok,"late cancel never resurrects source")
+	confirm_transfer.rpc_id(peer,str(target.name),final_balance)
+	await wait_until(func()->bool:return answers.get(peer)=="transfer_confirmed")
+	print("LOCAL_TRANSFER_OK cancel/movement/combat/drain/failure/gates/checkpoint, client recreation, single activation and retained HP/Yang")
+
+@rpc("authority","call_remote","reliable",0)
+func probe_transfer() -> void:
+	var item: Dictionary=world.inventory_endpoint.state.items[0]
+	world.inventory_endpoint.request_move_item.rpc_id(1,item.uid,item.revision,0,0,0,"transfer_gate","transfer-gate-operation")
+	await wait_until(func()->bool:return operations.has("transfer_gate"))
+	check(operations.transfer_gate.get("error")=="transfer_pending","actual Inventory RPC blocked during countdown")
+	report.rpc_id(1,"transfer_gated")
+
+@rpc("authority","call_remote","reliable",0)
+func start_transfer(channel: int) -> void:
+	# The earlier forged-path test installed inert foreign RPC stubs. They are
+	# fixture-only nodes, and must not collide with a subsequently legitimate map.
+	for child: Node in client_manager.get_children():
+		if child!=client_manager.current_instance:
+			client_manager.remove_child(child)
+			child.queue_free()
+	client_manager._next_channel_request=100001 # Earlier forged-selector regression used request 100000.
+	client_manager.channel_transfer("start",channel)
+	await wait_until(func()->bool:return client_manager.transfer.get("phase")=="countdown")
+	report.rpc_id(1,"transfer_started")
+
+@rpc("authority","call_remote","reliable",0)
+func confirm_transfer(instance_id: String, balance: int) -> void:
+	await wait_until(func()->bool:return str(client_manager.current_instance.name)==instance_id and world.characters.size()==2 and world.currency_endpoint.state.get("balance",-1)==balance and world.combat_endpoint.state.get("health",{}).get(multiplayer.get_unique_id(),-1)==73)
+	compose_recovery()
+	await wait_until(func()->bool:return recovery_items.journal.load_pending().entry.is_empty())
+	var recovered: Array=world.inventory_endpoint.state.items.filter(func(item: Dictionary)->bool:return item.uid==recovery_uid)
+	check(recovered.size()==1 and recovered[0].revision==recovery_revision,"lost-response Inventory receipt recovers across CH without another mutation")
+	world.join_world.rpc_id(1) # Duplicate ready cannot heal or create another actor.
+	client_manager.channel_transfer("status")
+	await wait_until(func()->bool:return client_manager.transfer.get("phase")=="completed")
+	report.rpc_id(1,"transfer_confirmed")
+
+func compose_recovery() -> void:
+	recovery_dispatcher=UiCommandDispatcher.new()
+	add_child(recovery_dispatcher)
+	var bridge:=WebUiBridge.new()
+	recovery_dispatcher.add_child(bridge)
+	recovery_dispatcher.attach(bridge)
+	recovery_session=UiCommandSession.new()
+	recovery_items=ItemUiAdapter.new()
+	recovery_items.journal.directory=recovery_directory
+	recovery_items.attach(world.inventory_endpoint,recovery_dispatcher,recovery_session,get_tree())
+
+@rpc("authority","call_remote","reliable",0)
+func prepare_transfer_receipt() -> void:
+	recovery_directory="res://.godot/verification/transfer-journal-%d" % multiplayer.get_unique_id()
+	compose_recovery()
+	var item: Dictionary=world.inventory_endpoint.state.items.filter(func(row: Dictionary)->bool:return row.location=="bag")[0]
+	recovery_uid=item.uid
+	world.inventory_endpoint.operation_finished.disconnect(recovery_session.finish)
+	var result:=await recovery_items._move({"id":item.uid,"revision":item.revision,"x":4,"y":6,"page":3})
+	world.inventory_endpoint.operation_finished.connect(recovery_session.finish)
+	check(result.get("error")=="inventory_pending" and not recovery_items.journal.load_pending().entry.is_empty(),"committed Inventory move with lost response retains durable client intent before CH")
+	var moved: Dictionary=world.inventory_endpoint.state.items.filter(func(row: Dictionary)->bool:return row.uid==recovery_uid)[0]
+	check(moved.revision==int(item.revision)+1,"move committed before transfer; response deliberately lost")
+	recovery_revision=moved.revision
+	report.rpc_id(1,"transfer_receipt")

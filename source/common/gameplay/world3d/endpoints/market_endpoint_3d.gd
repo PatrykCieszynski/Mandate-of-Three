@@ -40,6 +40,7 @@ func _owner(peer_id: int) -> int:
 	return player.player_id if player!=null else 0
 
 func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dictionary:
+	if action not in ["open","receipt"] and not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
 	if not valid(action,payload) or not services.available() or services.economy()==null: return {"ok":false,"error":"request"}
 	var owner := _owner(peer_id)
 	if owner<=0: return {"ok":false,"error":"owner"}

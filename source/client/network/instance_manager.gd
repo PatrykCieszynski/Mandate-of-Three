@@ -5,6 +5,7 @@ extends Node
 signal instance_changed(instance: InstanceClient)
 signal channels_changed(catalogue: Dictionary)
 signal channel_selection_finished(result: Dictionary)
+signal transfer_changed(result: Dictionary)
 
 
 var current_instance: InstanceClient
@@ -13,10 +14,12 @@ var channels: Dictionary = {}
 var _next_channel_request: int = 1
 var _catalogue_request: int = 0
 var _selection_request: int = 0
+var transfer: Dictionary = {"phase":"idle"}
 
 
 func reset_channel_flow() -> void:
 	channels = {}
+	transfer = {"phase":"idle"}
 	_catalogue_request = 0
 	_selection_request = 0
 	_next_channel_request = 1
@@ -35,6 +38,24 @@ func select_initial_channel(channel_id: int) -> void:
 	request_initial_channel.rpc_id(1, _selection_request, channel_id)
 
 
+func channel_transfer(action: String, channel_id: int = 0) -> void:
+	var request_id := _next_channel_request
+	_next_channel_request+=1
+	request_transfer.rpc_id(1,request_id,action,channel_id,int(transfer.get("attempt",0)),int(transfer.get("epoch",0)))
+
+
+@rpc("any_peer", "call_remote", "reliable", 0)
+func request_transfer(_request_id: int, _action: String, _channel: int, _attempt: int, _epoch: int) -> void: pass
+
+
+@rpc("authority", "call_remote", "reliable", 0)
+func receive_transfer(_request_id: int, result: Dictionary) -> void:
+	var incoming: Dictionary = result.get("transfer",{})
+	if int(incoming.get("attempt",0))<int(transfer.get("attempt",0)): return
+	transfer=incoming.duplicate(true)
+	transfer_changed.emit(result)
+
+
 @rpc("any_peer", "call_remote", "reliable", 0)
 func request_channels(_request_id: int) -> void: pass
 
@@ -45,10 +66,10 @@ func request_initial_channel(_request_id: int, _channel_id: int) -> void: pass
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_channels(request_id: int, result: Dictionary) -> void:
-	if request_id != _catalogue_request or current_instance != null: return
+	if request_id != _catalogue_request: return
 	channels = result.duplicate(true)
 	channels_changed.emit(channels)
-	if auto_select_channel and result.get("ok", false) and _selection_request == 0:
+	if current_instance==null and auto_select_channel and result.get("ok", false) and _selection_request == 0:
 		select_initial_channel(0)
 
 

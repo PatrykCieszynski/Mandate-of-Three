@@ -30,6 +30,7 @@ func open_for_peer(peer_id: int, instance_id: String, service_id: StringName) ->
 	return {"ok":true}
 
 func buy_for_peer(peer_id: int, instance_id: String, service_id: StringName, offer_id: StringName, position: int, now: int, operation_id: String = "") -> Dictionary:
+	if not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
 	if now - _last_buy.get(peer_id, -1000) < 100: return {"ok":false, "error":"too_fast"}
 	_last_buy[peer_id] = now
 	var authorization: Dictionary = _authorization(peer_id, instance_id, service_id)

@@ -176,6 +176,10 @@ func _build_camera_and_ui() -> void:
 	options_button.text = "Options"
 	options_button.focus_mode = Control.FOCUS_NONE
 	controls.add_child(options_button)
+	var channel_button := Button.new()
+	channel_button.text="Change CH"
+	channel_button.focus_mode=Control.FOCUS_NONE
+	controls.add_child(channel_button)
 	_ui_failure_label = Label.new()
 	_ui_failure_label.custom_minimum_size.x = 300
 	_ui_failure_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -188,6 +192,20 @@ func _build_camera_and_ui() -> void:
 	_options = load("res://source/client/ui/settings/settings_menu.tscn").instantiate() as Navigator
 	_options.hide()
 	options_layer.add_child(_options)
+	var channel_panel := preload("res://source/client/network/channel_transfer_panel.gd").new()
+	options_layer.add_child(channel_panel)
+	var network := get_parent().get_parent() as InstanceManagerClient
+	if network!=null:
+		channel_panel.setup(network)
+		channel_button.pressed.connect(func()->void:
+			_options.hide()
+			_npc_approach.cancel()
+			var inventory: Node = get_node_or_null("WebInventory")
+			if inventory!=null: inventory.set_open(false)
+			channel_panel.open())
+	else:
+		channel_button.hide()
+		channel_panel.queue_free()
 	_options.visibility_changed.connect(func() -> void:
 		if _options.visible:
 			_npc_approach.cancel()
@@ -196,7 +214,9 @@ func _build_camera_and_ui() -> void:
 		ClientState.menu_open = _options.visible
 		input_enabled = not _options.visible
 		if not _options.visible: get_viewport().gui_release_focus())
-	options_button.pressed.connect(func() -> void: _options.show())
+	options_button.pressed.connect(func() -> void:
+		if is_instance_valid(channel_panel): channel_panel.hide()
+		_options.show())
 
 func gameplay_camera() -> Camera3D:
 	return _camera
@@ -284,6 +304,7 @@ func join_world() -> void:
 	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null:
 		return
+	var carried := services.hydrate_transfer(peer_id,host)
 	host.awaiting_peers.erase(peer_id)
 	host.connected_peers.append(peer_id)
 	resource.current_instance = host.instance_resource.instance_name
@@ -293,14 +314,14 @@ func join_world() -> void:
 	_send_roster()
 	inventory_endpoint.initialize_peer(peer_id)
 	currency_endpoint.initialize_peer(peer_id)
-	combat_endpoint.initialize_peer(peer_id)
+	combat_endpoint.initialize_peer(peer_id,carried)
 	world_time.publish_to(peer_id)
 	print("SPIKE3D_JOIN: ", peer_id)
 
-func remove_peer(peer_id: int) -> void:
+func remove_peer(peer_id: int, checkpoint_already_saved: bool = false) -> void:
 	var host: ServerInstance = get_parent() as ServerInstance
 	if _server and not characters.has(peer_id) and (host==null or not host.awaiting_peers.has(peer_id)): return
-	if _server:
+	if _server and not checkpoint_already_saved:
 		var resource: PlayerResource = services.player_for_peer(peer_id)
 		if resource != null and services.economy() != null:
 			services.economy().flush_character(resource.player_id)
