@@ -79,7 +79,8 @@ def main():
     env["PGPASSWORD"] = password
     control_log = directory / "control.log"
     summary = {"result": "FAIL", "cluster": "owned disposable loopback", "port": port,
-               "soci": "v0.4.1", "suite": args.suite, "started_at_unix": int(time.time())}
+               "soci": json.loads((ROOT / "tools/soci/release.json").read_text(encoding="utf-8"))["tag"],
+               "suite": args.suite, "started_at_unix": int(time.time())}
     initialized = False
     try:
         run([binaries["initdb"], "-D", data, "-U", "mandate_bootstrap", "--encoding=UTF8",

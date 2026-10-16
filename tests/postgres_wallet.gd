@@ -139,8 +139,15 @@ func _ready() -> void:
 	assert(postgres.rollback())
 	assert(pg_wallet.spend_in_transaction(account,0,1).error=="transaction")
 	assert(pg_wallet.credit_in_transaction(account,0,1).error=="transaction")
-	# Native COMMIT-error handling is isolated in postgres_commit_failure: the
-	# pinned Windows driver currently exits before GDScript can inspect its result.
+	# COMMIT rejection is conservatively unknown at the store boundary: discard
+	# the session and reconcile, never invite blind retry of income or a spend.
+	assert(postgres.execute("CREATE CONSTRAINT TRIGGER fixture_commit AFTER UPDATE ON economy.account_wallets DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.fixture_reject_wallet();").ok)
+	var uncertain: Dictionary = pg_wallet.spend(account,9,1)
+	assert(not uncertain.ok and uncertain.outcome_unknown and uncertain.error=="outcome_unknown")
+	assert(not postgres.is_open())
+	assert(postgres.open("postgresql",connection))
+	assert(postgres.execute("DROP TRIGGER fixture_commit ON economy.account_wallets;").ok)
+	assert(state(pg_wallet,account)==before, "injected deferred failure rolled back before reconnect")
 	postgres.close()
 	assert(postgres.open("postgresql",connection) and PgSchema.ensure_schema(postgres))
 	assert(pg_wallet.load_wallet(account).wallet_state.authority_id==authority and state(pg_wallet,account)==before)

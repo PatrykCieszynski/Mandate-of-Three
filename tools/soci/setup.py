@@ -14,7 +14,7 @@ addon=ROOT/'addons/godot_soci'
 if not args.check:
     archive=ROOT/'.godot/plugin-cache'/LOCK['asset']; archive.parent.mkdir(parents=True,exist_ok=True)
     if not archive.exists():
-        local=ROOT/'.godot/verification/soci-release-041'/LOCK['asset']
+        local=ROOT/'.godot/verification'/('soci-release-'+LOCK['tag'].lstrip('v').replace('.',''))/LOCK['asset']
         archive.write_bytes(local.read_bytes() if local.exists() else urllib.request.urlopen(LOCK['url'],timeout=60).read())
     if hashlib.sha256(archive.read_bytes()).hexdigest()!=LOCK['sha256']: raise ValueError('SOCI archive hash mismatch')
     with zipfile.ZipFile(archive) as z:

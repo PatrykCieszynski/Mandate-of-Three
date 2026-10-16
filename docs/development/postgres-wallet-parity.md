@@ -1,15 +1,16 @@
 # PostgreSQL P1b — account wallet parity
 
-Status: opt-in backend port candidate; **not connected to World runtime**. The game
-still uses SQLite. Core wallet parity passes, but a native COMMIT-error crash is a
-blocking driver finding, so this package is not approved for runtime use. It is
-not full P1 Item/Shop/Storage/Upgrade/Exchange parity or the later executor gates.
+Status: opt-in backend port; **not connected to World runtime**. The game still
+uses SQLite. Wallet parity and the installed-payload COMMIT-error regression pass
+with pinned SOCI v0.4.2. The historical v0.4.1 crash and its resolution are recorded
+below. This is not full P1 Item/Shop/Storage/Upgrade/Exchange parity or the later
+executor gates. See the [active SOCI dependency](soci-dependency.md).
 
 ## Ownership and schema
 
 `source/server/world/database/postgres/` contains a PostgreSQL-specific schema
 bootstrap and wallet store. There is no generic database interface or SQLite SQL
-translation. All statements use the pinned native godot-soci v0.4.1 API.
+translation. All statements use the pinned native godot-soci v0.4.2 API.
 
 The isolated `economy` namespace starts with trusted Master account IDs, a stable
 authority identity and account wallets. It does not copy passwords, create login
@@ -39,10 +40,9 @@ parallel schema bootstraps are not an accepted deployment procedure.
   and receipt writes in that same transaction. No COMMIT is hidden in a primitive.
 - Standalone operations refuse to take over an existing caller transaction.
 - If native COMMIT returns failure, the store returns `outcome_unknown` and closes
-  the session. The pinned Windows binary currently crashes first in the isolated
-  deferred-error reproducer below; this containment path is not runtime-validated.
-  Never infer
-  failure or blindly resubmit the spend/delta. This store does **not** implement
+  the session. The deferred-error fixture verifies this response, session close
+  and state reconciliation after reconnect on the installed v0.4.2 payload.
+  Never infer failure or blindly resubmit the spend/delta. This store does **not** implement
   durable command receipts or grinding-batch deduplication; outcome discovery and
   fencing must be added before remote/runtime use.
 
@@ -80,7 +80,7 @@ SQLite fixture and the actual PostgreSQL driver. It compares durable snapshots
 - exact cap and balance/reservation/revision persistence after reconnect;
 - repeated schema bootstrap and rejection of a future schema version.
 
-## Blocking driver finding: failed native COMMIT
+## Historical driver finding: failed native COMMIT on v0.4.1
 
 ```powershell
 python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite commit-failure
@@ -132,11 +132,19 @@ was verified against GitHub's SHA-256:
 `f597edbb6aae906de676dc50d98a625d0f8c9ba209a5d178a4eab83debc291e4`.
 
 No new C++ patch was required. This narrows the blocker to the old dependency pin,
-not an unresolved failure on current upstream. **Mandate remains pinned to v0.4.1**;
-adoption still requires an explicit dependency update and rerunning the complete
+not an unresolved failure on current upstream. At this investigation stage,
+Mandate was still pinned to v0.4.1; adoption required an explicit update and the complete
 wallet/readiness/auction regressions on that installed payload. These isolated
 results do not establish whole-game compatibility, Linux behavior or safe retry
 after actual connection loss.
+
+### Adopted dependency
+
+The subsequent user-authorized update installs and pins the official v0.4.2
+payload, including all per-file hashes. The installed Mandate payload passes
+`commit-failure`, `wallet` (including the store's unknown-COMMIT/close/reconnect
+path) and `readiness`. World still uses SQLite. Historical isolated A/B evidence
+above is retained rather than relabeled as current-runtime evidence.
 
 The existing `yang_wallet` smoke remains responsible for authoritative RAM,
 30-second dirty batching, disconnect/relog and shutdown behavior on the current

@@ -1,7 +1,7 @@
 extends Node
 ## Minimal native-only reproducer. No Wallet/SQLite/gameplay code participates.
-## v0.4.1 Windows currently terminates at commit() with 0xE06D7363. Do not turn
-## this into an expected PASS: driver failure containment is a runtime adoption gate.
+## v0.4.1 Windows terminated at commit() with 0xE06D7363. Keep this regression
+## on the installed payload: native failure containment is an adoption gate.
 func _ready() -> void:
 	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster", "Use the owned PostgreSQL runner")
 	var db: Object = ClassDB.instantiate("GodotSociDatabase")

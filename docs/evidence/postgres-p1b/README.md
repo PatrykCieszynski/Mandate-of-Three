@@ -59,3 +59,31 @@ LNK4098 CRT-library warning; it is not a production distribution artifact. The
 published-payload A/B is the adoption evidence. No native debugger was installed;
 the ABI diagnosis uses the upstream source fix plus this controlled A/B, not a
 captured C++ exception stack. Mandate's pin and installed files remain unchanged.
+
+## Subsequent user-authorized v0.4.2 adoption
+
+The earlier pin-preservation statements describe the investigation stage. Mandate
+now pins and installs the official v0.4.2 archive and all 24 file hashes through
+`tools/soci/release.json` / `setup.py`. Installed-payload verification:
+
+| Check | Result |
+| --- | --- |
+| setup.py --check | PASS: v0.4.2 |
+| Native deferred-COMMIT containment and rollback | PASS |
+| SQLite/PostgreSQL wallet parity, including unknown-COMMIT/session-close/reconnect | PASS |
+| Original PostgreSQL readiness | PASS |
+| Default smoke | PASS: 13 Godot / 85 Web |
+| Auction async admission, parity, deadlines, failed-drain recovery, backup/restart | PASS |
+| Two real auction RPC clients, 10k offers, combat/AI, atomic mutations and receipts | PASS |
+| Owned writer crash, WAL restore and async reader restart | PASS |
+
+The first direct auction-queries invocation lacked its fixture parent; the next
+attempt could not write `user://` backups in the sandbox. It passed after creating
+the fixture directory and isolating APPDATA/LOCALAPPDATA in verification. No
+admission limit or runtime behavior was loosened. The load fixture's dependency
+label now reads the pin, instead of hardcoding 0.4.1; native SQL timing remains
+uncollected by that fixture. No native payload or database is committed.
+
+This closes the v0.4.1 driver adoption blocker. Future domain ports, P2 races,
+P3 asynchronous execution/receipts/fencing, P4 operational proof and Linux
+verification remain separate gates. See [active dependency](../../development/soci-dependency.md).
