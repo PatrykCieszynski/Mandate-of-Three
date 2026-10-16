@@ -115,7 +115,7 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 
 	if not ItemInstance.valid_uid(uid) or not drops.has(uid):
 		return {"ok": false, "error": "gone"}
-    
+
 	var drop: Dictionary = drops[uid]
 	if now >= int(drop.expires):
 		drops.erase(uid)

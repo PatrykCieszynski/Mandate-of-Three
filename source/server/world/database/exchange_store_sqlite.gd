@@ -33,12 +33,20 @@ func ledger(character_id: int) -> Dictionary:
 	var account:=WorldStoreSqlite.new(db).resolve_account_id(character_id)
 	if account<=0: return {"ok":false,"error":"owner"}
 	if not db.query_with_bindings("SELECT asset_id,free,reserved FROM exchange_assets WHERE account_id=? ORDER BY asset_id;",[account]): return {"ok":false,"error":"storage"}
-	var assets: Array=[]
-	for definition: ItemDefinition in [ItemDefinitions.UPGRADE_ORE]:
-		var quantity: Dictionary={"asset_id":str(definition.definition_id),"name":definition.item_name,"stack_limit":definition.stack_limit,"free":0,"reserved":0}
-		for row: Dictionary in db.query_result:
-			if row.asset_id==str(definition.definition_id): quantity.free=int(row.free);quantity.reserved=int(row.reserved)
-		assets.append(quantity)
+	# Publish every asset the same admission policy accepts for deposits,
+	# even when its balance is zero. The UI derives its withdraw selector here.
+	var balances: Dictionary = {}
+	for row: Dictionary in db.query_result:
+		balances[str(row.asset_id)] = row
+	var assets: Array = []
+	for definition: ItemDefinition in ItemDefinitions.all_definitions():
+		var asset_id := str(definition.definition_id)
+		if asset_definition(asset_id) != definition:
+			continue
+		var row: Dictionary = balances.get(asset_id, {})
+		assets.append({"asset_id": asset_id, "name": definition.item_name,
+			"stack_limit": definition.stack_limit,
+			"free": int(row.get("free", 0)), "reserved": int(row.get("reserved", 0))})
 	if not db.query_with_bindings("SELECT yang,reserved_yang FROM account_wallets WHERE account_id=?;",[account]) or db.query_result.is_empty(): return {"ok":false,"error":"storage"}
 	return {"ok":true,"assets":assets,"yang":int(db.query_result[0].yang),"reserved_yang":int(db.query_result[0].reserved_yang)}
 func deposit(character_id: int,command_id: String,uid: String,revision: int,amount: int,source: String) -> Dictionary:

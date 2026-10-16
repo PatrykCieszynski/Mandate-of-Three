@@ -209,7 +209,14 @@ func _reply(peer_id: int, result: Dictionary) -> void:
 func receive_feedback(result: Dictionary) -> void:
 	if GameMode.is_world_server(): return
 	match str(result.get("error", "")):
-		"": _notice = "Podniesiono: %s · atak %d · I: porównaj" % [result.get("item_name", "Żelazny miecz"), int(result.get("weapon_attack", 0))]
+		"":
+			var item_name: String = str(result.get("item_name", "Przedmiot"))
+			var amount: int = int(result.get("amount", 1))
+			_notice = "Podniesiono: %s" % item_name
+			if amount > 1:
+				_notice += " ×%d" % amount
+			if int(result.get("weapon_attack", 0)) > 0:
+				_notice += " · atak %d · I: porównaj" % int(result.weapon_attack)
 		"reserved": _notice = "Łup jest jeszcze zarezerwowany dla innego gracza."
 		"distance": _notice = "Podejdź bliżej łupu."
 		"bag_full": _notice = "Torba jest pełna. Łup pozostaje na ziemi."
@@ -332,7 +339,12 @@ func receive_state(snapshot: Dictionary) -> void:
 			node.add_child(label)
 			_visual_drops[uid] = node
 		var label: Label3D = _visual_drops[uid].get_node("Name")
-		label.text = "%s · Atak %d · E" % [drop.item_name, int(drop.weapon_attack)] + ("\n" + str(drop.reserved_for) if drop.reserved_for != "" else "")
+		var item_label: String = str(drop.item_name)
+		if int(drop.get("amount", 1)) > 1:
+			item_label += " ×%d" % int(drop.amount)
+		if int(drop.get("weapon_attack", 0)) > 0:
+			item_label += " · Atak %d" % int(drop.weapon_attack)
+		label.text = item_label + " · E" + ("\n" + str(drop.reserved_for) if drop.reserved_for != "" else "")
 		label.modulate = Color("ffe291") if drop.allowed else Color("e0a681")
 	refresh_hud()
 

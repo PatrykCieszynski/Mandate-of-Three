@@ -23,6 +23,20 @@ func roll(tables: Array, base_count: int, luck_bp: int, seed_value: int = 987) -
 
 func _ready() -> void:
 	var ore := ItemDefinitions.UPGRADE_ORE
+	# Real authored source selection is independent of runtime mob/model resources.
+	assert(ItemDefinitions.get_definition(&"forest_resin") == ItemDefinitions.FOREST_RESIN)
+	assert(ItemDefinitions.get_definition(&"beast_hide") == ItemDefinitions.BEAST_HIDE)
+	assert(ItemDefinitions.get_definition(&"wolf_fang") == ItemDefinitions.WOLF_FANG)
+	assert(ItemDefinitions.get_definition(&"bandit_token") == ItemDefinitions.BANDIT_TOKEN)
+	var forest_tables := LootContent.tables_for(&"first_region", &"beast", &"forest_wolf")
+	var bandit_tables := LootContent.tables_for(&"first_region", &"humanoid", &"road_bandit")
+	var wild_tables := LootContent.tables_for(&"first_region", &"beast", &"wild_dog")
+	var other_tables := LootContent.tables_for(&"first_region", &"undead", &"unregistered")
+	assert(forest_tables.size() == 4 and bandit_tables.size() == 4 and wild_tables.size() == 4 and other_tables.size() == 2)
+	assert(roll(forest_tables, 1, 0).pool_weight_bp == 1350)
+	assert(roll(bandit_tables, 1, 0).pool_weight_bp == 1300)
+	assert(roll(wild_tables, 1, 0).pool_weight_bp == 1250)
+	assert(roll(other_tables, 1, 0).pool_weight_bp == 350)
 	var sword := ItemDefinitions.IRON_SWORD
 	var global_entry := make_entry(ore, 50, 2, 4)
 	var region_entry := make_entry(ore, 300)
