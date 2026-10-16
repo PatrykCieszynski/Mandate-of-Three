@@ -3,6 +3,10 @@
 Follow-up: [explicit instance access](instance-access-policy.md) separates public
 startup copies from reserved runs of the same map content. Reserved runs use idle
 retirement even when that shared map resource has public startup copies.
+The [bounded provisioning follow-up](bounded-channel-provisioning.md) adds optional
+on-demand public growth with host/map caps and CPU admission guards. First Region
+keeps its two-copy production limit; original finite-slice behavior below remains
+the historical baseline.
 
 ## Contract before implementation
 

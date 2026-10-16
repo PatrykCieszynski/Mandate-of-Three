@@ -17,6 +17,8 @@ enum SpawnOverride {
 @export_group("Local 3D admission")
 ## Safety limits, not measured hosting capacity. Legacy 2D routing is unchanged.
 @export_range(1, 1024) var max_players: int = 64
+## Total local public copies, including loading/startup copies; not private runs.
+@export_range(1, 16) var max_public_copies: int = 2
 @export_range(1.0, 300.0) var entry_timeout_seconds: float = 30.0
 @export_range(0.0, 3600.0) var idle_timeout_seconds: float = 60.0
 @export_range(0.0, 3600.0) var minimum_lifetime_seconds: float = 60.0
