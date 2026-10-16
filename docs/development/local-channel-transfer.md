@@ -38,6 +38,10 @@ attempt. Close/Escape hides it; the separate Cancel action cancels only the exac
 attempt/epoch. Movement and attack remain usable to interrupt the countdown.
 An open authoritative NPC interaction must be closed first. Channel selection
 does not create another map or use the legacy 2D teleport path.
+Fresh nonzero movement intent prevents starting a countdown. Once counting down,
+an accepted nonzero input cancels immediately after sequence validation, even
+against a wall or before physics runs. Intent expiry matches normal simulation;
+the displacement check remains a fallback for other movement sources.
 
 `InstanceManagerServer` admits/rate-limits three explicit RPC actions
 (`start`, `cancel`, `status`). A small local transfer owner coordinates reservation,
@@ -64,6 +68,8 @@ activation. It deliberately loses an Inventory move response before handoff and
 recovers the original journal/receipt after actual client map recreation without
 another revision increment. The reserved-entry variant rejects public handoff
 from a private copy.
+Real movement RPC regressions also cover held WASD at start and new input before
+the deadline with physics held stationary; an expired intent does not lock entry.
 
 The native session fixture covers real relog/disconnect during countdown, delayed
 old disconnect, post-fence loading timeout and relog with the saved wallet. These

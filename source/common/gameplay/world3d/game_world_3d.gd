@@ -389,6 +389,10 @@ func submit_input(sequence: int, direction: Vector2) -> void:
 	var previous: Dictionary = intentions[peer_id]
 	if sequence <= int(previous.sequence):
 		return
+	# Cancel on accepted intention, before physics: a wall or this tick's ordering
+	# must not let a moving player finish the channel countdown.
+	if direction != Vector2.ZERO:
+		services.interrupt_transfer(peer_id,"movement")
 	# Bounded storage and work: even a packet flood cannot advance physics.
 	combat_endpoint.remember_next_facing(peer_id,direction.limit_length())
 	intentions[peer_id] = {"direction": direction.limit_length(), "sequence": sequence, "time": Time.get_ticks_msec()}

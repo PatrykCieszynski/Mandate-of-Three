@@ -655,6 +655,7 @@ func exercise_transfer(peer: int, other: int, source: ServerInstance, target: Se
 	body.hit_reaction.clear()
 	body.knockback_velocity=Vector3.ZERO
 	body.hp=73
+	await exercise_transfer_movement(peer,source,target)
 	check(transfer.start(peer,channel).ok,"restart for movement")
 	body.position.x+=1
 	transfer.tick()
@@ -694,6 +695,47 @@ func exercise_transfer(peer: int, other: int, source: ServerInstance, target: Se
 	confirm_transfer.rpc_id(peer,str(target.name),final_balance)
 	await wait_until(func()->bool:return answers.get(peer)=="transfer_confirmed")
 	print("LOCAL_TRANSFER_OK cancel/movement/combat/drain/failure/gates/checkpoint, client recreation, single activation and retained HP/Yang")
+
+func exercise_transfer_movement(peer: int, source: ServerInstance, target: ServerInstance) -> void:
+	var map: GameWorld3D=source.get_node("GameWorld")
+	var body: PlayerActor3D=map.characters[peer]
+	var origin:=body.position
+	var channel:=int(target.identity.channel_id)
+	var transfer=manager.transfers
+	var sequence:=int(map.intentions[peer].sequence)+1
+	var map_processing:=map.is_physics_processing()
+	var manager_processing:=manager.is_physics_processing()
+	# Hold physics/countdown scheduling only: real input RPC admission stays live.
+	# This reproduces a wall/deadline boundary without relying on frame timing.
+	map.set_physics_process(false)
+	manager.set_physics_process(false)
+	transfer_movement.rpc_id(peer,sequence,Vector2.RIGHT)
+	await wait_until(func()->bool:return map.intentions[peer].sequence==sequence)
+	check(transfer.start(peer,channel).get("error")=="movement" and not target.awaiting_peers.has(peer),"held WASD rejects start before reserving destination")
+	map.intentions[peer].time=Time.get_ticks_msec()-GameWorld3D.INPUT_TIMEOUT_MS-1
+	check(transfer.start(peer,channel).ok,"expired movement intent does not permanently block transfer")
+	var attempt: Dictionary=transfer.snapshot(peer)
+	transfer.cancel(peer,attempt.attempt,attempt.epoch)
+	sequence+=1
+	transfer_movement.rpc_id(peer,sequence,Vector2.ZERO)
+	await wait_until(func()->bool:return map.intentions[peer].sequence==sequence)
+	check(transfer.start(peer,channel).ok,"zero movement input permits countdown")
+	var deadline: int=transfer.attempts[peer].due
+	sequence+=1
+	transfer_movement.rpc_id(peer,sequence,Vector2.RIGHT)
+	await wait_until(func()->bool:return map.intentions[peer].sequence==sequence)
+	check(body.position==origin and transfer.snapshot(peer).phase=="aborted" and transfer.snapshot(peer).error=="movement","accepted input cancels before any displacement or manager tick")
+	transfer.tick(deadline)
+	check(source.connected_peers.has(peer) and map.characters[peer]==body and not target.awaiting_peers.has(peer),"deadline cannot complete an input-cancelled transfer")
+	sequence+=1
+	transfer_movement.rpc_id(peer,sequence,Vector2.ZERO)
+	await wait_until(func()->bool:return map.intentions[peer].sequence==sequence)
+	map.set_physics_process(map_processing)
+	manager.set_physics_process(manager_processing)
+
+@rpc("authority","call_remote","reliable",0)
+func transfer_movement(sequence: int, direction: Vector2) -> void:
+	world.submit_input.rpc_id(1,sequence,direction)
 
 @rpc("authority","call_remote","reliable",0)
 func probe_transfer() -> void:

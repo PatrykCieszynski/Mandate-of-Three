@@ -28,6 +28,9 @@ func _world(host: ServerInstance) -> GameWorld3D:
 func _eligibility(peer: int, source: ServerInstance, now: int) -> String:
 	var world := _world(source)
 	if world==null or not world.characters.has(peer): return "source"
+	var intent: Dictionary = world.intentions.get(peer,{})
+	# Match simulation expiry: a lost release packet must not block CH forever.
+	if now-int(intent.get("time",0))<=GameWorld3D.INPUT_TIMEOUT_MS and intent.get("direction",Vector2.ZERO)!=Vector2.ZERO: return "movement"
 	var body: PlayerActor3D = world.characters[peer]
 	if not body.alive or body.hp<=0: return "dead"
 	if body.hit_reaction.locked(now) or body.knockback_active(): return "combat"
