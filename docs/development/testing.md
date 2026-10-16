@@ -382,3 +382,11 @@ the normal fixture temporarily permits a diagnostic third public copy; its creat
 may be denied by real headroom and no timing value is an acceptance assertion.
 Production First Region remains capped at two. See
 [provisioning observations](bounded-channel-provisioning.md).
+
+Initial CH selection reuses those fixtures: local_map_instances now selects CH1/
+CH2 via real catalogue/choice RPCs and checks no transfer/disconnect from a joined
+actor's selector request. Native world_session_admission covers an authenticated
+client waiting at the picker, refresh without reservation/deadline renewal, and
+expiry cleanup. `run-items.ps1 -WithSession` retains programmatic automatic mode.
+Visual QA of the existing pre-world Transition picker is separate from these
+network contracts; see [initial channel selection](initial-channel-selection.md).

@@ -80,6 +80,11 @@ func _ready() -> void:
 		number=int(CmdlineUtils.get_parsed_args().get("test-client","0"))
 		var session:=Node.new();session.name="Session";add_child(session)
 		client_manager=InstanceManagerClient.new();client_manager.name="Instances";session.add_child(client_manager)
+		client_manager.auto_select_channel=false
+		client_manager.channels_changed.connect(func(catalogue: Dictionary)->void:
+			check(catalogue.get("ok",false),"authenticated public catalogue")
+			check(catalogue.channels.size()==2 and catalogue.channels.all(func(row: Dictionary)->bool:return row.keys().size()==4 and row.channel_id in [1,2]),"public catalogue excludes reserved IDs, sessions and host metadata")
+			client_manager.select_initial_channel(number))
 		client_manager.instance_changed.connect(func(instance: InstanceClient)->void:
 			world=instance.get_node("GameWorld");world.input_enabled=false
 			world.market_endpoint.operation_finished.connect(func(id: String,result: Dictionary)->void:operations[id]=result))
@@ -121,6 +126,7 @@ func run_server() -> void:
 	check(a.identity.instance_id!=b.identity.instance_id and a.identity.channel_id!=b.identity.channel_id,"instance/channel identities distinct")
 	check(a.identity.realm_id==b.identity.realm_id and a.identity.host_id==b.identity.host_id,"one local realm and host")
 	check(ready_peers[first].identity==a.identity and ready_peers[second].identity==b.identity,"production client receives exact assigned identity")
+	if reserved_host==null: check(a.identity.channel_id==1 and b.identity.channel_id==2,"explicit requested channels honored by actual admission")
 	if reserved_host!=null:
 		check(reserved_host in [a,b] and reserved_host.identity.channel_id==0,"allowlisted client enters reserved copy with no public CH")
 		check(manager.select_entry_instance(manager.default_instance)!=reserved_host,"public selection never uses reserved copy")
@@ -135,7 +141,7 @@ func run_server() -> void:
 	manager.default_instance=cold
 	var obsolete:=PlayerResource.new();obsolete.player_id=999999;obsolete.current_peer_id=999999
 	server.connected_players[999999]=obsolete;server.player_id_to_peer_id[999999]=999999
-	manager._on_peer_connected(999999)
+	manager.admit_peer(999999,cold)
 	manager._on_peer_connected(999999)
 	var pending:=manager._instances_for(cold)[0]
 	check(pending.awaiting_peers.size()==1,"duplicate pending admission reserves once")
@@ -148,6 +154,7 @@ func run_server() -> void:
 	await exercise_lifecycle()
 	await exercise_access_policy()
 	await exercise_provisioning()
+	exercise_channel_choices()
 	check(left.get_world_3d()!=right.get_world_3d(),"separate World3D/physics spaces")
 	var obstacle:=StaticBody3D.new();obstacle.position=Vector3(10000,1000,10000)
 	var shape:=CollisionShape3D.new();shape.shape=BoxShape3D.new();obstacle.add_child(shape);left.add_child(obstacle)
@@ -282,7 +289,7 @@ func exercise_lifecycle() -> void:
 func exercise_access_policy() -> void:
 	var resource:=InstanceResource.new();resource.instance_name=&"AccessFixture";resource.use_3d=true
 	resource.map_path="res://tests/fixtures/world3d/test_arena.tscn"
-	resource.max_players=1;resource.minimum_lifetime_seconds=0;resource.idle_timeout_seconds=0
+	resource.max_players=1;resource.minimum_lifetime_seconds=0;resource.idle_timeout_seconds=60
 	resource.load_at_startup=true
 	manager.instance_collection[resource.instance_name]=resource
 	var before_count:=manager.loading_instances.size()
@@ -322,6 +329,7 @@ func exercise_access_policy() -> void:
 	check(manager.find_public_instance(resource) in [public_copy,public_second],"legacy public routing excludes last RESERVED copy")
 	exercise_legacy_transfer_guard(private_copy)
 	check(not manager.reserve_entry(910002,resource,private_copy).ok and public_copy.awaiting_peers.has(910002),"different target cannot replace a pending assignment")
+	resource.idle_timeout_seconds=0
 	private_copy.allowed_character_ids.clear()
 	check(not server.can_join_map_instance(910001,private_copy),"revoked membership blocks join before sweep")
 	manager.maintain_instances()
@@ -378,6 +386,38 @@ func healthy_budget():
 	for index: int in 120: budget.record(1.0,1.0,now-(119-index)*17)
 	return budget
 
+func exercise_channel_choices() -> void:
+	var session:=PlayerResource.new();session.player_id=950001;session.current_peer_id=950001
+	server.connected_players[950001]=session;server.player_id_to_peer_id[950001]=950001
+	var resource:=manager.default_instance
+	var first:=manager._instances_for(resource).filter(func(copy: ServerInstance)->bool:return copy.access_policy==ServerInstance.AccessPolicy.PUBLIC)[0] as ServerInstance
+	var expires:=Time.get_ticks_msec()+30000
+	manager._channel_choices[950001]={"session":session,"expires_at_ms":expires}
+	check(manager.public_channels(950001).ok and manager._channel_choices[950001].expires_at_ms==expires,"refresh does not renew choice deadline")
+	check(not manager.choose_initial_channel(950001,99999).ok and first.awaiting_peers.get(950001)==null,"unknown channel does not reserve/fallback")
+	var capacity:=resource.max_players;resource.max_players=first.population()
+	check(not manager.choose_initial_channel(950001,int(first.identity.channel_id)).ok,"full explicit channel does not fall back")
+	resource.max_players=capacity
+	first.admission_state=ServerInstance.AdmissionState.DRAINING
+	check(not manager.choose_initial_channel(950001,int(first.identity.channel_id)).ok,"draining explicit channel rejected")
+	first.admission_state=ServerInstance.AdmissionState.ACCEPTING
+	var chosen:=manager.choose_initial_channel(950001,int(first.identity.channel_id))
+	check(chosen.ok and chosen.instance==first and not manager._channel_choices.has(950001),"accepted choice consumes window and reserves exact target")
+	check(manager.choose_initial_channel(950001,int(first.identity.channel_id)).duplicate,"same choice can recover accepted pending entry")
+	check(not manager.choose_initial_channel(950001,0).ok,"different choice cannot replace pending target")
+	check(manager._admit_channel_request(950001,1) and not manager._admit_channel_request(950001,1),"request IDs deduplicate before rate-limit result")
+	manager._release_pending_peer(950001)
+	manager._channel_choices[950001]={"session":session,"expires_at_ms":Time.get_ticks_msec()-1}
+	check(not manager.choose_initial_channel(950001,1).ok,"expired initial choice cannot reserve")
+	manager.maintain_instances()
+	check(not manager._channel_choices.has(950001),"expired chooser releases bounded session state")
+	manager._release_pending_peer(950001)
+	server.connected_players.erase(950001);server.player_id_to_peer_id.erase(950001)
+	for peer_id: int in ready_peers:
+		var host:=manager.find_instance_for_peer(peer_id)
+		var actor: PlayerActor3D=host.get_node("GameWorld").characters[peer_id]
+		check(not manager.choose_initial_channel(peer_id,0).ok and host.get_node("GameWorld").characters[peer_id]==actor,"joined actor cannot use initial-choice API to transfer")
+
 func observe_live_headroom() -> void:
 	await get_tree().create_timer(3.0).timeout
 	print("PROVISION_OBSERVATION ",JSON.stringify({"copies":manager._all_instances().size(),
@@ -432,7 +472,7 @@ func exercise_provisioning() -> void:
 	var resource:=InstanceResource.new();resource.instance_name=&"ProvisionFixture";resource.use_3d=true
 	resource.map_path="res://tests/fixtures/world3d/test_arena.tscn"
 	resource.max_players=1;resource.max_public_copies=3;resource.load_at_startup=true
-	resource.idle_timeout_seconds=0;resource.minimum_lifetime_seconds=0
+	resource.idle_timeout_seconds=60;resource.minimum_lifetime_seconds=0
 	manager.instance_collection[resource.instance_name]=resource
 	for peer_id: int in [930001,930002,930003,930004,930005]:
 		var session:=PlayerResource.new();session.player_id=peer_id;session.current_peer_id=peer_id
@@ -448,6 +488,7 @@ func exercise_provisioning() -> void:
 	var private_copy:=manager.charge_reserved_instance(resource,PackedInt64Array([930004]))
 	await wait_until(func()->bool:return first.is_node_ready() and private_copy.is_node_ready())
 	check(manager.reserve_entry(930001,resource).ok and manager.reserve_entry(930004,resource,private_copy).ok,"setup full public and independent private run")
+	resource.idle_timeout_seconds=0
 	manager.provision_budget=healthy_budget()
 	for index: int in 120: manager.provision_budget.physics_samples[index]=100.0
 	check(not manager.reserve_entry(930002,resource).ok,"physics CPU saturation rejects growth")
@@ -508,6 +549,7 @@ func exercise(foreign: Dictionary, other_peer: int, own_drop: String, foreign_dr
 	combat.request_pickup.rpc_id(1,foreign_drop)
 	currency.request_pickup.rpc_id(1,1)
 	world.join_world.rpc_id(1) # Duplicate own entry cannot create a second actor.
+	client_manager.request_initial_channel.rpc_id(1,100000,0) # Post-join RPC must not move/disconnect the actor.
 	world.submit_input.rpc_id(1,1,Vector2(1,0))
 	report.rpc_id(1,"forged")
 

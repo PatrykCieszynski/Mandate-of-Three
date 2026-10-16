@@ -34,10 +34,10 @@
 
 ## Open product and engineering choices
 
-Current local implementation: [initial MapInstance admission and isolation](../development/local-map-instances.md)
-provides two configured First Region copies in one World, distinct routing/content/
+Initial local baseline: [MapInstance admission and isolation](../development/local-map-instances.md)
+introduced two configured First Region copies in one World, distinct routing/content/
 channel/host/realm labels, isolated simulation and shared SQLite economy. It is a
-finite first slice: no dynamic scaling, CH selector, active-character handoff,
+finite first slice: it did not add dynamic scaling, a CH selector, active-character handoff,
 multi-realm database allocation or cross-host ownership is implied.
 The local [admission/lifecycle follow-up](../development/instance-admission-lifecycle.md)
 adds bounded pending entries, capacity and safe draining/idle retirement; it does
@@ -49,6 +49,9 @@ The [bounded provisioning gate](../development/bounded-channel-provisioning.md)
 can add public copies under explicit map/host limits and recent CPU headroom.
 Measured First Region costs keep its production limit at two copies; automatic
 growth for that map is not enabled by this implementation.
+The [initial channel selector](../development/initial-channel-selection.md) now
+exposes an authenticated public catalogue and pre-spawn choice on the existing
+transition screen. Joined characters still cannot switch CH through this API.
 
 - Final player UX: dynamic public CH is preferred; hidden layers are optional, not committed content.
 - Per-map versus realm-wide channel numbering, channel persistence across map transitions, and limits/cooldowns for switching.

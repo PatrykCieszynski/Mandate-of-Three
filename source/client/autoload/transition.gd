@@ -24,6 +24,8 @@ var _buttons: HBoxContainer
 var _back_button: Button
 var _bloom: ColorRect
 var _fade_tween: Tween
+var _channel_controls: VBoxContainer
+var _choosing_channel: bool = false
 
 var _active: bool = false
 var _address: String
@@ -42,6 +44,8 @@ func _ready() -> void:
 	ClientState.local_player_ready.connect(_on_world_ready)
 	ClientState.world_ready.connect(_on_world_ready)
 	Client.connection_changed.connect(_on_connection_changed)
+	Client.instance_manager.channels_changed.connect(_show_channels)
+	Client.instance_manager.channel_selection_finished.connect(_channel_selected)
 
 
 ## Connect to a world and cover the load. Call from the gateway, then free it.
@@ -53,6 +57,7 @@ func start_world_load(address: String, port: int, token: String, background: Tex
 	_active = true
 	_background.texture = background
 	_show_loading()
+	Client.instance_manager.auto_select_channel = false
 	# Enter cue plays now (audio runs off the main thread, so the world load can't
 	# freeze it). The visual bloom waits for the reveal — see _fade_out.
 	if is_instance_valid(Client) and Client.audio_manager:
@@ -78,6 +83,7 @@ func _on_connection_changed(connected: bool) -> void:
 # --- UI states -------------------------------------------------------------
 
 func _show_loading() -> void:
+	_choosing_channel = false
 	if _fade_tween and _fade_tween.is_valid():
 		_fade_tween.kill()
 	visible = true
@@ -86,9 +92,54 @@ func _show_loading() -> void:
 	_label.text = "Entering the world…"
 	_spinner.visible = true
 	_buttons.visible = false
+	_channel_controls.visible = false
+
+
+func _show_channels(catalogue: Dictionary) -> void:
+	if not _active or _choosing_channel: return
+	for child: Node in _channel_controls.get_children():
+		_channel_controls.remove_child(child)
+		child.queue_free()
+	_spinner.visible = false
+	_buttons.visible = true
+	_channel_controls.visible = true
+	_label.text = "Choose a channel\nTime limit: 30 s from connection; refresh does not extend it."
+	if not catalogue.get("ok", false):
+		_label.text = "Channel list unavailable: " + str(catalogue.get("error", "unknown"))
+	else:
+		for channel: Dictionary in catalogue.get("channels", []):
+			var button := Button.new()
+			button.text = "CH %d — %s (%d / %d)" % [channel.channel_id, channel.state, channel.population, channel.capacity]
+			button.disabled = channel.state not in ["available", "loading"]
+			button.pressed.connect(_choose_channel.bind(int(channel.channel_id)))
+			_channel_controls.add_child(button)
+		var automatic := Button.new()
+		automatic.text = "Automatic channel"
+		automatic.pressed.connect(_choose_channel.bind(0))
+		_channel_controls.add_child(automatic)
+	var refresh := Button.new()
+	refresh.text = "Refresh channels"
+	refresh.pressed.connect(Client.instance_manager.refresh_channels)
+	_channel_controls.add_child(refresh)
+
+
+func _choose_channel(channel_id: int) -> void:
+	_choosing_channel = true
+	_channel_controls.visible = false
+	_label.text = "Joining channel…"
+	_spinner.visible = true
+	Client.instance_manager.select_initial_channel(channel_id)
+
+
+func _channel_selected(result: Dictionary) -> void:
+	if not _active or result.get("ok", false): return
+	_choosing_channel = false
+	_show_channels(Client.instance_manager.channels)
+	_label.text = "Channel unavailable: " + str(result.get("error", "unknown")) + ". Refresh or choose another."
 
 
 func _show_error() -> void:
+	_channel_controls.visible = false
 	_label.text = "Couldn't reach the world."
 	_spinner.visible = false
 	_buttons.visible = true
@@ -101,6 +152,7 @@ func _show_error() -> void:
 ## the new build. Called while the tree is paused; this layer is PROCESS_MODE_ALWAYS
 ## so the button stays live, and _back_to_login unpauses.
 func show_disconnected() -> void:
+	_channel_controls.visible = false
 	_active = false  # not a load — keep _on_world_ready / the load path from firing here
 	if _fade_tween and _fade_tween.is_valid():
 		_fade_tween.kill()
@@ -207,6 +259,9 @@ func _build_ui() -> void:
 	_label.add_theme_color_override(&"font_color", _CREAM)
 	_label.add_theme_font_size_override(&"font_size", 20)
 	vbox.add_child(_label)
+	_channel_controls = VBoxContainer.new()
+	_channel_controls.visible = false
+	vbox.add_child(_channel_controls)
 
 	_buttons = HBoxContainer.new()
 	_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
