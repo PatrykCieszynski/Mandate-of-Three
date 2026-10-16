@@ -25,6 +25,7 @@ var _experience_label: Label
 var _experience_bar: ProgressBar
 var _xp_notice: String = ""
 var _xp_notice_until_ms: int = 0
+var last_combat_ms: Dictionary[int, int] = {}
 
 func _ready() -> void:
 	_world = get_parent()
@@ -83,7 +84,7 @@ func _build_navigation() -> void:
 	navigation_region.navigation_mesh = mesh
 	_world.add_child(navigation_region)
 
-func initialize_peer(peer_id: int) -> void:
+func initialize_peer(peer_id: int, carried: Dictionary = {}) -> void:
 	var body: PlayerActor3D = _world.characters[peer_id]
 	body.hp = body.max_hp
 	body.set_alive(true)
@@ -92,9 +93,18 @@ func initialize_peer(peer_id: int) -> void:
 	if OS.has_feature("editor"):
 		for arg: String in OS.get_cmdline_user_args():
 			if arg.begins_with("--dev-combo-skill="): set_combo_skill_level(peer_id,arg.get_slice("=",1).to_int())
+	if not carried.is_empty():
+		body.max_hp=carried.max_hp
+		body.hp=clampi(int(carried.hp),1,body.max_hp)
+		body.position=carried.position
+		body.rotation.y=carried.yaw
+		set_combo_skill_level(peer_id,carried.skill)
+		set_combo_weapon_mode(peer_id,carried.weapon_mode)
+		set_combo_enabled(peer_id,carried.enabled)
 	_send_snapshot()
 
 func remove_peer(peer_id: int) -> void:
+	last_combat_ms.erase(peer_id)
 	client_combat.remove_peer(peer_id)
 	attacks.remove_peer(peer_id)
 	_pickup_ms.erase(peer_id)
@@ -122,6 +132,7 @@ func request_attack(sequence: int) -> void:
 	if not GameMode.is_world_server() or not services.item_domain_ready(): return
 	var peer_id := multiplayer.get_remote_sender_id()
 	if not is_player_alive(peer_id): return
+	services.interrupt_transfer(peer_id,"attack")
 	var retry_ms: int = attacks.request_intent(peer_id,sequence,Time.get_ticks_msec())
 	if retry_ms > 0: receive_attack_wait.rpc_id(peer_id,retry_ms)
 
@@ -225,6 +236,8 @@ func _physics_process(delta: float) -> void:
 func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition = BasicAttackHits.MOB_MELEE, hit_direction: Vector3 = Vector3.ZERO) -> CombatHitResult:
 	if not is_player_alive(peer_id): return null
 	if dev_god_mode: return CombatHitResult.new() # No damage, action lock or impulse.
+	last_combat_ms[peer_id]=now
+	services.interrupt_transfer(peer_id,"damage")
 	var body: PlayerActor3D = _world.characters[peer_id]
 	var result := HitReactionResolver.resolve(hit,body.reaction_profile,damage,body.hp,body.hit_reaction.locked(now))
 	body.hp -= result.damage

@@ -61,3 +61,16 @@ func runtime_attack(owner_id: int) -> int:
 
 func runtime_attack_speed_ratio(owner_id: int) -> float:
 	return -1.0 if _server() == null else _server().runtime_attack_speed_ratio(owner_id)
+
+func mutations_allowed(peer_id: int) -> bool:
+	var server := _server()
+	return server==null or server.instance_manager==null or not server.instance_manager.transfers.gated(peer_id)
+
+func interrupt_transfer(peer_id: int, reason: String) -> void:
+	var server := _server()
+	if server!=null and server.instance_manager!=null:
+		server.instance_manager.transfers.interrupt(peer_id,reason)
+
+func hydrate_transfer(peer_id: int, host: ServerInstance) -> Dictionary:
+	var server := _server()
+	return {} if server==null or server.instance_manager==null else server.instance_manager.transfers.hydrate(peer_id,host)

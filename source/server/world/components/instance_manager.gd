@@ -25,6 +25,7 @@ var _rejected_entries: Dictionary[int, PlayerResource] = {}
 var _last_legacy_unload_ms: int = 0
 var _channel_choices: Dictionary[int, Dictionary] = {}
 var _channel_request_ids: Dictionary[int, int] = {}
+var transfers := preload("res://source/server/world/components/local_channel_transfer.gd").new(self)
 
 @export var world_server: WorldServer
 
@@ -32,6 +33,7 @@ var _channel_request_ids: Dictionary[int, int] = {}
 func _physics_process(_delta: float) -> void:
 	if world_server == null:
 		return
+	transfers.tick()
 	provision_budget.record(
 		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
 		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
@@ -105,10 +107,13 @@ func _on_peer_connected(peer_id: int) -> void:
 func public_channels(peer_id: int) -> Dictionary:
 	if not _is_current_session(peer_id, world_server.connected_players.get(peer_id)):
 		return {"ok": false, "error": "session"}
-	if default_instance == null:
+	var resource := default_instance
+	var joined := find_instance_for_peer(peer_id)
+	if joined!=null: resource=joined.instance_resource
+	if resource == null:
 		return {"ok": false, "error": "map_unavailable"}
 	var channels: Array = []
-	for instance: ServerInstance in _instances_for(default_instance):
+	for instance: ServerInstance in _instances_for(resource):
 		if instance.access_policy != ServerInstance.AccessPolicy.PUBLIC:
 			continue
 		if instance.get_parent() != self and loading_instances.get(str(instance.name)) != instance:
@@ -116,11 +121,11 @@ func public_channels(peer_id: int) -> Dictionary:
 		var state := "available" if instance.is_node_ready() else "loading"
 		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
 			state = "draining"
-		elif instance.population() >= default_instance.max_players:
+		elif instance.population() >= resource.max_players:
 			state = "full"
 		channels.append({"channel_id": int(instance.identity.channel_id), "state": state,
-			"population": instance.population(), "capacity": default_instance.max_players})
-	return {"ok": true, "map_id": str(default_instance.resolved_map_id()), "channels": channels}
+			"population": instance.population(), "capacity": resource.max_players})
+	return {"ok": true, "map_id": str(resource.resolved_map_id()), "channels": channels}
 
 
 func _admit_channel_request(peer_id: int, request_id: int) -> bool:
@@ -198,6 +203,27 @@ func receive_channels(_request_id: int, _result: Dictionary) -> void: pass
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_channel_selection(_request_id: int, _result: Dictionary) -> void: pass
+
+
+@rpc("any_peer", "call_remote", "reliable", 0)
+func request_transfer(request_id: int, action: String, channel: int, attempt: int, epoch: int) -> void:
+	var peer := multiplayer.get_remote_sender_id()
+	if not _admit_channel_request(peer,request_id): return
+	if not RateLimiter.check(peer,&"instance.channels",8,1000):
+		receive_transfer.rpc_id(peer,request_id,{"ok":false,"error":"rate_limited","transfer":transfers.snapshot(peer)})
+		return
+	var result: Dictionary
+	match action:
+		"start": result=transfers.start(peer,channel)
+		"cancel": result=transfers.cancel(peer,attempt,epoch)
+		"status": result={"ok":true}
+		_: result={"ok":false,"error":"request"}
+	result["transfer"]=transfers.snapshot(peer)
+	receive_transfer.rpc_id(peer,request_id,result)
+
+
+@rpc("authority", "call_remote", "reliable", 0)
+func receive_transfer(_request_id: int, _result: Dictionary) -> void: pass
 
 
 ## Called by trusted initial-entry routing only, never directly by an RPC.
@@ -308,6 +334,7 @@ func _all_instances() -> Array[ServerInstance]:
 
 
 func _release_pending_peer(peer_id: int) -> void:
+	transfers.release_peer(peer_id)
 	_channel_choices.erase(peer_id)
 	_channel_request_ids.erase(peer_id)
 	_rejected_entries.erase(peer_id)

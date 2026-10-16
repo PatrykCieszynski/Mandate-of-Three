@@ -42,6 +42,7 @@ func snapshot_for_peer(peer_id: int, now: int) -> Dictionary:
 	return snapshot
 
 func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
+	if not _services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
 	if not _world.combat_endpoint.is_player_alive(peer_id) or _services.item_store()==null:
 		return {"ok":false,"error":"player"}
 	if not ItemInstance.valid_uid(uid) or not drops.has(uid): return {"ok":false,"error":"gone"}
