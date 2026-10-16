@@ -235,8 +235,9 @@ export function mountExchange(root: HTMLElement, o: Options) {
     withdrawAsset.replaceChildren(
       ...state.assets.map((a) => new Option(a.name, a.asset_id)),
     );
-    if (state.assets.some((a) => a.asset_id === previousWithdrawAsset))
+    if (state.assets.some((a) => a.asset_id === previousWithdrawAsset)) {
       withdrawAsset.value = previousWithdrawAsset;
+    }
     have.value = hv || 'yang';
     want.value = wv || state.assets[0]?.asset_id || '';
     depth.replaceChildren();
