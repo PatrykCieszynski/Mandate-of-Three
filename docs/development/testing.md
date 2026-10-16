@@ -362,3 +362,15 @@ sockets to reject a full map, time out a loading client, checkpoint XP/Yang and
 relogin into reclaimed capacity. This controls Master transport and client loading,
 not the actual World authentication/disconnect path. See
 [bounded map admission](instance-admission-lifecycle.md).
+
+The existing `local_map_instances` fixture also covers PUBLIC/RESERVED access.
+Run its normal two-public-copy case, then repeat with
+`MANDATE_TEST_RESERVED_ENTRY=1` in the runner environment (restore/unset it after
+the command). This test-only variant routes the first authenticated client into
+a server-reserved copy and the other into public capacity. Both use real manager
+publication, client loading and join RPCs; foreign join/movement/combat/pickup,
+isolated simulation and cross-copy Marketplace settlement remain checked. Direct
+admission cases additionally cover invalid membership, wrong manager, revocation,
+pending-target replacement and private retirement for shared startup content.
+No production map or party flow enables reserved entry by default. See
+[instance access](instance-access-policy.md).

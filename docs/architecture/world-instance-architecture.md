@@ -42,6 +42,9 @@ multi-realm database allocation or cross-host ownership is implied.
 The local [admission/lifecycle follow-up](../development/instance-admission-lifecycle.md)
 adds bounded pending entries, capacity and safe draining/idle retirement; it does
 not implement automatic channel scaling or active-character transfer.
+Local [PUBLIC/RESERVED access](../development/instance-access-policy.md) now keeps
+reserved runs out of public routing and validates server-owned character membership
+at reservation and final join. Party/dungeon gameplay and lockout policy are deferred.
 
 - Final player UX: dynamic public CH is preferred; hidden layers are optional, not committed content.
 - Per-map versus realm-wide channel numbering, channel persistence across map transitions, and limits/cooldowns for switching.

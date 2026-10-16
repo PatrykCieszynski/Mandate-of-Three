@@ -1,5 +1,9 @@
 # Bounded local MapInstance admission and draining
 
+Follow-up: [explicit instance access](instance-access-policy.md) separates public
+startup copies from reserved runs of the same map content. Reserved runs use idle
+retirement even when that shared map resource has public startup copies.
+
 ## Contract before implementation
 
 The previous slice counts pending entries for balancing, but never expires them,

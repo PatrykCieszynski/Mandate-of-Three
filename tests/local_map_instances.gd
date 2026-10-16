@@ -24,6 +24,7 @@ var elapsed := 0.0
 var failed := false
 var number := 0
 var database_path := ""
+var reserved_host: ServerInstance
 
 func check(value: bool, message: String) -> void:
 	if value: return
@@ -56,7 +57,10 @@ func _ready() -> void:
 			var player:=server.database.store.get_player(owner)
 			player.current_peer_id=peer
 			server.connected_players[peer]=player
-			server.player_id_to_peer_id[owner]=peer)
+			server.player_id_to_peer_id[owner]=peer
+			if OS.get_environment("MANDATE_TEST_RESERVED_ENTRY")=="1" and reserved_host==null:
+				reserved_host=manager.charge_reserved_instance(manager.default_instance,PackedInt64Array([owner]))
+				check(reserved_host!=null and manager.admit_peer(peer,manager.default_instance,reserved_host).ok,"trusted routing publishes reserved initial entry"))
 		manager=InstanceManagerServer.new();manager.name="Instances";manager.world_server=server
 		server.instance_manager=manager;server.add_child(manager)
 		manager.start_instance_manager()
@@ -106,6 +110,9 @@ func run_server() -> void:
 	check(a.identity.instance_id!=b.identity.instance_id and a.identity.channel_id!=b.identity.channel_id,"instance/channel identities distinct")
 	check(a.identity.realm_id==b.identity.realm_id and a.identity.host_id==b.identity.host_id,"one local realm and host")
 	check(ready_peers[first].identity==a.identity and ready_peers[second].identity==b.identity,"production client receives exact assigned identity")
+	if reserved_host!=null:
+		check(reserved_host in [a,b] and reserved_host.identity.channel_id==0,"allowlisted client enters reserved copy with no public CH")
+		check(manager.select_entry_instance(manager.default_instance)!=reserved_host,"public selection never uses reserved copy")
 	var left: GameWorld3D=a.get_node("GameWorld")
 	var right: GameWorld3D=b.get_node("GameWorld")
 	# A revoked session while a map is still loading must never receive/spawn an
@@ -126,6 +133,7 @@ func run_server() -> void:
 	server.connected_players.erase(999999);server.player_id_to_peer_id.erase(999999)
 	pending.queue_free()
 	await exercise_lifecycle()
+	await exercise_access_policy()
 	check(left.get_world_3d()!=right.get_world_3d(),"separate World3D/physics spaces")
 	var obstacle:=StaticBody3D.new();obstacle.position=Vector3(10000,1000,10000)
 	var shape:=CollisionShape3D.new();shape.shape=BoxShape3D.new();obstacle.add_child(shape);left.add_child(obstacle)
@@ -255,6 +263,57 @@ func exercise_lifecycle() -> void:
 		manager._release_pending_peer(peer_id)
 		server.connected_players.erase(peer_id);server.player_id_to_peer_id.erase(peer_id)
 	original.current_peer_id=0
+	manager.instance_collection.erase(resource.instance_name)
+
+func exercise_access_policy() -> void:
+	var resource:=InstanceResource.new();resource.instance_name=&"AccessFixture";resource.use_3d=true
+	resource.map_path="res://tests/fixtures/world3d/test_arena.tscn"
+	resource.max_players=1;resource.minimum_lifetime_seconds=0;resource.idle_timeout_seconds=0
+	resource.load_at_startup=true
+	manager.instance_collection[resource.instance_name]=resource
+	var before_count:=manager.loading_instances.size()
+	check(manager.charge_reserved_instance(resource,PackedInt64Array())==null,"empty reserved membership fails closed")
+	check(manager.charge_reserved_instance(resource,PackedInt64Array([-1]))==null,"invalid reserved identity fails closed")
+	check(manager.prepare_instance(resource,0,99)==null,"unknown access policy rejected")
+	var legacy:=InstanceResource.new();legacy.map_path=resource.map_path
+	check(manager.charge_reserved_instance(legacy,PackedInt64Array([910001]))==null,"legacy 2D path cannot create reserved 3D run")
+	check(manager.loading_instances.size()==before_count,"invalid policy registers no half-instance")
+	var ids:=PackedInt64Array([910001])
+	var private_copy:=manager.charge_reserved_instance(resource,ids)
+	ids.append(910002)
+	check(not private_copy.allowed_character_ids.has(910002),"membership copied from caller")
+	await wait_until(func()->bool:return private_copy.is_node_ready())
+	for peer_id: int in [910001,910002]:
+		var session:=PlayerResource.new();session.player_id=peer_id;session.current_peer_id=peer_id
+		server.connected_players[peer_id]=session;server.player_id_to_peer_id[peer_id]=peer_id
+	check(not manager.reserve_entry(910002,resource,private_copy).ok and private_copy.population()==0,"explicit target still requires server membership")
+	var other_manager:=InstanceManagerServer.new();other_manager.world_server=server
+	check(not other_manager.reserve_entry(910001,resource,private_copy).ok,"another manager cannot reserve this manager's instance")
+	other_manager.free()
+	var member: PlayerResource=server.connected_players[910001]
+	check(manager.reserve_entry(910001,resource,private_copy).ok and server.can_join_map_instance(910001,private_copy),"authorized reserved admission reaches final join gate")
+	var public_entry:=manager.reserve_entry(910002,resource)
+	check(public_entry.ok and public_entry.instance!=private_copy and public_entry.instance.access_policy==ServerInstance.AccessPolicy.PUBLIC,"private-only map registry does not suppress creation of public capacity")
+	var public_copy: ServerInstance=public_entry.instance
+	check(public_copy.identity.channel_id==1 and private_copy.identity.channel_id==0,"private run does not consume public channel numbering")
+	await wait_until(func()->bool:return public_copy.is_node_ready())
+	check(not manager.reserve_entry(910002,resource,private_copy).ok and public_copy.awaiting_peers.has(910002),"different target cannot replace a pending assignment")
+	private_copy.allowed_character_ids.clear()
+	check(not server.can_join_map_instance(910001,private_copy),"revoked membership blocks join before sweep")
+	manager.maintain_instances()
+	check(private_copy.awaiting_peers.is_empty() and not manager.reserve_entry(910001,resource,private_copy).ok,"revoked reservation is retired and cannot renew")
+	check(private_copy.is_queued_for_deletion(),"reserved run retires even when shared content has public startup copies")
+	manager._release_pending_peer(910002)
+	manager.maintain_instances()
+	check(not public_copy.is_queued_for_deletion(),"public startup policy remains intact")
+	manager.begin_draining(public_copy)
+	manager.maintain_instances()
+	await get_tree().process_frame
+	check(resource.charged_instances.is_empty(),"private/public empty copies use same retirement path")
+	member.current_peer_id=0
+	for peer_id: int in [910001,910002]:
+		manager._release_pending_peer(peer_id)
+		server.connected_players.erase(peer_id);server.player_id_to_peer_id.erase(peer_id)
 	manager.instance_collection.erase(resource.instance_name)
 
 @rpc("authority","call_remote","reliable",0)

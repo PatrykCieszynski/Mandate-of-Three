@@ -73,22 +73,29 @@ func charge_new_instance(_map_path: String, _instance_id: String, _identity: Dic
 
 ## Every login uses the technical map; no Ekonia tutorial/hub routing.
 func _on_peer_connected(peer_id: int) -> void:
-	var result := reserve_entry(peer_id, default_instance)
+	var result := admit_peer(peer_id, default_instance)
 	if not result.ok:
 		_reject_initial_entry(peer_id, world_server.connected_players.get(peer_id), result.error)
-		return
+
+
+## Called by trusted initial-entry routing only, never directly by an RPC.
+func admit_peer(peer_id: int, resource: InstanceResource, target: ServerInstance = null) -> Dictionary:
+	var result := reserve_entry(peer_id, resource, target)
+	if not result.ok:
+		return result
 	var instance: ServerInstance = result.instance
 	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
 	if result.get("duplicate", false):
-		return
+		return result
 	if instance.is_node_ready():
 		_publish_entry(peer_id, admitted, instance)
 	else:
 		instance.ready.connect(_publish_entry.bind(peer_id, admitted, instance), CONNECT_ONE_SHOT)
+	return result
 
 
 ## One synchronous admission boundary: validate, select, then reserve before yield.
-func reserve_entry(peer_id: int, resource: InstanceResource) -> Dictionary:
+func reserve_entry(peer_id: int, resource: InstanceResource, target: ServerInstance = null) -> Dictionary:
 	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
 	if not _is_current_session(peer_id, admitted):
 		return {"ok": false, "error": "session"}
@@ -96,18 +103,33 @@ func reserve_entry(peer_id: int, resource: InstanceResource) -> Dictionary:
 		return {"ok": false, "error": "entry_expired"}
 	var joined := find_instance_for_peer(peer_id)
 	if joined != null:
+		if target != null and target != joined:
+			return {"ok": false, "error": "already_joined"}
 		return {"ok": true, "instance": joined, "duplicate": true}
 	if resource == null:
 		return {"ok": false, "error": "map_unavailable"}
 	for existing: ServerInstance in _all_instances():
 		if existing.awaiting_peers.has(peer_id):
 			if has_valid_entry(existing, peer_id, admitted):
+				if target != null and target != existing:
+					return {"ok": false, "error": "entry_pending"}
 				return {"ok": true, "instance": existing, "duplicate": true}
 			# A duplicate at the deadline must fail, never renew its lease.
 			if existing.awaiting_peers[peer_id].get("session") == admitted:
 				return {"ok": false, "error": "entry_expired"}
 			existing.awaiting_peers.erase(peer_id)
-	var instance := select_entry_instance(resource)
+	var instance := target
+	if target != null:
+		if not _instances_for(resource).has(target) or not target.instance_resource.use_3d:
+			return {"ok": false, "error": "map_unavailable"}
+		if target.get_parent() != self and loading_instances.get(str(target.name)) != target:
+			return {"ok": false, "error": "map_unavailable"}
+		if not target.allows_character(admitted.player_id):
+			return {"ok": false, "error": "access_denied"}
+		if not target.accepts_reservation():
+			return {"ok": false, "error": "map_unavailable"}
+	else:
+		instance = select_entry_instance(resource)
 	if instance == null:
 		return {"ok": false, "error": "map_unavailable"}
 	instance.awaiting_peers[peer_id] = {
@@ -132,6 +154,7 @@ func has_valid_entry(instance: ServerInstance, peer_id: int, session: PlayerReso
 	return (
 		not instance.is_queued_for_deletion() and _is_current_session(peer_id, session)
 		and pending.get("session") == session
+		and instance.allows_character(session.player_id)
 		and (not instance.instance_resource.use_3d
 			or int(pending.get("expires_at_ms", 0)) > Time.get_ticks_msec())
 	)
@@ -192,7 +215,7 @@ func maintain_instances() -> void:
 		var resource := instance.instance_resource
 		var draining := instance.admission_state == ServerInstance.AdmissionState.DRAINING
 		if not draining:
-			if resource.load_at_startup:
+			if resource.load_at_startup and instance.access_policy == ServerInstance.AccessPolicy.PUBLIC:
 				continue
 			if now - instance.opened_at_ms < int(resource.minimum_lifetime_seconds * 1000.0):
 				continue
@@ -229,7 +252,10 @@ func _instances_for(resource: InstanceResource) -> Array[ServerInstance]:
 func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 	var selected: ServerInstance
 	var population := 2147483647
-	var instances := _instances_for(resource)
+	var instances: Array[ServerInstance] = []
+	for candidate: ServerInstance in _instances_for(resource):
+		if candidate.access_policy == ServerInstance.AccessPolicy.PUBLIC:
+			instances.append(candidate)
 	for instance: ServerInstance in instances:
 		if resource.use_3d and not instance.accepts_reservation():
 			continue
@@ -297,7 +323,7 @@ func recall_player(peer_id: int) -> void:
 
 func queue_charge_instance(instance_resource: InstanceResource, callback: Callable) -> void:
 	for pending: ServerInstance in loading_instances.values():
-		if pending.instance_resource==instance_resource:
+		if pending.instance_resource==instance_resource and pending.access_policy == ServerInstance.AccessPolicy.PUBLIC:
 			pending.ready.connect(callback.bind(pending),CONNECT_ONE_SHOT)
 			return
 	var new_instance: ServerInstance = prepare_instance(instance_resource)
@@ -343,7 +369,27 @@ func charge_instance(instance_resource: InstanceResource, channel_id: int = 0) -
 	return new_instance
 
 
-func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
+## A private run uses the same map runtime, never a public channel slot.
+func charge_reserved_instance(instance_resource: InstanceResource, character_ids: PackedInt64Array) -> ServerInstance:
+	var instance := prepare_instance(instance_resource, 0, ServerInstance.AccessPolicy.RESERVED, character_ids)
+	if instance != null:
+		add_child.call_deferred(instance, true)
+	return instance
+
+
+func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
+	access_policy: ServerInstance.AccessPolicy = ServerInstance.AccessPolicy.PUBLIC,
+	character_ids: PackedInt64Array = PackedInt64Array()) -> ServerInstance:
+	if access_policy not in [ServerInstance.AccessPolicy.PUBLIC, ServerInstance.AccessPolicy.RESERVED]:
+		return null
+	if access_policy == ServerInstance.AccessPolicy.RESERVED:
+		if instance_resource == null or not instance_resource.use_3d or channel_id != 0 or character_ids.is_empty():
+			return null
+		for character_id: int in character_ids:
+			if character_id <= 0:
+				return null
+	elif not character_ids.is_empty():
+		return null
 	if instance_resource==null or not ResourceLoader.exists(instance_resource.map_path):
 		push_error("Cannot load map instance: missing map resource")
 		return null
@@ -351,7 +397,9 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0) 
 	if instance_resource.use_3d:
 		instance.free()
 		instance = preload("res://source/server/world/components/world_instance_3d.gd").new()
-	if instance_resource.use_3d and channel_id==0:
+	instance.access_policy = access_policy
+	instance.allowed_character_ids = character_ids.duplicate()
+	if instance_resource.use_3d and channel_id==0 and access_policy == ServerInstance.AccessPolicy.PUBLIC:
 		channel_id=1
 		for existing: ServerInstance in _instances_for(instance_resource): channel_id=maxi(channel_id,int(existing.identity.get("channel_id",0))+1)
 	instance.identity=MapIdentity.create(realm_id,instance_resource.resolved_map_id(),host_id,channel_id)
