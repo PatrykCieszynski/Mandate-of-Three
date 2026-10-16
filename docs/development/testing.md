@@ -84,6 +84,13 @@ These tests intentionally protect persistence and authority, not prototype visua
 
 ## Optional integration
 
+PostgreSQL P1a is opt-in: `python tools/postgres/run_readiness.py` starts only a
+fresh owned loopback cluster, checks native SOCI transaction/type/independent-session
+contracts and stops/removes its data directory. Install binaries with
+`python tools/postgres/setup.py` or pass `--pg-bin`; pinned SOCI must be installed.
+It does not use port 18098 or player data, and is absent from default smoke/CI.
+See [setup, safety and verification limits](postgres-readiness.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
