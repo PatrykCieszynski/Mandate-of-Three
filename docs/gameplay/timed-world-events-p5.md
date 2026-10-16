@@ -1,19 +1,12 @@
-# P5a — Timed event drop core (draft)
+# P5a — Event loot foundation
 
-This slice only adds the **runtime event drop policy**. It does not enable an event by default. Quest drops and seasonal gameplay are out of scope.
+This slice adds only the server-side event drop execution seam. No concrete event, chest, schedule, event manager or persistent event state is implemented.
 
-## Runtime
-- `WorldEventDropService.configure(world_kind, schedules, unix_now)` accepts an authoritative manifest, with world kinds `classic` and `seasonal`, and event scopes `classic`, `seasonal`, and `all`.
-- Active event windows are refreshed once per second by the server World timer. The mob-death hot path uses only `active_drop_events`; an empty list exits immediately.
-- Each active event gets its own 0..10000 basis-point roll, independently of ordinary LootResolver, Luck, Yang and XP. All outcomes pass into the existing GroundLootSystem UID/pickup flow.
-- Timestamp values in the manifest are **Unix seconds**. Ground drop lifetime and ownership still use existing monotonic milliseconds from MobDeathResult.
-- Snapshot replacement validates the complete manifest before publishing. A failed update retains the previous manifest.
-- Up to 32 scheduled events are admitted and at most 8 successful event item outcomes are emitted per kill. Overflow beyond 8 is bounded, but event priority/budget policy must be decided before enabling stacked production events.
+- `WorldEventDropService.set_active_rules(world_kind, rules)` atomically receives active rules from a future authoritative coordinator. World kinds: `classic` / `seasonal`; rule scopes: `classic` / `seasonal` / `all`.
+- No active rules by default. The hot path exits immediately when the active list is empty; no SQL or time checks happen on mob death.
+- Active events independently roll rewards (basis points), separately from ordinary `LootResolver`, Luck, Yang and XP. Outcomes use existing `GroundLootSystem` UID/transactional pickup.
+- Rule admission validates canonical item definitions, stack quantity, unique event IDs, probability and scope. Failed updates do not replace the previous list.
+- Bounded to 32 input rules and at most eight successful reward outcomes per kill. Policy for more simultaneous active events should be defined before production deployment.
+- Deterministic tests in `tests/world_event_drops.tscn` are registered with the smoke suite.
 
-## Still required before production event activation
-1. A server-side coordinator with canonical Classic/Seasonal world identification and fan-out to every instance/channel. **Do not infer this from map names.**
-2. SQL storage of event schedules and restart-safe reload, with authorized admin operations to start/stop a two-hour event.
-3. An original/licensed Moonlight Chest item definition and content policy; do not reuse material IDs as production chest rewards.
-4. A kill-to-ground-to-SQL integration smoke and a multiplayer/server replay test, plus a manual test after restart and expiry.
-
-No production event is turned on by this draft. Tests in `tests/world_event_drops.tscn` check the pure runtime policy; the default smoke runner includes the scene.
+Deferred: authoritative active-event coordinator, world identity source, schedules, admin controls, persistence/restarts, event-specific item/content, and full end-to-end multiplayer integration tests. This branch does not start any event.
