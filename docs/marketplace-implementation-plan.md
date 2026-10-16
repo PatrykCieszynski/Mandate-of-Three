@@ -19,7 +19,7 @@ event bus, PostgreSQL, channels, reputation, favorite sellers or commission now.
 | E1b | Durable My Shop, name/status/grid/prices and Inventory D&D using existing Core UI. Cancel returns to account claims, not a possibly full alt bag. |
 | E2 | Atomic purchase and offline seller settlement; one buyer wins, no charge on full bag, same command retry returns the same receipt. |
 | E3a | Server catalog/search: one base definition, independent +0..+9 inclusive bounds, rolled-affix AND filters, indexed queries, bounded cursor/limit, 10k-offer measurements. |
-| E3b | Compact Metin Trading Glass-style CEF table with PoE-style bonus filters; tooltip reuse; selecting a result opens the whole shop and highlights the offer. |
+| E3b | Compact marketplace-search CEF table with multi-bonus AND filters; tooltip reuse; selecting a result opens the whole shop and highlights the offer. |
 | E4 | Whitelisted fungible asset ledger, deposit/withdraw, free/reserved and conservation, sharing the same Yang authority. |
 | E5 | Exact integer-ratio, price-time orderbook: maker price, partial fill/cancel races, offline fills, receipts and Exchange UI. |
 | E6 optional | Rotating physical stalls reference existing shop IDs; no separate market. |

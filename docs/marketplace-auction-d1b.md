@@ -144,7 +144,7 @@ resource ZIP inspection is not a standalone/Linux runtime acceptance.
 
 Existing smoke/architecture guards passed: ten Godot cases and 78 Web contracts.
 Existing market search/migration, purchase and Exchange order suites passed.
-Extended the existing two-client bridge/RPC market flow to open Trading Glass,
+Extended the existing two-client bridge/RPC market flow to open Marketplace Search,
 perform a real asynchronous search and reject a malformed cursor, then exercise
 the existing shop/reload/cancel/claim flow. Both market and Exchange headless
 network scenarios passed on port 18098, sequentially. No native CEF window was

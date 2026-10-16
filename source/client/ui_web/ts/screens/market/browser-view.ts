@@ -34,7 +34,7 @@ export function mountMarketBrowser(
 ) {
   const shell = new UiWindow(root, {
     id: 'market-browser',
-    title: 'Trading Glass',
+    title: 'Marketplace Search',
     className: 'market-browser-window',
     manager: o.manager,
     placement: {

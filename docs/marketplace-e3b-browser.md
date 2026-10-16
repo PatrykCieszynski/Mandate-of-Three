@@ -1,6 +1,6 @@
-# E3b: Trading Glass and public shop
+# E3b: Marketplace search and public shop
 
-T opens Trading Glass (B retains Storage; M opens My Shop). A compact table shows
+T opens Marketplace Search (B retains Storage; M opens My Shop). A compact table shows
 icon, real item +N, amount, whole-stack Yang and shop. Catalog typeahead debounces
 200 ms. Upgrade from/to are independent and inverted bounds produce an error.
 Bonus rows use authoritative labels/units and AND; Reset removes them. Search uses
