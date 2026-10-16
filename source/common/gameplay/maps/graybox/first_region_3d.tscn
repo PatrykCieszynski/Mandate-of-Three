@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=27 format=3]
 [ext_resource type="Script" path="res://source/common/gameplay/world3d/game_world_3d.gd" id="1"]
 [ext_resource type="Script" path="res://source/common/gameplay/maps/graybox/first_region.gd" id="2"]
 [ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_spawn_point_3d.gd" id="point"]
@@ -6,34 +6,48 @@
 [ext_resource type="Resource" path="res://source/common/gameplay/mobs/wild_dog.tres" id="wild"]
 [ext_resource type="Resource" path="res://source/common/gameplay/mobs/feral_dog.tres" id="feral"]
 [ext_resource type="Resource" path="res://source/common/gameplay/mobs/hollow_hound.tres" id="hollow"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/forest_wolf.tres" id="forest_wolf"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/dire_wolf.tres" id="dire_wolf"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/wolf_alpha.tres" id="wolf_alpha"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/road_bandit.tres" id="road_bandit"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/bandit_raider.tres" id="bandit_raider"]
+[ext_resource type="Resource" path="res://source/common/gameplay/mobs/bandit_captain_3d.tres" id="bandit_captain"]
 [sub_resource type="Resource" id="OutskirtsWest0"]
 script = ExtResource("entry")
-mob = ExtResource("wild")
+mob = ExtResource("forest_wolf")
 count = 10
 [sub_resource type="Resource" id="OutskirtsBend0"]
 script = ExtResource("entry")
-mob = ExtResource("wild")
+mob = ExtResource("forest_wolf")
 count = 10
 [sub_resource type="Resource" id="OutskirtsBend1"]
 script = ExtResource("entry")
-mob = ExtResource("feral")
-count = 4
+mob = ExtResource("dire_wolf")
+count = 3
+[sub_resource type="Resource" id="OutskirtsBend2"]
+script = ExtResource("entry")
+mob = ExtResource("wolf_alpha")
+count = 1
 [sub_resource type="Resource" id="OldRoadWest0"]
 script = ExtResource("entry")
-mob = ExtResource("wild")
+mob = ExtResource("road_bandit")
 count = 10
 [sub_resource type="Resource" id="OldRoadWest1"]
 script = ExtResource("entry")
-mob = ExtResource("feral")
+mob = ExtResource("bandit_raider")
 count = 6
 [sub_resource type="Resource" id="OldRoadCoast0"]
 script = ExtResource("entry")
-mob = ExtResource("wild")
+mob = ExtResource("road_bandit")
 count = 10
 [sub_resource type="Resource" id="OldRoadCoast1"]
 script = ExtResource("entry")
-mob = ExtResource("feral")
-count = 8
+mob = ExtResource("bandit_raider")
+count = 7
+[sub_resource type="Resource" id="OldRoadCoast2"]
+script = ExtResource("entry")
+mob = ExtResource("bandit_captain")
+count = 1
 [sub_resource type="Resource" id="HollowWest0"]
 script = ExtResource("entry")
 mob = ExtResource("feral")
@@ -65,7 +79,7 @@ respawn_seconds = 15.0
 [node name="OutskirtsBend" type="Marker3D" parent="Region"]
 position = Vector3(-9,0,-20)
 script = ExtResource("point")
-members = Array[ExtResource("entry")]([SubResource("OutskirtsBend0"),SubResource("OutskirtsBend1")])
+members = Array[ExtResource("entry")]([SubResource("OutskirtsBend0"),SubResource("OutskirtsBend1"),SubResource("OutskirtsBend2")])
 spawn_radius = 5.0
 wander_radius = 9.0
 leash_radius = 15.0
@@ -81,7 +95,7 @@ respawn_seconds = 15.0
 [node name="OldRoadCoast" type="Marker3D" parent="Region"]
 position = Vector3(14,0,-52)
 script = ExtResource("point")
-members = Array[ExtResource("entry")]([SubResource("OldRoadCoast0"),SubResource("OldRoadCoast1")])
+members = Array[ExtResource("entry")]([SubResource("OldRoadCoast0"),SubResource("OldRoadCoast1"),SubResource("OldRoadCoast2")])
 spawn_radius = 6.0
 wander_radius = 10.0
 leash_radius = 18.0
