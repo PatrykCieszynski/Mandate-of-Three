@@ -76,11 +76,13 @@ func begin_attack(peer_id: int, sequence: int, now: int) -> bool:
 	return _start_attack(peer_id,sequence,now,chained)
 
 func _start_attack(peer_id: int, sequence: int, now: int, chained: bool = false) -> bool:
+	services.interrupt_transfer(peer_id,"attack")
 	var attack := services.runtime_attack(services.owner_id_for_peer(peer_id))
 	var ratio := services.runtime_attack_speed_ratio(services.owner_id_for_peer(peer_id))
 	if attack < 0 or ratio <= 0: return false
 	var resolved := combo_state(peer_id).take_step(now,chained)
 	if resolved.is_empty(): return false
+	_endpoint.last_combat_ms[peer_id]=now
 	var hit: BasicAttackStepDefinition = resolved.step
 	if OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-legacy-melee"): hit.combat_trace = null
 	var body: PlayerActor3D = _world.characters[peer_id]

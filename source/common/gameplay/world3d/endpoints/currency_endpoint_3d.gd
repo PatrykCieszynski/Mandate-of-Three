@@ -58,6 +58,7 @@ func spawn_currency(position: Vector3, owner_id: int, owner_name: String, now: i
 	return _next_drop_id
 
 func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP_REACH) -> Dictionary:
+	if not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
 	if not _world.combat_endpoint.is_player_alive(peer_id) or _database() == null:
 		return {"ok": false, "error": "player"}
 	if not ground.has(drop_id): return {"ok": false, "error": "gone"}
@@ -87,6 +88,7 @@ func request_pickup(drop_id: int) -> void:
 	_send_snapshot()
 
 func spend_for_peer(peer_id: int, sequence: int, now: int) -> Dictionary:
+	if not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
 	if not _world.combat_endpoint.is_player_alive(peer_id) or _database() == null:
 		return {"ok": false, "error": "player"}
 	if sequence < 0 or sequence > 2147483647 or sequence <= _spend_sequences.get(peer_id, -1):

@@ -74,7 +74,9 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 	var now: int = Time.get_ticks_msec()
 	var result: Dictionary = {"ok":false,"error":"too_fast"}
 	var committed := false
-	if now - _last_action_ms.get(peer_id,-1000) >= 100:
+	if not services.mutations_allowed(peer_id):
+		result={"ok":false,"error":"transfer_pending"}
+	elif now - _last_action_ms.get(peer_id,-1000) >= 100:
 		_last_action_ms[peer_id] = now
 		var resource: PlayerResource = services.player_for_peer(peer_id)
 		if resource == null: return
@@ -130,7 +132,9 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 	var result: Dictionary
 	var committed := false
 	var now: int = Time.get_ticks_msec()
-	if now - _last_action_ms.get(peer_id, -1000) < 100:
+	if not services.mutations_allowed(peer_id):
+		result={"ok":false,"error":"transfer_pending"}
+	elif now - _last_action_ms.get(peer_id, -1000) < 100:
 		result = {"ok": false, "error": "too_fast"}
 	else:
 		_last_action_ms[peer_id] = now

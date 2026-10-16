@@ -6,6 +6,7 @@ signal context_changed(peer_id: int)
 signal state_changed(snapshot: Dictionary)
 signal operation_finished(command_id: String, result: Dictionary)
 var state: Dictionary = {"active":false}
+var services := MandateWorldServices.new()
 var actors: Dictionary[String, NeutralNpc3D] = {}
 var contexts: Dictionary[int, NpcInteractionContext] = {}
 var _world: Node3D
@@ -42,6 +43,7 @@ func _validate_actor(peer_id: int, instance_id: String) -> Dictionary:
 	return {"ok":true, "actor":actor}
 
 func interact_for_peer(peer_id: int, instance_id: String) -> Dictionary:
+	if not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
 	var result: Dictionary = _validate_actor(peer_id, instance_id)
 	if not result.ok:
 		close_for_peer(peer_id)
