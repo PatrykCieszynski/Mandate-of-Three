@@ -5,6 +5,8 @@
 [resource]
 script = ExtResource("1_instance")
 instance_name = &"FirstRegion"
+map_id = &"first_region"
+startup_copies = 2
 map_path = "res://source/common/gameplay/maps/graybox/first_region_3d.tscn"
 load_at_startup = true
 use_3d = true

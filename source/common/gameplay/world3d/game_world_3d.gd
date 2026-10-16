@@ -279,7 +279,7 @@ func join_world() -> void:
 		return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	var host: ServerInstance = get_parent() as ServerInstance
-	if host == null or not host.awaiting_peers.has(peer_id) or characters.has(peer_id):
+	if not services.can_join_map_instance(peer_id,host) or characters.has(peer_id):
 		return
 	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null:
@@ -298,6 +298,8 @@ func join_world() -> void:
 	print("SPIKE3D_JOIN: ", peer_id)
 
 func remove_peer(peer_id: int) -> void:
+	var host: ServerInstance = get_parent() as ServerInstance
+	if _server and not characters.has(peer_id) and (host==null or not host.awaiting_peers.has(peer_id)): return
 	if _server:
 		var resource: PlayerResource = services.player_for_peer(peer_id)
 		if resource != null and services.economy() != null:
@@ -313,7 +315,6 @@ func remove_peer(peer_id: int) -> void:
 	if characters.has(peer_id):
 		characters[peer_id].queue_free()
 		characters.erase(peer_id)
-	var host: ServerInstance = get_parent() as ServerInstance
 	if host != null:
 		host.connected_peers.erase(peer_id)
 		host.awaiting_peers.erase(peer_id)
@@ -341,7 +342,11 @@ func receive_roster(roster: Dictionary) -> void:
 	for peer_id: int in roster:
 		if not characters.has(peer_id):
 			_add_character(peer_id, str(roster[peer_id]))
-	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nGracze: %d" % ["First Region" if region != null else "Test Arena", characters.size()]
+	var instance := get_parent() as InstanceClient
+	var channel := int(instance.identity.get("channel_id",0)) if instance!=null else 0
+	var title := "First Region" if region != null else "Test Arena"
+	if channel>0: title += " · CH %d" % channel
+	_status.text = "Mandate of Three · %s\nWASD — ruch · PPM — kamera · rolka — zoom\nI — ekwipunek · N — NPC\nGracze: %d" % [title, characters.size()]
 
 func _add_character(peer_id: int, display_name: String) -> PlayerActor3D:
 	var body := PlayerActor3D.new()

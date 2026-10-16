@@ -1,5 +1,6 @@
 class_name InstanceClient
 extends Node
+var identity: Dictionary = {}
 
 
 const LOCAL_PLAYER: PackedScene = preload("res://source/client/local_player/local_player.tscn")

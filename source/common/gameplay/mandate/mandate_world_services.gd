@@ -32,6 +32,9 @@ func owner_id_for_peer(peer_id: int) -> int:
 	var player := player_for_peer(peer_id)
 	return 0 if player == null else player.player_id
 
+func can_join_map_instance(peer_id: int, instance: ServerInstance) -> bool:
+	return _server()!=null and _server().can_join_map_instance(peer_id,instance)
+
 func peers() -> Array:
 	return [] if _server() == null else _server().connected_players.keys()
 

@@ -43,8 +43,11 @@ func _ready() -> void:
 		api.peer_connected.connect(func(id: int) -> void:
 			var resource := PlayerResource.new()
 			resource.display_name = "Test_%d" % server.connected_players.size()
+			resource.player_id=id
+			resource.current_peer_id=id
+			server.player_id_to_peer_id[id]=id
 			server.connected_players[id] = resource
-			host.awaiting_peers[id] = {})
+			host.awaiting_peers[id] = {"session":resource})
 	else:
 		_check(peer.create_client("ws://127.0.0.1:%d" % PORT) == OK, "client socket")
 		api.multiplayer_peer = peer
