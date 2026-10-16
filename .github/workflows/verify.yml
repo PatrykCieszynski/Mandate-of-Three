@@ -35,12 +35,6 @@ jobs:
         run: |
           & ./tools/check-mandate-boundaries.ps1
           & ./tests/check-mandate-boundaries.ps1
-      - name: Temporary Prettier diagnostics (remove before merge)
-        working-directory: source/client/ui_web
-        shell: pwsh
-        run: |
-          npm run format
-          git diff -- ts/screens/market/browser-view.ts test/core_cleanup.test.mts
       - name: Check Core UI formatting
         working-directory: source/client/ui_web
         shell: pwsh

@@ -333,7 +333,9 @@ export function mountMarketBrowser(root, shopRoot, o) {
             body.append(row);
         }
         status.textContent =
-            (uncertainPurchase ? 'Purchase outcome unknown. Retry the same purchase first.' : '') ||
+            (uncertainPurchase
+                ? 'Purchase outcome unknown. Retry the same purchase first.'
+                : '') ||
                 state.error ||
                 (state.results.length
                     ? 'Select a result to open its whole shop.'

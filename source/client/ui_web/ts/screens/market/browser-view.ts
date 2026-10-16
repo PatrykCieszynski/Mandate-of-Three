@@ -165,13 +165,7 @@ export function mountMarketBrowser(
   whisper.disabled = true;
   whisper.title = 'Private messages are not implemented yet.';
   whisper.hidden = true;
-  visitor.contentRoot.append(
-    shopName,
-    shopGridRoot,
-    offerInfo,
-    buy,
-    whisper,
-  );
+  visitor.contentRoot.append(shopName, shopGridRoot, offerInfo, buy, whisper);
   function input(label: string) {
     const n = document.createElement('input');
     n.type = 'text';
@@ -407,7 +401,9 @@ export function mountMarketBrowser(
       body.append(row);
     }
     status.textContent =
-      (uncertainPurchase ? 'Purchase outcome unknown. Retry the same purchase first.' : '') ||
+      (uncertainPurchase
+        ? 'Purchase outcome unknown. Retry the same purchase first.'
+        : '') ||
       state.error ||
       (state.results.length
         ? 'Select a result to open its whole shop.'

@@ -716,7 +716,6 @@ test('Storage retry remains available after the original item left shared storag
   host.close();
 });
 
-
 test('Trading Glass keeps one unresolved purchase ID across selection changes and closed visitor windows', async () => {
   const { host, doc, manager } = environment();
   Object.assign(globalThis, {
@@ -783,9 +782,9 @@ test('Trading Glass keeps one unresolved purchase ID across selection changes an
   });
   view.setState(snapshot(shop));
   shopRoot.querySelector<HTMLElement>('[data-id="' + first + '"]')!.click();
-  const buy = Array.from(shopRoot.querySelectorAll<HTMLButtonElement>('button')).find(
-    (node) => node.textContent === 'Buy selected item',
-  )!;
+  const buy = Array.from(
+    shopRoot.querySelectorAll<HTMLButtonElement>('button'),
+  ).find((node) => node.textContent === 'Buy selected item')!;
   assert.equal(buy.disabled, false);
   buy.click();
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -800,13 +799,17 @@ test('Trading Glass keeps one unresolved purchase ID across selection changes an
   // The seller shop may close or disappear while the result remains unknown.
   view.setState(snapshot({}));
   assert.equal(shopRoot.hidden, true);
-  const retry = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
-    (node) => node.textContent === 'Retry same purchase',
-  )!;
+  const retry = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('button'),
+  ).find((node) => node.textContent === 'Retry same purchase')!;
   assert.equal(retry.hidden, false, 'Retry stays in Trading Glass');
   retry.click();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(sent[1], command, 'retry replays exactly the first purchase');
+  assert.deepEqual(
+    sent[1],
+    command,
+    'retry replays exactly the first purchase',
+  );
   assert.equal(retry.hidden, true);
 
   view.setState(snapshot(shop));
@@ -815,7 +818,11 @@ test('Trading Glass keeps one unresolved purchase ID across selection changes an
   buy.click();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(sent.length, 3);
-  assert.notEqual(sent[2].command_id, command.command_id, 'a new ID only after resolution');
+  assert.notEqual(
+    sent[2]!.command_id,
+    command.command_id,
+    'a new ID only after resolution',
+  );
 
   view.dispose();
   manager.dispose();
