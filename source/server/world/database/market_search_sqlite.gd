@@ -47,7 +47,10 @@ static func normalize(text: String) -> String:
 static func catalog(query: String) -> Dictionary:
 	if query.length()>80: return {"ok":false,"error":"request"}
 	var result: Array=[]
-	for definition: ItemDefinition in [ItemDefinitions.IRON_SWORD,ItemDefinitions.UPGRADE_ORE]:
+	for definition: ItemDefinition in ItemDefinitions.all_definitions():
+		# Match the Shop's sellable policy; never expose dev/quest-bound items.
+		if not definition.tradeable:
+			continue
 		if normalize(query) in normalize(definition.item_name) or normalize(query) in normalize(str(definition.definition_id)):
 			result.append({"definition_id":str(definition.definition_id),"name":definition.item_name,"icon_id":str(definition.icon_id)})
 	return {"ok":true,"items":result,"stats":STATS.duplicate(true)}
