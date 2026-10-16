@@ -21,6 +21,7 @@ $taskCases = [ordered]@{
     loot_resolver = 'LOOT_RESOLVER_OK'
     world_event_drops = 'WORLD_EVENT_DROPS_OK'
     mob_packs = 'MOB_PACKS_OK'
+    horn_taunt = 'HORN_TAUNT_OK'
     hit_reactions = 'HIT_REACTIONS_OK'
 }
 foreach ($taskCase in $taskCases.GetEnumerator()) {
