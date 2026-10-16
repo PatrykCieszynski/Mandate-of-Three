@@ -85,6 +85,8 @@ static func _encode_result(result: Dictionary) -> String:
 	var stored := result.duplicate(true)
 	if stored.has("item_state"):
 		for field: String in ["account_id","character_id","revision"]: stored.item_state[field]=str(stored.item_state[field])
+	for state: Dictionary in stored.get("wallet_states",[]):
+		for field: String in ["account_id","revision","balance","reserved_yang","pending_applied"]: state[field]=str(state[field])
 	return JSON.stringify(stored)
 
 static func decode_result(json: String) -> Dictionary:
@@ -96,4 +98,12 @@ static func decode_result(json: String) -> Dictionary:
 			var value: Variant = result.item_state.get(field)
 			if not value is String or not value.is_valid_int(): return {"ok":false,"error":"storage"}
 			result.item_state[field]=int(value)
+	if result.has("wallet_states") and not result.wallet_states is Array: return {"ok":false,"error":"storage"}
+	for state: Variant in result.get("wallet_states",[]):
+		if not state is Dictionary: return {"ok":false,"error":"storage"}
+		if not state.has("revision"): continue # Pre-feature receipt.
+		for field: String in ["account_id","revision","balance","reserved_yang","pending_applied"]:
+			var value: Variant = state.get(field)
+			if not value is String or not value.is_valid_int(): return {"ok":false,"error":"storage"}
+			state[field]=int(value)
 	return result

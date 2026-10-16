@@ -34,7 +34,7 @@ func purchase(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: 
 	item.amount = offer.quantity
 	var inserted: Dictionary = items.receive_item_in_transaction(item, int(receiving.position))
 	if not inserted.ok: return _rollback(str(inserted.error))
-	return _transaction.commit({"ok":true, "balance":spent.balance, "uid":inserted.uid, "position":inserted.position})
+	return _transaction.commit({"ok":true, "balance":spent.balance,"wallet_states":[spent.wallet_state], "uid":inserted.uid, "position":inserted.position})
 
 func purchase_receipt(owner_id: int, operation_id: String) -> Dictionary:
 	if operation_id.is_empty() or operation_id.length() > 96: return {"ok":false,"error":"request"}

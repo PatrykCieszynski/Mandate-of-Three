@@ -261,7 +261,7 @@ func purchase(character_id: int, command_id: String, shop_id: int, offer_id: Str
 	if not db.query_with_bindings("UPDATE item_instances SET owner_character_id=?,revision=revision+1 WHERE uid=?;",[character_id,offer.item_uid]): return _transaction.rollback("storage")
 	if not db.query_with_bindings("UPDATE item_custody SET location='bag',owner_id=?,position=?,container_id=0,offer_id=NULL WHERE uid=?;",[character_id,receiving.position,offer.item_uid]): return _transaction.rollback("storage")
 	if not db.query_with_bindings("DELETE FROM shop_offers WHERE offer_id=?;",[offer_id]): return _transaction.rollback("storage")
-	return _transaction.commit({"ok":true,"uid":offer.item_uid,"buyer_account":_transaction.account_id,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_balance":int(credited.balance),"shop_id":int(offer.shop_id)})
+	return _transaction.commit({"ok":true,"uid":offer.item_uid,"buyer_account":_transaction.account_id,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_balance":int(credited.balance),"wallet_states":[spent.wallet_state,credited.wallet_state],"shop_id":int(offer.shop_id)})
 
 ## Public read has no claims, credentials or offline player/session dependency.
 func visit(shop_id: int) -> Dictionary:

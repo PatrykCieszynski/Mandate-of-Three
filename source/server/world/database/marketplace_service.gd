@@ -40,13 +40,7 @@ func execute(character_id: int, action: String, payload: Dictionary) -> EconomyO
 	# A successful receipt replay is a successful response, not another commit.
 	# Do not consume newer pending income or publish another account change.
 	if not result.ok or not committed: return _operation(character_id, action, payload, result)
-	if action in ["order", "cancel_order"]:
-		_reconcile_wallets(result.wallet_states)
-	elif action == "buy":
-		_reconcile_wallets([
-			{"account_id": result.buyer_account, "balance": result.buyer_balance},
-			{"account_id": result.seller_account, "balance": result.seller_balance},
-		])
+	if result.has("wallet_states"): _reconcile_wallets(result.wallet_states)
 	var affected: Array = result.get("affected_accounts", [_runtime.wallet_account_id(character_id)])
 	if action == "buy": affected = [int(result.buyer_account), int(result.seller_account)]
 	var operation := _operation(character_id, action, payload, result, true, affected)
@@ -64,13 +58,7 @@ func _pending_wallet_deltas() -> Dictionary:
 ## Offline wallets stay offline; their durable settlement already happened in SQL.
 func _reconcile_wallets(states: Array) -> void:
 	for state: Dictionary in states:
-		var account := int(state.account_id)
-		if not _runtime.runtime_wallets.has(account): continue
-		var wallet: Dictionary = _runtime.runtime_wallets[account]
-		wallet.wallet_balance = int(state.balance)
-		if state.has("reserved_yang"): wallet.reserved_yang = int(state.reserved_yang)
-		wallet.pending_currency_delta = 0
-		_runtime.dirty_wallet.erase(account)
+		_runtime.reconcile_committed_wallet(state)
 
 func _exchange_command(exchange: ExchangeStoreSqlite, character_id: int, action: String, p: Dictionary) -> Dictionary:
 	match action:

@@ -87,7 +87,8 @@ UPDATE account_wallets SET yang = yang + ? WHERE account_id = ?;
 Gameplay consumers keep their authenticated character context; WorldDatabase
 resolves/caches the account once and owns the shared wallet. New character
 creation grants 1500 Yang only when that account's wallet is first created.
-Successful commit clears pending delta; failure retains it for retry.
+A successful commit consumes only the pending delta captured by that transaction;
+later income remains dirty. Failure retains the original delta for retry.
 WorldDatabase's separate `dirty_wallet` checkpoint is not part of full
 PlayerResource autosave or dirty progression.
 
@@ -220,3 +221,14 @@ combat until a current full snapshot is accepted. Combat still reads RAM only.
 This additive item-state feature migration preserves existing custody migrations;
 it does not change wallet checkpoints or implement cross-World cache coherence.
 See [durable item revisions](../development/economy-command-boundary.md#durable-account-item-revisions-and-world-cache-reconciliation).
+
+
+Wallet Yang/reservation changes now advance a durable account revision in the
+same transaction. Final balances, revisions and consumed pending prefixes are
+captured before COMMIT; World reconciles loaded accounts before publishing facts.
+Newer income is retained, duplicate/older results cannot clear it, and historical
+receipts never reset RAM. Currency delivery ordering separately protects pending
+income display while the durable revision is unchanged. Checkpoint cadence, delta
+writes and the accepted crash window are unchanged. This is synchronous local
+reconciliation, not distributed Yang batch idempotency or multi-writer support.
+See [versioned wallet commits](../development/economy-command-boundary.md#versioned-wallet-commits-and-pending-income-reconciliation).

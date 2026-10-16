@@ -318,3 +318,12 @@ rejects old durable item state even with a newer delivery sequence. run-progress
 also checks stale/duplicate World combat cache updates, retained watermark after
 failed refresh, current-state rehydration and no SQLite inventory reads per swing.
 No native window, timing assertion or new default suite is required for this change.
+
+
+Wallet revision/reconciliation coverage extends yang_wallet (part of smoke),
+yang_network (run-yang), market_purchase and exchange_orders. It protects late
+income preservation, duplicate/older results, both-account preparation before
+facts, atomic revision rollback, reservation-only changes, migration/retry and
+int64 receipts. The existing Yang network flow also rejects stale durable state
+with newer delivery, stale same-revision display and wrong account scope. These
+are contract tests; no new suite, pixel baseline or exact timing assertion is added.

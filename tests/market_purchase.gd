@@ -6,6 +6,7 @@ var market: MarketStoreSqlite
 var items: ItemStoreSqlite
 var persistence: WorldDatabase
 var observed_accounts: Array[int]=[]
+var fact_wallets: Array[Dictionary]=[]
 func balance(account: int) -> int:
 	assert(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;",[account]))
 	return int(db.query_result[0].yang)
@@ -77,6 +78,7 @@ func _ready() -> void:
 	var reader:=SQLite.new();reader.path=ProjectSettings.globalize_path(db.path);assert(reader.open_db())
 	persistence.market_account_changed.connect(func(account: int)->void:
 		assert(reader.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;",[account]) and not reader.query_result.is_empty(),"observer connection sees committed ledger")
+		fact_wallets.append(persistence.runtime_wallets.duplicate(true))
 		observed_accounts.append(account))
 	# The application boundary must reject malformed direct callers, not rely on
 	# the network adapter to prevent indexing/type errors or durable writes.
@@ -98,6 +100,7 @@ func _ready() -> void:
 		assert(observed_accounts.is_empty(),"SQL rollback emits no success/account fact")
 		assert(persistence.wallet_balance(seller)==1533 and persistence.wallet_balance(buyer)==1590,"rollback retains both pending incomes")
 		assert(db.query("DROP TRIGGER fail_sale;"))
+	fact_wallets.clear()
 	var operation := persistence.market_operation(buyer, "buy", payload)
 	var result := operation.response()
 	assert(operation.operation_id == "purchase" and operation.character_id == buyer and operation.account_id == buyer_account)
@@ -106,6 +109,9 @@ func _ready() -> void:
 	assert(seller_account in observed_accounts and buyer_account in observed_accounts,"World fact refreshes both accounts beyond current map")
 	assert(result.ok and balance(buyer_account)==1490 and balance(seller_account)==1633)
 	assert(persistence.wallet_balance(buyer)==1490 and persistence.wallet_balance(seller)==1633)
+	for notification: Dictionary in fact_wallets:
+		for state: Dictionary in result.wallet_states:
+			assert(notification[int(state.account_id)].wallet_state==state and notification[int(state.account_id)].pending_currency_delta==0,"both versioned wallets reconcile before the first account fact")
 	assert(items.inventory(buyer).items.any(func(i: Dictionary)->bool:return i.uid==item.uid and i.revision==2))
 	assert(market.purchase(rival,"rival",listed.shop_id,listed.offer_id,0,100,{}).error=="unavailable")
 	assert(persistence.add_yang(buyer,17) and persistence.add_yang(seller,19))
@@ -115,6 +121,7 @@ func _ready() -> void:
 	assert(replay.operation_id == operation.operation_id and replay.account_id == operation.account_id)
 	var lookup := persistence.market_operation(buyer, "receipt", {"command_id":payload.command_id})
 	assert(lookup.response().ok and not lookup.new_commit and not lookup.receipt_replay and lookup.changed_accounts.is_empty())
+	assert(replay.response().wallet_states==result.wallet_states and lookup.response().wallet_states==result.wallet_states,"purchase retry/discovery retains both original committed wallet revisions/prefixes")
 	assert(observed_accounts.size() == notifications, "receipt/retry publishes no new committed account changes")
 	assert(persistence.wallet_balance(buyer)==1507 and persistence.wallet_balance(seller)==1652,"replayed receipt never restores stale committed balances")
 	assert(persistence.flush_wallet())
