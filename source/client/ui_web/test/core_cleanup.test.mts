@@ -1,6 +1,7 @@
 import { MAX_STATE_BYTES, MAX_BYTES } from '../web/protocol.js';
 import { transfer } from '../web/screens/storage/transfer.js';
 import { mountStorage } from '../web/screens/storage/storage-view.js';
+import { mountMarketBrowser } from '../web/screens/market/browser-view.js';
 import type { StorageSnapshot } from '../web/protocol/contracts.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -710,6 +711,119 @@ test('Storage retry remains available after the original item left shared storag
     }),
     false,
   );
+  view.dispose();
+  manager.dispose();
+  host.close();
+});
+
+test('Trading Glass keeps one unresolved purchase ID across selection changes and closed visitor windows', async () => {
+  const { host, doc, manager } = environment();
+  Object.assign(globalThis, {
+    HTMLElement: host.HTMLElement,
+    HTMLInputElement: host.HTMLInputElement,
+    Option: host.Option,
+  });
+  const root = target();
+  const shopRoot = target();
+  root.hidden = true;
+  shopRoot.hidden = true;
+  doc.body.append(root, shopRoot);
+
+  const first = 'a'.repeat(32);
+  const second = 'b'.repeat(32);
+  const item = (id: string, x: number) => ({
+    ...bagItem,
+    id,
+    revision: 0,
+    x,
+    y: 0,
+    page: 0,
+    height: 2,
+    quantity: 1,
+  });
+  const offers = [
+    { id: first, revision: 0, price: 100, item: item(first, 0) },
+    { id: second, revision: 0, price: 200, item: item(second, 2) },
+  ];
+  const shop = {
+    active: true as const,
+    shopId: 42,
+    name: 'Test merchant',
+    status: 'active' as const,
+    revision: 0,
+    columns: 5 as const,
+    rows: 8 as const,
+    offers,
+    claims: [],
+  };
+  const sent: Array<Record<string, unknown>> = [];
+  const view = mountMarketBrowser(root, shopRoot, {
+    manager,
+    resolveItemIcon: () => '',
+    catalog: async () => ({ ok: true }),
+    search: async () => ({ ok: true }),
+    visit: async () => ({ ok: true }),
+    buy: async (intent) => {
+      sent.push({ ...intent });
+      return sent.length === 1 ? { ok: false, error: 'timeout' } : { ok: true };
+    },
+    close: () => {},
+    regions: () => {},
+  });
+  const snapshot = (activeShop: typeof shop | Record<string, never>) => ({
+    active: true as const,
+    catalog: [],
+    stats: {},
+    results: [],
+    cursor: '',
+    shop: activeShop,
+    highlight: first,
+    error: '',
+  });
+  view.setState(snapshot(shop));
+  shopRoot.querySelector<HTMLElement>('[data-id="' + first + '"]')!.click();
+  const buy = Array.from(
+    shopRoot.querySelectorAll<HTMLButtonElement>('button'),
+  ).find((node) => node.textContent === 'Buy selected item')!;
+  assert.equal(buy.disabled, false);
+  buy.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(sent.length, 1);
+  const command = { ...sent[0] };
+
+  shopRoot.querySelector<HTMLElement>('[data-id="' + second + '"]')!.click();
+  assert.equal(buy.disabled, true, 'an unknown buy locks other offers');
+  buy.click();
+  assert.equal(sent.length, 1, 'a second buy cannot overwrite the original ID');
+
+  // The seller shop may close or disappear while the result remains unknown.
+  view.setState(snapshot({}));
+  assert.equal(shopRoot.hidden, true);
+  const retry = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('button'),
+  ).find((node) => node.textContent === 'Retry same purchase')!;
+  assert.equal(retry.hidden, false, 'Retry stays in Trading Glass');
+  retry.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(
+    sent[1],
+    command,
+    'retry replays exactly the first purchase',
+  );
+  assert.equal(retry.hidden, true);
+
+  view.setState(snapshot(shop));
+  shopRoot.querySelector<HTMLElement>('[data-id="' + second + '"]')!.click();
+  assert.equal(buy.disabled, false);
+  buy.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(sent.length, 3);
+  assert.notEqual(
+    sent[2]!.command_id,
+    command.command_id,
+    'a new ID only after resolution',
+  );
+
   view.dispose();
   manager.dispose();
   host.close();

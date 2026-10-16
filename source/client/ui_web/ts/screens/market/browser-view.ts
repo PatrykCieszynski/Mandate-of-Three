@@ -74,6 +74,7 @@ export function mountMarketBrowser(
     timer: ReturnType<typeof setTimeout> | undefined,
     lastSearch: MarketSearch | undefined;
   let buyIntent: MarketCommand | undefined;
+  let uncertainPurchase = false;
   let criteriaKey = '';
   const tooltip = ItemTooltip(root, { geometry: () => o.manager }),
     shopTooltip = ItemTooltip(shopRoot, { geometry: () => o.manager });
@@ -149,7 +150,9 @@ export function mountMarketBrowser(
     }),
     conditionList,
   );
-  shell.contentRoot.append(filter, bonuses, status, table, next);
+  const retry = button('Retry same purchase', () => void purchase(true));
+  retry.hidden = true;
+  shell.contentRoot.append(filter, bonuses, status, retry, table, next);
   const shopName = document.createElement('p'),
     shopGridRoot = document.createElement('div');
   shopGridRoot.className = 'market-grid';
@@ -157,21 +160,12 @@ export function mountMarketBrowser(
   const offerInfo = document.createElement('p'),
     buy = button('Buy selected item', () => void purchase());
   buy.disabled = true;
-  const retry = button('Retry same purchase', () => void purchase(true));
-  retry.hidden = true;
   // Placeholder only: private messages have no server command yet.
   const whisper = button('Whisper seller (soon)', () => {});
   whisper.disabled = true;
   whisper.title = 'Private messages are not implemented yet.';
   whisper.hidden = true;
-  visitor.contentRoot.append(
-    shopName,
-    shopGridRoot,
-    offerInfo,
-    buy,
-    whisper,
-    retry,
-  );
+  visitor.contentRoot.append(shopName, shopGridRoot, offerInfo, buy, whisper);
   function input(label: string) {
     const n = document.createElement('input');
     n.type = 'text';
@@ -244,8 +238,23 @@ export function mountMarketBrowser(
       pending = false;
     }
   }
+  function syncPurchaseControls() {
+    retry.hidden = !uncertainPurchase;
+    retry.disabled = pending;
+    buy.disabled =
+      pending ||
+      uncertainPurchase ||
+      !selected ||
+      !state.active ||
+      !('status' in state.shop) ||
+      state.shop.status !== 'active' ||
+      selected.price === null;
+  }
   async function purchase(replay = false) {
     if (pending || !state.active) return;
+    // A timed-out purchase may already have committed. Never overwrite its ID
+    // with a second intent until the original receipt resolves.
+    if (replay ? !uncertainPurchase || !buyIntent : uncertainPurchase) return;
     if (
       !replay &&
       (!selected || !('active' in state.shop) || !state.shop.active)
@@ -261,36 +270,37 @@ export function mountMarketBrowser(
         price: selected.price!,
       };
     if (!buyIntent) return;
+    const command = buyIntent;
     pending = true;
-    buy.disabled = true;
-    retry.hidden = true;
+    syncPurchaseControls();
     offerInfo.textContent = 'Waiting for server…';
     try {
-      const r = await o.buy(buyIntent);
+      const result = await o.buy(command);
       if (disposed) return;
-      offerInfo.textContent = r.ok ? 'Purchased.' : (r.error ?? 'Rejected');
-      retry.hidden = r.ok || r.error !== 'timeout';
-      if (r.ok) buyIntent = undefined;
-      await o.visit(
-        Number(
-          buyIntent?.shop_id ??
-            ('shopId' in state.shop ? state.shop.shopId : 0),
-        ),
-        selected?.id ?? '',
-      );
+      uncertainPurchase = !result.ok && result.error === 'timeout';
+      if (!uncertainPurchase) buyIntent = undefined;
+      offerInfo.textContent = result.ok
+        ? 'Purchased.'
+        : (result.error ?? 'Rejected');
+      if (uncertainPurchase)
+        status.textContent =
+          'Purchase outcome unknown. Retry the same purchase first.';
+      // Refresh failure is not evidence that an acknowledged buy is uncertain.
+      try {
+        await o.visit(Number(command.shop_id ?? 0), selected?.id ?? '');
+      } catch {
+        // Keep the known outcome and allow the player to reopen the shop.
+      }
     } catch {
       if (!disposed) {
+        uncertainPurchase = true;
         offerInfo.textContent = 'Unknown outcome.';
-        retry.hidden = false;
+        status.textContent =
+          'Purchase outcome unknown. Retry the same purchase first.';
       }
     } finally {
       pending = false;
-      buy.disabled =
-        !selected ||
-        !state.active ||
-        !('status' in state.shop) ||
-        state.shop.status !== 'active' ||
-        selected?.price === null;
+      if (!disposed) syncPurchaseControls();
     }
   }
   function choose(offer: MarketOffer) {
@@ -302,12 +312,7 @@ export function mountMarketBrowser(
         ? 'Do negocjacji'
         : offer.price.toLocaleString('en-US') + ' Yang');
     whisper.hidden = offer.price !== null;
-    buy.disabled =
-      offer.price === null ||
-      pending ||
-      !state.active ||
-      !('status' in state.shop) ||
-      state.shop.status !== 'active';
+    syncPurchaseControls();
     shopGridRoot
       .querySelectorAll('[data-id]')
       .forEach((n) =>
@@ -396,6 +401,9 @@ export function mountMarketBrowser(
       body.append(row);
     }
     status.textContent =
+      (uncertainPurchase
+        ? 'Purchase outcome unknown. Retry the same purchase first.'
+        : '') ||
       state.error ||
       (state.results.length
         ? 'Select a result to open its whole shop.'
@@ -430,7 +438,7 @@ export function mountMarketBrowser(
         state.shop.offers.find((x) => x.id === selected?.id) ??
         state.shop.offers.find((x) => x.id === highlight);
       selected = undefined;
-      buy.disabled = true;
+      syncPurchaseControls();
       whisper.hidden = true;
       if (openedShop) visitor.handle.activate();
       if (chosen) choose(chosen);
@@ -459,6 +467,7 @@ export function mountMarketBrowser(
         tooltip.hide();
         shopTooltip.hide();
       } else render();
+      syncPurchaseControls();
       if (opened) shell.handle.activate();
     },
     closeIfActive() {
