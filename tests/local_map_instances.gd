@@ -7,6 +7,17 @@ class ForeignCombat extends CombatEndpoint3D:
 	func _ready() -> void: pass
 class ForeignCurrency extends CurrencyEndpoint3D:
 	func _ready() -> void: pass
+class LegacyHost extends ServerInstance:
+	var despawn_count := 0
+	func _ready() -> void: pass
+	@rpc("authority", "call_remote", "reliable", 0)
+	func despawn_player(_peer_id: int, _delete: bool = false) -> void:
+		despawn_count+=1
+class FailedCheckpoint extends WorldDatabase:
+	var calls := 0
+	func flush_character(_owner_id: int = -1) -> bool:
+		calls+=1
+		return false
 
 var socket := WebSocketMultiplayerPeer.new()
 var server: WorldServer
@@ -297,6 +308,13 @@ func exercise_access_policy() -> void:
 	var public_copy: ServerInstance=public_entry.instance
 	check(public_copy.identity.channel_id==1 and private_copy.identity.channel_id==0,"private run does not consume public channel numbering")
 	await wait_until(func()->bool:return public_copy.is_node_ready())
+	var public_second:=manager.charge_instance(resource,2)
+	await wait_until(func()->bool:return public_second.is_node_ready())
+	resource.charged_instances.erase(private_copy);resource.charged_instances.append(private_copy)
+	resource.max_players=2
+	check(resource.get_instance()==private_copy,"regression fixture has RESERVED last after PUBLIC CH1/CH2")
+	check(manager.find_public_instance(resource) in [public_copy,public_second],"legacy public routing excludes last RESERVED copy")
+	exercise_legacy_transfer_guard(private_copy)
 	check(not manager.reserve_entry(910002,resource,private_copy).ok and public_copy.awaiting_peers.has(910002),"different target cannot replace a pending assignment")
 	private_copy.allowed_character_ids.clear()
 	check(not server.can_join_map_instance(910001,private_copy),"revoked membership blocks join before sweep")
@@ -307,6 +325,7 @@ func exercise_access_policy() -> void:
 	manager.maintain_instances()
 	check(not public_copy.is_queued_for_deletion(),"public startup policy remains intact")
 	manager.begin_draining(public_copy)
+	manager.begin_draining(public_second)
 	manager.maintain_instances()
 	await get_tree().process_frame
 	check(resource.charged_instances.is_empty(),"private/public empty copies use same retirement path")
@@ -315,6 +334,36 @@ func exercise_access_policy() -> void:
 		manager._release_pending_peer(peer_id)
 		server.connected_players.erase(peer_id);server.player_id_to_peer_id.erase(peer_id)
 	manager.instance_collection.erase(resource.instance_name)
+
+func exercise_legacy_transfer_guard(private_copy: ServerInstance) -> void:
+	var source:=LegacyHost.new();source.name="LegacySource"
+	source.instance_resource=InstanceResource.new();source.instance_resource.instance_name=&"LegacySource"
+	source.instance_resource.charged_instances.append(source)
+	manager.instance_collection[&"LegacySource"]=source.instance_resource
+	manager.add_child(source)
+	var target:=LegacyHost.new();target.name="LegacyTarget";target.instance_resource=InstanceResource.new()
+	manager.add_child(target)
+	var session:=PlayerResource.new();session.player_id=920001;session.current_peer_id=920001
+	server.connected_players[920001]=session;server.player_id_to_peer_id[920001]=920001
+	var actor:=Player.new();actor.name="920001";actor.player_resource=session
+	source.connected_peers.append(920001);source.players_by_peer_id[920001]=actor
+	var saved_database:=server.database
+	var checkpoint:=FailedCheckpoint.new();server.database=checkpoint
+	check(not manager.player_switch_instance(private_copy,0,actor,source),"legacy transfer rejects RESERVED/3D before despawn")
+	check(not manager.teleport_peer_to(920001,private_copy,Vector2.ZERO),"direct cross-instance teleport rejects private target")
+	target.access_policy=ServerInstance.AccessPolicy.RESERVED
+	check(not manager.player_switch_instance(target,0,actor,source),"legacy access guard does not rely only on 3D type")
+	target.access_policy=ServerInstance.AccessPolicy.PUBLIC;target.admission_state=ServerInstance.AdmissionState.DRAINING
+	check(not manager.player_switch_instance(target,0,actor,source),"draining target rejected before checkpoint/despawn")
+	check(checkpoint.calls==0 and source.despawn_count==0 and source.get_player(920001)==actor and source.connected_peers.has(920001),"rejected targets preserve source actor and membership without side effects")
+	target.admission_state=ServerInstance.AdmissionState.ACCEPTING
+	check(not manager.player_switch_instance(target,0,actor,source) and checkpoint.calls==1,"accepted legacy target still requires successful checkpoint")
+	check(source.despawn_count==0 and source.get_player(920001)==actor and target.awaiting_peers.is_empty(),"failed checkpoint leaves source and target unchanged")
+	server.database=saved_database;checkpoint.free()
+	actor.free();source.players_by_peer_id.clear();source.connected_peers.clear()
+	server.connected_players.erase(920001);server.player_id_to_peer_id.erase(920001)
+	manager.instance_collection.erase(&"LegacySource");source.instance_resource.charged_instances.clear()
+	source.queue_free();target.queue_free()
 
 @rpc("authority","call_remote","reliable",0)
 func exercise(foreign: Dictionary, other_peer: int, own_drop: String, foreign_drop: String, metin_hp: int) -> void:

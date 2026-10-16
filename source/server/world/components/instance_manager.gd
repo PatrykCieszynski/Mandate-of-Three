@@ -267,6 +267,23 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 	return charge_instance(resource) if instances.is_empty() else selected
 
 
+## Loaded public routing only. Never use InstanceResource array order as access.
+func find_public_instance(resource: InstanceResource) -> ServerInstance:
+	if resource == null:
+		return null
+	for instance: ServerInstance in _instances_for(resource):
+		if instance.get_parent() != self or not instance.is_node_ready():
+			continue
+		if instance.access_policy != ServerInstance.AccessPolicy.PUBLIC:
+			continue
+		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
+			continue
+		if resource.use_3d and not instance.accepts_reservation():
+			continue
+		return instance
+	return null
+
+
 func _on_player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper) -> void:
 	# Jailed players can't traverse warpers — that's the whole point of jail.
 	# We notify them once per attempt so they know it's intentional.
@@ -284,7 +301,7 @@ func _on_player_entered_warper(player: Player, current_instance: ServerInstance,
 		return
 
 	if instance_resource.can_join_instance(player, instance_index):
-		target_instance = instance_resource.get_instance()
+		target_instance = find_public_instance(instance_resource)
 		if target_instance:
 			player_switch_instance(target_instance, warper.target_id, player, current_instance)
 		else:
@@ -315,15 +332,16 @@ func recall_player(peer_id: int) -> void:
 	if current_inst.instance_resource == res:
 		teleport_peer_to(peer_id, current_inst, current_inst.instance_map.get_spawn_position(0))
 		return
-	if res.charged_instances.is_empty():
+	var target := find_public_instance(res)
+	if target == null:
 		queue_charge_instance(res, player_switch_instance.bind(0, player, current_inst))
 	else:
-		player_switch_instance(res.get_instance(), 0, player, current_inst)
+		player_switch_instance(target, 0, player, current_inst)
 
 
 func queue_charge_instance(instance_resource: InstanceResource, callback: Callable) -> void:
 	for pending: ServerInstance in loading_instances.values():
-		if pending.instance_resource==instance_resource and pending.access_policy == ServerInstance.AccessPolicy.PUBLIC:
+		if pending.instance_resource==instance_resource and pending.access_policy == ServerInstance.AccessPolicy.PUBLIC and pending.admission_state == ServerInstance.AdmissionState.ACCEPTING and not pending.is_queued_for_deletion():
 			pending.ready.connect(callback.bind(pending),CONNECT_ONE_SHOT)
 			return
 	var new_instance: ServerInstance = prepare_instance(instance_resource)
@@ -337,15 +355,17 @@ func player_switch_instance(
 	warper_target_id: int,
 	player: Player,
 	current_instance: ServerInstance,
-) -> void:
+) -> bool:
+	if not _can_legacy_transfer(target_instance, player, current_instance):
+		return false
 	var peer_id: int = player.name.to_int()
 	if not world_server.database.flush_character(player.player_resource.player_id):
 		push_error("Instance transfer cancelled: character checkpoints could not be saved.")
-		return
+		return false
 	if current_instance.connected_peers.has(peer_id):
 		current_instance.despawn_player(peer_id, false)
 	else:
-		return
+		return false
 	# Leaving a dungeon run drops this peer from its group.
 	DungeonService.on_player_left(peer_id, current_instance)
 	charge_new_instance.rpc_id(
@@ -355,8 +375,33 @@ func player_switch_instance(
 	)
 	target_instance.awaiting_peers[peer_id] = {
 		"player": player,
+		"session": player.player_resource,
 		"target_id": warper_target_id
 	}
+	return true
+
+
+## Legacy Player/Map handoff is not the future 3D transfer state machine.
+## Reject unsupported or inaccessible targets before checkpoint or despawn.
+func _can_legacy_transfer(target: ServerInstance, player: Player, source: ServerInstance) -> bool:
+	if not is_instance_valid(target) or not is_instance_valid(source) or not is_instance_valid(player):
+		return false
+	if target.get_parent() != self or source.get_parent() != self or not target.is_node_ready():
+		return false
+	if target.is_queued_for_deletion() or source.is_queued_for_deletion():
+		return false
+	if target.instance_resource == null or source.instance_resource == null:
+		return false
+	if target.instance_resource.use_3d or source.instance_resource.use_3d:
+		return false
+	if target.access_policy != ServerInstance.AccessPolicy.PUBLIC or target.admission_state != ServerInstance.AdmissionState.ACCEPTING:
+		return false
+	var peer_id := str(player.name).to_int()
+	if not _is_current_session(peer_id, player.player_resource) or source.get_player(peer_id) != player or not source.connected_peers.has(peer_id):
+		return false
+	if target != source and (target.connected_peers.has(peer_id) or target.awaiting_peers.has(peer_id)):
+		return false
+	return target.instance_resource.can_join_instance(player)
 
 
 func charge_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
@@ -503,13 +548,14 @@ func send_player_to_jail(peer_id: int) -> bool:
 	if current_inst.instance_resource == jail_res:
 		return false
 
-	if jail_res.charged_instances.is_empty():
+	var target := find_public_instance(jail_res)
+	if target == null:
 		queue_charge_instance(
 			jail_res,
 			player_switch_instance.bind(0, player, current_inst)
 		)
 	else:
-		player_switch_instance(jail_res.get_instance(), 0, player, current_inst)
+		return player_switch_instance(target, 0, player, current_inst)
 	return true
 
 
@@ -537,7 +583,11 @@ func teleport_peer_to(peer_id: int, dest_instance: ServerInstance, dest_position
 		world_server.data_push.rpc_id(peer_id, &"player.teleport", {"position": dest_position})
 		return true
 
+	if not _can_legacy_transfer(dest_instance, player, current_inst):
+		return false
+	if not world_server.database.flush_character(player.player_resource.player_id):
+		return false
 	current_inst.despawn_player(peer_id, false)
 	charge_new_instance.rpc_id(peer_id, dest_instance.instance_resource.map_path, dest_instance.name)
-	dest_instance.awaiting_peers[peer_id] = {"player": player, "target_position": dest_position}
+	dest_instance.awaiting_peers[peer_id] = {"player": player, "session": player.player_resource, "target_position": dest_position}
 	return true

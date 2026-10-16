@@ -46,6 +46,15 @@ reserved run. Legacy public loader callbacks also skip reserved pending copies.
 Reserved runs do not consume public channel numbers. Their retirement uses the
 same idle/draining gates but ignores the shared resource's public startup flag.
 
+Legacy warper, recall and jail routing use `find_public_instance`, which selects
+only loaded, owned, accepting PUBLIC copies rather than the resource array's
+last entry. Deferred public-load callbacks skip draining/retiring copies too.
+Legacy cross-instance transfer and staff teleport revalidate the destination and
+current source/session before checkpoint or despawn. RESERVED, unsupported 3D,
+draining, stale and foreign targets leave the source actor in place. A failed
+checkpoint also leaves both memberships unchanged. This safety check does not
+implement the future 3D transfer/handoff flow.
+
 Pending access is checked again before publication and actual join. Maintenance
 releases revoked reservations and uses the existing matching-session rejection /
 disconnect path. Allowlist mutation is a trusted server action; changing it does
@@ -70,6 +79,11 @@ the explicit server API. No new RPC, frontend control or database field was adde
   private-only registry/public provisioning, pending target protection,
   access revoked before join, and private retirement for shared startup content.
   Existing deadline, replacement-session and draining checks also pass.
+- Review regression: PUBLIC CH1 + CH2 followed by RESERVED CH0 never selects the
+  private copy through the legacy public helper. Controlled legacy source and
+  checkpoint fixtures verify no despawn/checkpoint for rejected targets and no
+  despawn or destination reservation after checkpoint failure. That deliberate
+  failure logs the named transfer-cancelled error.
 - Existing World RPC ingress and native World session admission regressions pass.
 - Normal Gateway/Master/World `run-items.ps1 -WithSession` passed in a disposable
   project, including both clients equip/relog and graceful World shutdown through
