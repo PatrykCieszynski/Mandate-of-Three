@@ -1,10 +1,10 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** Proposed implementation sequence (2026-10-16), **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 backend parity in progress (2026-10-16); P2–P4 **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 **P1 progress:** [P1a readiness](../development/postgres-readiness.md) adds a
 disposable Godot/SOCI PostgreSQL probe and a sanitized SQLite schema/source audit.
-Domain backend/schema parity and runtime extraction remain unimplemented; this
+Full domain backend/schema parity and runtime extraction remain incomplete; this
 preparatory package does not complete P1 or change the game's SQLite backend.
 
 **P1b progress:** [account wallet parity](../development/postgres-wallet-parity.md)
@@ -16,6 +16,12 @@ The native-only `commit-failure` fixture exposed a deferred COMMIT crash on
 v0.4.1. User-authorized adoption of official v0.4.2 fixes the MSVC exception ABI
 configuration; installed-payload COMMIT/rollback, wallet parity and readiness
 now pass. This closes that driver gate, not P1's remaining domain ports or P2–P4.
+
+**P1c progress:** [NPC purchase parity](../development/postgres-npc-shop-parity.md)
+adds an opt-in transaction spanning character Inventory capacity/custody, pending
+Yang, item/wallet watermarks and a durable success receipt. Existing SQLite code
+shares the unchanged receipt codec. Other Inventory mutations, Storage, Player
+Shop, Upgrade and Exchange ports remain pending; World continues using SQLite.
 
 **Placement:** After the current single-World Economy hardening/SoC and local **MapInstance / CH** lifecycle, and **before** admitting two independent World Processes to the same realm economy. Preparatory contract tests may start earlier, but the plan does not require PostgreSQL for local CH or interrupt [World performance work](world-server-optimization.md). Do not combine it with gameplay/visual changes.
 

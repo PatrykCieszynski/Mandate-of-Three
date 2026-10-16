@@ -95,6 +95,11 @@ Wallet backend parity uses the same owned runner with `--suite wallet`; pass
 `--pg-bin 'Y:/Software/PostgreSQL/bin'` to use an installed binary directory while
 still creating a fresh disposable cluster. See [wallet parity](postgres-wallet-parity.md).
 
+`--suite npc-shop` compares the existing SQLite NPC purchase with the PostgreSQL
+port, including custody/receipts, full bag, exact target replay/reopen, SQL and
+COMMIT failures, and integer watermarks above 2^53. This remains opt-in, with no
+PostgreSQL dependency in default CI. See [NPC purchase parity](postgres-npc-shop-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
