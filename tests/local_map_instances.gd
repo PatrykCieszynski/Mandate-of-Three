@@ -126,10 +126,12 @@ func run_server() -> void:
 		check(manager.select_entry_instance(manager.default_instance)!=reserved_host,"public selection never uses reserved copy")
 	var left: GameWorld3D=a.get_node("GameWorld")
 	var right: GameWorld3D=b.get_node("GameWorld")
+	await observe_live_headroom()
 	# A revoked session while a map is still loading must never receive/spawn an
 	# assignment. Repeated connection notification must reserve only once.
 	var default_map:=manager.default_instance
 	var cold:=InstanceResource.new();cold.instance_name=&"ColdFixture";cold.use_3d=true;cold.map_path="res://tests/fixtures/world3d/test_arena.tscn"
+	manager.charge_instance(cold) # Explicit server load; admission still awaits ready.
 	manager.default_instance=cold
 	var obsolete:=PlayerResource.new();obsolete.player_id=999999;obsolete.current_peer_id=999999
 	server.connected_players[999999]=obsolete;server.player_id_to_peer_id[999999]=999999
@@ -145,6 +147,7 @@ func run_server() -> void:
 	pending.queue_free()
 	await exercise_lifecycle()
 	await exercise_access_policy()
+	await exercise_provisioning()
 	check(left.get_world_3d()!=right.get_world_3d(),"separate World3D/physics spaces")
 	var obstacle:=StaticBody3D.new();obstacle.position=Vector3(10000,1000,10000)
 	var shape:=CollisionShape3D.new();shape.shape=BoxShape3D.new();obstacle.add_child(shape);left.add_child(obstacle)
@@ -303,7 +306,10 @@ func exercise_access_policy() -> void:
 	other_manager.free()
 	var member: PlayerResource=server.connected_players[910001]
 	check(manager.reserve_entry(910001,resource,private_copy).ok and server.can_join_map_instance(910001,private_copy),"authorized reserved admission reaches final join gate")
+	var original_budget=manager.provision_budget
+	manager.provision_budget=healthy_budget()
 	var public_entry:=manager.reserve_entry(910002,resource)
+	manager.provision_budget=original_budget
 	check(public_entry.ok and public_entry.instance!=private_copy and public_entry.instance.access_policy==ServerInstance.AccessPolicy.PUBLIC,"private-only map registry does not suppress creation of public capacity")
 	var public_copy: ServerInstance=public_entry.instance
 	check(public_copy.identity.channel_id==1 and private_copy.identity.channel_id==0,"private run does not consume public channel numbering")
@@ -364,6 +370,127 @@ func exercise_legacy_transfer_guard(private_copy: ServerInstance) -> void:
 	server.connected_players.erase(920001);server.player_id_to_peer_id.erase(920001)
 	manager.instance_collection.erase(&"LegacySource");source.instance_resource.charged_instances.clear()
 	source.queue_free();target.queue_free()
+
+func healthy_budget():
+	var budget=preload("res://source/server/world/components/instance_provision_budget.gd").new()
+	var now:=Time.get_ticks_msec()
+	budget.reset(now-2100)
+	for index: int in 120: budget.record(1.0,1.0,now-(119-index)*17)
+	return budget
+
+func observe_live_headroom() -> void:
+	await get_tree().create_timer(3.0).timeout
+	print("PROVISION_OBSERVATION ",JSON.stringify({"copies":manager._all_instances().size(),
+		"physics_p95_ms":manager.provision_budget.p95(manager.provision_budget.physics_samples),
+		"frame_p95_ms":manager.provision_budget.p95(manager.provision_budget.frame_samples),
+		"samples":manager.provision_budget.physics_samples.size(),
+		"headroom":manager.provision_budget.has_headroom(Time.get_ticks_msec())}))
+	if reserved_host!=null: return
+	var session:=PlayerResource.new();session.player_id=940001;session.current_peer_id=940001
+	server.connected_players[940001]=session;server.player_id_to_peer_id[940001]=940001
+	var resource:=manager.default_instance
+	var saved_capacity:=resource.max_players;resource.max_players=1
+	var saved_copy_limit:=resource.max_public_copies;resource.max_public_copies=3 # Diagnostic only.
+	var start:=Time.get_ticks_usec()
+	var entry:=manager.reserve_entry(940001,resource)
+	var creation_ms: float=(Time.get_ticks_usec()-start)/1000.0
+	if entry.ok:
+		var overflow: ServerInstance=entry.instance
+		check(overflow.is_overflow_copy,"live headroom trial creates bounded overflow")
+		await wait_until(func()->bool:return overflow.is_node_ready())
+		await get_tree().create_timer(3.0).timeout
+		print("PROVISION_LIVE_GROWTH ",JSON.stringify({"copies":manager._all_instances().size(),"construction_ms":creation_ms,
+			"physics_p95_ms":manager.provision_budget.p95(manager.provision_budget.physics_samples),
+			"frame_p95_ms":manager.provision_budget.p95(manager.provision_budget.frame_samples),
+			"samples":manager.provision_budget.physics_samples.size()}))
+		manager._release_pending_peer(940001);manager.begin_draining(overflow);manager.maintain_instances()
+		await get_tree().process_frame
+	else:
+		print("PROVISION_LIVE_GROWTH_DENIED insufficient measured headroom")
+	resource.max_players=saved_capacity
+	resource.max_public_copies=saved_copy_limit
+	server.connected_players.erase(940001);server.player_id_to_peer_id.erase(940001)
+
+func exercise_provisioning() -> void:
+	var now:=Time.get_ticks_msec()
+	var budget=healthy_budget()
+	now=budget.last_sample_ms
+	check(budget.has_headroom(now),"recent low CPU sample permits creation")
+	check(not budget.has_headroom(now+251),"stale headroom fails closed")
+	for index: int in 120:
+		budget.physics_samples[index]=0.6*0.75*1000.0/Engine.physics_ticks_per_second
+		budget.frame_samples[index]=budget.physics_samples[index]
+	check(not budget.has_headroom(now),"combined physics and process cost must fit CPU guard")
+	budget=healthy_budget()
+	budget.record(NAN,1.0,now+17)
+	check(not budget.has_headroom(now+17),"invalid monitor sample resets budget")
+	budget=healthy_budget();budget.record(1.0,1.0,now+100)
+	check(not budget.has_headroom(now+100),"observed tick stall forces resampling/settling")
+	var saved_budget=manager.provision_budget
+	manager.set_physics_process(false)
+	var saved_host_limit:=manager.max_host_instances
+	var resource:=InstanceResource.new();resource.instance_name=&"ProvisionFixture";resource.use_3d=true
+	resource.map_path="res://tests/fixtures/world3d/test_arena.tscn"
+	resource.max_players=1;resource.max_public_copies=3;resource.load_at_startup=true
+	resource.idle_timeout_seconds=0;resource.minimum_lifetime_seconds=0
+	manager.instance_collection[resource.instance_name]=resource
+	for peer_id: int in [930001,930002,930003,930004,930005]:
+		var session:=PlayerResource.new();session.player_id=peer_id;session.current_peer_id=peer_id
+		server.connected_players[peer_id]=session;server.player_id_to_peer_id[peer_id]=peer_id
+	manager.max_host_instances=manager._all_instances().size()+1
+	var broken:=InstanceResource.new();broken.use_3d=true;broken.instance_name=&"BrokenProvision"
+	broken.map_path="res://tests/inventory_grid.tscn"
+	var slots:=manager._all_instances().size()
+	check(manager.prepare_instance(broken)==null and manager._all_instances().size()==slots,"failed construction releases claimed host slot")
+	var first:=manager.charge_instance(resource,1)
+	check(first!=null,"released slot is immediately reusable by valid content")
+	manager.max_host_instances=saved_host_limit
+	var private_copy:=manager.charge_reserved_instance(resource,PackedInt64Array([930004]))
+	await wait_until(func()->bool:return first.is_node_ready() and private_copy.is_node_ready())
+	check(manager.reserve_entry(930001,resource).ok and manager.reserve_entry(930004,resource,private_copy).ok,"setup full public and independent private run")
+	manager.provision_budget=healthy_budget()
+	for index: int in 120: manager.provision_budget.physics_samples[index]=100.0
+	check(not manager.reserve_entry(930002,resource).ok,"physics CPU saturation rejects growth")
+	manager.provision_budget=healthy_budget()
+	for index: int in 120: manager.provision_budget.frame_samples[index]=100.0
+	check(not manager.reserve_entry(930002,resource).ok,"frame CPU saturation rejects growth")
+	manager.provision_budget=healthy_budget()
+	manager.max_host_instances=manager._all_instances().size()
+	check(not manager.reserve_entry(930002,resource).ok and manager.charge_reserved_instance(resource,PackedInt64Array([930005]))==null,"host limit includes reserved/loaded copies")
+	manager.max_host_instances=saved_host_limit
+	var second_entry:=manager.reserve_entry(930002,resource)
+	check(second_entry.ok and second_entry.instance!=first and second_entry.instance.is_overflow_copy,"full public set grows under headroom and caps")
+	var second: ServerInstance=second_entry.instance
+	check(manager.reserve_entry(930002,resource).duplicate,"burst duplicate retains one pending copy/place")
+	check(not manager.reserve_entry(930003,resource).ok,"creation settles before another expansion")
+	resource.max_players=2
+	check(manager.reserve_entry(930005,resource).ok and manager._instances_for(resource).size()==3,"burst reuses spare places despite settling; private is not overflow")
+	manager._release_pending_peer(930005);resource.max_players=1
+	await wait_until(func()->bool:return second.is_node_ready())
+	manager.provision_budget=healthy_budget()
+	first.admission_state=ServerInstance.AdmissionState.DRAINING
+	check(not manager.reserve_entry(930003,resource).ok,"draining public set is not automatically replenished")
+	first.admission_state=ServerInstance.AdmissionState.ACCEPTING # Controlled fixture state.
+	var third_entry:=manager.reserve_entry(930003,resource)
+	check(third_entry.ok and third_entry.instance.is_overflow_copy,"fresh measurements permit next bounded copy")
+	var third: ServerInstance=third_entry.instance
+	manager.provision_budget=healthy_budget()
+	check(not manager.reserve_entry(930005,resource).ok and manager.charge_instance(resource)==null,"map cap counts loading copies and cannot be bypassed by loader")
+	manager.max_host_instances=manager._all_instances().size()
+	check(manager.charge_reserved_instance(resource,PackedInt64Array([930005]))==null,"host cap counts newly loading copies too")
+	manager.max_host_instances=saved_host_limit
+	await wait_until(func()->bool:return third.is_node_ready())
+	manager._release_pending_peer(930002)
+	manager.maintain_instances()
+	check(second.is_queued_for_deletion() and not first.is_queued_for_deletion() and not third.is_queued_for_deletion(),"idle overflow retires, startup/pending copies remain")
+	for peer_id: int in [930001,930002,930003,930004,930005]: manager._release_pending_peer(peer_id)
+	manager.begin_draining(first);manager.begin_draining(private_copy);manager.maintain_instances()
+	await get_tree().process_frame
+	check(resource.charged_instances.is_empty(),"overflow retirement releases host/map slots")
+	for peer_id: int in [930001,930002,930003,930004,930005]:
+		server.connected_players.erase(peer_id);server.player_id_to_peer_id.erase(peer_id)
+	manager.instance_collection.erase(resource.instance_name)
+	manager.provision_budget=saved_budget;manager.set_physics_process(true)
 
 @rpc("authority","call_remote","reliable",0)
 func exercise(foreign: Dictionary, other_peer: int, own_drop: String, foreign_drop: String, metin_hp: int) -> void:

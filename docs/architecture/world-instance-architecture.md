@@ -45,6 +45,10 @@ not implement automatic channel scaling or active-character transfer.
 Local [PUBLIC/RESERVED access](../development/instance-access-policy.md) now keeps
 reserved runs out of public routing and validates server-owned character membership
 at reservation and final join. Party/dungeon gameplay and lockout policy are deferred.
+The [bounded provisioning gate](../development/bounded-channel-provisioning.md)
+can add public copies under explicit map/host limits and recent CPU headroom.
+Measured First Region costs keep its production limit at two copies; automatic
+growth for that map is not enabled by this implementation.
 
 - Final player UX: dynamic public CH is preferred; hidden layers are optional, not committed content.
 - Per-map versus realm-wide channel numbering, channel persistence across map transitions, and limits/cooldowns for switching.

@@ -374,3 +374,11 @@ admission cases additionally cover invalid membership, wrong manager, revocation
 pending-target replacement and private retirement for shared startup content.
 No production map or party flow enables reserved entry by default. See
 [instance access](instance-access-policy.md).
+
+The same fixture covers bounded public provisioning with controlled monitor inputs
+for headroom/staleness/stalls, count caps, loading/burst/settling and idle retirement.
+It also records actual physics/process p95 on the live First Region copies. Only
+the normal fixture temporarily permits a diagnostic third public copy; its creation
+may be denied by real headroom and no timing value is an acceptance assertion.
+Production First Region remains capped at two. See
+[provisioning observations](bounded-channel-provisioning.md).

@@ -14,6 +14,8 @@ const DEFAULT_INSTANCE_NAME: String = "FirstRegion"
 var loading_instances: Dictionary[String, ServerInstance]
 @export var realm_id: StringName = &"local"
 @export var host_id: StringName = &"local-world"
+@export_range(1, 64) var max_host_instances: int = 8
+var provision_budget := preload("res://source/server/world/components/instance_provision_budget.gd").new()
 const MapIdentity = preload("res://source/common/gameplay/maps/instance/map_instance_identity.gd")
 var instance_collection: Dictionary[String, InstanceResource]
 var default_instance: InstanceResource
@@ -22,6 +24,16 @@ var _rejected_entries: Dictionary[int, PlayerResource] = {}
 var _last_legacy_unload_ms: int = 0
 
 @export var world_server: WorldServer
+
+
+func _physics_process(_delta: float) -> void:
+	if world_server == null:
+		return
+	provision_budget.record(
+		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+		Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+		Time.get_ticks_msec()
+	)
 
 
 func start_instance_manager() -> void:
@@ -215,7 +227,7 @@ func maintain_instances() -> void:
 		var resource := instance.instance_resource
 		var draining := instance.admission_state == ServerInstance.AdmissionState.DRAINING
 		if not draining:
-			if resource.load_at_startup and instance.access_policy == ServerInstance.AccessPolicy.PUBLIC:
+			if resource.load_at_startup and instance.access_policy == ServerInstance.AccessPolicy.PUBLIC and not instance.is_overflow_copy:
 				continue
 			if now - instance.opened_at_ms < int(resource.minimum_lifetime_seconds * 1000.0):
 				continue
@@ -263,8 +275,26 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 		if count<population:
 			selected=instance
 			population=count
-	# Full/draining copies do not trigger speculative creation or an unbounded queue.
-	return charge_instance(resource) if instances.is_empty() else selected
+	if selected != null:
+		return selected
+	if instances.is_empty():
+		# An empty host can bootstrap; a busy host must not bypass the CPU guard
+		# by asking for a map that currently has only private/no public copies.
+		if resource.use_3d and not _all_instances().is_empty() and not provision_budget.has_headroom(Time.get_ticks_msec()):
+			return null
+		return charge_instance(resource)
+	# Grow only a full accepting set. Draining is an explicit retirement decision.
+	if not resource.use_3d or instances.size() >= resource.max_public_copies:
+		return null
+	for instance: ServerInstance in instances:
+		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
+			return null
+	if not provision_budget.has_headroom(Time.get_ticks_msec()):
+		return null
+	var overflow := charge_instance(resource)
+	if overflow != null:
+		overflow.is_overflow_copy = true
+	return overflow
 
 
 ## Loaded public routing only. Never use InstanceResource array order as access.
@@ -438,6 +468,15 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 	if instance_resource==null or not ResourceLoader.exists(instance_resource.map_path):
 		push_error("Cannot load map instance: missing map resource")
 		return null
+	if _all_instances().size() >= max_host_instances:
+		return null
+	if instance_resource.use_3d and access_policy == ServerInstance.AccessPolicy.PUBLIC:
+		var copies := 0
+		for existing: ServerInstance in _all_instances():
+			if existing.instance_resource == instance_resource and existing.access_policy == ServerInstance.AccessPolicy.PUBLIC:
+				copies += 1
+		if copies >= instance_resource.max_public_copies:
+			return null
 	var instance: ServerInstance = ServerInstance.new()
 	if instance_resource.use_3d:
 		instance.free()
@@ -471,6 +510,7 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 		loading_instances.erase(str(instance.name))
 		instance.free()
 		return null
+	provision_budget.reset(Time.get_ticks_msec())
 	return instance
 
 
@@ -486,6 +526,9 @@ func set_instance_collection() -> void:
 		if loaded == null or not (loaded is InstanceResource):
 			continue
 		var instance_resource: InstanceResource = loaded
+		if instance_resource.use_3d and instance_resource.load_at_startup and instance_resource.startup_copies > instance_resource.max_public_copies:
+			push_error("Map startup copies exceed its public instance limit: " + str(instance_resource.instance_name))
+			continue
 		if instance_resource.load_at_startup:
 			for copy: int in (instance_resource.startup_copies if instance_resource.use_3d else 1):
 				charge_instance(instance_resource,copy+1 if instance_resource.use_3d else 0)

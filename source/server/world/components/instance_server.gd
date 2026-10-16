@@ -33,6 +33,7 @@ var access_policy: AccessPolicy = AccessPolicy.PUBLIC
 var allowed_character_ids: PackedInt64Array = PackedInt64Array()
 var opened_at_ms: int = 0
 var idle_since_ms: int = -1
+var is_overflow_copy: bool = false
 var synchronizer_manager: StateSynchronizerManagerServer
 
 
