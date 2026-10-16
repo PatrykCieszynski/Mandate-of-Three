@@ -2,7 +2,6 @@ extends RefCounted
 ## PostgreSQL command/receipt ownership, by composition. One native session owns
 ## read/validate/mutation/receipt/COMMIT; no arbitrary async statement dispatch.
 const Codec = preload("res://source/server/world/database/economy_receipt_codec.gd")
-const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 var db: Object
 var account_id: int
 var character_id: int
@@ -64,7 +63,7 @@ func rollback(error: String) -> Dictionary:
 func commit(result: Dictionary) -> Dictionary:
 	if not result.ok: return rollback(str(result.get("error","storage")))
 	result=result.duplicate(true)
-	result.item_state=Items.new(db).read_state(character_id)
+	result.item_state=read_state(db,character_id)
 	if result.item_state.is_empty(): return rollback("storage")
 	var written: Dictionary=db.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) VALUES(:account,:command,:character,:kind,:request,:result);",{"account":account_id,"command":_command,"character":character_id,"kind":_kind,"request":_request,"result":Codec.encode_result(result)})
 	if not written.ok: return rollback("storage")
@@ -73,6 +72,12 @@ func commit(result: Dictionary) -> Dictionary:
 		return {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
 	committed=true
 	return result
+
+static func read_state(database: Object, owner: int) -> Dictionary:
+	var result: Dictionary=database.query("SELECT c.account_id,COALESCE(r.revision,0) AS revision,m.value AS authority_id FROM economy.characters c LEFT JOIN economy.account_item_revisions r ON r.account_id=c.account_id JOIN economy.meta m ON m.key='economy_authority_id' WHERE c.character_id=:id;",{"id":owner})
+	if not result.ok or result.rows.is_empty(): return {}
+	var row: Dictionary=result.rows[0]
+	return {"authority_id":str(row.authority_id),"account_id":int(row.account_id),"character_id":owner,"revision":int(row.revision)}
 
 static func decode(json: String) -> Dictionary:
 	var result: Dictionary=Codec.decode_result(json)

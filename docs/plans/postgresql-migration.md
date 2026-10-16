@@ -23,6 +23,13 @@ Yang, item/wallet watermarks and a durable success receipt. Existing SQLite code
 shares the unchanged receipt codec. Other Inventory mutations, Storage, Player
 Shop, Upgrade and Exchange ports remain pending; World continues using SQLite.
 
+**P1d progress:** [character Inventory parity](../development/postgres-inventory-parity.md)
+adds opt-in starter initialization, durable ground pickup and receipt-backed
+move/equip/swap/unequip/activate with SQLite behavior comparisons and native
+COMMIT-failure recovery checks. This extends the same character custody model;
+account Storage remains a separate risk/slice. World still uses SQLite and
+independent-connection P2 races, P3 execution/fencing and cutover remain pending.
+
 **Placement:** After the current single-World Economy hardening/SoC and local **MapInstance / CH** lifecycle, and **before** admitting two independent World Processes to the same realm economy. Preparatory contract tests may start earlier, but the plan does not require PostgreSQL for local CH or interrupt [World performance work](world-server-optimization.md). Do not combine it with gameplay/visual changes.
 
 ## Target and non-goals
