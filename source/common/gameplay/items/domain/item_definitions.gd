@@ -12,7 +12,13 @@ const BEAST_HIDE: ItemDefinition = preload("res://source/common/gameplay/items/d
 const WOLF_FANG: ItemDefinition = preload("res://source/common/gameplay/items/domain/wolf_fang.tres")
 const BANDIT_TOKEN: ItemDefinition = preload("res://source/common/gameplay/items/domain/bandit_token.tres")
 
+## Canonical authored definitions. The same source drives item lookup,
+## Exchange's fungible ledger and Auction's searchable tradeable catalog.
+## Never infer tradability from the presence of a resource alone.
+static func all_definitions() -> Array[ItemDefinition]:
+	return [IRON_SWORD, UPGRADE_ORE, DEV_TRACE_SWORD, FOREST_RESIN, BEAST_HIDE, WOLF_FANG, BANDIT_TOKEN]
+
 static func get_definition(id: StringName) -> ItemDefinition:
-	for definition: ItemDefinition in [IRON_SWORD, UPGRADE_ORE, DEV_TRACE_SWORD, FOREST_RESIN, BEAST_HIDE, WOLF_FANG, BANDIT_TOKEN]:
+	for definition: ItemDefinition in all_definitions():
 		if id == definition.definition_id: return definition
 	return null
