@@ -1,6 +1,8 @@
 class_name FirstRegionGraybox
 extends Node3D
 ## One authored prototype region; metres, XZ ground plane. No spawn framework.
+## Stable identity for the map-local ordinary loot source.
+@export var loot_region_key: StringName = &"first_region"
 const HUB := Vector3(0, 0.1, 20)
 const BLACKSMITH := Vector3(-6, 0, 14)
 const METIN_POINTS: Array[Vector3] = [Vector3(-24,0,-20), Vector3(16,0,-44), Vector3(-20,0,-78), Vector3(10,0,-92)]
