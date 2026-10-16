@@ -3,6 +3,11 @@
 [resource]
 script = ExtResource("1")
 mob_key = &"hollow_hound"
+category = &"beast"
+family = &"dogs"
+rank = &"strong"
+min_loot_rolls = 2
+max_loot_rolls = 4
 display_name = "Hollow Hound"
 max_hp = 220
 attack_damage = 10
