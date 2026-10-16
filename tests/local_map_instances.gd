@@ -125,6 +125,7 @@ func run_server() -> void:
 	check(pending.awaiting_peers.is_empty() and pending.get_node("GameWorld").characters.is_empty(),"revoked load-time assignment cannot spawn")
 	server.connected_players.erase(999999);server.player_id_to_peer_id.erase(999999)
 	pending.queue_free()
+	await exercise_lifecycle()
 	check(left.get_world_3d()!=right.get_world_3d(),"separate World3D/physics spaces")
 	var obstacle:=StaticBody3D.new();obstacle.position=Vector3(10000,1000,10000)
 	var shape:=CollisionShape3D.new();shape.shape=BoxShape3D.new();obstacle.add_child(shape);left.add_child(obstacle)
@@ -180,6 +181,81 @@ func run_server() -> void:
 	db.close_db()
 	for suffix: String in ["","-wal","-shm"]: DirAccess.remove_absolute(ProjectSettings.globalize_path(database_path+suffix))
 	get_tree().quit(1 if failed else 0)
+
+## Authenticated session and membership setup is controlled here. Actual entry,
+## foreign RPCs and simulation below/above still run over the two real clients.
+func exercise_lifecycle() -> void:
+	var resource:=InstanceResource.new()
+	resource.instance_name=&"LifecycleFixture";resource.use_3d=true
+	resource.map_path="res://tests/fixtures/world3d/test_arena.tscn"
+	resource.max_players=1;resource.load_at_startup=true
+	manager.instance_collection[resource.instance_name]=resource
+	var one:=manager.charge_instance(resource,1)
+	var two:=manager.charge_instance(resource,2)
+	await wait_until(func()->bool:return one.is_node_ready() and two.is_node_ready())
+	for peer_id: int in [900001,900002,900003]:
+		var session:=PlayerResource.new();session.player_id=peer_id;session.current_peer_id=peer_id
+		server.connected_players[peer_id]=session;server.player_id_to_peer_id[peer_id]=peer_id
+	var original: PlayerResource=server.connected_players[900001]
+	var first:=manager.reserve_entry(900001,resource)
+	var second:=manager.reserve_entry(900002,resource)
+	check(first.ok and second.ok and first.instance!=second.instance,"pending entries consume distinct bounded places")
+	var deadline: int=one.awaiting_peers[900001].expires_at_ms
+	check(manager.reserve_entry(900001,resource).duplicate and one.awaiting_peers[900001].expires_at_ms==deadline,"duplicate entry retains original deadline")
+	check(not manager.reserve_entry(900003,resource).ok and manager._instances_for(resource).size()==2,"full copies reject without creating overflow or a queue")
+	check(manager.begin_draining(one),"server starts draining owned 3D copy")
+	check(server.can_join_map_instance(900001,one),"pre-drain reservation may still complete")
+	# An active member survives draining. The manager never relocates it.
+	one.awaiting_peers.erase(900001);one.connected_peers.append(900001)
+	manager.maintain_instances()
+	check(not one.is_queued_for_deletion() and one.connected_peers.has(900001),"drain retains active member")
+	one.connected_peers.erase(900001)
+	# Test an expired loading client independently from the occupied/draining copy.
+	two.awaiting_peers[900002].expires_at_ms=Time.get_ticks_msec()-1
+	check(not server.can_join_map_instance(900002,two),"late join rejected before periodic sweep")
+	var expired: PlayerResource=server.connected_players[900002]
+	manager._on_peer_connected(900002)
+	manager.maintain_instances()
+	check(one.is_queued_for_deletion() and two.awaiting_peers.is_empty(),"empty draining startup copy closes and expired place is reclaimed")
+	check(not manager.reserve_entry(900002,resource).ok,"expired session cannot renew while disconnect is pending")
+	# A newer session may use the reclaimed place; the old ready callback cannot
+	# erase the new reservation or disconnect the replacement.
+	var replacement:=PlayerResource.new();replacement.player_id=900002;replacement.current_peer_id=900002
+	expired.current_peer_id=0;server.connected_players[900002]=replacement
+	var renewed:=manager.reserve_entry(900002,resource)
+	check(renewed.ok and renewed.instance==two,"replacement session can reserve reclaimed space")
+	manager._publish_entry(900002,expired,two)
+	check(manager.has_valid_entry(two,900002,replacement),"stale ready callback preserves new session reservation")
+	resource.max_players=2
+	manager.begin_draining(two)
+	check(not manager.reserve_entry(900003,resource).ok,"draining blocks fresh entry even with spare capacity")
+	manager.maintain_instances()
+	check(not two.is_queued_for_deletion(),"pending grandfathered entry protects drain")
+	manager._release_pending_peer(900002)
+	manager.maintain_instances()
+	check(two.is_queued_for_deletion(),"disconnect releases last pending place for retirement")
+	await get_tree().process_frame
+	check(resource.charged_instances.is_empty() and manager._instances_for(resource).is_empty(),"retirement removes loaded and loading registry entries")
+	var idle:=manager.charge_instance(resource,3)
+	await wait_until(func()->bool:return idle.is_node_ready())
+	manager.maintain_instances()
+	check(not idle.is_queued_for_deletion(),"empty startup copy remains accepting")
+	resource.load_at_startup=false
+	resource.idle_timeout_seconds=0;resource.minimum_lifetime_seconds=60
+	manager.maintain_instances()
+	check(not idle.is_queued_for_deletion(),"minimum lifetime prevents immediate idle retirement")
+	resource.minimum_lifetime_seconds=0;resource.idle_timeout_seconds=60
+	manager.maintain_instances()
+	check(not idle.is_queued_for_deletion(),"idle grace prevents flapping")
+	resource.idle_timeout_seconds=0
+	manager.maintain_instances()
+	check(idle.is_queued_for_deletion(),"idle non-startup copy retires after both gates")
+	await get_tree().process_frame
+	for peer_id: int in [900001,900002,900003]:
+		manager._release_pending_peer(peer_id)
+		server.connected_players.erase(peer_id);server.player_id_to_peer_id.erase(peer_id)
+	original.current_peer_id=0
+	manager.instance_collection.erase(resource.instance_name)
 
 @rpc("authority","call_remote","reliable",0)
 func exercise(foreign: Dictionary, other_peer: int, own_drop: String, foreign_drop: String, metin_hp: int) -> void:

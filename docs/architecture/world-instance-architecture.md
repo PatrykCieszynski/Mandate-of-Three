@@ -39,6 +39,9 @@ provides two configured First Region copies in one World, distinct routing/conte
 channel/host/realm labels, isolated simulation and shared SQLite economy. It is a
 finite first slice: no dynamic scaling, CH selector, active-character handoff,
 multi-realm database allocation or cross-host ownership is implied.
+The local [admission/lifecycle follow-up](../development/instance-admission-lifecycle.md)
+adds bounded pending entries, capacity and safe draining/idle retirement; it does
+not implement automatic channel scaling or active-character transfer.
 
 - Final player UX: dynamic public CH is preferred; hidden layers are optional, not committed content.
 - Per-map versus realm-wide channel numbering, channel persistence across map transitions, and limits/cooldowns for switching.

@@ -4,6 +4,11 @@ First Stage 4 slice: one World, one economy and two independently simulated
 First Region copies. Realm/map/instance/channel/host labels are distinct. Reuse
 InstanceManager and ServerInstance; do not add a scheduler, service or database.
 
+Follow-up implemented: [bounded admission and draining](instance-admission-lifecycle.md)
+adds capacity, expiring initial reservations and idle/draining retirement to this
+finite local topology. The original slice and its verification below describe
+the baseline before that follow-up.
+
 Guarantee: initial admission is server-owned and chooses the least populated
 configured copy, counting pending entries. A peer can enter only its assigned
 copy under the current authenticated session. Duplicate/foreign joins cannot

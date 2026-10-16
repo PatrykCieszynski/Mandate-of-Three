@@ -17,6 +17,9 @@ var loading_instances: Dictionary[String, ServerInstance]
 const MapIdentity = preload("res://source/common/gameplay/maps/instance/map_instance_identity.gd")
 var instance_collection: Dictionary[String, InstanceResource]
 var default_instance: InstanceResource
+## Bounded by current sessions; expiry cannot be renewed before transport teardown.
+var _rejected_entries: Dictionary[int, PlayerResource] = {}
+var _last_legacy_unload_ms: int = 0
 
 @export var world_server: WorldServer
 
@@ -28,13 +31,14 @@ func start_instance_manager() -> void:
 
 	set_instance_collection.call_deferred()
 	world_server.multiplayer_api.peer_connected.connect(_on_peer_connected)
+	world_server.multiplayer_api.peer_disconnected.connect(_release_pending_peer)
 
-	# Timer which will call unload_unused_instances
+	# Expiry is checked at join too; this sweep reclaims clients that never join.
 	var timer: Timer = Timer.new()
-	timer.wait_time = 20.0 # 20.0 is for testing, consider increasing it
+	timer.wait_time = 1.0
 
 	timer.autostart = true
-	timer.timeout.connect(unload_unused_instances)
+	timer.timeout.connect(maintain_instances)
 	add_sibling(timer)
 
 
@@ -69,33 +73,146 @@ func charge_new_instance(_map_path: String, _instance_id: String, _identity: Dic
 
 ## Every login uses the technical map; no Ekonia tutorial/hub routing.
 func _on_peer_connected(peer_id: int) -> void:
+	var result := reserve_entry(peer_id, default_instance)
+	if not result.ok:
+		_reject_initial_entry(peer_id, world_server.connected_players.get(peer_id), result.error)
+		return
+	var instance: ServerInstance = result.instance
 	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
-	if admitted == null or admitted.current_peer_id != peer_id or world_server.player_id_to_peer_id.get(admitted.player_id, 0) != peer_id:
+	if result.get("duplicate", false):
 		return
-	if find_instance_for_peer(peer_id)!=null: return
-	if default_instance == null:
-		push_error("No technical default instance configured.")
-		return
-	# Duplicate connection notifications must not reserve/spawn a second actor.
-	for existing: ServerInstance in _instances_for(default_instance):
-		if existing.connected_peers.has(peer_id): return
-		if existing.awaiting_peers.has(peer_id):
-			if existing.awaiting_peers[peer_id].get("session")==admitted: return
-			existing.awaiting_peers.erase(peer_id)
-	var instance := select_entry_instance(default_instance)
-	if instance == null:
-		push_error("Could not create the technical default instance.")
-		return
-	instance.awaiting_peers[peer_id] = {"session":admitted}
 	if instance.is_node_ready():
-		_publish_entry(peer_id,admitted,instance)
+		_publish_entry(peer_id, admitted, instance)
 	else:
-		instance.ready.connect(_publish_entry.bind(peer_id,admitted,instance),CONNECT_ONE_SHOT)
+		instance.ready.connect(_publish_entry.bind(peer_id, admitted, instance), CONNECT_ONE_SHOT)
+
+
+## One synchronous admission boundary: validate, select, then reserve before yield.
+func reserve_entry(peer_id: int, resource: InstanceResource) -> Dictionary:
+	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
+	if not _is_current_session(peer_id, admitted):
+		return {"ok": false, "error": "session"}
+	if _rejected_entries.get(peer_id) == admitted:
+		return {"ok": false, "error": "entry_expired"}
+	var joined := find_instance_for_peer(peer_id)
+	if joined != null:
+		return {"ok": true, "instance": joined, "duplicate": true}
+	if resource == null:
+		return {"ok": false, "error": "map_unavailable"}
+	for existing: ServerInstance in _all_instances():
+		if existing.awaiting_peers.has(peer_id):
+			if has_valid_entry(existing, peer_id, admitted):
+				return {"ok": true, "instance": existing, "duplicate": true}
+			# A duplicate at the deadline must fail, never renew its lease.
+			if existing.awaiting_peers[peer_id].get("session") == admitted:
+				return {"ok": false, "error": "entry_expired"}
+			existing.awaiting_peers.erase(peer_id)
+	var instance := select_entry_instance(resource)
+	if instance == null:
+		return {"ok": false, "error": "map_unavailable"}
+	instance.awaiting_peers[peer_id] = {
+		"session": admitted,
+		"expires_at_ms": Time.get_ticks_msec() + int(resource.entry_timeout_seconds * 1000.0),
+	}
+	instance.idle_since_ms = -1
+	return {"ok": true, "instance": instance}
+
+
+func _is_current_session(peer_id: int, session: PlayerResource) -> bool:
+	return (
+		peer_id > 1 and session != null and session.player_id > 0
+		and world_server.connected_players.get(peer_id) == session
+		and session.current_peer_id == peer_id
+		and world_server.player_id_to_peer_id.get(session.player_id, 0) == peer_id
+	)
+
+
+func has_valid_entry(instance: ServerInstance, peer_id: int, session: PlayerResource) -> bool:
+	var pending: Dictionary = instance.awaiting_peers.get(peer_id, {})
+	return (
+		not instance.is_queued_for_deletion() and _is_current_session(peer_id, session)
+		and pending.get("session") == session
+		and (not instance.instance_resource.use_3d
+			or int(pending.get("expires_at_ms", 0)) > Time.get_ticks_msec())
+	)
+
+
+func _reject_initial_entry(peer_id: int, session: PlayerResource, reason: String) -> void:
+	if not _is_current_session(peer_id, session):
+		return
+	_rejected_entries[peer_id] = session
+	print("MAP_ENTRY_REJECTED: ", peer_id, " ", reason)
+	# Disconnect uses the normal session/checkpoint cleanup, not a partial logout.
+	if world_server.multiplayer_api.get_peers().has(peer_id):
+		world_server.multiplayer_api.multiplayer_peer.disconnect_peer(peer_id)
+
+
+func _all_instances() -> Array[ServerInstance]:
+	var result: Array[ServerInstance] = []
+	for instance: ServerInstance in loading_instances.values():
+		if is_instance_valid(instance) and not result.has(instance):
+			result.append(instance)
+	for child: Node in get_children():
+		if child is ServerInstance and not result.has(child):
+			result.append(child)
+	return result
+
+
+func _release_pending_peer(peer_id: int) -> void:
+	_rejected_entries.erase(peer_id)
+	for instance: ServerInstance in _all_instances():
+		instance.awaiting_peers.erase(peer_id)
+
+
+func begin_draining(instance: ServerInstance) -> bool:
+	if not is_instance_valid(instance) or instance.get_parent() != self:
+		return false
+	if not instance.instance_resource.use_3d or instance.is_queued_for_deletion():
+		return false
+	instance.admission_state = ServerInstance.AdmissionState.DRAINING
+	return true
+
+
+func maintain_instances() -> void:
+	var now := Time.get_ticks_msec()
+	for instance: ServerInstance in _all_instances():
+		if instance.is_queued_for_deletion() or not instance.instance_resource.use_3d:
+			continue
+		for peer_id: int in instance.awaiting_peers.keys():
+			var session: PlayerResource = instance.awaiting_peers[peer_id].get("session")
+			if has_valid_entry(instance, peer_id, session):
+				continue
+			instance.awaiting_peers.erase(peer_id)
+			_reject_initial_entry(peer_id, session, "entry_expired")
+		if instance.population() > 0:
+			instance.idle_since_ms = -1
+			continue
+		if instance.idle_since_ms < 0:
+			instance.idle_since_ms = now
+		var resource := instance.instance_resource
+		var draining := instance.admission_state == ServerInstance.AdmissionState.DRAINING
+		if not draining:
+			if resource.load_at_startup:
+				continue
+			if now - instance.opened_at_ms < int(resource.minimum_lifetime_seconds * 1000.0):
+				continue
+			if now - instance.idle_since_ms < int(resource.idle_timeout_seconds * 1000.0):
+				continue
+		# No admission can race this retirement on the main thread.
+		instance.admission_state = ServerInstance.AdmissionState.DRAINING
+		instance.queue_free()
+	# Preserve the old 20-second cleanup cadence for unrelated legacy 2D maps.
+	if now - _last_legacy_unload_ms >= 20000:
+		_last_legacy_unload_ms = now
+		unload_unused_instances()
 
 func _publish_entry(peer_id: int, admitted: PlayerResource, instance: ServerInstance) -> void:
-	if not is_instance_valid(instance): return
-	if world_server.connected_players.get(peer_id)!=admitted or admitted.current_peer_id!=peer_id or world_server.player_id_to_peer_id.get(admitted.player_id,0)!=peer_id:
-		if instance.awaiting_peers.get(peer_id,{}).get("session")==admitted: instance.awaiting_peers.erase(peer_id)
+	if not is_instance_valid(instance):
+		return
+	if not has_valid_entry(instance, peer_id, admitted):
+		if instance.awaiting_peers.get(peer_id, {}).get("session") == admitted:
+			instance.awaiting_peers.erase(peer_id)
+		_reject_initial_entry(peer_id, admitted, "entry_expired")
 		return
 	if instance.awaiting_peers.get(peer_id,{}).get("session")==admitted:
 		charge_new_instance.rpc_id(peer_id,instance.instance_resource.map_path,str(instance.name),instance.identity)
@@ -112,12 +229,16 @@ func _instances_for(resource: InstanceResource) -> Array[ServerInstance]:
 func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 	var selected: ServerInstance
 	var population := 2147483647
-	for instance: ServerInstance in _instances_for(resource):
-		var count := instance.connected_peers.size()+instance.awaiting_peers.size()
+	var instances := _instances_for(resource)
+	for instance: ServerInstance in instances:
+		if resource.use_3d and not instance.accepts_reservation():
+			continue
+		var count := instance.population()
 		if count<population:
 			selected=instance
 			population=count
-	return charge_instance(resource) if selected==null else selected
+	# Full/draining copies do not trigger speculative creation or an unbounded queue.
+	return charge_instance(resource) if instances.is_empty() else selected
 
 
 func _on_player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper) -> void:
@@ -239,6 +360,7 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0) 
 		push_error("Invalid map instance identity configuration")
 		return null
 	instance.name = instance.identity.instance_id
+	instance.opened_at_ms=Time.get_ticks_msec()
 	loading_instances[str(instance.name)] = instance
 	instance.instance_resource = instance_resource
 	instance.tree_exiting.connect(func()->void:
@@ -280,8 +402,10 @@ func set_instance_collection() -> void:
 
 
 func unload_unused_instances() -> void:
-	print("Checking unload_unused_instances")
-	for instance: ServerInstance in get_children():
+	for child: Node in get_children():
+		if not child is ServerInstance: continue
+		var instance := child as ServerInstance
+		if instance.instance_resource.use_3d: continue # Managed by the bounded lifecycle above.
 		if instance.instance_resource.load_at_startup:
 			continue
 		if instance.connected_peers or not instance.awaiting_peers.is_empty():
