@@ -20,7 +20,7 @@ export function mountExchange(root, o) {
     let state = { active: false }, candidate, disposed = false;
     const balances = document.createElement('div'), deposit = document.createElement('div');
     deposit.className = 'exchange-deposit';
-    deposit.textContent = 'Drop a tradeable material from Inventory or Storage.';
+    deposit.textContent = 'Drop a material from Inventory or Storage.';
     const depositAmount = input('Deposit amount', '1'), depositButton = button('Deposit', () => {
         if (candidate)
             void submit('deposit', {
@@ -109,7 +109,7 @@ export function mountExchange(root, o) {
             status.textContent = r.ok ? 'Committed.' : (r.error ?? 'Rejected');
             if (r.ok && action === 'deposit') {
                 candidate = undefined;
-                deposit.textContent = 'Drop a tradeable material from Inventory or Storage.';
+                deposit.textContent = 'Drop a material from Inventory or Storage.';
             }
         }
         catch {
