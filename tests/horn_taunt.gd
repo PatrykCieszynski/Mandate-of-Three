@@ -18,6 +18,11 @@ func _ready() -> void:
 	assert(horn.tier_for(1) == HornTaunt.IMPROVED)
 	horn.clear_peer(1)
 	assert(horn.tier_for(1) == HornTaunt.BASIC)
+	var server := WorldServer.new()
+	WorldServer.curr = server
+	var player := PlayerResource.new()
+	player.player_id = 1
+	server.connected_players[1] = player
 	var world := preload("res://tests/fixtures/world3d/test_arena.tscn").instantiate() as GameWorld3D
 	add_child(world)
 	world.set_physics_process(false)
@@ -25,11 +30,6 @@ func _ready() -> void:
 	for id: int in world.mob_system.mobs.keys():
 		world.mob_system.remove_mob(id)
 	world.mob_system.packs.clear()
-	var server := WorldServer.new()
-	WorldServer.curr = server
-	var player := PlayerResource.new()
-	player.player_id = 1
-	server.connected_players[1] = player
 	var body := PlayerActor3D.new()
 	body.position = Vector3.ZERO
 	world.add_child(body)
