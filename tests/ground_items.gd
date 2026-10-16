@@ -71,6 +71,34 @@ func _ready() -> void:
 	for item: Dictionary in store.inventory(second).items:
 		if item.uid==generic_uid: generic_found = item.definition_id==str(ItemDefinitions.UPGRADE_ORE.definition_id) and item.amount==2 and item.affixes.is_empty()
 	check(generic_found,"SQL claim preserves definition/quantity instead of generating legacy sword loot")
+
+	# P3a: ordinary materials and variable-size stacks use the same ground UID flow.
+	var ground := GroundLootSystem.new()
+	var ore_uid: String = ground.spawn_resolved_item(Vector3.ZERO, second, "Beta", 1000, ItemDefinitions.UPGRADE_ORE.definition_id, 3, [])
+	check(ItemInstance.valid_uid(ore_uid) and ground.drops.has(ore_uid), "generic material ground entry creates one UID")
+	var ore_drop: Dictionary = ground.drops[ore_uid]
+	var prepared_ore := GroundLootSystem.prepare_claim_item(ore_uid, second, ore_drop)
+	check(prepared_ore != null and prepared_ore.amount == 3 and prepared_ore.affixes.is_empty(), "prepared claim conserves amount and no affixes")
+	operation = persistence.claim_ground_item_operation(second, ore_uid, prepared_ore)
+	check(operation.new_commit and operation.response().ok, "generic stack pickup persists atomically")
+	check(persistence.claim_ground_item_operation(second, ore_uid, GroundLootSystem.prepare_claim_item(ore_uid, second, ore_drop)).response().get("error", "") == "claimed", "replay cannot mint stack twice")
+	var saw_stack := false
+	for item: Dictionary in store.inventory(second).items:
+		if item.uid == ore_uid: saw_stack = item.amount == 3 and item.definition_id == "upgrade_ore" and item.affixes.is_empty()
+	check(saw_stack, "generic ground stack amount survives SQLite receipt")
+	check(ground.spawn_resolved_item(Vector3.ZERO, second, "Beta", 1000, ItemDefinitions.UPGRADE_ORE.definition_id, 201, []).is_empty(), "cannot exceed stack limit")
+	check(ground.spawn_resolved_item(Vector3.ZERO, second, "Beta", 1000, &"missing_item", 1, []).is_empty(), "reject unknown item definition")
+	check(ground.spawn_resolved_item(Vector3.ZERO, second, "Beta", 1000, ItemDefinitions.UPGRADE_ORE.definition_id, 1, [{"stat":"attack","value":1}]).is_empty(), "materials reject weapon affixes")
+	var mutable_rolls: Array = [{"stat":"attack","value":6}]
+	var sword_uid := ground.spawn_resolved_item(Vector3.ZERO, second, "Beta", 1000, ItemDefinitions.IRON_SWORD.definition_id, 1, mutable_rolls)
+	check(ItemInstance.valid_uid(sword_uid), "rolled equipment ground entry is valid")
+	mutable_rolls[0].value = 99
+	var frozen := GroundLootSystem.prepare_claim_item(sword_uid, second, ground.drops[sword_uid])
+	check(frozen != null and frozen.affixes[0].value == 6, "ground item freezes rolled affixes against caller changes")
+	check(GroundLootSystem.attack_for_drop(ItemDefinitions.IRON_SWORD, ground.drops[sword_uid]) == 16, "presentation derives attack for equipment only")
+	check(GroundLootSystem.attack_for_drop(ItemDefinitions.UPGRADE_ORE, ore_drop) == 0, "material is not a weapon")
+	check(ground.spawn_item(Vector3.ZERO, second, "Beta", 1000, ItemDefinitions.IRON_SWORD.definition_id, 5).length() == 32, "old sword helper remains compatible")
+	check(GroundLootSystem.prepare_claim_item("bad-uid", second, ore_drop) == null, "invalid UID rejected before SQL")
 	persistence.free()
 	db.close_db()
 	if not failed:
