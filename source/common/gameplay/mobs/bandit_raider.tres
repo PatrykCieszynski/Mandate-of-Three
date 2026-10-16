@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="MobDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+mob_key = &"bandit_raider"
+display_name = "Bandit Raider"
+category = &"humanoid"
+family = &"bandits"
+rank = &"strong"
+max_hp = 210
+attack_damage = 12
+move_speed = 3
+visual_id = &"barbarian_infantry"
+proximity_aggro = false
+min_loot_rolls = 2
+max_loot_rolls = 3

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="MobDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/mobs/mob_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+mob_key = &"road_bandit"
+display_name = "Road Bandit"
+category = &"humanoid"
+family = &"bandits"
+rank = &"normal"
+max_hp = 130
+attack_damage = 8
+move_speed = 2.7
+visual_id = &"barbarian_soldier"
+proximity_aggro = false
+min_loot_rolls = 1
+max_loot_rolls = 3

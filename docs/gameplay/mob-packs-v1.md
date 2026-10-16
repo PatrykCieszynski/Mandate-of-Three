@@ -7,10 +7,12 @@ The Metin lifecycle, reward/contribution rules and persistence policy stay intac
 ## Content and authoring
 
 `source/common/gameplay/mobs/` contains `MobDefinition`, `MobSpawnEntry`,
-`MobSpawnPoint3D` and the map-local `MobPackRuntime`. Four `.tres` definitions
-hold the former Wild Dog, Feral Dog, Hollow Hound and Metin Elite profiles.
-`mob_key` is content identity; `display_name` is presentation text. All four
-currently use the optional `stray_dog` visual. HP/damage/speed/visual are copied
+`MobSpawnPoint3D` and the map-local `MobPackRuntime`. Ten `.tres` definitions
+cover the original four dogs and six additional wolf/bandit profiles.
+`mob_key` is content identity; `display_name` is presentation text.
+The original four dogs still use the optional `stray_dog` visual; wolves
+and bandits use curated `wolf`/`barbarian_*` visual IDs with local-only
+models and repo-owned fallback placeholders. HP/damage/speed/visual are copied
 through one `CombatEndpoint3D.spawn_mob` entry point. `MobSpawnEntry.valid()` requires
 the exact canonical resource registered in `MobDefinitions`, not merely a valid
 resource with a matching key. Unregistered keys and duplicate resources using an
@@ -28,8 +30,8 @@ The production graybox authors six pack markers in `first_region_3d.tscn`:
 
 | Area | Pack compositions | Total |
 | --- | --- | --- |
-| Outskirts | 10 Wild Dogs; 10 Wild Dogs + 4 Feral Dogs | 24 |
-| Old Road | 10 Wild Dogs + 6 Feral Dogs; 10 Wild Dogs + 8 Feral Dogs | 34 |
+| Outskirts | 10 Forest Wolves; 10 Forest Wolves + 3 Dire Wolves + 1 Wolf Alpha | 24 |
+| Old Road | 10 Road Bandits + 6 Bandit Raiders; 10 Road Bandits + 7 Bandit Raiders + 1 Bandit Captain | 34 |
 | Stone Hollow | 14 Feral Dogs + 8 Hollow Hounds; 14 Feral Dogs + 10 Hollow Hounds | 46 |
 
 There are 104 open-world actors before Metin waves. These are density test data,
