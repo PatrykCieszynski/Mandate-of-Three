@@ -48,6 +48,18 @@ not a new behavior tree, generic spawning framework, or economy refactor.
    The purpose is real non-weapon and stackable drop support, not a
    rewrite of World wallets, the inventory transaction service or
    market receipts.
+6. **Quest/event/season drops are condition-gated reward sources**,
+   *outside* the ordinary 10000-bp pool. They share item generation
+   and transactional pickup, but do not consume ordinary item attempts
+   or dilute ordinary item odds. Quest/event/season eligibility is
+   evaluated by authoritative World state **at death**.
+7. **Item Quantity and Item Rarity remain separate.** Quantity
+   influences ordinary loot opportunities; Rarity determines
+   equipment tier/affixes *after equipment selection*. Neither
+   modifies quest, event or seasonal guaranteed/special rewards
+   by default. The accepted player Luck chance (+1 item attempt)
+   already occupies part of the Quantity design; do not introduce
+   an overlapping independent Item Quantity stat in P1-P4.
 
 ## Existing baseline (as of 2026-10-16)
 
@@ -76,6 +88,11 @@ not a new behavior tree, generic spawning framework, or economy refactor.
 - `VisualResolver` already separates visual IDs from gameplay profiles
   and has a local-only prototype asset convention. Prototype assets are
   not deliverables.
+- The older `QuestService`, `QuestObjective`, `QuestItem`
+  and `EventService` currently use the older `HostileNpc`/
+  `PlayerResource` item paths; the current World3D death reward
+  pipeline does not yet consume their eligibility. Reuse the
+  concepts, not the incompatible legacy item-ID contracts.
 
 ## Content contract
 
@@ -208,7 +225,15 @@ item probability to wallet/grind delta semantics.
 ### PoE-inspired design: quantity, type and rarity stay separate
 
 The direction is toward Path of Exile's **conceptual separation**
-of drop quantity and item rarity, not copying its formulas:
+of drop quantity and item rarity, not copying its formulas.
+The accepted player **Luck** mechanic is a percentage chance
+for +1 ordinary item attempt and therefore already a
+limited Quantity effect. Defer any additional Item Quantity
+modifier until we decide whether it extends or replaces
+Luck; do not silently multiply the same stat twice.
+Future Item Rarity modifiers can influence equipment
+normal/magic/rare tiers and affixes, but not the rate
+of quest drops, materials, or event tokens.
 
 1. **Number of attempts:** authored mob/encounter policy
    chooses `min_rolls..max_rolls` **at spawn**; the eligible
@@ -234,6 +259,79 @@ in the one-shot death fact. A respawn samples a new value.
 Resolve actual item UIDs/amounts/affixes only once at death
 and preserve receipt-safe pickup. Luck/loot sources must
 never be accepted from untrusted client requests.
+
+### Gated rewards: active quests, timed events and seasons (P5)
+
+**Do not put conditional quest/event/season items into the ordinary
+four-scope weighted pool.** They share the item factory, UID and
+ground pickup mechanics, but have separate eligibility and
+bounded reward rolls. They can coexist with normal loot,
+without consuming ordinary attempts or changing its probabilities.
+
+| Source | Server-gated when mob dies | Example | Quantity/Rarity/Luck |
+| --- | --- | --- | --- |
+| Quest | Rewarded player has the required active, incomplete quest objective | Quest-only wolf fang | Ignore by default |
+| Event | Current World event flag/window and map/mob requirements match | Event token | Ignore by default |
+| Season | Logical World/season identity and enabled content match | Seasonal crafting material | Ignore by default |
+| Encounter | Explicit mob/boss encounter reward rule | Boss trophy | Explicit custom rule |
+
+Use small **authored, validated conditions**, not arbitrary scripts:
+quest/objective key; event/season key; optional zone, mob, category
+and server-time window; item definition; chance and amount.
+Evaluate the gates **at death**, unlike the normal attempt
+budget that was frozen at spawn. A mob spawned before an event
+starts or ends cannot circumvent event activation. Snapshot
+the authoritative World context once and freeze generated
+outcomes; a pickup never rerolls or rechecks the item chance.
+
+**Quest eligibility, ownership and quotas:**
+
+- Initially only the established `MobDeathResult.reward_owner`
+  gets conditional personal quest loot. Multiple participating
+  characters and party-wide personal rewards need their own
+  separate policy; client-supplied quest state is never trusted.
+- Quest drops should have **permanent owner-only pickup**
+  until expiry, rather than the ordinary 15-second reservation
+  that becomes public. Such items are character/account bound,
+  non-tradeable and excluded from shops/Exchange by default.
+- Stop quest drops once the objective requirement is already met.
+  Count existing collected quantities **and outstanding personal
+  ground drops** to prevent several fast kills producing more
+  quest items than needed. Define abandon/turn-in/expiry
+  behavior explicitly, without deleting committed items outside
+  Inventory transactions.
+- Quest completion, repeat death, disconnect, full bag, owner
+  rejoin, duplicate claim and pickup races require tests.
+
+**Event and season lifecycle:**
+
+- World owns the active event/season manifest and checks its
+  authoritative clock and current logical World identity.
+  Event timing and eligibility never come from clients.
+- Ending an event stops **new drops**; items already generated
+  remain until their normal ground expiry, and committed
+  inventory items remain until a separately designed lifecycle
+  applies. Explicitly author whether each event item can be
+  traded, sold, stacked or redeemed after the event.
+- Keep season-specific items scoped to their logical World;
+  cross-season transfers and Classic/Seasonal economy rules
+  remain separate work.
+- Use explicit, bounded quest/event result budgets per kill.
+  Multiple conditional rules cannot spawn an unbounded
+  number of entities; validate overlaps before publication.
+  Ordinary 1..4 spawn attempts and +1 Luck cap apply **only
+  to ordinary item selections**, not to these separately
+  eligible gated rewards.
+
+**Integration seam:** capture World map/mob/owner and any active
+quest/event/season facts at death; resolve ordinary rewards
+and eligible conditional rewards separately; pass one frozen
+collection of item outcomes to existing ground-claim custody.
+`KillRewardResolver` orchestrates this. Small quest/event
+policy adapters resolve eligibility. `GroundLootSystem`
+must not depend on quest logic or the calendar itself.
+These are **future P5 requirements**, not an assertion
+that 3D quests/events are currently integrated.
 
 ### Frozen reward and pickup (L2)
 
@@ -328,6 +426,9 @@ extra generic event bus or drop persistence table for this phase.
   ownership/transaction APIs.
 - Rework snapshots/UI presentation only if required for genuine
   non-weapon/quantity display; preserve protocol validation.
+  Keep the ground pickup owner-policy extensible for
+  **permanent personal quest loot** versus ordinary temporary
+  reservations; implement the policy only with P5.
 - Tests: full bag, commit failure, receipt replay, two-player
   simultaneous claim, expiry/reservation, reconnect, multi-drop
   spawn/claim, two drops of the same item definition with different
@@ -362,15 +463,40 @@ extra generic event bus or drop persistence table for this phase.
 - **Exit:** greater encounter variety with a reason to farm distinct
   mobs/areas, without a measurable performance or economy regression.
 
+### P5 — Condition-gated quest, event and seasonal loot
+
+- Author and validate specific quest/event/season loot conditions
+  and independently bounded tables. Do not mix them into
+  ordinary drop probabilities or player Luck rolls.
+- Integrate authoritative **3D** player quest/objective
+  eligibility and server event/season manifests into the
+  death-time reward context. Existing 2D QuestService/
+  EventService paths are not an automatic drop-in.
+- Add permanent owner-only quest pickup with quotas,
+  inventory + outstanding-ground accounting, non-tradeable
+  item policy and durable claim/replay.
+- Add one quest-only material, one event-window reward and
+  one season-only reward. Test eligible/ineligible kills,
+  mid-fight event transitions, player reconnect, over-cap
+  objectives, event conclusion with previously generated
+  items, malicious flags and concurrent claims.
+- **Exit:** gated loot is awarded only when relevant server
+  conditions hold, without disturbing normal drop rolls
+  or existing economy custody.
+
 ## Exclusions and dependencies
 
-No Mystic category in P1–P4; no new combat category-damage modifiers,
-complex mob AI, boss skills, party loot policy, persistence of
-individual ground entities, new economy ledgers, or import of the old
-2D enemy system. The prototype model source/rights remain outside
-git and published client assets.
+No Mystic category for this roadmap; no new combat
+category-damage modifiers, complex mob AI, boss skills,
+party-wide quest loot, silent post-event item deletion,
+persistent ordinary ground entities, new economy ledgers
+or direct reuse of the legacy 2D item IDs. Prototype
+model source/rights remain outside Git and public builds.
 
-Implement **P1 -> P2 -> P3 -> P4** in separate small reviewable PRs,
-based on fresh `main`. Avoid overlapping Codex's economy/Inventory
-writer work in P1/P2; make P3's pickup contract a deliberate integration
-checkpoint, with transactional and network regressions before merge.
+Implement **P1 -> P2 -> P3 -> P4**, with gated rewards
+in a separate **P5**, as reviewable PRs based on fresh
+`main`. Leave eligibility/owner and item rarity/quantity
+seams in P2/P3, but do not rush a new quest system or
+event scheduler into normal loot work. Keep Codex economy
+writer changes independent; verify transaction and
+multiplayer regressions for P3/P5 before merging.
