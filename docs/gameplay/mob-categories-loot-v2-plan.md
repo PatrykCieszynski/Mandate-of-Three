@@ -13,17 +13,23 @@ not a new behavior tree, generic spawning framework, or economy refactor.
    A mob has exactly one category.
 2. **Family** is independent (e.g. wolves, bandits, skeletons); it groups
    variants/content within a category. **Rank** is independent
-   (`normal`, `strong`, `elite`, `boss`). A category is neither a
-   zone nor an aggro/AI mode. Future vs-category damage bonuses may use
-   these IDs; **do not implement damage bonuses in this roadmap**.
+   (`normal`, `strong`, `elite`, `boss`). A rare spawn can use a
+   separately authored mob variant or an explicit encounter loot
+   policy; rarity does not need to be a sixth category or a second
+   hidden loot multiplier. A category is neither a zone nor an
+   aggro/AI mode. Future vs-category damage bonuses may use these IDs;
+   **do not implement damage bonuses in this roadmap**.
 3. **Loot sources:** optional global, map/region, category, and exact mob.
    Sources contribute entries to **one consolidated ordinary-item pool**,
-   rather than forcing an independent roll per source. **Roll count is
-   separate and data-driven**: ordinary mobs default to one draw,
-   stronger ranks can have several, and the rewarded player's Luck
-   can trigger at most one bonus draw. Every draw can yield a distinct
-   item or no drop. Rank/level influence only explicitly authored
-   policies; there is no hidden multiplier.
+   rather than forcing an independent roll per source. **Base roll
+   count is individually configurable from 1 to 4 per mob / explicit
+   encounter variant**, with sensible rank defaults, not forced by
+   category or hardcoded rank. Rare spawns and elites can have more
+   rolls. The rewarded player's Luck grants a percentage chance of
+   **exactly one extra draw** on top (maximum 5 ordinary draws).
+   Every draw can yield a distinct item or no drop. Rank/level
+   influence only explicitly authored policies; there is no hidden
+   multiplier.
 4. **Models from external reference games remain on the developer's
    machine only** as throwaway prototype assets. No such models, textures,
    animations, binary imports, exported packs or their derived data may be
@@ -127,12 +133,16 @@ One authoritative resolver combines the following in stable order:
    drop per draw**. For each draw sample a fresh integer `r` uniformly
    from `[0,9999]`, walk cumulative weights and choose at most one
    entry (or no item). **Four table sources are not four automatic draws.**
-4. The number of draws comes from an explicit, bounded **LootRollPolicy**
-   (a small data contract, not a generic rule engine). Illustrative
-   authoring defaults: normal=1, strong=1, elite=2, boss=2 ordinary
-   draws. Bosses/encounters may additionally grant a separately authored,
-   bounded guaranteed reward. Rank controls the roll policy, not
-   hidden table weight multipliers.
+4. The number of base draws comes from an explicit, bounded
+   **LootRollPolicy** (a small data contract, not a generic rule
+   engine). Author `base_rolls` as an integer from **1 to 4** on
+   each mob definition or explicitly selected encounter variant.
+   Suggested **defaults only**: normal=1, strong=2, rare variant=3,
+   elite=3, boss=4. Designers may override a rank's default per mob;
+   a rare variant and an elite can therefore differ, and rank never
+   silently multiplies pool weights. Bosses/encounters may additionally
+   grant a separately authored, bounded guaranteed reward. Do not
+   add random encounter rarity multipliers or unbounded extra rolls.
 5. Reward-owner **Luck** is an explicit chance of **one additional
    independent ordinary draw** (e.g. 2000 bp = 20% chance to make one
    extra draw). The server resolves the eligible reward owner's stats
@@ -140,10 +150,13 @@ One authoritative resolver combines the following in stable order:
    never accepts luck from the client. This bonus draw can yield a
    different item or no item. It does not duplicate a selected stack
    and does not implicitly increase Yang/XP.
-6. Keep a simple initial hard ceiling: **at most 3 base ordinary
-   draws + 1 luck bonus draw per kill**, plus at most 1 explicitly
-   authored guaranteed encounter reward; reject invalid policies
-   rather than truncating successful rolls. Do not add unbounded
+6. Keep a simple initial hard ceiling: **1..4 base ordinary draws,
+   plus 0..1 Luck bonus draw per kill** (so a maximum of **5 ordinary
+   draws**), plus at most 1 explicitly authored guaranteed encounter
+   reward. Validate/reject policies outside 1..4 rather than silently
+   truncating successful rolls. The Luck chance is checked only
+   **once per kill**, never once per draw; 100% Luck chance always
+   adds exactly one roll, not one per base roll. Do not add
    recursive rerolls or a general-purpose loot rule engine.
 7. If selected entries have variable quantities/affixes, resolve these
    as separate *property rolls* before ground spawn. Each successful
@@ -157,11 +170,15 @@ Example **per draw**: global ore 0.5% (50 bp), region resin 3%
 **86.5% no item**. Adding a valid fifth entry reduces only the
 no-drop remainder *per draw*; all original absolute weights remain
 unchanged. One normal draw yields an item in 13.5% of kills.
-An elite with two independent draws yields at least one item in
-`1 - (1 - 0.135)^2 = 25.18%` of kills; it can yield two stacks.
-Normal + a 20% bonus-roll chance yields an expected 1.2 draws
-and **0.162** ordinary item stacks per kill (not a guaranteed
-20% item drop). These are examples, not finalized live balance.
+An elite configured with three independent draws can produce
+0..3 ordinary item stacks; a rare variant configured with four
+draws can produce 0..4. With the example 13.5% chance of an item
+per draw, four base draws yield **0.54 expected item stacks per kill**,
+not four guaranteed drops. Four base draws with a 20% Luck
+bonus-roll chance yield **4.2 expected draws** and **0.567 expected
+item stacks per kill**. This Luck chance is checked once per kill,
+not separately for each base draw. These examples are not
+finalized live balance.
 
 **Terminology:** `Luck -> chance for a bonus draw` is the first
 implementation of a player double-drop opportunity. A literal
@@ -184,9 +201,9 @@ item probability to wallet/grind delta semantics.
 
 Capture/carry the authoritative region/category/mob context when the
 mob dies, before the actor is removed or a new definition can replace
-it. Resolve **zero to four ordinary item outcomes** (depending on
-bounded rank/Luck draws), optional explicit encounter reward and
-one Yang outcome. This is an immutable list fixed at death, not
+it. Resolve **zero to five ordinary item outcomes** (1..4 authored
+base draws plus at most one Luck draw), optional explicit encounter
+reward and one Yang outcome. This is an immutable list fixed at death, not
 something generated when a player clicks pickup.
 Create ground entries representing item type, quantity and optional
 valid item rolls. The eventual `ItemInstance` receives the same stable
@@ -240,17 +257,21 @@ extra generic event bus or drop persistence table for this phase.
   with a fixed 10000 bp budget and implicit no-drop remainder **per
   draw**. Validate all authored region + category + mob combinations;
   reject overflow and never silently renormalize chances.
-- Add a small data-driven, bounded **LootRollPolicy** for mob ranks
-  and at most one server-authoritative Luck bonus draw. Keep one
-  explicitly authored optional boss/encounter guaranteed reward;
-  leave Yang as its own separate policy.
+- Add a small data-driven **LootRollPolicy** with individually
+  configurable `base_rolls` (1..4 per mob or encounter variant),
+  default suggestions by rank, and **one** server-authoritative
+  Luck bonus-roll chance checked once per kill. Cap ordinary
+  draws at 5 total. Keep one optional, explicit boss/encounter
+  guaranteed reward; leave Yang as its own separate policy.
 - Tests: absent tables, 0 and 10000 bp entries, 10000 bp total and
   >10000 rejection, unchanged **per-draw** odds as scopes are
   added, deterministic seeded multiple draws, zero/multiple item
   results, repeated item UID uniqueness, valid quantity ranges,
-  exactly capped 3+1 draw policy, offline/unavailable winner Luck
-  fallback, malicious client Luck irrelevance and no unrequested
-  four-source multiplier.
+  authored base-roll cases 1/2/3/4 and rejection of 0/5,
+  exactly capped 4+1 draw policy, 0/20/100% Luck cases
+  (100% gives only +1 even with four base draws), offline/
+  unavailable winner Luck fallback, malicious client Luck
+  irrelevance and no unrequested four-source multiplier.
 - **Exit:** testable outcome objects; no production ground
   item behavior change.
 
@@ -286,8 +307,9 @@ extra generic event bus or drop persistence table for this phase.
   and repo-owned fallbacks; do not commit externally sourced models,
   their imports or derived textures. Confirm no such binary appears
   in git diff or distributed exports.
-- Run bounded seeded loot simulations (normal vs elite/boss and
-  Luck 0/20/100% bonus-roll chance), 10-15 minute play sessions,
+- Run bounded seeded loot simulations for authored 1/2/3/4
+  base draws (including rare variant, elite/boss) and
+  Luck 0/20/100% bonus-roll chance, 10-15 minute play sessions,
   headless packs/network/Metin tests and a frame-time/density check.
   Measure item entities per kill, probabilities of 0/1/2+ drops,
   rare material yield, progression, drop pickup feel and
