@@ -52,5 +52,47 @@ func _ready() -> void:
 	assert(db.query("PRAGMA foreign_key_check;") and db.query_result.is_empty())
 	assert(db.close_db() and db.open_db() and ExchangeStoreSqlite.ensure_ledger_schema(db))
 	assert(exchange.ledger(alt).assets[0].free==55 and exchange.withdraw(alt,"withdraw","upgrade_ore",35,"bag").uid==withdrawn.uid)
+	# Every newly tradeable material must be visible in the Exchange ledger and
+	# withdrawable through the same asset IDs that ordinary deposits accept.
+	var materials: Array[ItemDefinition] = [
+		ItemDefinitions.FOREST_RESIN, ItemDefinitions.BEAST_HIDE,
+		ItemDefinitions.WOLF_FANG, ItemDefinitions.BANDIT_TOKEN
+	]
+	var asset_names: Array[String] = []
+	for index: int in materials.size():
+		var definition: ItemDefinition = materials[index]
+		var asset_id := str(definition.definition_id)
+		assert(MarketRequestRules.asset_definition(asset_id) == definition)
+		var material := ItemInstance.create(definition, owner, [])
+		material.amount = 3
+		assert(EconomyFixture.insert_item(items, material, 5 + index), "new material seeded")
+		assert(exchange.deposit(owner, "new_deposit_" + asset_id, material.uid, 0, 3, "bag").ok, "new material deposit")
+		var account_ledger := exchange.ledger(alt)
+		assert(account_ledger.ok)
+		var listed: bool = false
+		for asset: Dictionary in account_ledger.assets:
+			if asset.asset_id == asset_id:
+				listed = asset.name == definition.item_name and asset.stack_limit == definition.stack_limit and asset.free == 3 and asset.reserved == 0
+		assert(listed, "deposited asset must be visible through UI ledger")
+		assert(MarketRequestRules.valid_command("withdraw", {"command_id": "valid_" + asset_id,
+			"asset_id": asset_id, "amount": 2, "destination": "bag"}), "withdraw selector accepts asset")
+		var payout := exchange.withdraw(alt, "new_withdraw_" + asset_id, asset_id, 2, "bag")
+		assert(payout.ok, "new material can be withdrawn through regular Exchange")
+		assert(exchange.withdraw(alt, "new_withdraw_" + asset_id, asset_id, 2, "bag").uid == payout.uid, "withdraw receipt replay")
+		var persisted: bool = false
+		for item: Dictionary in items.inventory(alt).items:
+			if item.uid == payout.uid:
+				persisted = item.definition_id == asset_id and item.amount == 2
+		assert(persisted, "withdrawn material must persist with exact amount and definition")
+		var remaining: bool = false
+		for asset: Dictionary in exchange.ledger(owner).assets:
+			if asset.asset_id == asset_id:
+				remaining = asset.free == 1 and asset.reserved == 0
+		assert(remaining, "post-withdrawal balance remains visible")
+		assert(db.query_with_bindings("SELECT free,reserved FROM exchange_assets WHERE account_id=? AND asset_id=?;", [world.resolve_account_id(owner), asset_id]))
+		assert(db.query_result.size() == 1 and db.query_result[0].free == 1 and db.query_result[0].reserved == 0, "SQL ledger and snapshot agree")
+		asset_names.append(asset_id)
+	assert(asset_names.size() == 4)
+	assert(exchange.ledger(owner).assets.size() == 5, "only canonical fungible assets are shown, including zero balances")
 	print("EXCHANGE_LEDGER_OK whitelist, bag/storage, 100-35 conservation, reserve/spend guard, claims, faults, retry/reopen")
 	db.close_db();DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path));get_tree().quit()
