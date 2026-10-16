@@ -7,6 +7,15 @@ disposable Godot/SOCI PostgreSQL probe and a sanitized SQLite schema/source audi
 Domain backend/schema parity and runtime extraction remain unimplemented; this
 preparatory package does not complete P1 or change the game's SQLite backend.
 
+**P1b progress:** [account wallet parity](../development/postgres-wallet-parity.md)
+adds an opt-in PostgreSQL wallet schema/store and SQLite comparison fixture for
+delta checkpoints, atomic pending-income spend/credit, reservations, revisions,
+rollback and reconnect. Production identity hydration, other domain stores and
+runtime execution remain unimplemented; no production backend switch is made.
+The native-only `commit-failure` fixture currently terminates the pinned Windows
+SOCI process on a deferred COMMIT error. This is a blocking driver/adoption gate;
+successful core wallet parity does not waive it.
+
 **Placement:** After the current single-World Economy hardening/SoC and local **MapInstance / CH** lifecycle, and **before** admitting two independent World Processes to the same realm economy. Preparatory contract tests may start earlier, but the plan does not require PostgreSQL for local CH or interrupt [World performance work](world-server-optimization.md). Do not combine it with gameplay/visual changes.
 
 ## Target and non-goals

@@ -91,6 +91,10 @@ contracts and stops/removes its data directory. Install binaries with
 It does not use port 18098 or player data, and is absent from default smoke/CI.
 See [setup, safety and verification limits](postgres-readiness.md).
 
+Wallet backend parity uses the same owned runner with `--suite wallet`; pass
+`--pg-bin 'Y:/Software/PostgreSQL/bin'` to use an installed binary directory while
+still creating a fresh disposable cluster. See [wallet parity](postgres-wallet-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
