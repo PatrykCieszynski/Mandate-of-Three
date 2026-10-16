@@ -37,6 +37,7 @@ func connect_to_server(
 ) -> void:
 	print("Connecting to: ", _address, " (port: ", _port, ")")
 	authentication_token = _authentication_token
+	instance_manager.reset_channel_flow()
 	create(Role.CLIENT, _address, _port)
 
 

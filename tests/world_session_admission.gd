@@ -62,7 +62,7 @@ func issue(token: String, account: String, character: int, account_id: int) -> b
 	master.register_world_session(7, account, token)
 	return server.accept_master_handoff(token, account, character, account_id)
 
-func connect_client(token: String, finish: bool = true) -> WireClient:
+func connect_client(token: String, finish: bool = true, automatic_channel: bool = true) -> WireClient:
 	var client := WireClient.new()
 	client.name = "Client%d" % clients.size()
 	client.token = token
@@ -71,6 +71,7 @@ func connect_client(token: String, finish: bool = true) -> WireClient:
 	add_child(client)
 	if server.instance_manager!=null:
 		var loading:=LoadingClient.new();loading.name="Instances";client.add_child(loading)
+		loading.auto_select_channel=automatic_channel
 	assert(client.create(BaseMultiplayerEndpoint.Role.CLIENT, "127.0.0.1", 18098) == OK)
 	return client
 
@@ -231,6 +232,21 @@ func run() -> void:
 	assert(host.awaiting_peers.has(retry_id) and host.population()==1,"relogin reclaims timed-out capacity")
 	server.peer.disconnect_peer(retry_id)
 	await wait_for(func()->bool:return retry.ended and host.awaiting_peers.is_empty() and server.connected_players.is_empty())
+	assert(issue("chooser-beta","beta",characters[2],22))
+	var chooser:=connect_client("chooser-beta",true,false)
+	var picker:=chooser.get_node("Instances") as LoadingClient
+	await wait_for(func()->bool:return picker.channels.get("ok",false))
+	var chooser_id:=chooser.multiplayer_api.get_unique_id()
+	var choice_deadline: int=manager._channel_choices[chooser_id].expires_at_ms
+	var refreshes: Array[int]=[0]
+	picker.channels_changed.connect(func(_catalogue: Dictionary)->void:refreshes[0]+=1)
+	picker.refresh_channels()
+	await wait_for(func()->bool:return refreshes[0]==1)
+	assert(manager._channel_choices[chooser_id].expires_at_ms==choice_deadline and host.population()==0,"catalogue refresh reserves nothing and does not extend deadline")
+	manager._channel_choices[chooser_id].expires_at_ms=Time.get_ticks_msec()-1
+	manager.maintain_instances()
+	await wait_for(func()->bool:return chooser.ended and server.connected_players.is_empty())
+	assert(server.notifications.back().retired and host.population()==0 and host.get_node("GameWorld").characters.is_empty(),"expired chooser retires session without actor/reservation")
 
 	for client: WireClient in clients:
 		client.peer.close()

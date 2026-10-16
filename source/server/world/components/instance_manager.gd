@@ -10,6 +10,7 @@ const JAIL_INSTANCE_NAME: String = "jail"
 ## Production First Region entry/recall resource.
 const RECALL_INSTANCE_NAME: String = "FirstRegion"
 const DEFAULT_INSTANCE_NAME: String = "FirstRegion"
+const CHANNEL_CHOICE_TIMEOUT_MS: int = 30000
 
 var loading_instances: Dictionary[String, ServerInstance]
 @export var realm_id: StringName = &"local"
@@ -22,6 +23,8 @@ var default_instance: InstanceResource
 ## Bounded by current sessions; expiry cannot be renewed before transport teardown.
 var _rejected_entries: Dictionary[int, PlayerResource] = {}
 var _last_legacy_unload_ms: int = 0
+var _channel_choices: Dictionary[int, Dictionary] = {}
+var _channel_request_ids: Dictionary[int, int] = {}
 
 @export var world_server: WorldServer
 
@@ -85,9 +88,116 @@ func charge_new_instance(_map_path: String, _instance_id: String, _identity: Dic
 
 ## Every login uses the technical map; no Ekonia tutorial/hub routing.
 func _on_peer_connected(peer_id: int) -> void:
-	var result := admit_peer(peer_id, default_instance)
-	if not result.ok:
+	var session: PlayerResource = world_server.connected_players.get(peer_id)
+	if not _is_current_session(peer_id, session) or find_instance_for_peer(peer_id) != null:
+		return
+	for instance: ServerInstance in _all_instances():
+		if instance.awaiting_peers.has(peer_id):
+			if not has_valid_entry(instance, peer_id, session):
+				_reject_initial_entry(peer_id, session, "entry_expired")
+			return # Trusted routing may already have assigned a private run.
+	if _channel_choices.get(peer_id, {}).get("session") != session:
+		_channel_choices[peer_id] = {"session": session, "expires_at_ms": Time.get_ticks_msec() + CHANNEL_CHOICE_TIMEOUT_MS}
+		_channel_request_ids.erase(peer_id)
+	receive_channels.rpc_id(peer_id, 0, public_channels(peer_id))
+
+
+func public_channels(peer_id: int) -> Dictionary:
+	if not _is_current_session(peer_id, world_server.connected_players.get(peer_id)):
+		return {"ok": false, "error": "session"}
+	if default_instance == null:
+		return {"ok": false, "error": "map_unavailable"}
+	var channels: Array = []
+	for instance: ServerInstance in _instances_for(default_instance):
+		if instance.access_policy != ServerInstance.AccessPolicy.PUBLIC:
+			continue
+		if instance.get_parent() != self and loading_instances.get(str(instance.name)) != instance:
+			continue
+		var state := "available" if instance.is_node_ready() else "loading"
+		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
+			state = "draining"
+		elif instance.population() >= default_instance.max_players:
+			state = "full"
+		channels.append({"channel_id": int(instance.identity.channel_id), "state": state,
+			"population": instance.population(), "capacity": default_instance.max_players})
+	return {"ok": true, "map_id": str(default_instance.resolved_map_id()), "channels": channels}
+
+
+func _admit_channel_request(peer_id: int, request_id: int) -> bool:
+	if not _is_current_session(peer_id, world_server.connected_players.get(peer_id)):
+		return false
+	if request_id <= _channel_request_ids.get(peer_id, 0) or request_id > 2147483647:
+		return false
+	_channel_request_ids[peer_id] = request_id # Deduplicate before rate-limit responses.
+	return true
+
+
+@rpc("any_peer", "call_remote", "reliable", 0)
+func request_channels(request_id: int) -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	if not _admit_channel_request(peer_id, request_id): return
+	if not RateLimiter.check(peer_id, &"instance.channels", 8, 1000):
+		receive_channels.rpc_id(peer_id, request_id, {"ok": false, "error": "rate_limited"})
+		return
+	receive_channels.rpc_id(peer_id, request_id, public_channels(peer_id))
+
+
+func choose_initial_channel(peer_id: int, channel_id: int) -> Dictionary:
+	var session: PlayerResource = world_server.connected_players.get(peer_id)
+	if not _is_current_session(peer_id, session): return {"ok": false, "error": "session"}
+	if find_instance_for_peer(peer_id) != null: return {"ok": false, "error": "already_joined"}
+	if default_instance == null: return {"ok": false, "error": "map_unavailable"}
+	if channel_id < 0: return {"ok": false, "error": "channel_unavailable"}
+	for pending: ServerInstance in _all_instances():
+		if pending.awaiting_peers.has(peer_id):
+			if pending.awaiting_peers[peer_id].get("initial_channel", -1) != channel_id:
+				return {"ok": false, "error": "already_selected"}
+			if not has_valid_entry(pending, peer_id, session): return {"ok": false, "error": "entry_expired"}
+			return {"ok": true, "instance": pending, "duplicate": true}
+	var choice: Dictionary = _channel_choices.get(peer_id, {})
+	if choice.get("session") != session or int(choice.get("expires_at_ms", 0)) <= Time.get_ticks_msec():
+		return {"ok": false, "error": "choice_expired"}
+	var target: ServerInstance
+	if channel_id > 0:
+		for instance: ServerInstance in _instances_for(default_instance):
+			if instance.get_parent() != self and loading_instances.get(str(instance.name)) != instance:
+				continue
+			if instance.access_policy == ServerInstance.AccessPolicy.PUBLIC and int(instance.identity.channel_id) == channel_id:
+				target = instance
+				break
+		if target == null or not target.accepts_reservation(): return {"ok": false, "error": "channel_unavailable"}
+	var result := reserve_entry(peer_id, default_instance, target)
+	if result.ok:
+		result.instance.awaiting_peers[peer_id]["initial_channel"] = channel_id
+		_channel_choices.erase(peer_id)
+	return result
+
+
+@rpc("any_peer", "call_remote", "reliable", 0)
+func request_initial_channel(request_id: int, channel_id: int) -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	if not _admit_channel_request(peer_id, request_id): return
+	if not RateLimiter.check(peer_id, &"instance.channels", 8, 1000):
+		receive_channel_selection.rpc_id(peer_id, request_id, {"ok": false, "error": "rate_limited"})
+		return
+	var result := choose_initial_channel(peer_id, channel_id)
+	# Never serialize server objects or the private pending/session record.
+	receive_channel_selection.rpc_id(peer_id, request_id, {"ok": result.ok, "error": result.get("error", "")})
+	if result.ok:
+		if result.get("duplicate", false):
+			if result.instance.is_node_ready(): _publish_entry(peer_id, world_server.connected_players[peer_id], result.instance)
+		else:
+			_start_entry_publication(peer_id, result.instance)
+	elif result.get("error") == "choice_expired" or (channel_id == 0 and result.get("error") == "map_unavailable"):
 		_reject_initial_entry(peer_id, world_server.connected_players.get(peer_id), result.error)
+
+
+@rpc("authority", "call_remote", "reliable", 0)
+func receive_channels(_request_id: int, _result: Dictionary) -> void: pass
+
+
+@rpc("authority", "call_remote", "reliable", 0)
+func receive_channel_selection(_request_id: int, _result: Dictionary) -> void: pass
 
 
 ## Called by trusted initial-entry routing only, never directly by an RPC.
@@ -95,15 +205,18 @@ func admit_peer(peer_id: int, resource: InstanceResource, target: ServerInstance
 	var result := reserve_entry(peer_id, resource, target)
 	if not result.ok:
 		return result
-	var instance: ServerInstance = result.instance
-	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
 	if result.get("duplicate", false):
 		return result
+	_start_entry_publication(peer_id, result.instance)
+	return result
+
+
+func _start_entry_publication(peer_id: int, instance: ServerInstance) -> void:
+	var admitted: PlayerResource = world_server.connected_players.get(peer_id)
 	if instance.is_node_ready():
 		_publish_entry(peer_id, admitted, instance)
 	else:
 		instance.ready.connect(_publish_entry.bind(peer_id, admitted, instance), CONNECT_ONE_SHOT)
-	return result
 
 
 ## One synchronous admission boundary: validate, select, then reserve before yield.
@@ -149,6 +262,7 @@ func reserve_entry(peer_id: int, resource: InstanceResource, target: ServerInsta
 		"expires_at_ms": Time.get_ticks_msec() + int(resource.entry_timeout_seconds * 1000.0),
 	}
 	instance.idle_since_ms = -1
+	_channel_choices.erase(peer_id) # Any accepted server assignment ends initial choice.
 	return {"ok": true, "instance": instance}
 
 
@@ -194,6 +308,8 @@ func _all_instances() -> Array[ServerInstance]:
 
 
 func _release_pending_peer(peer_id: int) -> void:
+	_channel_choices.erase(peer_id)
+	_channel_request_ids.erase(peer_id)
 	_rejected_entries.erase(peer_id)
 	for instance: ServerInstance in _all_instances():
 		instance.awaiting_peers.erase(peer_id)
@@ -210,6 +326,11 @@ func begin_draining(instance: ServerInstance) -> bool:
 
 func maintain_instances() -> void:
 	var now := Time.get_ticks_msec()
+	for peer_id: int in _channel_choices.keys():
+		var choice: Dictionary = _channel_choices[peer_id]
+		if int(choice.expires_at_ms) <= now or not _is_current_session(peer_id, choice.session):
+			_channel_choices.erase(peer_id)
+			_reject_initial_entry(peer_id, choice.session, "choice_expired")
 	for instance: ServerInstance in _all_instances():
 		if instance.is_queued_for_deletion() or not instance.instance_resource.use_3d:
 			continue
