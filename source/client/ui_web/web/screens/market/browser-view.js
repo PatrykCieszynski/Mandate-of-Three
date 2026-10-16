@@ -7,7 +7,7 @@ import { marketCommandId, } from './market-model.js';
 export function mountMarketBrowser(root, shopRoot, o) {
     const shell = new UiWindow(root, {
         id: 'market-browser',
-        title: 'Trading Glass',
+        title: 'Marketplace Search',
         className: 'market-browser-window',
         manager: o.manager,
         placement: {
