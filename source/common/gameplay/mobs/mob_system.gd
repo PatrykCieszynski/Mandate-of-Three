@@ -7,6 +7,8 @@ var packs: Dictionary[int, MobPackRuntime] = {}
 var _next_mob_id: int = 0
 var _next_pack_id: int = 0
 var _warned_unknown_mob_keys: Dictionary[StringName, bool] = {}
+## Most packs have no replacement tickets; do not traverse them 60 times/sec.
+var _respawning_pack_ids: Dictionary[int, bool] = {}
 var _world: GameWorld3D
 var _endpoint: Node
 var services: MandateWorldServices
@@ -90,7 +92,13 @@ func remove_mob(id: int) -> void:
 	var dog: MobActor3D = mobs[id]
 	dog.collision_layer = 0
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
-	if pack != null: pack.actor_ids.erase(id)
+	if pack != null:
+		pack.actor_ids.erase(id)
+		# An empty, non-respawning pack has no future work. Previously the
+		# 60-Hz pack sweep cleaned it on the next tick.
+		if not pack.respawn_enabled and pack.actor_ids.is_empty():
+			packs.erase(pack.pack_instance_id)
+			_respawning_pack_ids.erase(pack.pack_instance_id)
 	mobs.erase(id)
 	dog.queue_free()
 
@@ -100,13 +108,23 @@ func tick(delta: float, now: int) -> void:
 		if (dog.expires_at > 0 and now >= dog.expires_at) or (dog.ai_state == MobState.Value.DEAD and now >= dog.dead_until_ms):
 			remove_mob(id)
 		else: tick_mob(dog,delta,now)
-	for pack_id: int in packs.keys():
-		var pack: MobPackRuntime = packs[pack_id]
-		for ticket: Dictionary in pack.replacements.duplicate():
-			if now < int(ticket.at): continue
-			pack.replacements.erase(ticket)
-			spawn_mob(ticket.definition,pack.random_point(pack.spawn_radius),pack)
-		if not pack.respawn_enabled and pack.actor_ids.is_empty(): packs.erase(pack_id)
+	# Only dead, respawning packs need the time-wheel equivalent of a scan.
+	# No duplicate Array allocation or all-pack iteration on the hot path.
+	for pack_id: int in _respawning_pack_ids.keys():
+		var pack: MobPackRuntime = packs.get(pack_id)
+		if pack == null:
+			_respawning_pack_ids.erase(pack_id)
+			continue
+		var index := 0
+		while index < pack.replacements.size():
+			var ticket: Dictionary = pack.replacements[index]
+			if now < int(ticket.at):
+				index += 1
+				continue
+			pack.replacements.remove_at(index)
+			spawn_mob(ticket.definition, pack.random_point(pack.spawn_radius), pack)
+		if pack.replacements.is_empty():
+			_respawning_pack_ids.erase(pack_id)
 
 func die(dog: MobActor3D, now: int) -> void:
 	if dog.ai_state == MobState.Value.DEAD: return
@@ -114,6 +132,7 @@ func die(dog: MobActor3D, now: int) -> void:
 	var pack: MobPackRuntime = packs.get(dog.pack_instance_id)
 	if dog.respawn_enabled and pack != null:
 		pack.replacements.append({"definition":dog.definition,"at":now+int(pack.respawn_seconds*1000)})
+		_respawning_pack_ids[pack.pack_instance_id] = true
 	var death := MobDeathResult.capture(dog,now,services)
 	mob_died.emit(death)
 	dog.contribution_players.clear()

@@ -17,6 +17,8 @@ var _advance_yaw := 0.0
 var _advance_distance := 0.0
 var _advance_duration := 0.0
 var _advance_elapsed := 0.0
+## Reuse the PhysicsServer shape query rather than allocating one per player tick.
+var _overlap_shape_query: PhysicsShapeQueryParameters3D
 
 func setup(display_name: String, tint: Color) -> void:
 	_display_name = display_name
@@ -74,11 +76,12 @@ func simulate(delta: float, direction: Vector2) -> void:
 			velocity.z = 0
 			break
 	var temporary_exceptions: Array[PhysicsBody3D] = []
-	var existing_exceptions := get_collision_exceptions()
-	for mob: PhysicsBody3D in overlaps:
-		if existing_exceptions.has(mob): continue
-		add_collision_exception_with(mob)
-		temporary_exceptions.append(mob)
+	if not overlaps.is_empty():
+		var existing_exceptions := get_collision_exceptions()
+		for mob: PhysicsBody3D in overlaps:
+			if existing_exceptions.has(mob): continue
+			add_collision_exception_with(mob)
+			temporary_exceptions.append(mob)
 	if advance_velocity.length_squared() > 0 and delta > 0:
 		# Probe the straight advance before the normal slide. Consume the curve
 		# even when blocked, but discard the tangential remainder on actor BODY.
@@ -96,14 +99,19 @@ func simulate(delta: float, direction: Vector2) -> void:
 
 func _overlapping_mob_bodies() -> Array[PhysicsBody3D]:
 	var overlaps: Array[PhysicsBody3D] = []
-	if combat_collider == null or not collision_mask & 4: return overlaps
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = combat_collider.shape
-	query.transform = combat_collider.global_transform
-	query.collision_mask = 4
-	for hit: Dictionary in get_world_3d().direct_space_state.intersect_shape(query,256):
+	if combat_collider == null or not collision_mask & 4:
+		return overlaps
+	# Godot's native physics broadphase is much faster than the scripted
+	# grid/capsule scan for densely overlapping players and mobs.
+	if _overlap_shape_query == null:
+		_overlap_shape_query = PhysicsShapeQueryParameters3D.new()
+	_overlap_shape_query.shape = combat_collider.shape
+	_overlap_shape_query.transform = combat_collider.global_transform
+	_overlap_shape_query.collision_mask = 4
+	for hit: Dictionary in get_world_3d().direct_space_state.intersect_shape(_overlap_shape_query, 256):
 		var mob := hit.collider as MobActor3D
-		if mob != null and not overlaps.has(mob): overlaps.append(mob)
+		if mob != null and not overlaps.has(mob):
+			overlaps.append(mob)
 	return overlaps
 
 func start_attack_advance(yaw: float, distance: float, duration: float) -> void:
