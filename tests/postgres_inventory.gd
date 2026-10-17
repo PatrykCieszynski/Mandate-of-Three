@@ -252,6 +252,7 @@ func _ready() -> void:
 	assert(pg.execute("UPDATE economy.schema_versions SET version=999 WHERE feature='inventory';").ok)
 	assert(not Schema.ensure_schema(pg) and not pg.in_transaction())
 	assert(pg.execute("UPDATE economy.schema_versions SET version=1 WHERE feature='inventory';").ok and Schema.ensure_schema(pg))
+	await retry_checks(items)
 	pg.close()
 	runtime.db=null
 	runtime.free()
@@ -259,3 +260,166 @@ func _ready() -> void:
 	for suffix: String in ["","-wal","-shm"]: DirAccess.remove_absolute(ProjectSettings.globalize_path(sqlite.path+suffix))
 	print("POSTGRES_INVENTORY_OK SQLite parity: starter/pickup, move/equip/swap/activate/unequip, stats, receipts, reopen, full bag and atomic failures")
 	get_tree().quit()
+
+func retry_checks(items: RefCounted) -> void:
+	assert(PgWallet.new(pg).initialize_account(8300).ok)
+	assert(pg.execute("CREATE SEQUENCE economy.fixture_item_attempt;").ok)
+	assert(pg.execute("CREATE FUNCTION economy.fixture_item_retry() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE attempt BIGINT; BEGIN attempt:=nextval('economy.fixture_item_attempt'); IF attempt<=TG_ARGV[1]::BIGINT THEN IF TG_NARGS>2 THEN PERFORM pg_advisory_xact_lock(95129); END IF; RAISE EXCEPTION 'item retry fixture' USING ERRCODE=TG_ARGV[0]; END IF; RETURN NEW; END; $$;").ok)
+	var index: int=0
+	for action: String in ["move","equip","activate","unequip","swap"]:
+		for stage: String in ["placement","revision","receipt"]:
+			for code: String in ["40001","40P01"]:
+				var character: int=83000+index
+				var id: int=20000+index*3
+				retry_seed(items,character,id,action in ["unequip","swap"])
+				var before: Dictionary=items.inventory(character)
+				var target: int=id+1 if action=="swap" else id
+				var revision: int=1 if action=="unequip" else 0
+				var destination: int=25 if action in ["move","unequip"] else -1
+				var kind: String="equip" if action=="swap" else action
+				item_retry_fault(stage,kind,retry_uid(target),code,1)
+				var command_id: String="retry-item-"+str(index)
+				var result: Dictionary=items.inventory_command(character,kind,retry_uid(target),revision,destination,command_id)
+				assert(result.ok and items.committed and not items.receipt_replay and item_attempts()==2,str(result))
+				var after: Dictionary=items.inventory(character)
+				assert(after.items.size()==before.items.size() and after.item_state==result.item_state)
+				var selected: Dictionary=after.items.filter(func(item: Dictionary) -> bool: return item.uid==retry_uid(target))[0]
+				assert(selected.revision==revision+1)
+				if action in ["move","unequip"]: assert(selected.location=="bag" and selected.bag_position==destination)
+				else: assert(selected.location=="equipment" and after.equipment.weapon==selected.uid)
+				if action=="swap":
+					var previous: Dictionary=after.items.filter(func(item: Dictionary) -> bool: return item.uid==retry_uid(id))[0]
+					assert(previous.location=="bag" and previous.bag_position==10 and previous.revision==2)
+				if action=="move": assert(after.stats==before.stats)
+				elif action=="unequip": assert(after.stats.attack<before.stats.attack)
+				else: assert(after.stats.attack>before.stats.attack)
+				var state:=retry_state()
+				assert(items.inventory_command(character,kind,retry_uid(target),revision,destination,command_id)==result and not items.committed and items.receipt_replay and retry_state()==state and item_attempts()==2)
+				assert(items.inventory_receipt(character,command_id)==result)
+				clear_item_retry(stage)
+				index+=1
+	var character: int=83900
+	var id: int=20900
+	retry_seed(items,character,id,false)
+	for code: String in ["40001","40P01","23505","55P03","57014"]:
+		item_retry_fault("receipt","move",retry_uid(id),code,99)
+		var state:=retry_state()
+		var result: Dictionary=items.inventory_command(character,"move",retry_uid(id),0,25,"exhausted-"+code)
+		assert(result.error=="storage" and not items.committed and not items.receipt_replay and not pg.in_transaction() and retry_state()==state)
+		assert(item_attempts()==(3 if code in ["40001","40P01"] else 1))
+		clear_item_retry("receipt")
+	for code: String in ["40001","40P01"]:
+		item_retry_fault("receipt","move",retry_uid(id),code,99,true)
+		var state:=retry_state()
+		var result: Dictionary=items.inventory_command(character,"move",retry_uid(id),0,25,"unknown-"+code)
+		assert(result.get("outcome_unknown",false) and not items.committed and not items.receipt_replay and not pg.is_open())
+		assert(pg.open("postgresql",connection) and item_attempts()==1)
+		clear_item_retry("receipt")
+		assert(retry_state()==state and items.inventory_receipt(character,"unknown-"+code).error=="unknown_command")
+	# A receipted no-op remains a no-op, even when its receipt write is retried.
+	var before: Dictionary=items.inventory(character)
+	item_retry_fault("receipt","move",retry_uid(id),"40001",1)
+	var noop: Dictionary=items.inventory_command(character,"move",retry_uid(id),0,0,"retry-noop")
+	assert(noop.ok and not items.committed and not items.receipt_replay and item_attempts()==2 and items.inventory(character)==before)
+	assert(items.inventory_command(character,"move",retry_uid(id),0,0,"retry-noop")==noop and not items.committed and items.receipt_replay and item_attempts()==2)
+	clear_item_retry("receipt")
+	for scenario: String in ["revision","equipment","capacity"]: await retry_reselection(items,scenario)
+	print("POSTGRES_INVENTORY_RETRY_OK complete move/equip/activate/unequip/swap, revisions/stats/custody, replay/no-op flags, bounded attempts, no COMMIT retry and current equipment/capacity")
+
+func retry_uid(id: int) -> String: return str(id).pad_zeros(32)
+
+func retry_seed(items: RefCounted, character: int, id: int, equipped: bool) -> void:
+	assert(items.bind_character(character,8300) and pg.begin())
+	for index: int in 3:
+		var item:=prepared(ItemDefinitions.UPGRADE_ORE if index==2 else ItemDefinitions.IRON_SWORD,character,id+index)
+		if index==1: item.upgrade_level=1
+		assert(items.receive_item_in_transaction(item,index*10).ok)
+	assert(pg.commit())
+	if equipped: assert(items.inventory_command(character,"equip",retry_uid(id),0,-1,"seed-"+str(id)).ok)
+
+func retry_state() -> Array:
+	var state: Array=[]
+	for table: String in ["item_instances","item_custody","account_item_revisions","market_commands","ground_item_claims","item_initializations"]:
+		var result: Dictionary=pg.query("SELECT row_to_json(t)::text AS value FROM economy."+table+" t ORDER BY row_to_json(t)::text;",{},10000)
+		assert(result.ok and not result.truncated)
+		state.append(result.rows)
+	return state
+
+func item_retry_table(stage: String) -> String:
+	return {"placement":"item_custody","revision":"item_instances","receipt":"market_commands"}[stage]
+
+func item_retry_fault(stage: String, action: String, uid: String, code: String, failures: int, deferred: bool = false) -> void:
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_item_attempt RESTART WITH 1;").ok)
+	var event: String="INSERT" if stage=="receipt" or (stage=="placement" and action!="move") else "UPDATE"
+	var create: String="CREATE CONSTRAINT TRIGGER fixture_retry AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED" if deferred else "CREATE TRIGGER fixture_retry BEFORE %s ON economy.%s" % [event,item_retry_table(stage)]
+	var condition: String="" if stage=="receipt" else " WHEN (NEW.uid='%s')" % uid
+	assert(pg.execute(create+" FOR EACH ROW"+condition+" EXECUTE FUNCTION economy.fixture_item_retry('%s','%d');" % [code,failures]).ok)
+
+func clear_item_retry(stage: String) -> void:
+	assert(pg.execute("DROP TRIGGER fixture_retry ON economy."+item_retry_table(stage)+";").ok)
+
+func item_attempts() -> int:
+	return int(pg.query("SELECT last_value FROM economy.fixture_item_attempt;").rows[0].last_value)
+
+func retry_reselection(items: RefCounted, scenario: String) -> void:
+	var index: int=["revision","equipment","capacity"].find(scenario)
+	var character: int=83910+index
+	var id: int=21000+index*3
+	retry_seed(items,character,id,scenario!="revision")
+	var action: String="unequip" if scenario=="capacity" else "equip"
+	var target: int=id+1 if scenario=="equipment" else id
+	var revision: int=1 if scenario=="capacity" else 0
+	var destination: int=25 if scenario=="capacity" else -1
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_item_attempt RESTART WITH 1;").ok)
+	assert(pg.execute("CREATE TRIGGER fixture_retry BEFORE INSERT ON economy.market_commands FOR EACH ROW WHEN (current_setting('application_name')='retry-inventory') EXECUTE FUNCTION economy.fixture_item_retry('40001','1','gate');").ok)
+	assert(pg.execute("SELECT pg_advisory_lock(95129);").ok)
+	# Only these coordinated diagnostic sessions extend their timeout budgets.
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var actor:=Thread.new()
+	var command_id: String="reselect-"+scenario
+	assert(actor.start(item_worker.bind(connection+" application_name=retry-inventory"+budgets,character,action,retry_uid(target),revision,destination,command_id,ready))==OK)
+	ready.wait()
+	var acting: bool=await item_waiting("retry-inventory")
+	var editor:=Thread.new()
+	var other_action: String="unequip" if scenario=="equipment" else "move"
+	var other_target: int=id+2 if scenario=="capacity" else id
+	var other_revision: int=1 if scenario=="equipment" else 0
+	var blocked: int=InventoryGrid.cells(25,ItemDefinitions.IRON_SWORD.inventory_height).back()
+	assert(editor.start(item_worker.bind(connection+" application_name=retry-inventory-editor"+budgets,character,other_action,retry_uid(other_target),other_revision,blocked if scenario=="capacity" else 25,"edit-"+scenario,ready))==OK)
+	ready.wait()
+	var editing: bool=await item_waiting("retry-inventory-editor")
+	assert(pg.execute("SELECT pg_advisory_unlock(95129);").ok)
+	var acted: Dictionary=actor.wait_to_finish()
+	var edited: Dictionary=editor.wait_to_finish()
+	clear_item_retry("receipt")
+	assert(acting and editing and edited.result.ok and edited.committed)
+	var inventory: Dictionary=items.inventory(character)
+	if scenario=="equipment":
+		assert(acted.result.ok and acted.committed and item_attempts()==2 and inventory.equipment.weapon==retry_uid(target))
+		assert(inventory.items.any(func(item: Dictionary) -> bool: return item.uid==retry_uid(id) and item.location=="bag" and item.bag_position==25 and item.revision==2),"retry must not move the formerly equipped item a second time")
+	else:
+		assert(acted.result.error==("stale" if scenario=="revision" else "occupied") and not acted.committed and not acted.replay and item_attempts()==1)
+		assert(items.inventory_receipt(character,command_id).error=="unknown_command")
+		if scenario=="revision": assert(inventory.items.any(func(item: Dictionary) -> bool: return item.uid==retry_uid(id) and item.location=="bag" and item.bag_position==25 and item.revision==1))
+		else: assert(inventory.items.any(func(item: Dictionary) -> bool: return item.uid==retry_uid(id) and item.location=="equipment" and item.revision==1))
+
+func item_waiting(label: String) -> bool:
+	var deadline: int=Time.get_ticks_msec()+2000
+	while Time.get_ticks_msec()<deadline:
+		assert(pg.execute("SELECT pg_stat_clear_snapshot();").ok)
+		if int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name=:label AND wait_event_type='Lock';",{"label":label}).rows[0].n)==1: return true
+		await get_tree().create_timer(0.005).timeout
+	return false
+
+func item_worker(dsn: String, character: int, action: String, uid: String, revision: int, position: int, command_id: String, ready: Semaphore) -> Dictionary:
+	var database: Object=ClassDB.instantiate("GodotSociDatabase")
+	var opened: bool=database.open("postgresql",dsn)
+	ready.post()
+	if not opened: return {"result":{"ok":false,"error":"fixture_connection"},"committed":false,"replay":false}
+	var store:=PgItems.new(database)
+	var result: Dictionary=store.inventory_command(character,action,uid,revision,position,command_id)
+	var committed: bool=store.committed
+	var replay: bool=store.receipt_replay
+	database.close()
+	return {"result":result,"committed":committed,"replay":replay}

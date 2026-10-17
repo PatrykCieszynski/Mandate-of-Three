@@ -145,6 +145,14 @@ nonstarting footprint cells: explicit placement rejects without costs, automatic
 placement reselects. No schema, protocol, gameplay or runtime backend changes;
 remaining Inventory/Storage/seller/claim retry, broader P2 and P3/P4 remain open.
 
+**P2h progress:** [Inventory command retry](../development/postgres-transaction-retry.md#p2h--character-inventory-commands)
+uses one existing command owner for whole move/equip/activate/unequip/swap attempts.
+Native faults verify custody, revisions, stats, original replay, no-op/mutation
+flags, exhaustion and no COMMIT retry. Queued editors force current revision,
+equipment and full-footprint capacity decisions. Starter/pickup/receiving helpers
+keep their existing policies; account Storage and seller/claim retry stay separate.
+No schema/protocol/runtime change; broader P2 and P3/P4 remain open.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must

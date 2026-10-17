@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CombatTraceDefinition" format=3]
+[gd_resource type="Resource" script_class="CombatTraceDefinition" format=3 uid="uid://b512fflv2vx35"]
 
-[ext_resource type="Script" path="res://source/common/gameplay/combat/combat_trace_sample.gd" id="1_kk6iw"]
-[ext_resource type="Script" path="res://source/common/gameplay/combat/combat_trace_definition.gd" id="2_k02u1"]
+[ext_resource type="Script" uid="uid://dgcgqo0gax43w" path="res://source/common/gameplay/combat/combat_trace_sample.gd" id="1_kk6iw"]
+[ext_resource type="Script" uid="uid://cydqdjsrk4087" path="res://source/common/gameplay/combat/combat_trace_definition.gd" id="2_k02u1"]
 
 [sub_resource type="Resource" id="Resource_yqy4c"]
 script = ExtResource("1_kk6iw")

@@ -1,85 +1,70 @@
-[gd_resource type="Resource" script_class="BasicAttackComboDefinition" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="BasicAttackComboDefinition" format=3 uid="uid://k7bipbmx6bpj"]
 
-[ext_resource type="Script" path="res://source/common/gameplay/combat/basic_attack_combo_definition.gd" id="1"]
-[ext_resource type="Script" path="res://source/common/gameplay/combat/basic_attack_step_definition.gd" id="2"]
-
-[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_01.tres" id="Trace0"]
-[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_02.tres" id="Trace1"]
-[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_03.tres" id="Trace2"]
-[ext_resource type="Resource" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_04.tres" id="Trace3"]
+[ext_resource type="Script" uid="uid://4k6j4slvmixm" path="res://source/common/gameplay/combat/basic_attack_combo_definition.gd" id="1"]
+[ext_resource type="Script" uid="uid://b2hmj04iake5m" path="res://source/common/gameplay/combat/basic_attack_step_definition.gd" id="2"]
+[ext_resource type="Resource" uid="uid://bfjio74sb22bj" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_01.tres" id="Trace0"]
+[ext_resource type="Resource" uid="uid://13hrxbv87ky7" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_02.tres" id="Trace1"]
+[ext_resource type="Resource" uid="uid://b36elsx6jw17h" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_03.tres" id="Trace2"]
+[ext_resource type="Resource" uid="uid://bq74oh4bxr2lp" path="res://source/common/gameplay/combat/traces/onehand_sword__combo_04.tres" id="Trace3"]
 
 [sub_resource type="Resource" id="Step0"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_01"
-motion_duration_ms = 1000
+hit_start_ms = 192
+hit_end_ms = 315
+combat_trace = ExtResource("Trace0")
 advance_distance = 1.3176
 preinput_ms = 167
 direct_input_ms = 533
 input_limit_ms = 603
-hit_start_ms = 192
-hit_end_ms = 315
-combat_trace = ExtResource("Trace0")
 impact_ms = 260
 recovery_ms = 533
-damage_multiplier = 1.0
-reaction = 1
-reaction_duration = 0.18
-get_up_duration = 0.4
 
 [sub_resource type="Resource" id="Step1"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_02"
+hit_start_ms = 215
+hit_end_ms = 321
+combat_trace = ExtResource("Trace1")
 motion_duration_ms = 934
 advance_distance = 0.8525
 preinput_ms = 101
 direct_input_ms = 543
 input_limit_ms = 637
-hit_start_ms = 215
-hit_end_ms = 321
-combat_trace = ExtResource("Trace1")
 impact_ms = 270
 recovery_ms = 543
-damage_multiplier = 1.0
-reaction = 1
-reaction_duration = 0.18
-get_up_duration = 0.4
 
 [sub_resource type="Resource" id="Step2"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_03"
+hit_start_ms = 181
+hit_end_ms = 418
+combat_trace = ExtResource("Trace2")
 motion_duration_ms = 1067
 advance_distance = 1.4301
 preinput_ms = 85
 direct_input_ms = 418
 input_limit_ms = 665
-hit_start_ms = 181
-hit_end_ms = 418
-combat_trace = ExtResource("Trace2")
 impact_ms = 290
 recovery_ms = 418
-damage_multiplier = 1.0
-reaction = 1
-reaction_duration = 0.18
-get_up_duration = 0.4
 
 [sub_resource type="Resource" id="Step3"]
 script = ExtResource("2")
 animation_key = &"onehand_sword__combo_04"
+hit_start_ms = 570
+hit_end_ms = 700
+combat_trace = ExtResource("Trace3")
 motion_duration_ms = 1267
 advance_distance = 1.0552
 preinput_ms = 1058
 direct_input_ms = 1058
 input_limit_ms = 731
-hit_start_ms = 570
-hit_end_ms = 700
-combat_trace = ExtResource("Trace3")
-impact_ms = 620
-recovery_ms = 1267
 damage_multiplier = 1.5
 reaction = 3
-knockback_distance = 2.5
 reaction_duration = 1.2
-get_up_duration = 0.4
+knockback_distance = 2.5
+impact_ms = 620
+recovery_ms = 1267
 
 [resource]
 script = ExtResource("1")

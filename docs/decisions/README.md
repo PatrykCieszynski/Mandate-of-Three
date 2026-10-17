@@ -10,6 +10,10 @@
 
 ## Decision precedence
 
+The [Marketplace / item-drag source review](marketplace-source-review.md) maps the
+retained PDFs to current contracts and records superseded assumptions. PDFs are
+provenance, not a competing implementation checklist.
+
 The source code and [persistence policy](../architecture/persistence-policy.md) describe current behavior. Newer accepted domain contracts describe desired future behavior; design **does not override the running code without an implementation PR**. Archived records and experimental plans explain why a decision was made but are not current implementation instructions.
 
 For an architecture change, link the relevant accepted rule, the concrete behavior being changed, the regression/failure tests, and any data migration. Track still-open product choices as open rather than inventing defaults.

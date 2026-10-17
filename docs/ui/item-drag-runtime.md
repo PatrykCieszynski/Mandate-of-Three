@@ -107,6 +107,22 @@ Never use standalone `spend()` followed by an item transaction. The default SQLi
 wallet and Shop suites compose these production helpers and verify `inventory_full` without
 charge, exact rejection, insufficient funds, write-failure rollback and reopen.
 
+## Design source and future policy boundaries
+
+The [original drag design](../item-drag-runtime-system.pdf) describes gestures,
+not permission to implement every listed service. Runtime subjects remain opaque;
+the PDF's union examples belong to typed source/target policies. NPC offers now
+exist; Trade examples remain unimplemented future acceptance cases.
+
+- A Shop-offer drop starts purchase/confirmation, not transfer of an owned UID.
+  Source visuals are never proof of ownership or finite stock.
+- A future Trade policy may drag only the player's unlocked own offers; opponent
+  offers and locked/accepted sides cannot provide a draggable source.
+- Right-click activation remains distinct from drag lifecycle. Rewards and quick
+  receiving can reuse server placement without creating a drag gesture.
+- A green preview is advisory. Stale revision, ownership/occupancy changes, sold
+  offers, insufficient funds or locked workflows can still reject at commit.
+
 ## Verification
 
 Default smoke includes `item_drag.test.mts` against generated production JS:
