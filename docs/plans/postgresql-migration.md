@@ -129,6 +129,14 @@ without ledger credit. Storage owns its existing lock/authorization/consumption
 contract; no schema, protocol or runtime backend changes. Remaining domain retry,
 broader P2, P3 and P4 are still open.
 
+**P2f progress:** [Upgrade retry](../development/postgres-transaction-retry.md#p2f--upgrade-material-wallet-and-item-mutation)
+uses the existing bounded owner for complete material/pending-Yang/spend/target/
+receipt transactions, with one captured server recipe. Native faults cover all
+mutation stages, original-result replay, exhaustion and no COMMIT retry. Queued
+editors force material reselection or stale-target rejection without partial cost.
+No schema, protocol, gameplay or runtime backend change; other domains' explicit
+retry adoption, broader P2 and P3/P4 remain open.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must

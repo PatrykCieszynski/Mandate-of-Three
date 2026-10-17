@@ -201,6 +201,7 @@ func _ready() -> void:
 	var candidate:=exercise(PgUpgrade.new(pg),items,PgWallet.new(pg),PgStorage.new(pg),true)
 	assert(baseline==candidate, "Upgrade/material/custody/wallet/revision/receipt snapshots match SQLite")
 	native_checks(items)
+	await retry_checks(items)
 	pg.close()
 	runtime.db=null
 	runtime.free()
@@ -247,3 +248,160 @@ func native_checks(items: RefCounted) -> void:
 	assert(items.inventory(large).items[0].revision==9007199254741034)
 	assert(store.upgrade(large,9999,simple,str(904).pad_zeros(32),9007199254741033,"large-issuer")==result)
 	assert(store.upgrade_receipt(character,"large-issuer").error=="unknown_command")
+
+func retry_checks(items: RefCounted) -> void:
+	assert(PgWallet.new(pg).initialize_account(8100).ok)
+	assert(pg.execute("UPDATE economy.account_wallets SET yang=100000 WHERE account_id=8100;").ok)
+	assert(pg.execute("CREATE SEQUENCE economy.fixture_upgrade_attempt;").ok)
+	assert(pg.execute("CREATE FUNCTION economy.fixture_upgrade_retry() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE attempt BIGINT; BEGIN attempt:=nextval('economy.fixture_upgrade_attempt'); IF attempt<=TG_ARGV[1]::BIGINT THEN IF TG_NARGS>2 THEN PERFORM pg_advisory_xact_lock(95127); END IF; RAISE EXCEPTION 'upgrade retry fixture' USING ERRCODE=TG_ARGV[0]; END IF; IF TG_OP='DELETE' THEN RETURN OLD; END IF; RETURN NEW; END; $$;").ok)
+	var store:=PgUpgrade.new(pg)
+	var accepted: UpgradeDefinition=recipe.duplicate(true)
+	accepted.yang_cost=100
+	var index: int=0
+	for stage: String in ["custody","delete","partial","wallet","target","receipt"]:
+		for code: String in ["40001","40P01"]:
+			var character: int=81000+index
+			var id: int=10000+index*3
+			retry_seed(items,character,id)
+			var original: Dictionary=items.inventory(character).items.filter(func(item: Dictionary) -> bool: return item.uid==str(id).pad_zeros(32))[0]
+			var balance: int=PgWallet.new(pg).load_wallet(8100).balance
+			upgrade_retry_fault(stage,code,1)
+			var command: String="retry-upgrade-"+str(index)
+			var result: Dictionary=store.upgrade(character,17,accepted,str(id).pad_zeros(32),0,command)
+			assert(result.ok and store.committed and upgrade_attempts()==2 and result.balance==balance+17-100)
+			assert(result.wallet_states[0].pending_applied==17 and PgWallet.new(pg).load_wallet(8100).balance==result.balance)
+			var inventory: Array=items.inventory(character).items
+			assert(inventory.size()==2,"first material stack is consumed once, second is reduced once")
+			for item: Dictionary in inventory:
+				if item.uid==str(id).pad_zeros(32): assert(item.upgrade_level==1 and item.revision==1 and item.bag_position==0 and item.affixes==original.affixes and item.sockets==original.sockets)
+				else: assert(item.uid==str(id+2).pad_zeros(32) and item.amount==4 and item.revision==1)
+			var before:=retry_state()
+			assert(store.upgrade(character,9999,accepted,str(id).pad_zeros(32),0,command)==result and not store.committed and retry_state()==before and upgrade_attempts()==2)
+			assert(store.upgrade_receipt(character,command)==result)
+			clear_upgrade_retry(stage)
+			index+=1
+	var character: int=81900
+	var id: int=10900
+	retry_seed(items,character,id)
+	for code: String in ["40001","40P01","23505","55P03","57014"]:
+		upgrade_retry_fault("receipt",code,99)
+		var before:=retry_state()
+		var result: Dictionary=store.upgrade(character,17,accepted,str(id).pad_zeros(32),0,"exhausted-"+code)
+		assert(result.error=="storage" and not store.committed and not pg.in_transaction() and retry_state()==before)
+		assert(upgrade_attempts()==(3 if code in ["40001","40P01"] else 1))
+		clear_upgrade_retry("receipt")
+	for code: String in ["40001","40P01"]:
+		upgrade_retry_fault("receipt",code,99,true)
+		var before:=retry_state()
+		var result: Dictionary=store.upgrade(character,17,accepted,str(id).pad_zeros(32),0,"unknown-"+code)
+		assert(result.get("outcome_unknown",false) and not store.committed and not pg.is_open())
+		assert(pg.open("postgresql",connection) and upgrade_attempts()==1)
+		clear_upgrade_retry("receipt")
+		assert(retry_state()==before and store.upgrade_receipt(character,"unknown-"+code).error=="unknown_command")
+	for target: bool in [false,true]: await retry_reselection(items,accepted,target)
+	print("POSTGRES_UPGRADE_RETRY_OK material deletion/remainder, pending/spend/target/receipt atomicity, exact replay, bounded attempts, no COMMIT retry and current target/material reselection")
+
+func retry_seed(items: RefCounted, character: int, id: int) -> void:
+	assert(items.bind_character(character,8100))
+	seed_item(items,true,ItemDefinitions.IRON_SWORD,character,id,0)
+	seed_item(items,true,ItemDefinitions.UPGRADE_ORE,character,id+1,10,2)
+	seed_item(items,true,ItemDefinitions.UPGRADE_ORE,character,id+2,11,5)
+
+func retry_state() -> Array:
+	var snapshot: Array=[]
+	for table: String in ["item_instances","item_custody","account_item_revisions","account_wallets","market_commands"]:
+		var result: Dictionary=pg.query("SELECT row_to_json(t)::text AS value FROM economy."+table+" t ORDER BY row_to_json(t)::text;",{},10000)
+		assert(result.ok and not result.truncated)
+		snapshot.append(result.rows)
+	return snapshot
+
+func upgrade_retry_fault(stage: String, code: String, failures: int, deferred: bool = false) -> void:
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_upgrade_attempt RESTART WITH 1;").ok)
+	var table: String=upgrade_retry_table(stage)
+	var event: String="DELETE" if stage in ["custody","delete"] else ("INSERT" if stage=="receipt" else "UPDATE")
+	var condition: String=""
+	if stage in ["target","partial"]: condition=" WHEN (NEW.definition_id='%s')" % ("iron_sword" if stage=="target" else "upgrade_ore")
+	if stage=="wallet": condition=" WHEN (NEW.yang<OLD.yang)"
+	var create: String="CREATE CONSTRAINT TRIGGER fixture_retry AFTER INSERT ON economy.%s DEFERRABLE INITIALLY DEFERRED" % table if deferred else "CREATE TRIGGER fixture_retry BEFORE %s ON economy.%s" % [event,table]
+	assert(pg.execute(create+" FOR EACH ROW"+condition+" EXECUTE FUNCTION economy.fixture_upgrade_retry('%s','%d');" % [code,failures]).ok)
+
+func upgrade_retry_table(stage: String) -> String:
+	return {"custody":"item_custody","delete":"item_instances","partial":"item_instances","wallet":"account_wallets","target":"item_instances","receipt":"market_commands"}[stage]
+
+func clear_upgrade_retry(stage: String) -> void:
+	assert(pg.execute("DROP TRIGGER fixture_retry ON economy."+upgrade_retry_table(stage)+";").ok)
+
+func upgrade_attempts() -> int:
+	return int(pg.query("SELECT last_value FROM economy.fixture_upgrade_attempt;").rows[0].last_value)
+
+func retry_reselection(items: RefCounted, accepted: UpgradeDefinition, target: bool) -> void:
+	var character: int=81911 if target else 81910
+	var id: int=11010 if target else 11000
+	retry_seed(items,character,id)
+	var balance: int=PgWallet.new(pg).load_wallet(8100).balance
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_upgrade_attempt RESTART WITH 1;").ok)
+	assert(pg.execute("CREATE TRIGGER fixture_retry BEFORE INSERT ON economy.market_commands FOR EACH ROW WHEN (current_setting('application_name')='retry-upgrader') EXECUTE FUNCTION economy.fixture_upgrade_retry('40001','1','gate');").ok)
+	assert(pg.execute("SELECT pg_advisory_lock(95127);").ok)
+	# Coordination probe only, not a change to normal fixture timeout budgets.
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var original: UpgradeDefinition=accepted.duplicate(true)
+	var upgrader:=Thread.new()
+	assert(upgrader.start(upgrade_worker.bind(connection+" application_name=retry-upgrader"+budgets,character,id,original,ready))==OK)
+	ready.wait()
+	var upgrading: bool=await upgrade_waiting("retry-upgrader")
+	var editor:=Thread.new()
+	assert(editor.start(edit_worker.bind(connection+" application_name=retry-upgrade-editor"+budgets,character,id,target,ready))==OK)
+	ready.wait()
+	var editing: bool=await upgrade_waiting("retry-upgrade-editor")
+	# The accepted operation keeps its captured recipe while live server content
+	# changes; new calls may use the new values, retries keep the accepted costs.
+	original.yang_cost=9999
+	original.material_amount=999
+	assert(pg.execute("SELECT pg_advisory_unlock(95127);").ok)
+	var upgraded: Dictionary=upgrader.wait_to_finish()
+	var edited: Dictionary=editor.wait_to_finish()
+	clear_upgrade_retry("receipt")
+	assert(upgrading and editing and edited.ok)
+	var inventory: Array=items.inventory(character).items
+	if target:
+		assert(upgraded.result.error=="stale" and not upgraded.committed and upgrade_attempts()==1)
+		assert(PgWallet.new(pg).load_wallet(8100).balance==balance)
+		assert(PgUpgrade.new(pg).upgrade_receipt(character,"reselection-"+str(character)).error=="unknown_command")
+		assert(inventory.any(func(item: Dictionary) -> bool: return item.uid==str(id).pad_zeros(32) and item.upgrade_level==0 and item.revision==1 and item.bag_position==20))
+		assert(inventory.any(func(item: Dictionary) -> bool: return item.uid==str(id+1).pad_zeros(32) and item.amount==2 and item.revision==0))
+		assert(inventory.any(func(item: Dictionary) -> bool: return item.uid==str(id+2).pad_zeros(32) and item.amount==5 and item.revision==0))
+	else:
+		assert(upgraded.result.ok and upgraded.committed and upgrade_attempts()==2)
+		assert(PgWallet.new(pg).load_wallet(8100).balance==balance+17-100)
+		assert(inventory.any(func(item: Dictionary) -> bool: return item.uid==str(id).pad_zeros(32) and item.upgrade_level==1 and item.revision==1))
+		assert(inventory.any(func(item: Dictionary) -> bool: return item.uid==str(id+2).pad_zeros(32) and item.amount==2 and item.revision==1),"retry reselects current materials instead of reusing the deleted first-attempt stack")
+		assert(PgStorage.new(pg).snapshot(character).items.any(func(item: Dictionary) -> bool: return item.uid==str(id+1).pad_zeros(32) and item.amount==2))
+
+func upgrade_waiting(label: String) -> bool:
+	var deadline: int=Time.get_ticks_msec()+2000
+	while Time.get_ticks_msec()<deadline:
+		assert(pg.execute("SELECT pg_stat_clear_snapshot();").ok)
+		if int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name=:label AND wait_event_type='Lock';",{"label":label}).rows[0].n)==1: return true
+		await get_tree().create_timer(0.005).timeout
+	return false
+
+func upgrade_worker(dsn: String, character: int, id: int, accepted: UpgradeDefinition, ready: Semaphore) -> Dictionary:
+	var database: Object=ClassDB.instantiate("GodotSociDatabase")
+	var opened: bool=database.open("postgresql",dsn)
+	ready.post()
+	if not opened: return {"result":{"ok":false,"error":"fixture_connection"},"committed":false}
+	var store:=PgUpgrade.new(database)
+	var result: Dictionary=store.upgrade(character,17,accepted,str(id).pad_zeros(32),0,"reselection-"+str(character))
+	var committed: bool=store.committed
+	database.close()
+	return {"result":result,"committed":committed}
+
+func edit_worker(dsn: String, character: int, id: int, target: bool, ready: Semaphore) -> Dictionary:
+	var database: Object=ClassDB.instantiate("GodotSociDatabase")
+	var opened: bool=database.open("postgresql",dsn)
+	ready.post()
+	if not opened: return {"ok":false,"error":"fixture_connection"}
+	var result: Dictionary=PgItems.new(database).inventory_command(character,"move",str(id).pad_zeros(32),0,20,"reselect-target") if target else PgStorage.new(database).transfer_command(character,str(id+1).pad_zeros(32),0,"inventory","storage",20,"reselect-material")
+	database.close()
+	return result
