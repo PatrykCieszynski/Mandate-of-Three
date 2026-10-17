@@ -67,10 +67,11 @@ See [evidence](../evidence/postgres-p2a/README.md).
 
 This is not complete P2 verification: cross-operation custody/placement, broader
 transaction conflicts and a bounded whole-transaction retry owner remain separate.
-The pinned synchronous SOCI database API reports failure text, not a structured
-SQLSTATE classification. Do not infer retryability by matching localized error
-messages, or reuse the async dispatcher just to obtain its error fields. Safe
-automatic retries need a verified native error boundary first.
+At the P2a v0.4.2 pin, synchronous SOCI reported failure text without structured
+SQLSTATE. [P2c](postgres-transaction-retry.md) adopts v0.4.3 and adds verified
+classification plus bounded Shop purchase/collection retry. Other use-case adoption
+remains explicit; do not match localized messages or route transactions through
+independent async statements just to obtain error fields.
 
 Known statement failure plus successful rollback permits explicit original-ID
 retry. Ambiguous COMMIT still closes the connection and requires receipt discovery;

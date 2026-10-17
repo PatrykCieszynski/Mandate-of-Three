@@ -105,6 +105,13 @@ conversion, cross-producer full-footprint/last-space receiving and global ground
 UID uniqueness. Storage policy stays in its Store. Broad P2 verification and native
 error classification/whole-transaction retry remain open; P3/P4 are unchanged.
 
+**P2c progress:** [receipt-backed settlement retry](../development/postgres-transaction-retry.md)
+adopts official pinned SOCI v0.4.3 structured native errors and enables at most three
+complete attempts for Shop purchase/collection after confirmed `40001`/`40P01`
+statement rollback. Re-selection, prefix/replay integrity, exhaustion and no
+COMMIT/failed-cleanup retry are covered. Other use cases and unreceipted checkpoints
+are not opted in; broad P2, P3/P4 and production PostgreSQL adoption remain open.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must

@@ -1,7 +1,7 @@
 # PostgreSQL readiness (P1a)
 
 The original P1a evidence below used SOCI v0.4.1. The current dependency is
-[v0.4.2](soci-dependency.md), with the readiness fixture rerun on that installed
+[v0.4.3](soci-dependency.md), with the readiness fixture rerun on that installed
 payload. Historical evidence is retained with its original version labels.
 
 ## Contract before implementation

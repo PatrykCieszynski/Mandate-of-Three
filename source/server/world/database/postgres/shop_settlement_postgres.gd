@@ -25,6 +25,10 @@ func receipt(character: int, command: String) -> Dictionary:
 	return Seller.new(db,rejected).receipt(character,command)
 
 func purchase(character: int, command: String, shop: int, offer: String, revision: int, price: int, pending: Dictionary) -> Dictionary:
+	# Capture the server-owned prefix once; each failed attempt rolls it back.
+	return _transaction.run_with_retry(_purchase_once.bind(character,command,shop,offer,revision,price,pending.duplicate(true)))
+
+func _purchase_once(character: int, command: String, shop: int, offer: String, revision: int, price: int, pending: Dictionary) -> Dictionary:
 	_transaction.committed=false
 	# This hint is independent of the offer: sold offers must still replay.
 	# Shop ownership is immutable in this port and checked again after admission.
@@ -59,6 +63,9 @@ func purchase(character: int, command: String, shop: int, offer: String, revisio
 	return _transaction.commit({"ok":true,"uid":str(row.item_uid),"buyer_account":_transaction.account_id,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_claimable_yang":str(credited.rows[0].yang),"wallet_states":[spent.wallet_state],"shop_id":shop})
 
 func claim_revenue(character: int, command: String, pending_income: int) -> Dictionary:
+	return _transaction.run_with_retry(_claim_revenue_once.bind(character,command,pending_income))
+
+func _claim_revenue_once(character: int, command: String, pending_income: int) -> Dictionary:
 	if not _transaction.begin(character,command,"claim_revenue",[character],true): return _transaction.cached
 	var account: int=_transaction.account_id
 	var funds:=revenue(account)

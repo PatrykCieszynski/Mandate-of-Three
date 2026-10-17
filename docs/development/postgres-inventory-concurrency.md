@@ -61,8 +61,9 @@ the regression owners for their earlier guarantees.
 ## Remaining gates
 
 This does not complete broad P2 load/conflict coverage or whole-transaction retries.
-The synchronous native SQLSTATE/error classification prerequisite recorded in
-[P2a](postgres-wallet-concurrency.md) remains. P3 execution, pending-prefix ownership,
+The classification prerequisite recorded in [P2a](postgres-wallet-concurrency.md)
+is now delivered by [P2c](postgres-transaction-retry.md), with retry enabled only
+for Shop settlement; Inventory/Storage are not opted in. P3 execution, pending-prefix ownership,
 session fencing and World integration, plus P4 migration/load/cutover, are separate.
 No new RPC, CEF flow, executor or database dependency is added to default CI. Linux,
 PostgreSQL World/client/CEF and throughput/soak behavior are not verified here.
