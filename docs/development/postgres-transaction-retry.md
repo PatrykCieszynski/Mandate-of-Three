@@ -1,8 +1,8 @@
-# PostgreSQL P2c–P2h — receipt-backed transaction retry
+# PostgreSQL P2c–P2i — receipt-backed transaction retry
 
 These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
 retry for **Shop purchase/revenue collection, Exchange order placement/cancellation,
-Exchange stack conversion, Upgrade, NPC purchases and receipted Inventory commands**. Production World remains
+Exchange stack conversion, Upgrade, NPC purchases and receipted Inventory/Storage commands**. Production World remains
 SQLite; no executor, connection pool, RPC, schema or backend selection is added.
 
 ## Policy and ownership
@@ -253,3 +253,38 @@ unequip. Only these coordination sessions extend diagnostic timeout budgets.
 See [P2h evidence](../evidence/postgres-p2h/README.md). Account Storage and Shop
 seller/claim retry remain separate scopes. World still uses SQLite; broader P2,
 P3 execution/fencing and P4 migration/cutover remain open.
+
+## P2i — Shared-account Storage commands
+
+`AccountStoragePostgres.transfer_command()` uses one existing command owner for
+the entire bounded loop. Every attempt reacquires account-before-character
+admission, checks the original issuing-character receipt, and reauthorizes current
+source custody/revision and full destination footprint. Deposit, internal move
+and alt withdrawal repeat custody removal, provenance/revision update, destination
+insertion and receipt atomically. Character, UID, expected revision, route,
+requested position and operation ID stay fixed; retry cannot retarget an alt.
+
+Stored provenance remains the original character until withdrawal assigns the
+receiving character. Same-account access does not turn another alt's command into
+a replay: a different issuer conflicts, and read-only discovery is issuer-scoped.
+Public mutation/no-op/replay flags keep the existing Inventory semantics. Failed
+COMMIT closes the session and returns `outcome_unknown` for receipt discovery,
+without automatic retry. Caller-owned `item_in_transaction()` and
+`consume_in_transaction()` remain inside their calling command's transaction;
+they do not start a nested retry loop or become independent custody writers.
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite storage
+```
+
+The existing fixture now injects statement errors at custody deletion, revision/
+provenance update, placement insertion and receipt for all three routes. It checks
+one UID/custody, preserved rolls, correct alt provenance, exact replay/issuer
+conflict, no-op flags, bounded exhaustion and no COMMIT retry. Independently queued
+alts withdraw the source, revise its position or occupy a nonstarting destination
+cell before retry. Current owner/stale/occupied checks reject without partial
+transfer. Only those diagnostic sessions extend their coordination timeouts.
+
+See [P2i evidence](../evidence/postgres-p2i/README.md). Shop seller/claim retry,
+starter/pickup and unreceipted checkpoints retain their existing policies.
+Production remains SQLite; broader P2 and P3/P4 are not completed by this slice.
