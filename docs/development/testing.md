@@ -148,6 +148,14 @@ are synchronous SQL/projection measurements, not World/concurrent-load evidence.
 Production remains on the existing async SQLite reader. See
 [Auction parity and limits](postgres-auction-search-parity.md).
 
+The existing `--suite shop-settlement` also covers P2c bounded whole-operation
+retry on the published SOCI v0.4.3 payload. Server-injected statement SQLSTATEs,
+independent concurrent offer edit, pending-income/receipt invariants, attempt caps,
+COMMIT phase and failed-cleanup recovery are checked. `--suite commit-failure`
+additionally proves structured fields and local flag versus PostgreSQL state after
+aborted/deferred COMMIT. No retry/pool is added to World or default CI. See
+[settlement retry](postgres-transaction-retry.md).
+
 `--suite inventory-concurrency` is the opt-in P2 cross-operation custody check:
 cross-alt receipts, equip/list, move/deposit/conversion, full-footprint overlap,
 last-space receiving, starter/pickup and global UID uniqueness. Independent native

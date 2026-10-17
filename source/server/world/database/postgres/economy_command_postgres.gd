@@ -8,6 +8,11 @@ var character_id: int
 var cached: Dictionary={}
 var committed:=false
 var receipt_replay:=false
+const MAX_TRANSACTION_ATTEMPTS: int=3
+# Internal proof from this owner's last successful statement-failure rollback.
+# Never populate from COMMIT, caller text or a previous attempt.
+var _rolled_back_sqlstate: String=""
+var _commit_attempted: bool=false
 var rejected: MarketRejectedCommands
 var _command: String
 var _kind: String
@@ -33,6 +38,7 @@ func begin(owner: int, command: String, kind: String, args: Array, shared_accoun
 	if db.in_transaction() or not db.begin():
 		cached={"ok":false,"error":"storage"}
 		return false
+	_commit_attempted=false
 	# Shared Storage must serialize BEFORE receipt lookup as well as capacity:
 	# two alts using one command ID must observe replay/conflict, not a PK error.
 	var locked_account: int=0
@@ -60,6 +66,7 @@ func begin(owner: int, command: String, kind: String, args: Array, shared_accoun
 ## this method then owns character/receipt checks and terminal rollback/commit.
 ## Ordinary begin() still refuses a caller's existing transaction.
 func admit_in_transaction(owner: int, command: String, kind: String, args: Array, expected_account: int) -> bool:
+	_commit_attempted=false
 	committed=false
 	receipt_replay=false
 	cached={}
@@ -105,10 +112,34 @@ func admit_in_transaction(owner: int, command: String, kind: String, args: Array
 	return false
 
 func rollback(error: String) -> Dictionary:
+	_rolled_back_sqlstate=""
+	var details: Dictionary={}
+	if not _commit_attempted and error=="storage" and db.in_transaction() and db.has_method("get_last_error_details"):
+		details=db.get_last_error_details()
 	if not db.rollback():
 		db.close()
 		return {"ok":false,"error":"storage"}
+	if details.get("error_backend","")=="postgresql" and details.get("sqlstate","") in ["40001","40P01"]:
+		_rolled_back_sqlstate=str(details.sqlstate)
 	return {"ok":false,"error":error}
+
+## Opt-in owner for receipted use cases only. The callable must restart the whole
+## operation (including identity/receipt/selection/capacity), keeping original ID
+## and pending prefix. No yields, connection pool or statement-level retry.
+func run_with_retry(operation: Callable) -> Dictionary:
+	committed=false
+	receipt_replay=false
+	_rolled_back_sqlstate=""
+	if db.in_transaction(): return {"ok":false,"error":"storage"}
+	_commit_attempted=false
+	var result: Dictionary={"ok":false,"error":"storage"}
+	for attempt: int in MAX_TRANSACTION_ATTEMPTS:
+		_rolled_back_sqlstate=""
+		result=operation.call()
+		if result.get("ok",false) or result.get("outcome_unknown",false): return result
+		if _commit_attempted: return result
+		if _rolled_back_sqlstate not in ["40001","40P01"] or db.in_transaction() or not db.is_open(): return result
+	return result
 
 func commit(result: Dictionary) -> Dictionary:
 	if not result.ok:
@@ -127,6 +158,7 @@ func commit(result: Dictionary) -> Dictionary:
 		stored.affected_accounts=stored.affected_accounts.map(func(account: Variant) -> String: return str(account))
 	var written: Dictionary=db.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) VALUES(:account,:command,:character,:kind,:request,:result);",{"account":account_id,"command":_command,"character":character_id,"kind":_kind,"request":_request,"result":Codec.encode_result(stored)})
 	if not written.ok: return rollback("storage")
+	_commit_attempted=true
 	if not db.commit():
 		db.close()
 		return {"ok":false,"error":"outcome_unknown","outcome_unknown":true}

@@ -294,7 +294,147 @@ func native_checks(items: RefCounted) -> void:
 	assert(not Schema.ensure_schema(pg) and not pg.in_transaction())
 	execute(true,"UPDATE economy.schema_versions SET version=1 WHERE feature='shop_settlement';")
 	assert(Schema.ensure_schema(pg))
+	await retry_checks()
 	print("POSTGRES_SHOP_SETTLEMENT_NATIVE_OK double-buy, cancel conflict, additive sales, shared receipt, reciprocal locks and COMMIT recovery")
+
+func retry_checks() -> void:
+	assert(pg.has_method("get_last_error_details"),"Installed release must expose structured native failures")
+	for account: int in [8000,8001]:
+		assert(Wallet.new(pg).initialize_account(account).ok and Items.new(pg).bind_character(account*10,account))
+		execute(true,"UPDATE economy.account_wallets SET yang=1000 WHERE account_id="+str(account)+";")
+	execute(true,"CREATE SEQUENCE economy.fixture_retry_attempt;")
+	execute(true,"CREATE FUNCTION economy.fixture_retry_fault() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE attempt BIGINT; BEGIN attempt:=nextval('economy.fixture_retry_attempt'); IF attempt<=TG_ARGV[1]::BIGINT THEN IF TG_NARGS>2 THEN PERFORM pg_advisory_xact_lock(95124); END IF; RAISE EXCEPTION 'fixture 40001 text is not a classification' USING ERRCODE=TG_ARGV[0]; END IF; RETURN NEW; END; $$;")
+	var market:=Settlement.new(pg)
+	var selling:=Seller.new(pg)
+	var index: int=0
+	for code: String in ["40001","40P01"]:
+		for stage: String in ["item_custody","market_commands"]:
+			var listed:=retry_listing(index)
+			var before:=retry_state()
+			retry_fault(stage,code,1)
+			var result: Dictionary=market.purchase(80010,"retry-buy-"+str(index),listed.shop_id,listed.offer_id,0,100,{8001:17})
+			assert(result.ok and market.committed and retry_attempts()==2)
+			assert(Wallet.new(pg).load_wallet(8001).balance==int(before["wallets"][1].yang)-83)
+			assert(int(market.revenue(8000).amount)==int(before.revenue)+100)
+			assert(int(rows(true,"SELECT owner_character_id FROM economy.item_instances WHERE uid='"+listed.uid+"';")[0].owner_character_id)==80010)
+			assert(market.receipt(80010,"retry-buy-"+str(index))==result)
+			assert(market.purchase(80010,"retry-buy-"+str(index),listed.shop_id,listed.offer_id,0,100,{8001:999})==result and not market.committed and retry_attempts()==2)
+			clear_retry_fault(stage)
+			index+=1
+	# Exhaustion, constraints, lock timeout, cancellation and generic failures do
+	# not become durable/cached business rejection or leak pending income.
+	for code: String in ["40001","40P01","23505","55P03","57014","P0001"]:
+		var listed:=retry_listing(index)
+		var before:=retry_state()
+		retry_fault("item_custody",code,100)
+		assert(market.purchase(80010,"retry-budget-"+str(index),listed.shop_id,listed.offer_id,0,100,{8001:17}).error=="storage")
+		assert(retry_attempts()==(3 if code in ["40001","40P01"] else 1))
+		assert(retry_state()==before and market.receipt(80010,"retry-budget-"+str(index)).error=="unknown_command")
+		clear_retry_fault("item_custody")
+		assert(selling.cancel_offer(80000,"clear-budget-"+str(index),listed.offer_id,0).ok)
+		index+=1
+	for code: String in ["40001","40P01"]:
+		# Same code at COMMIT is not the statement-rollback retry path.
+		var listed:=retry_listing(index)
+		var before:=retry_state()
+		retry_fault("market_commands",code,100,true)
+		var result: Dictionary=market.purchase(80010,"retry-commit-"+str(index),listed.shop_id,listed.offer_id,0,100,{8001:17})
+		assert(result.get("outcome_unknown",false) and not pg.is_open() and not market.committed)
+		assert(pg.open("postgresql",connection) and retry_attempts()==1)
+		clear_retry_fault("market_commands")
+		assert(retry_state()==before and market.receipt(80010,"retry-commit-"+str(index)).error=="unknown_command")
+		assert(selling.cancel_offer(80000,"clear-commit-"+str(index),listed.offer_id,0).ok)
+		index+=1
+	await retry_reselection(index)
+	# Collection retries its entire headroom/income/revenue operation too.
+	for code: String in ["40001","40P01"]:
+		execute(true,"UPDATE economy.account_shop_revenue SET yang=100 WHERE account_id=8000;")
+		var before: int=Wallet.new(pg).load_wallet(8000).balance
+		retry_fault("account_shop_revenue",code,1)
+		var result: Dictionary=market.claim_revenue(80000,"retry-collect-"+code,23)
+		assert(result.ok and result.claimed==100 and market.committed and retry_attempts()==2)
+		assert(Wallet.new(pg).load_wallet(8000).balance==before+123 and market.revenue(8000).amount==0)
+		assert(market.claim_revenue(80000,"retry-collect-"+code,999)==result and not market.committed and retry_attempts()==2)
+		clear_retry_fault("account_shop_revenue")
+	# Caller-owned work is refused, never committed/rolled back by the wrapper.
+	assert(pg.begin())
+	assert(market.claim_revenue(80000,"retry-nested",0).error=="storage" and not market.committed and pg.in_transaction())
+	assert(pg.rollback())
+	# A retryable statement code is insufficient when cleanup itself fails.
+	var before_cleanup:=retry_state()
+	var killer: Object=ClassDB.instantiate("GodotSociDatabase")
+	assert(killer.open("postgresql",connection))
+	var pid: int=int(rows(true,"SELECT pg_backend_pid() AS pid;")[0].pid)
+	var calls: Array[int]=[0]
+	var owner:=preload("res://source/server/world/database/postgres/economy_command_postgres.gd").new(pg)
+	var failed: Dictionary=owner.run_with_retry(func() -> Dictionary:
+		calls[0]+=1
+		if not owner.begin(80010,"rollback-failed","buy",[],true): return owner.cached
+		assert(not pg.execute("DO $$ BEGIN RAISE EXCEPTION 'statement abort' USING ERRCODE='40001'; END; $$;").ok)
+		assert(killer.query("SELECT pg_terminate_backend(:pid);",{"pid":pid}).ok)
+		return owner.rollback("storage"))
+	assert(failed.error=="storage" and calls[0]==1 and not pg.is_open() and not owner.committed)
+	killer.close()
+	assert(pg.open("postgresql",connection) and retry_state()==before_cleanup)
+	print("POSTGRES_SHOP_RETRY_OK full purchase/collect, exact pending prefix, durable replay, bounded rollback retry and no COMMIT retry")
+
+func retry_reselection(index: int) -> void:
+	var listed:=retry_listing(index)
+	var before:=retry_state()
+	execute(true,"ALTER SEQUENCE economy.fixture_retry_attempt RESTART WITH 1;")
+	execute(true,"CREATE TRIGGER fixture_retry BEFORE UPDATE ON economy.item_custody FOR EACH ROW WHEN (current_setting('application_name')='retry-selection-buyer') EXECUTE FUNCTION economy.fixture_retry_fault('40001','1','gate');")
+	execute(true,"SELECT pg_advisory_lock(95124);")
+	# Only this coordinated diagnostic uses larger per-session budgets; normal
+	# production/fixture limits and the three-attempt policy are unchanged.
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var buyer_thread:=Thread.new()
+	assert(buyer_thread.start(race_worker.bind(connection+" application_name=retry-selection-buyer"+budgets,[80010,"buy",[listed.shop_id,listed.offer_id,0,100,{8001:17}]],"retry-selection-buy",ready))==OK)
+	ready.wait()
+	var buyer_waiting: bool=await retry_waiting("retry-selection-buyer")
+	var editor_thread:=Thread.new()
+	assert(editor_thread.start(race_worker.bind(connection+" application_name=retry-selection-editor"+budgets,[80000,"edit",[listed.offer_id,0,index,101]],"retry-selection-edit",ready))==OK)
+	ready.wait()
+	var editor_waiting: bool=await retry_waiting("retry-selection-editor")
+	# Editor is queued ahead of the retried buyer on the seller account row.
+	execute(true,"SELECT pg_advisory_unlock(95124);")
+	var bought: Dictionary=buyer_thread.wait_to_finish()
+	var edited: Dictionary=editor_thread.wait_to_finish()
+	clear_retry_fault("item_custody")
+	assert(buyer_waiting and editor_waiting and edited.result.ok)
+	assert(bought.result.error=="stale" and not bought.committed and retry_attempts()==1,"retry must reselect current price/revision, not reuse first attempt's SQL decisions")
+	assert(retry_state().wallets==before.wallets and Settlement.new(pg).revenue(8000).amount==int(before.revenue))
+	assert(Settlement.new(pg).receipt(80010,"retry-selection-buy").error=="unknown_command")
+	assert(Seller.new(pg).cancel_offer(80000,"clear-selection",listed.offer_id,1).ok)
+
+func retry_waiting(label: String) -> bool:
+	var deadline: int=Time.get_ticks_msec()+2000
+	while Time.get_ticks_msec()<deadline:
+		execute(true,"SELECT pg_stat_clear_snapshot();")
+		var result: Dictionary=pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name=:label AND wait_event_type='Lock';",{"label":label})
+		if int(result.rows[0].n)==1: return true
+		await get_tree().create_timer(0.005).timeout
+	return false
+
+func retry_listing(index: int) -> Dictionary:
+	seed_item(Items.new(pg),true,80000,9200+index,90)
+	var result: Dictionary=Seller.new(pg).list_item(80000,"retry-list-"+str(index),uid(9200+index),0,index,100)
+	assert(result.ok)
+	return result
+
+func retry_state() -> Dictionary:
+	return {"wallets":rows(true,"SELECT * FROM economy.account_wallets WHERE account_id IN (8000,8001) ORDER BY account_id;"),"revenue":Settlement.new(pg).revenue(8000).amount,"custody":native_custody()}
+
+func retry_fault(table: String, code: String, failures: int, deferred: bool = false) -> void:
+	execute(true,"ALTER SEQUENCE economy.fixture_retry_attempt RESTART WITH 1;")
+	var create: String="CREATE CONSTRAINT TRIGGER fixture_retry AFTER INSERT ON economy.%s DEFERRABLE INITIALLY DEFERRED" % table if deferred else "CREATE TRIGGER fixture_retry BEFORE %s ON economy.%s" % ["INSERT" if table=="market_commands" else "UPDATE",table]
+	execute(true,create+" FOR EACH ROW EXECUTE FUNCTION economy.fixture_retry_fault('%s','%d');" % [code,failures])
+
+func clear_retry_fault(table: String) -> void:
+	execute(true,"DROP TRIGGER fixture_retry ON economy."+table+";")
+
+func retry_attempts() -> int:
+	return int(rows(true,"SELECT last_value FROM economy.fixture_retry_attempt;")[0].last_value)
 
 func native_custody() -> Array:
 	var snapshot: Array=[]

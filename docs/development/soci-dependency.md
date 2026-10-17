@@ -1,7 +1,7 @@
 # Active SOCI dependency
 
-Mandate pins the official godot-soci **v0.4.2** prerelease, commit
-`222cfec77acbdb15fa7cd6f6c97d7064126a947a`. The release archive and every payload
+Mandate pins the official godot-soci **v0.4.3** prerelease, commit
+`ae96333eaf765bace372fee993454f7870e79ffe`. The release archive and every payload
 file are pinned in `tools/soci/release.json`. Native payloads remain ignored.
 
 ```powershell
@@ -9,15 +9,22 @@ python tools/soci/setup.py
 python tools/soci/setup.py --check
 ```
 
-Source: [official v0.4.2 release](https://github.com/PatrykCieszynski/godot-soci/releases/tag/v0.4.2).
+Source: [official v0.4.3 release](https://github.com/PatrykCieszynski/godot-soci/releases/tag/v0.4.3).
 ZIP SHA-256:
-`f597edbb6aae906de676dc50d98a625d0f8c9ba209a5d178a4eab83debc291e4`.
+`54ffd57acce47e4f18cab67d1b73414ce729dfac803eaa82bf0d02505127d94c`.
 
-The update fixes the Windows MSVC exception-ABI mismatch exposed by a deferred
-PostgreSQL COMMIT failure in v0.4.1. The installed official payload passes the
-native-only failure/rollback fixture and wallet-level conservative unknown-outcome
-handling, session close and reconciliation after reconnect. No raw COMMIT SQL,
-locally rebuilt addon or C++ patch is installed in Mandate.
+v0.4.2 fixed the Windows MSVC exception-ABI mismatch exposed by deferred COMMIT
+failure in v0.4.1. v0.4.3 adds synchronous structured errors (`error_backend`,
+category, backend code, SQLSTATE), sharing async naming. The installed official
+payload passes failure/rollback and conservative COMMIT-unknown/reconnect checks.
+The expanded native probe distinguishes a local transaction flag from PostgreSQL
+state and verifies that accepted COMMIT on an aborted transaction can mean rollback.
+No raw COMMIT SQL, locally rebuilt addon or C++ patch is installed in Mandate.
+
+Only PostgreSQL Shop purchase/collect opt into bounded whole-use-case retry after
+confirmed statement-failure rollback. See [P2c policy and verification](postgres-transaction-retry.md).
+Other stores, unreceipted checkpoint deltas, runtime execution and outcome recovery
+are not automatically retried by this dependency update.
 
 Adoption verification uses PostgreSQL 18.6 binaries from
 `Y:/Software/PostgreSQL/bin` with fresh owned SCRAM loopback clusters only. The
@@ -30,6 +37,7 @@ Verification commands:
 ```powershell
 python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite commit-failure
 python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite wallet
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite shop-settlement
 python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin'
 ./tests/run-smoke.ps1
 ./tests/run-market.ps1 -Scene auction_queries -Marker AUCTION_QUERIES_OK
@@ -46,4 +54,6 @@ API is not adopted by this dependency update.
 
 Windows verification does not establish Linux runtime behavior or PostgreSQL
 economic concurrency correctness. Earlier S0/P0/D1/D2 reports describe their
-original payloads and are not relabeled as v0.4.2 measurements.
+original payloads and are not relabeled as v0.4.3 measurements. The exact focused
+adoption run set is recorded in [P2c evidence](../evidence/postgres-p2c/README.md);
+the optional Auction load command above does not imply a new capacity benchmark.
