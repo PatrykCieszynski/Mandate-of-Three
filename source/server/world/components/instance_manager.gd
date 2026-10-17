@@ -613,7 +613,11 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 				return null
 	elif not character_ids.is_empty():
 		return null
-	if instance_resource==null or not ResourceLoader.exists(instance_resource.map_path):
+	# The production manager creates 3D worlds only. Legacy 2D fixtures may
+	# still use ServerInstance directly without exposing a 2D content route.
+	if instance_resource == null or not instance_resource.use_3d:
+		return null
+	if not ResourceLoader.exists(instance_resource.map_path):
 		push_error("Cannot load map instance: missing map resource")
 		return null
 	if _all_instances().size() >= max_host_instances:
@@ -625,10 +629,7 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 				copies += 1
 		if copies >= instance_resource.max_public_copies:
 			return null
-	var instance: ServerInstance = ServerInstance.new()
-	if instance_resource.use_3d:
-		instance.free()
-		instance = preload("res://source/server/world/components/world_instance_3d.gd").new()
+	var instance: ServerInstance = preload("res://source/server/world/components/world_instance_3d.gd").new()
 	instance.access_policy = access_policy
 	instance.allowed_character_ids = character_ids.duplicate()
 	if instance_resource.use_3d and channel_id==0 and access_policy == ServerInstance.AccessPolicy.PUBLIC:
@@ -654,7 +655,7 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 		CONNECT_ONE_SHOT
 	)
 	instance.load_map(instance_resource.map_path)
-	if instance_resource.use_3d and instance.get_node_or_null("GameWorld")==null:
+	if instance.get_node_or_null("GameWorld") == null:
 		loading_instances.erase(str(instance.name))
 		instance.free()
 		return null
