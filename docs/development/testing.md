@@ -126,6 +126,14 @@ footprint conflict and single-transfer/cross-alt replay. Purchases, claims,
 revenue and Auction search are outside this fixture. See
 [seller parity and limits](postgres-shop-seller-parity.md).
 
+`--suite shop-settlement` compares fixed-price purchase, offline seller revenue
+and partial wallet collection against SQLite, including pending income,
+reservations, full bag, overflow, statement/COMMIT faults and receipt recovery.
+Independent native sessions cover double-buy, buy/cancel/edit, additive sales,
+same-ID buy/collect and reciprocal account locking. It is opt-in and does not
+switch World or complete the broader concurrency/load gates. See
+[settlement parity and limits](postgres-shop-settlement-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC

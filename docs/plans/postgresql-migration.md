@@ -53,6 +53,14 @@ projection omits unported claims/revenue; purchase/settlement, those projections
 Auction reads and Exchange still need separate ports. This is not full P1/P2 or
 a live Marketplace backend switch.
 
+**P1h progress:** [Player Shop settlement](../development/postgres-shop-settlement-parity.md)
+adds opt-in purchase, offline seller claimable revenue and partial collection in
+native transactions with success receipts. Sorted buyer/seller account admission,
+additive proceeds, Inventory-only receiving, pending-income/reservation behavior,
+replay/reopen and targeted independent-session conflicts are covered. Legacy
+claims, complete Marketplace projections/public reads and Exchange remain pending;
+this does not switch runtime or complete the broader P2/P3/P4 gates.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
