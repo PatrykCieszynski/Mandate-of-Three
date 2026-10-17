@@ -1,8 +1,14 @@
-## TinyMMO addon/plugin
+# TinyMMO editor integration (legacy name)
 
-This plugin is mean to be used only with TinyMMO, won't work outside of it.  
+This addon remains **enabled** in `project.godot` and must not be removed without replacing its export behavior.
 
-It aims to provide editor tools to help dev:
-	- Generating content index from editor interface
-	- Make modification during export (right now simply deleting client autoloads on server)
- 
+## Current responsibilities
+
+- **Client export:** `export_plugin/export_plugin.gd` excludes server-only resources and substitutes server GDScript classes with generated stubs. It also includes raw optional CEF UI raster assets and a material icon needed by FileAccess.
+- **Editor content panel:** `main_screen/main_panel.gd` offers content-index generation, preview and refresh.
+
+The former editor inspector extension is not registered; the old commented plugin bootstrap has been removed. The package name reflects project ancestry, not a runtime TinyMMO dependency by itself.
+
+## Before removing the addon
+
+Relocate and test its client export hooks, then verify exported client startup, server startup and all references to generated server-class stubs. Removing the editor plugin registration without migration can break packaged builds despite editor/headless tests passing. Do not change the configured user-data directory as part of cleanup: this can affect existing local saves and databases.
