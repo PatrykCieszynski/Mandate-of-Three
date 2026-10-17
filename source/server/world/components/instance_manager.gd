@@ -573,20 +573,19 @@ func charge_reserved_instance(instance_resource: InstanceResource, character_ids
 func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 	access_policy: ServerInstance.AccessPolicy = ServerInstance.AccessPolicy.PUBLIC,
 	character_ids: PackedInt64Array = PackedInt64Array()) -> ServerInstance:
+	if instance_resource == null or not instance_resource.use_3d:
+		return null
 	if access_policy not in [ServerInstance.AccessPolicy.PUBLIC, ServerInstance.AccessPolicy.RESERVED]:
 		return null
 	if access_policy == ServerInstance.AccessPolicy.RESERVED:
-		if instance_resource == null or not instance_resource.use_3d or channel_id != 0 or character_ids.is_empty():
+		if channel_id != 0 or character_ids.is_empty():
 			return null
 		for character_id: int in character_ids:
 			if character_id <= 0:
 				return null
 	elif not character_ids.is_empty():
 		return null
-	# The production manager only provisions authored 3D worlds.
 	# ServerInstance remains for transport/type compatibility during migration.
-	if instance_resource == null or not instance_resource.use_3d:
-		return null
 	if not ResourceLoader.exists(instance_resource.map_path):
 		push_error("Cannot load map instance: missing map resource")
 		return null
