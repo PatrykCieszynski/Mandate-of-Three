@@ -22,7 +22,6 @@ var instance_collection: Dictionary[String, InstanceResource]
 var default_instance: InstanceResource
 ## Bounded by current sessions; expiry cannot be renewed before transport teardown.
 var _rejected_entries: Dictionary[int, PlayerResource] = {}
-var _last_legacy_unload_ms: int = 0
 var _channel_choices: Dictionary[int, Dictionary] = {}
 var _channel_request_ids: Dictionary[int, int] = {}
 var transfers := preload("res://source/server/world/components/local_channel_transfer.gd").new(self)
@@ -384,10 +383,6 @@ func maintain_instances() -> void:
 		# No admission can race this retirement on the main thread.
 		instance.admission_state = ServerInstance.AdmissionState.DRAINING
 		instance.queue_free()
-	# Preserve the old 20-second cleanup cadence for unrelated legacy 2D maps.
-	if now - _last_legacy_unload_ms >= 20000:
-		_last_legacy_unload_ms = now
-		unload_unused_instances()
 
 func _publish_entry(peer_id: int, admitted: PlayerResource, instance: ServerInstance) -> void:
 	if not is_instance_valid(instance):
@@ -690,19 +685,6 @@ func set_instance_collection() -> void:
 		if instance_resource.instance_name == DEFAULT_INSTANCE_NAME:
 			default_instance = instance_resource
 		instance_collection.set(instance_resource.instance_name, instance_resource)
-
-
-func unload_unused_instances() -> void:
-	for child: Node in get_children():
-		if not child is ServerInstance: continue
-		var instance := child as ServerInstance
-		if instance.instance_resource.use_3d: continue # Managed by the bounded lifecycle above.
-		if instance.instance_resource.load_at_startup:
-			continue
-		if instance.connected_peers or not instance.awaiting_peers.is_empty():
-			continue
-		instance.instance_resource.charged_instances.erase(instance)
-		instance.queue_free()
 
 
 func get_instance_server_by_id(id: String) -> ServerInstance:
