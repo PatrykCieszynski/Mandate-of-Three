@@ -19,7 +19,7 @@ var current_content_index: ContentIndex
 func _ready() -> void:
 	output_view.syntax_highlighter = GDScriptSyntaxHighlighter.new()
 	output_view.draw_tabs = true
-	output_view.text = "## Hello it's horizon, just to say you can edit / select there like in editor.\n## It supports GDScript Highlighter."
+	output_view.text = "Select a ContentIndex to preview its entries."
 
 
 #region preview
@@ -263,7 +263,7 @@ func get_slug_id(content_index: ContentIndex, slug: StringName) -> int:
 
 func _on_clear_button_pressed() -> void:
 	output_view.clear()
-	output_view.text = "## Just to say you can edit / select there like in editor.\n## It supports GDScript Highlighter."
+	output_view.text = "Select a ContentIndex to preview its entries."
 
 
 #region update
