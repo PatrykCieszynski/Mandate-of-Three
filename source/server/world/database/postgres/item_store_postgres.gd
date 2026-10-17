@@ -125,8 +125,16 @@ func inventory_command(owner: int, action: String, uid: String, revision: int, p
 	if action not in ["move","equip","unequip","activate"] or not ItemInstance.valid_uid(uid) or revision<0: return _error("request")
 	if (action in ["activate","equip"] and position!=-1) or position < -1 or position>=InventoryGrid.CAPACITY: return _error("request")
 	var transaction:=Commands.new(db)
+	var result: Dictionary=transaction.run_with_retry(_inventory_command_once.bind(owner,action,uid,revision,position,operation_id,transaction))
+	receipt_replay=transaction.receipt_replay
+	return result
+
+func _inventory_command_once(owner: int, action: String, uid: String, revision: int, position: int, operation_id: String, transaction: RefCounted) -> Dictionary:
+	# Reuse this command's owner for rollback proof, but reread all custody,
+	# capacity and equipment decisions on every attempt. Public committed means
+	# an actual item mutation; a newly receipted no-op still leaves it false.
+	committed=false
 	if not transaction.begin(owner,operation_id,"inventory",[owner,action,uid,revision,position],true):
-		receipt_replay=transaction.receipt_replay
 		return transaction.cached
 	var result: Dictionary
 	match action:

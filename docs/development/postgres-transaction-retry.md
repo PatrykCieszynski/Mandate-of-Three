@@ -1,8 +1,8 @@
-# PostgreSQL P2c–P2g — receipt-backed transaction retry
+# PostgreSQL P2c–P2h — receipt-backed transaction retry
 
 These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
 retry for **Shop purchase/revenue collection, Exchange order placement/cancellation,
-Exchange stack conversion, Upgrade and NPC purchases**. Production World remains
+Exchange stack conversion, Upgrade, NPC purchases and receipted Inventory commands**. Production World remains
 SQLite; no executor, connection pool, RPC, schema or backend selection is added.
 
 ## Policy and ownership
@@ -216,3 +216,40 @@ See [P2g evidence](../evidence/postgres-p2g/README.md). Ordinary Inventory/Stora
 Shop seller/claim commands and unreceipted checkpoints are not newly opted in.
 No schema, protocol, gameplay or runtime backend changes; broader P2 and P3/P4
 remain separate gates.
+
+## P2h — Character Inventory commands
+
+`ItemStorePostgres.inventory_command()` uses one existing command owner for the
+complete retry loop, including `move`, `equip`, `activate`, `unequip` and weapon
+swap. Each attempt reacquires account-before-character admission and the original
+receipt, then rechecks target ownership/revision, primary action, current equipment
+and full-footprint receiving capacity. It repeats all custody/revision mutations
+and receipt persistence. Original command ID and scalar arguments stay fixed.
+Starter initialization, ground pickup and caller-owned receiving helpers retain
+their existing policies; they are not implicitly wrapped by this change.
+
+Public `committed` still means an actual item mutation. A successful newly
+receipted no-op leaves it false and `receipt_replay` false. Replaying a durable
+success leaves `committed` false and `receipt_replay` true, including no-ops.
+Rollback, exhaustion and unknown COMMIT never report a committed mutation.
+COMMIT failure closes the session and requires original receipt discovery; it
+does not authorize automatic retry. These are backend flags, not a World runtime
+or combat-cache integration.
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite inventory
+```
+
+The existing parity fixture injects `40001`/`40P01` statement faults at placement,
+target revision and receipt writes for every command path. It verifies atomic
+two-item swap, one revision per affected item, unchanged UID count, equipped stats,
+original-result replay, no-op flags, bounded exhaustion and no COMMIT retry.
+Independent editors queue before retry and change target revision, currently
+equipped weapon or a nonstarting cell of unequip's destination footprint. Retry
+respectively rejects stale input, selects current equipment without moving the
+formerly equipped item twice, or rejects occupied placement with no partial
+unequip. Only these coordination sessions extend diagnostic timeout budgets.
+
+See [P2h evidence](../evidence/postgres-p2h/README.md). Account Storage and Shop
+seller/claim retry remain separate scopes. World still uses SQLite; broader P2,
+P3 execution/fencing and P4 migration/cutover remain open.
