@@ -49,13 +49,7 @@ text = "Clear Preview"
 custom_minimum_size = Vector2(100, 300)
 layout_mode = 2
 size_flags_vertical = 3
-text = "## Hello it's horizon, just to say you can edit / select there like in editor.
-## It supports GDScript Highlighter.
-func _ready() -> void:
-	pass
-{&\"id\": 1}
-Array[StringName]
-# But doesn't support error check and other features."
+text = "Select a ContentIndex to preview its entries."
 syntax_highlighter = SubResource("GDScriptSyntaxHighlighter_qau0y")
 draw_tabs = true
 
