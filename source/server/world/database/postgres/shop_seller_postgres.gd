@@ -15,29 +15,9 @@ func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -
 	rejected=rejected_commands if rejected_commands!=null else MarketRejectedCommands.new()
 	_transaction=Commands.new(db,rejected)
 
-## Seller projection only: no fabricated claims/revenue projection for unported flows.
+## Retain the seller-only projection on its original schema.
 func mine(character: int) -> Dictionary:
-	if db.in_transaction() or not db.begin(): return _error("storage")
-	var identity: Dictionary=db.query("SELECT c.account_id FROM economy.characters c JOIN economy.accounts a ON a.account_id=c.account_id WHERE c.character_id=:id FOR NO KEY UPDATE OF a;",{"id":character})
-	if not identity.ok or identity.rows.is_empty(): return _transaction.rollback("storage" if not identity.ok else "owner")
-	var shop: int=_shop(int(identity.rows[0].account_id))
-	if shop==0: return _transaction.rollback("storage")
-	var result: Dictionary=db.query("SELECT shop_id,display_name AS name,status,revision FROM economy.account_shops WHERE shop_id=:shop;",{"shop":shop})
-	if not result.ok or result.rows.is_empty(): return _transaction.rollback("storage")
-	var snapshot: Dictionary=result.rows[0].duplicate(true)
-	snapshot.merge({"ok":true,"columns":Grid.COLUMNS,"rows":Grid.ROWS,"offers":[]})
-	result=db.query("SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.position,o.price_yang,o.offer_only,o.revision AS offer_revision FROM economy.shop_offers o JOIN economy.item_custody c ON c.uid=o.item_uid JOIN economy.item_instances i ON i.uid=o.item_uid WHERE o.shop_id=:shop ORDER BY o.position;",{"shop":shop})
-	if not result.ok or result.truncated: return _transaction.rollback("storage")
-	for row: Dictionary in result.rows:
-		var item:=ItemInstance.from_row(row)
-		var definition: ItemDefinition=null if item==null else ItemDefinitions.get_definition(item.definition_id)
-		if definition==null: return _transaction.rollback("unknown_definition")
-		var view:=item.to_snapshot()
-		view.merge({"item_name":definition.item_name,"icon_id":str(definition.icon_id),"inventory_height":definition.inventory_height,"stats":item.effective_stats(definition)})
-		snapshot.offers.append({"offer_id":str(row.offer_id),"position":int(row.position),"price":null if int(row.offer_only)==1 else int(row.price_yang),"revision":int(row.offer_revision),"item":view})
-	if db.commit(): return snapshot
-	db.close()
-	return {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
+	return preload("res://source/server/world/database/postgres/shop_queries_postgres.gd").new(db).seller_mine(character)
 
 func list_item(character: int, command: String, uid: String, revision: int, position: int, price: int) -> Dictionary:
 	if not _transaction.begin(character,command,"list",[uid,revision,position,price],true): return _transaction.cached

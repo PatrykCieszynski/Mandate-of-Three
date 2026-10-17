@@ -61,6 +61,14 @@ replay/reopen and targeted independent-session conflicts are covered. Legacy
 claims, complete Marketplace projections/public reads and Exchange remain pending;
 this does not switch runtime or complete the broader P2/P3/P4 gates.
 
+**P1i progress:** [account claims and Shop projections](../development/postgres-account-claims-parity.md)
+adds explicit account claim custody, atomic claim-to-Inventory with original
+receipts/reopen, complete private Shop revenue/claims and coherent public visitor
+reads. Prior seller-only projections remain compatible. Targeted alt/capacity
+conflicts, provenance constraints and read snapshot consistency are covered;
+Exchange claim creation/ledger/matching and Auction search remain separate ports.
+The existing 200-claim window is preserved; there is no client/runtime switch.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
