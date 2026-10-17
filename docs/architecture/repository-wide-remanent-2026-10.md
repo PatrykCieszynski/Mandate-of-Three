@@ -44,3 +44,9 @@ No bulk legacy 2D assets or tests were deleted in this pass; evidence at this st
 ## Current follow-up
 
 The former `addons/tinymmo` addon path has been retired. Active ContentIndex editor UI and the required client/server export-stubbing plugin now live under `addons/mandate_tools`, with source content and script UID identities preserved. `project.godot` now registers the new editor plugin path. Packaged client/server exports still require separate validation beyond import/smoke CI.
+
+## Production 3D-only boundary (follow-up)
+
+The only checked-in authored instance resource in `source/common/gameplay/maps/instance/instance_collection/` is `first_region.tres`, explicitly `use_3d = true`. `InstanceManagerServer.prepare_instance()` selects `WorldInstance3D` for that resource; `WorldInstance3D` overrides legacy `load_map`, `_ready`, and the old ready-to-enter RPC so it does not instantiate the 2D Player scene. The `GameWorld3D` service still shares `PlayerResource` data.
+
+The content-registry loader now **rejects authored `use_3d = false` instances** rather than silently entering the old 2D path. This does not yet remove `ServerInstance`, `Player`, `Character`, or `Entity`: 3D instances subclass `ServerInstance`, and old types still appear in the shared instance manager and ancillary services. Eliminating those classes requires separating the shared lifecycle/session host from the old Map/Player implementation, not deleting a folder. The existing in-memory compatibility fixtures are retained.
