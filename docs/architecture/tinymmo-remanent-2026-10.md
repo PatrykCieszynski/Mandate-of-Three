@@ -4,9 +4,9 @@
 
 | Area | Evidence | Decision |
 |---|---|---|
-| `addons/tinymmo/plugin.gd` | Active `[editor_plugins]` registration in `project.godot`; commented-out inspector and old debug-instance bootstrap | Removed commented bootstrap and unused inspector registration; then removed the disconnected inspector/property-editor popup subgraph (11 files, including .uid) |
-| `addons/tinymmo/export_plugin/export_plugin.gd` | Called from active editor plugin; replaces `source/server/*.gd` scripts with reflection-based stubs on client export, excludes SQLite addon and includes raw CEF UI images | **Keep. Production export dependency.** Not safe to remove the addon wholesale |
-| `addons/tinymmo/main_screen/main_panel.gd` | Instantiated and exposed by active plugin, generates content indices and warns about quest prereq cycles | Keep until content-index workflow is separately migrated or retired |
+| `addons/mandate_tools/plugin.gd` | Active `[editor_plugins]` registration in `project.godot`; commented-out inspector and old debug-instance bootstrap | Removed commented bootstrap and unused inspector registration; then removed the disconnected inspector/property-editor popup subgraph (11 files, including .uid) |
+| `addons/mandate_tools/export_plugin/export_plugin.gd` | Called from active editor plugin; replaces `source/server/*.gd` scripts with reflection-based stubs on client export, excludes SQLite addon and includes raw CEF UI images | **Keep. Production export dependency.** Not safe to remove the addon wholesale |
+| `addons/mandate_tools/main_screen/main_panel.gd` | Instantiated and exposed by active plugin, generates content indices and warns about quest prereq cycles | Keep until content-index workflow is separately migrated or retired |
 | `project.godot` user dir | `config/custom_user_dir_name="slayhorizon"` | Do not rename casually: migration of existing user data must be planned |
 | `source/common/gameplay/maps/terrain3d_spike/` and `tools/terrain3d/*spike*` | Explicitly named spike/test terrain | Candidate for later cleanup, but do not delete without reference scan and map/editor verification |
 | `assets/sprites/characters/fungus_old/`, old 2D resources and `tests/legacy_batch_visual*` | Historical naming / 2D resources | Candidates for dependency inventory, not proof of being unused |
@@ -22,3 +22,8 @@
 ## This PR's scope
 
 Removes the disabled editor bootstrap plus its unregistered inspector/property-editor/popup graph (11 files); corrects addon documentation. No gameplay logic, export behavior, config/user-data location or runtime assets were changed. Godot editor startup/export smoke must still be run before merge.
+
+
+## Current follow-up
+
+The former `addons/tinymmo` addon path has been retired. Active ContentIndex editor UI and the required client/server export-stubbing plugin now live under `addons/mandate_tools`, with source content and script UID identities preserved. `project.godot` now registers the new editor plugin path. Packaged client/server exports still require separate validation beyond import/smoke CI.
