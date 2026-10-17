@@ -26,6 +26,12 @@ func candidate(owner: int, uid: String, revision: int, recipe: UpgradeDefinition
 	return {"ok":true,"item":item}
 
 func upgrade(owner: int, pending_yang: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String = "") -> Dictionary:
+	# Keep this accepted operation's server-owned recipe and pending prefix stable
+	# while each attempt rereads target/materials/funds under fresh admission.
+	var captured: UpgradeDefinition=recipe.duplicate(true) if recipe!=null else null
+	return _transaction.run_with_retry(_upgrade_once.bind(owner,pending_yang,captured,uid,revision,operation_id))
+
+func _upgrade_once(owner: int, pending_yang: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String) -> Dictionary:
 	_transaction.committed=false
 	if revision<0 or recipe==null or not recipe.validation_errors().is_empty(): return _error("request")
 	if not _transaction.begin(owner,operation_id,"upgrade",[owner,str(recipe.upgrade_id),uid,revision],true): return _transaction.cached

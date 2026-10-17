@@ -1,8 +1,8 @@
-# PostgreSQL P2c–P2e — receipt-backed transaction retry
+# PostgreSQL P2c–P2f — receipt-backed transaction retry
 
 These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
-retry for **Shop purchase/revenue collection, Exchange order placement/cancellation
-and Exchange stack conversion**. Production World remains
+retry for **Shop purchase/revenue collection, Exchange order placement/cancellation,
+Exchange stack conversion and Upgrade**. Production World remains
 SQLite; no executor, connection pool, RPC, schema or backend selection is added.
 
 ## Policy and ownership
@@ -141,3 +141,40 @@ new owner. Existing cross-operation capacity/custody regressions remain required
 See [P2e evidence](../evidence/postgres-p2e/README.md). Production remains SQLite.
 P3 pending-prefix/session fencing and nonblocking execution, remaining domains'
 explicit retry adoption and the broader P2/P4 gates remain separate work.
+
+## P2f — Upgrade material, wallet and item mutation
+
+`UpgradeStorePostgres.upgrade()` uses the same owner and at most three whole
+attempts after proven statement rollback. The original operation ID, expected
+target revision and pending Yang stay fixed. A deep copy captures the server-owned
+recipe once per call, so an accepted operation cannot change cost or material
+requirements between attempts. Receipt identity and result formats are unchanged.
+
+Each attempt redoes account/character admission, receipt discovery, target
+ownership/placement/revision, capacity, ordered material selection, whole/partial
+stack consumption, pending-income spend, target upgrade and receipt persistence.
+An aborted attempt publishes nothing; only confirmed commit may refresh runtime
+stats/wallet. Replay returns the original result with `committed == false`.
+COMMIT failures still close the connection and require receipt discovery without
+automatic retry. Caller-owned NPC/service/range authorization is unchanged; this
+store does not implement a World admission/session fence or async execution.
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite upgrade
+```
+
+The existing parity fixture now injects statement errors at material custody and
+instance deletion, partial-stack reduction, wallet spend, target mutation and
+receipt writes. Each case checks one upgrade/revision, one material cost, one
+pending prefix and original-result replay. Exhaustion and deferred COMMIT errors
+preserve target/material/custody/wallet/account revisions and receipts.
+
+Independent native editors queue before retry. Moving a material into Storage
+forces reselection of current eligible stacks; changing target position/revision
+forces `stale` without costs. Editing the original recipe while the first attempt
+is held does not alter the captured operation. Only these barrier diagnostics
+extend session-local timeouts; the normal runner budgets remain unchanged.
+
+See [P2f evidence](../evidence/postgres-p2f/README.md). NPC purchase, ordinary
+Inventory/Storage, Shop seller/claim commands and unreceipted checkpoints are not
+newly opted in. Runtime remains SQLite; broader P2 and P3/P4 gates remain open.
