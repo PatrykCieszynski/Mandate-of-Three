@@ -14,6 +14,12 @@ func _init(database: Object) -> void:
 	_transaction=Commands.new(db)
 
 func purchase(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1, operation_id: String = "") -> Dictionary:
+	# Capture accepted server content once; revalidate live custody/funds/capacity
+	# on every complete attempt, keeping original command and pending prefix.
+	var captured: ShopDefinition=shop.duplicate(true) if shop!=null else null
+	return _transaction.run_with_retry(_purchase_once.bind(owner_id,pending_yang,captured,offer_id,requested_position,operation_id))
+
+func _purchase_once(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: StringName, requested_position: int, operation_id: String) -> Dictionary:
 	_transaction.committed=false
 	if shop==null or not shop.validation_errors().is_empty(): return {"ok":false,"error":"invalid_definition"}
 	if not _transaction.begin(owner_id,operation_id,"npc_shop.buy",[owner_id,str(shop.shop_id),str(offer_id),requested_position],true): return _transaction.cached

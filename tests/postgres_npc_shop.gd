@@ -223,6 +223,7 @@ func _ready() -> void:
 	assert(large_receipt.ok and large_receipt.item_state.character_id==large_character)
 	assert(store.purchase_receipt(large_character,"large-character")==large_receipt)
 	assert(store.purchase(large_character,99,shop,&"ore",-1,"large-character")==large_receipt)
+	await retry_checks(pg_items)
 	pg.close()
 	runtime.db=null
 	runtime.free()
@@ -230,3 +231,136 @@ func _ready() -> void:
 	for suffix: String in ["","-wal","-shm"]: DirAccess.remove_absolute(ProjectSettings.globalize_path(sqlite.path+suffix))
 	print("POSTGRES_NPC_SHOP_OK SQLite parity: atomic purchase, custody, pending funds, receipts, replay/reopen, footprint, rollback and reject growth")
 	get_tree().quit()
+
+func retry_checks(items: RefCounted) -> void:
+	assert(PgWallet.new(pg).initialize_account(8200).ok)
+	assert(pg.execute("UPDATE economy.account_wallets SET yang=100000 WHERE account_id=8200;").ok)
+	assert(pg.execute("CREATE SEQUENCE economy.fixture_purchase_attempt;").ok)
+	assert(pg.execute("CREATE FUNCTION economy.fixture_purchase_retry() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE attempt BIGINT; BEGIN attempt:=nextval('economy.fixture_purchase_attempt'); IF attempt<=TG_ARGV[1]::BIGINT THEN IF TG_NARGS>2 THEN PERFORM pg_advisory_xact_lock(95128); END IF; RAISE EXCEPTION 'purchase retry fixture' USING ERRCODE=TG_ARGV[0]; END IF; RETURN NEW; END; $$;").ok)
+	var store:=PgShop.new(pg)
+	var index: int=0
+	for stage: String in ["income","spend","instance","custody","receipt"]:
+		for code: String in ["40001","40P01"]:
+			for offer: ShopOfferDefinition in shop.offers:
+				var character: int=82000+index
+				assert(items.bind_character(character,8200))
+				var balance: int=PgWallet.new(pg).load_wallet(8200).balance
+				purchase_retry_fault(stage,code,1)
+				var command: String="retry-purchase-"+str(index)
+				var result: Dictionary=store.purchase(character,17,shop,offer.offer_id,0,command)
+				assert(result.ok and store.committed and purchase_attempts()==2 and result.balance==balance+17-offer.price)
+				assert(result.wallet_states[0].pending_applied==17 and PgWallet.new(pg).load_wallet(8200).balance==result.balance)
+				var inventory: Array=items.inventory(character).items
+				assert(inventory.size()==1 and inventory[0].uid==result.uid and inventory[0].definition_id==str(offer.item_definition_id) and inventory[0].amount==offer.quantity and inventory[0].bag_position==0,"one durable UID and correct quantity after rollback/retry")
+				var before:=retry_state()
+				assert(store.purchase(character,9999,shop,offer.offer_id,0,command)==result and not store.committed and retry_state()==before and purchase_attempts()==2)
+				assert(store.purchase_receipt(character,command)==result)
+				clear_purchase_retry(stage)
+				index+=1
+	var character: int=82900
+	assert(items.bind_character(character,8200))
+	for code: String in ["40001","40P01","23505","55P03","57014"]:
+		purchase_retry_fault("receipt",code,99)
+		var before:=retry_state()
+		var result: Dictionary=store.purchase(character,17,shop,&"sword",0,"exhausted-"+code)
+		assert(result.error=="storage" and not store.committed and not pg.in_transaction() and retry_state()==before)
+		assert(purchase_attempts()==(3 if code in ["40001","40P01"] else 1))
+		clear_purchase_retry("receipt")
+	for code: String in ["40001","40P01"]:
+		purchase_retry_fault("receipt",code,99,true)
+		var before:=retry_state()
+		var result: Dictionary=store.purchase(character,17,shop,&"sword",0,"unknown-"+code)
+		assert(result.get("outcome_unknown",false) and not store.committed and not pg.is_open())
+		assert(pg.open("postgresql",connection) and purchase_attempts()==1)
+		clear_purchase_retry("receipt")
+		assert(retry_state()==before and store.purchase_receipt(character,"unknown-"+code).error=="unknown_command")
+	for requested: int in [0,-1]: await retry_capacity(items,requested)
+	print("POSTGRES_NPC_PURCHASE_RETRY_OK one UID/debit/pending prefix, exact replay, bounded attempts, no COMMIT retry and current full-footprint placement")
+
+func retry_state() -> Array:
+	var snapshot: Array=[]
+	for table: String in ["item_instances","item_custody","account_item_revisions","account_wallets","market_commands"]:
+		var result: Dictionary=pg.query("SELECT row_to_json(t)::text AS value FROM economy."+table+" t ORDER BY row_to_json(t)::text;",{},10000)
+		assert(result.ok and not result.truncated)
+		snapshot.append(result.rows)
+	return snapshot
+
+func purchase_retry_table(stage: String) -> String:
+	return {"income":"account_wallets","spend":"account_wallets","instance":"item_instances","custody":"item_custody","receipt":"market_commands"}[stage]
+
+func purchase_retry_fault(stage: String, code: String, failures: int, deferred: bool = false) -> void:
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_purchase_attempt RESTART WITH 1;").ok)
+	var table: String=purchase_retry_table(stage)
+	var condition: String=" WHEN (NEW.yang>OLD.yang)" if stage=="income" else (" WHEN (NEW.yang<OLD.yang)" if stage=="spend" else "")
+	var create: String="CREATE CONSTRAINT TRIGGER fixture_retry AFTER INSERT ON economy.%s DEFERRABLE INITIALLY DEFERRED" % table if deferred else "CREATE TRIGGER fixture_retry BEFORE %s ON economy.%s" % ["UPDATE" if stage in ["income","spend"] else "INSERT",table]
+	assert(pg.execute(create+" FOR EACH ROW"+condition+" EXECUTE FUNCTION economy.fixture_purchase_retry('%s','%d');" % [code,failures]).ok)
+
+func clear_purchase_retry(stage: String) -> void:
+	assert(pg.execute("DROP TRIGGER fixture_retry ON economy."+purchase_retry_table(stage)+";").ok)
+
+func purchase_attempts() -> int:
+	return int(pg.query("SELECT last_value FROM economy.fixture_purchase_attempt;").rows[0].last_value)
+
+func retry_capacity(items: RefCounted, requested: int) -> void:
+	var character: int=82910 if requested==0 else 82911
+	assert(items.bind_character(character,8200))
+	var balance: int=PgWallet.new(pg).load_wallet(8200).balance
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_purchase_attempt RESTART WITH 1;").ok)
+	assert(pg.execute("CREATE TRIGGER fixture_retry BEFORE INSERT ON economy.market_commands FOR EACH ROW WHEN (current_setting('application_name')='retry-npc-buyer') EXECUTE FUNCTION economy.fixture_purchase_retry('40001','1','gate');").ok)
+	assert(pg.execute("SELECT pg_advisory_lock(95128);").ok)
+	# Coordinate independent sessions without changing normal fixture timeouts.
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var original: ShopDefinition=shop.duplicate(true)
+	var buyer_thread:=Thread.new()
+	assert(buyer_thread.start(purchase_worker.bind(connection+" application_name=retry-npc-buyer"+budgets,character,original,&"sword",requested,17,"capacity-buyer-"+str(character),ready))==OK)
+	ready.wait()
+	var buying: bool=await purchase_waiting("retry-npc-buyer")
+	var editor:=Thread.new()
+	# Occupy the last cell of the sword footprint, leaving its starting cell free.
+	var blocked: int=InventoryGrid.cells(0,ItemDefinitions.IRON_SWORD.inventory_height).back()
+	var occupied: Dictionary=items.inventory(character)
+	assert(occupied.items.is_empty(),"other native transaction cannot see the uncommitted item")
+	assert(editor.start(purchase_worker.bind(connection+" application_name=retry-npc-editor"+budgets,character,original,&"ore",blocked,0,"capacity-editor-"+str(character),ready))==OK)
+	ready.wait()
+	var editing: bool=await purchase_waiting("retry-npc-editor")
+	# Both calls already captured accepted server offers before blocking. Resource
+	# changes must not alter either the retried price or nested offer quantity.
+	original.offers[0].price+=10000
+	original.offers[1].quantity+=1
+	assert(pg.execute("SELECT pg_advisory_unlock(95128);").ok)
+	var bought: Dictionary=buyer_thread.wait_to_finish()
+	var edited: Dictionary=editor.wait_to_finish()
+	clear_purchase_retry("receipt")
+	assert(buying and editing and edited.result.ok and edited.result.position==blocked)
+	var inventory: Array=items.inventory(character).items
+	assert(inventory.any(func(item: Dictionary) -> bool: return item.uid==edited.result.uid and item.amount==shop.offers[1].quantity))
+	if requested==0:
+		assert(bought.result.error=="occupied" and not bought.committed and purchase_attempts()==1)
+		assert(inventory.size()==1 and PgWallet.new(pg).load_wallet(8200).balance==balance-shop.offers[1].price)
+		assert(PgShop.new(pg).purchase_receipt(character,"capacity-buyer-"+str(character)).error=="unknown_command")
+	else:
+		assert(bought.result.ok and bought.committed and purchase_attempts()==2 and bought.result.position!=0)
+		assert(inventory.size()==2 and PgWallet.new(pg).load_wallet(8200).balance==balance-shop.offers[1].price-shop.offers[0].price+17)
+		var footprint:=InventoryGrid.cells(int(bought.result.position),ItemDefinitions.IRON_SWORD.inventory_height)
+		assert(not footprint.has(blocked))
+		assert(PgShop.new(pg).purchase(character,9999,shop,&"sword",requested,"capacity-buyer-"+str(character))==bought.result)
+
+func purchase_waiting(label: String) -> bool:
+	var deadline: int=Time.get_ticks_msec()+2000
+	while Time.get_ticks_msec()<deadline:
+		assert(pg.execute("SELECT pg_stat_clear_snapshot();").ok)
+		if int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name=:label AND wait_event_type='Lock';",{"label":label}).rows[0].n)==1: return true
+		await get_tree().create_timer(0.005).timeout
+	return false
+
+func purchase_worker(dsn: String, character: int, accepted: ShopDefinition, offer: StringName, position: int, pending: int, command: String, ready: Semaphore) -> Dictionary:
+	var database: Object=ClassDB.instantiate("GodotSociDatabase")
+	var opened: bool=database.open("postgresql",dsn)
+	ready.post()
+	if not opened: return {"result":{"ok":false,"error":"fixture_connection"},"committed":false}
+	var store:=PgShop.new(database)
+	var result: Dictionary=store.purchase(character,pending,accepted,offer,position,command)
+	var committed: bool=store.committed
+	database.close()
+	return {"result":result,"committed":committed}
