@@ -54,6 +54,9 @@ func read_in_transaction(character: int) -> Dictionary:
 	return result
 
 func deposit(character: int, command: String, uid: String, revision: int, amount: int, source: String) -> Dictionary:
+	return _transaction.run_with_retry(_deposit_once.bind(character,command,uid,revision,amount,source))
+
+func _deposit_once(character: int, command: String, uid: String, revision: int, amount: int, source: String) -> Dictionary:
 	if not _transaction.begin(character,command,"exchange.deposit",[character,uid,revision,amount,source],true): return _transaction.cached
 	if source not in ["bag","account_storage"] or amount<=0: return _reject("request")
 	var item: ItemInstance
@@ -82,6 +85,9 @@ func deposit(character: int, command: String, uid: String, revision: int, amount
 	return _transaction.commit({"ok":true,"asset_id":str(item.definition_id),"amount":amount})
 
 func withdraw(character: int, command: String, asset: String, amount: int, destination: String) -> Dictionary:
+	return _transaction.run_with_retry(_withdraw_once.bind(character,command,asset,amount,destination))
+
+func _withdraw_once(character: int, command: String, asset: String, amount: int, destination: String) -> Dictionary:
 	if not _transaction.begin(character,command,"exchange.withdraw",[character,asset,amount,destination],true): return _transaction.cached
 	var definition:=asset_definition(asset)
 	if definition==null or amount<=0 or amount>definition.stack_limit or destination not in ["bag","claim"]: return _reject("request")
