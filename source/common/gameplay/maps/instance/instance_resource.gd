@@ -68,15 +68,18 @@ func level_band() -> String:
 	return "Level %d+" % level_min
 
 
-@warning_ignore("unused_parameter")
-func can_join_instance(player: Player, index: int = -1) -> bool:
-	# Wardstone gate (docs/wardstones.md): character-wide progress key, no
-	# level or party bypass. Everything else stays open.
+## Dimension-independent wardstone gate: use persisted character data,
+## never a scene actor. This is the entry point for 3D and future map hosts.
+func can_join_character(player: PlayerResource) -> bool:
 	if required_wardstone.is_empty():
 		return true
-	if player == null or player.player_resource == null:
-		return false
-	return player.player_resource.wardstones.has(String(required_wardstone))
+	return player != null and player.wardstones.has(String(required_wardstone))
+
+
+@warning_ignore("unused_parameter")
+func can_join_instance(player: Player, index: int = -1) -> bool:
+	# Legacy 2D adapter kept until the old warper/Player APIs are removed.
+	return can_join_character(player.player_resource if player != null else null)
 
 
 func get_instance(index: int = -1) -> Node:
