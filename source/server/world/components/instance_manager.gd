@@ -622,7 +622,7 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 		return null
 	if _all_instances().size() >= max_host_instances:
 		return null
-	if instance_resource.use_3d and access_policy == ServerInstance.AccessPolicy.PUBLIC:
+	if access_policy == ServerInstance.AccessPolicy.PUBLIC:
 		var copies := 0
 		for existing: ServerInstance in _all_instances():
 			if existing.instance_resource == instance_resource and existing.access_policy == ServerInstance.AccessPolicy.PUBLIC:
@@ -632,7 +632,7 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 	var instance: ServerInstance = preload("res://source/server/world/components/world_instance_3d.gd").new()
 	instance.access_policy = access_policy
 	instance.allowed_character_ids = character_ids.duplicate()
-	if instance_resource.use_3d and channel_id==0 and access_policy == ServerInstance.AccessPolicy.PUBLIC:
+	if channel_id==0 and access_policy == ServerInstance.AccessPolicy.PUBLIC:
 		channel_id=1
 		for existing: ServerInstance in _instances_for(instance_resource): channel_id=maxi(channel_id,int(existing.identity.get("channel_id",0))+1)
 	instance.identity=MapIdentity.create(realm_id,instance_resource.resolved_map_id(),host_id,channel_id)
@@ -681,12 +681,12 @@ func set_instance_collection() -> void:
 		if not instance_resource.use_3d:
 			push_error("Unsupported legacy 2D map configuration: " + file_path)
 			continue
-		if instance_resource.use_3d and instance_resource.load_at_startup and instance_resource.startup_copies > instance_resource.max_public_copies:
+		if instance_resource.load_at_startup and instance_resource.startup_copies > instance_resource.max_public_copies:
 			push_error("Map startup copies exceed its public instance limit: " + str(instance_resource.instance_name))
 			continue
 		if instance_resource.load_at_startup:
-			for copy: int in (instance_resource.startup_copies if instance_resource.use_3d else 1):
-				charge_instance(instance_resource,copy+1 if instance_resource.use_3d else 0)
+			for copy: int in instance_resource.startup_copies:
+				charge_instance(instance_resource, copy + 1)
 		if instance_resource.instance_name == DEFAULT_INSTANCE_NAME:
 			default_instance = instance_resource
 		instance_collection.set(instance_resource.instance_name, instance_resource)
