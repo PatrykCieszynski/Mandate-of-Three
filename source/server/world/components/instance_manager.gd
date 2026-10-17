@@ -272,7 +272,7 @@ func reserve_entry(peer_id: int, resource: InstanceResource, target: ServerInsta
 			existing.awaiting_peers.erase(peer_id)
 	var instance := target
 	if target != null:
-		if not _instances_for(resource).has(target) or not target.instance_resource.use_3d:
+		if not _instances_for(resource).has(target):
 			return {"ok": false, "error": "map_unavailable"}
 		if target.get_parent() != self and loading_instances.get(str(target.name)) != target:
 			return {"ok": false, "error": "map_unavailable"}
