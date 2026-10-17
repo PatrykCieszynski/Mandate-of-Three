@@ -112,6 +112,14 @@ statement rollback. Re-selection, prefix/replay integrity, exhaustion and no
 COMMIT/failed-cleanup retry are covered. Other use cases and unreceipted checkpoints
 are not opted in; broad P2, P3/P4 and production PostgreSQL adoption remain open.
 
+**P2d progress:** [Exchange order lifecycle retry](../development/postgres-transaction-retry.md#p2d--exchange-order-lifecycle)
+opts placement/matching and cancellation/refund into the existing bounded owner.
+Native faults cover second-maker rollback, reservations, material/Yang refunds,
+pending-income replay, exhaustion and no COMMIT retry. Independent queued sessions
+verify maker and cancellation-revision reselection after rollback. No schema,
+protocol or live backend change; ledger conversion/custody retry, broader P2 and
+P3/P4 remain separate gates.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must

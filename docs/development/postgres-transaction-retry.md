@@ -1,7 +1,7 @@
-# PostgreSQL P2c — receipt-backed settlement retry
+# PostgreSQL P2c–P2d — receipt-backed transaction retry
 
-This opt-in slice adopts official SOCI v0.4.3 and enables bounded whole-use-case
-retry for **Shop purchase and revenue collection only**. Production World remains
+These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
+retry for **Shop purchase/revenue collection and Exchange order placement/cancellation**. Production World remains
 SQLite; no executor, connection pool, RPC, schema or backend selection is added.
 
 ## Policy and ownership
@@ -16,8 +16,8 @@ closes the session and never produces that proof. Missing structured diagnostics
 fail closed. No retry metadata is added to public results or receipts.
 
 `run_with_retry()` invokes the complete operation at most three times. Each
-invocation starts fresh identity/admission, receipt lookup, current offer or revenue
-selection, capacity/headroom and economic validation, then mutation/receipt/COMMIT.
+invocation starts fresh identity/admission, receipt lookup, current offer/revenue
+or order-book selection, capacity/headroom and economic validation, then mutation/receipt/COMMIT.
 The initiating character and command ID remain identical. Purchase captures a copy
 of its server-owned pending-income prefix once; collection retains the original
 integer prefix. An aborted attempt rolls that prefix back with every other write.
@@ -31,7 +31,8 @@ path; P3 must provide bounded nonblocking execution before runtime adoption.
 COMMIT failure keeps the existing conservative policy: close and return
 `outcome_unknown`, then discover the original receipt after reconnect. Even a
 COMMIT error carrying `40001`/`40P01` does not enter the statement-rollback loop.
-Unreceipted Wallet checkpoints and other domain stores are not opted in.
+Unreceipted Wallet checkpoints, Exchange ledger conversion and other domain stores
+are not opted in.
 
 PostgreSQL requires retry of the full transaction, including decisions about SQL
 and values. SQLSTATE alone is insufficient for application retry safety. See
@@ -68,8 +69,42 @@ diagnostic uses larger session-local timeouts to coordinate its native threads;
 normal fixture limits and the three-attempt budget remain unchanged.
 
 This is fault/recovery correctness, not a contention-throughput or soak benchmark.
-See [evidence](../evidence/postgres-p2c/README.md). Other use cases need explicit
+See [P2c evidence](../evidence/postgres-p2c/README.md). Other use cases need explicit
 adoption/review, not a global retry toggle. P3 pending-prefix ownership, session
 fencing and runtime reconciliation, P4 migration/load/cutover and Linux native
 verification remain separate gates. An internally retried call does not make the
 same pending prefix safe across multiple successful commands with different IDs.
+
+## P2d — Exchange order lifecycle
+
+`ExchangeOrdersPostgres.place_order()` and `cancel_order()` use the same existing
+owner and three-attempt policy. No new retry engine or schema is introduced.
+Placement captures the original order payload and server-owned pending map once;
+cancellation captures its command/order ID, expected revision and pending map.
+Each complete attempt reacquires the pair and sorted participant accounts, checks
+the receipt, and rereads the current book or cancellation target. Failed attempts
+discard generated order IDs, selected makers, fills, wallet changes and refunds.
+
+Price/time priority, lot arithmetic, reservation rules, active-order limits and
+receipt results are unchanged. A successful replay returns the original result
+with `committed == false`; runtime reconciliation must distinguish it from a new
+commit. A cancellation whose expected revision became stale returns `stale` and
+does not refund the new remainder. COMMIT failure still closes the connection and
+requires receipt discovery; its SQLSTATE never authorizes automatic retry.
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite exchange-orders
+```
+
+The existing fixture injects real PostgreSQL statement errors before pair
+admission, during reservation/material refund, on the second of two maker fills,
+and at receipt persistence. It verifies rollback plus retry, pending income once,
+exact replay, bounded exhaustion, nonretryable codes and deferred COMMIT errors.
+Two independently queued-session cases verify current-state reselection: a maker
+cancelled before buyer retry is no longer matched; an order filled before cancel
+retry cannot be refunded using its old revision. Only those coordination probes
+extend session-local lock/statement timeouts; runner defaults are unchanged.
+
+See [P2d evidence](../evidence/postgres-p2d/README.md). This does not opt ledger
+conversion, Inventory, Storage, Upgrade or seller lifecycle into retry, complete
+the broad P2 gate, or provide P3 pending-prefix fencing/nonblocking execution.
