@@ -674,6 +674,12 @@ func set_instance_collection() -> void:
 		if loaded == null or not (loaded is InstanceResource):
 			continue
 		var instance_resource: InstanceResource = loaded
+		# Authored production maps are 3D-only. Keep legacy ServerInstance
+		# compatibility for isolated fixtures, but never register a 2D map
+		# from the production content directory.
+		if not instance_resource.use_3d:
+			push_error("Unsupported legacy 2D map configuration: " + file_path)
+			continue
 		if instance_resource.use_3d and instance_resource.load_at_startup and instance_resource.startup_copies > instance_resource.max_public_copies:
 			push_error("Map startup copies exceed its public instance limit: " + str(instance_resource.instance_name))
 			continue
