@@ -26,11 +26,20 @@ func receipt(character: int, command: String) -> Dictionary:
 func ledger(character: int) -> Dictionary:
 	if db.in_transaction() or not db.begin(): return _error("storage")
 	if not db.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;").ok: return _transaction.rollback("storage")
+	var result:=read_in_transaction(character)
+	if not result.ok: return _transaction.rollback(str(result.error))
+	if db.commit(): return result
+	db.close()
+	return _error("storage")
+
+## Existing read model within a caller-owned repeatable-read snapshot.
+func read_in_transaction(character: int) -> Dictionary:
+	if not db.in_transaction(): return _error("transaction")
 	var identity: Dictionary=db.query("SELECT account_id FROM economy.characters WHERE character_id=:id;",{"id":character})
-	if not identity.ok or identity.rows.is_empty(): return _transaction.rollback("storage" if not identity.ok else "owner")
+	if not identity.ok or identity.rows.is_empty(): return _error("storage" if not identity.ok else "owner")
 	var account: int=int(identity.rows[0].account_id)
 	var rows: Dictionary=db.query("SELECT asset_id,free,reserved FROM economy.exchange_assets WHERE account_id=:account ORDER BY asset_id;",{"account":account})
-	if not rows.ok or rows.truncated: return _transaction.rollback("storage")
+	if not rows.ok or rows.truncated: return _error("storage")
 	var balances: Dictionary={}
 	for row: Dictionary in rows.rows: balances[str(row.asset_id)]=row
 	var assets: Array=[]
@@ -40,11 +49,9 @@ func ledger(character: int) -> Dictionary:
 		var balance: Dictionary=balances.get(asset,{})
 		assets.append({"asset_id":asset,"name":definition.item_name,"stack_limit":definition.stack_limit,"free":int(balance.get("free",0)),"reserved":int(balance.get("reserved",0))})
 	var wallet: Dictionary=db.query("SELECT yang,reserved_yang FROM economy.account_wallets WHERE account_id=:account;",{"account":account})
-	if not wallet.ok or wallet.rows.is_empty(): return _transaction.rollback("storage")
+	if not wallet.ok or wallet.rows.is_empty(): return _error("storage")
 	var result: Dictionary={"ok":true,"assets":assets,"yang":int(wallet.rows[0].yang),"reserved_yang":int(wallet.rows[0].reserved_yang)}
-	if db.commit(): return result
-	db.close()
-	return _error("storage")
+	return result
 
 func deposit(character: int, command: String, uid: String, revision: int, amount: int, source: String) -> Dictionary:
 	if not _transaction.begin(character,command,"exchange.deposit",[character,uid,revision,amount,source],true): return _transaction.cached

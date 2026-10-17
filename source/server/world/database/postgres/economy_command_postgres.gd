@@ -53,13 +53,29 @@ func begin(owner: int, command: String, kind: String, args: Array, shared_accoun
 			if not admission.ok or admission.rows.is_empty():
 				cached=rollback("storage")
 				return false
+	return admit_in_transaction(owner,command,kind,args,locked_account)
+
+## Internal composition for an explicitly owned transaction (Exchange pair plus
+## sorted participant accounts). Caller must have acquired account admission;
+## this method then owns character/receipt checks and terminal rollback/commit.
+## Ordinary begin() still refuses a caller's existing transaction.
+func admit_in_transaction(owner: int, command: String, kind: String, args: Array, expected_account: int) -> bool:
+	committed=false
+	receipt_replay=false
+	cached={}
+	if not db.in_transaction():
+		cached={"ok":false,"error":"transaction"}
+		return false
+	if not valid_id(command):
+		cached=rollback("request")
+		return false
 	# Serialize character capacity/commands without blocking FK KEY SHARE checks
 	# on an alt's provenance while that alt waits for shared Storage admission.
 	var result: Dictionary=db.query("SELECT account_id FROM economy.characters WHERE character_id=:id FOR NO KEY UPDATE;",{"id":owner})
 	if not result.ok or result.rows.is_empty():
 		cached=rollback("storage" if not result.ok else "owner")
 		return false
-	if shared_account and locked_account!=int(result.rows[0].account_id):
+	if expected_account>0 and expected_account!=int(result.rows[0].account_id):
 		cached=rollback("storage")
 		return false
 	account_id=int(result.rows[0].account_id)
@@ -105,8 +121,10 @@ func commit(result: Dictionary) -> Dictionary:
 	result.item_state=read_state(db,character_id)
 	if result.item_state.is_empty(): return rollback("storage")
 	var stored:=result.duplicate(true)
-	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance","amount"]:
+	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance","amount","remaining","refunded"]:
 		if stored.has(field): stored[field]=str(stored[field])
+	if stored.has("affected_accounts"):
+		stored.affected_accounts=stored.affected_accounts.map(func(account: Variant) -> String: return str(account))
 	var written: Dictionary=db.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) VALUES(:account,:command,:character,:kind,:request,:result);",{"account":account_id,"command":_command,"character":character_id,"kind":_kind,"request":_request,"result":Codec.encode_result(stored)})
 	if not written.ok: return rollback("storage")
 	if not db.commit():
@@ -123,6 +141,8 @@ static func read_state(database: Object, owner: int) -> Dictionary:
 
 static func decode(json: String) -> Dictionary:
 	var result: Dictionary=Codec.decode_result(json)
-	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance","amount"]:
+	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance","amount","remaining","refunded"]:
 		if result.has(field): result[field]=int(result[field])
+	if result.has("affected_accounts"):
+		result.affected_accounts=result.affected_accounts.map(func(account: Variant) -> int: return int(account))
 	return result
