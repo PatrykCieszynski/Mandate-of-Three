@@ -70,3 +70,14 @@ The moderator `/where` and `/who` commands and player `/feedback` remain, with t
 ## Confirmed parser-coupled legacy services
 
 Attempted removal of the old `ZonePatch2D` and `DungeonMaster` classes exposed still-parsed dependencies in `source/common/gameplay/maps/map.gd`, `source/common/network/sync/state_synchronizer_manager_server.gd`, and `source/common/gameplay/dungeon/dungeon_service.gd` via Godot cold-import failures. Both classes and their UID/scene files were restored; these are **not standalone dead files** despite no authored production 2D instance. Removing them safely depends on separating `ServerInstance`/old map synchronization and legacy dungeon service from active 3D infrastructure. The orphaned 2D `EventService` world-boss orchestration, whose sole admin entry was retired, has been removed.
+
+## PR #67 closure boundary — separate follow-up PRs
+
+This branch is a bounded legacy cleanup, **not** a rewrite of the live session architecture. Do not widen it into a wholesale 2D deletion without rebuilding the host contracts and exercising the multiplayer integration tests. The following follow-ups are deliberately deferred:
+
+1. **Server host migration:** create a 3D-only instance base or replace `WorldInstance3D : ServerInstance` after migrating `InstanceManagerServer`, `WorldServer`, local channel transfers, admin commands and RPC-compatible paths. Retain session identity, admission, disconnection checkpoints, authoritative economy and `PlayerResource` persistence.
+2. **Client host migration:** replace `WorldInstance3D : InstanceClient` on the client and its `InstanceManagerClient` signal/current-instance contract while keeping scene/node RPC paths compatible during handoff.
+3. **Remove 2D gameplay hierarchy:** only after both hosts no longer reference the old implementation, audit and delete `Player` / `Character` / `Entity`, 2D `Map`, synchronizers, warper/dungeon systems and their scenes/resources together with their true consumers. The historical class or a 2D filename alone does not authorize deletion.
+4. **Build and multiplayer verification:** before merging the present branch, verify real packaged client/server exports with the relocated first-party export plugin, plus dedicated multi-peer local-map/channel-transfer regressions; the default CI smoke and cold-import pipeline does not establish these outcomes. Run relevant isolated domain tests after each future host deletion.
+
+Keep this separation explicit when planning subsequent PRs; speculative removal of active persistence, moderation, inventory or export code would exceed this cleanup's scope.
