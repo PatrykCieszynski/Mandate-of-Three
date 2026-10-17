@@ -581,8 +581,8 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 				return null
 	elif not character_ids.is_empty():
 		return null
-	# The production manager creates 3D worlds only. Legacy 2D fixtures may
-	# still use ServerInstance directly without exposing a 2D content route.
+	# The production manager only provisions authored 3D worlds.
+	# ServerInstance remains for transport/type compatibility during migration.
 	if instance_resource == null or not instance_resource.use_3d:
 		return null
 	if not ResourceLoader.exists(instance_resource.map_path):
