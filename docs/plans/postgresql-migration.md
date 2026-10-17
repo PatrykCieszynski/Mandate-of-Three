@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 backend parity in progress (2026-10-16); P2–P4 **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 backend parity in progress (2026-10-17); P2–P4 **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 **P1 progress:** [P1a readiness](../development/postgres-readiness.md) adds a
 disposable Godot/SOCI PostgreSQL probe and a sanitized SQLite schema/source audit.
@@ -29,6 +29,14 @@ move/equip/swap/unequip/activate with SQLite behavior comparisons and native
 COMMIT-failure recovery checks. This extends the same character custody model;
 account Storage remains a separate risk/slice. World still uses SQLite and
 independent-connection P2 races, P3 execution/fencing and cutover remain pending.
+
+**P1e progress:** [account Storage parity](../development/postgres-storage-parity.md)
+adds an explicit account custody extension, atomic deposit/move/withdrawal with
+issuing-character receipts, replay/reopen and SQLite comparisons. Targeted native
+two-session fixtures cover competing withdrawal, shared capacity, cross-alt
+provenance and operation-ID conflict. This does not complete the broader P2 gate
+or introduce PostgreSQL clients/World execution. Player Shop, Upgrade and Exchange
+ports remain pending; production continues using SQLite.
 
 **Placement:** After the current single-World Economy hardening/SoC and local **MapInstance / CH** lifecycle, and **before** admitting two independent World Processes to the same realm economy. Preparatory contract tests may start earlier, but the plan does not require PostgreSQL for local CH or interrupt [World performance work](world-server-optimization.md). Do not combine it with gameplay/visual changes.
 
