@@ -414,7 +414,7 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 		if candidate.access_policy == ServerInstance.AccessPolicy.PUBLIC:
 			instances.append(candidate)
 	for instance: ServerInstance in instances:
-		if resource.use_3d and not instance.accepts_reservation():
+		if not instance.accepts_reservation():
 			continue
 		var count := instance.population()
 		if count<population:
@@ -425,11 +425,11 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 	if instances.is_empty():
 		# An empty host can bootstrap; a busy host must not bypass the CPU guard
 		# by asking for a map that currently has only private/no public copies.
-		if resource.use_3d and not _all_instances().is_empty() and not provision_budget.has_headroom(Time.get_ticks_msec()):
+		if not _all_instances().is_empty() and not provision_budget.has_headroom(Time.get_ticks_msec()):
 			return null
 		return charge_instance(resource)
 	# Grow only a full accepting set. Draining is an explicit retirement decision.
-	if not resource.use_3d or instances.size() >= resource.max_public_copies:
+	if instances.size() >= resource.max_public_copies:
 		return null
 	for instance: ServerInstance in instances:
 		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
@@ -453,7 +453,7 @@ func find_public_instance(resource: InstanceResource) -> ServerInstance:
 			continue
 		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
 			continue
-		if resource.use_3d and not instance.accepts_reservation():
+		if not instance.accepts_reservation():
 			continue
 		return instance
 	return null
