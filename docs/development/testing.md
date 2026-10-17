@@ -119,6 +119,13 @@ replay/reopen, ineligible Storage/alt materials and exact issuer/revisions.
 It remains opt-in, on fresh owned clusters. The current two-client Upgrade
 runtime stays on SQLite. See [Upgrade parity](postgres-upgrade-parity.md).
 
+`--suite shop-seller` checks PostgreSQL/SQLite seller lifecycle parity: listing,
+offer/Shop edit, direct Inventory withdrawal, escrow/occupied-cell/receipt
+atomicity, negative-cache bounds and reopen. Native overlapping sessions cover
+footprint conflict and single-transfer/cross-alt replay. Purchases, claims,
+revenue and Auction search are outside this fixture. See
+[seller parity and limits](postgres-shop-seller-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
