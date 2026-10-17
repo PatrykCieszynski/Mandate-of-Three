@@ -309,8 +309,7 @@ func has_valid_entry(instance: ServerInstance, peer_id: int, session: PlayerReso
 		and pending.get("session") == session
 		and instance.allows_character(session.player_id)
 		and instance.instance_resource.can_join_character(session)
-		and (not instance.instance_resource.use_3d
-			or int(pending.get("expires_at_ms", 0)) > Time.get_ticks_msec())
+		and int(pending.get("expires_at_ms", 0)) > Time.get_ticks_msec()
 	)
 
 
