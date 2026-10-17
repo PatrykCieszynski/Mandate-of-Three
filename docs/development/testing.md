@@ -113,6 +113,12 @@ faults, full destinations and replay/reopen. The populated schema upgrade must
 preserve existing Inventory. This remains opt-in; no PostgreSQL service is needed
 by default CI. See [Storage parity and limits](postgres-storage-parity.md).
 
+`--suite upgrade` compares the current atomic +0 to +1 Upgrade with SQLite:
+whole/partial materials, pending/reserved Yang, target and receipt rollback,
+replay/reopen, ineligible Storage/alt materials and exact issuer/revisions.
+It remains opt-in, on fresh owned clusters. The current two-client Upgrade
+runtime stays on SQLite. See [Upgrade parity](postgres-upgrade-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC

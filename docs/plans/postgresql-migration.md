@@ -38,6 +38,20 @@ provenance and operation-ID conflict. This does not complete the broader P2 gate
 or introduce PostgreSQL clients/World execution. Player Shop, Upgrade and Exchange
 ports remain pending; production continues using SQLite.
 
+**P1f progress:** [Upgrade parity](../development/postgres-upgrade-parity.md)
+adds the opt-in existing +0 to +1 transaction: ordered material stack consumption,
+pending Yang plus critical spend, unchanged target UID and durable receipt.
+SQLite comparisons, partial-write/COMMIT faults and replay/reopen are covered;
+no new schema, recipe/gameplay, client protocol or runtime switch is introduced.
+Player Shop/Exchange ports, the broad P2 gate and P3–P4 remain pending.
+
+**Storage cross-port invariant:** the database's unique starting-cell index is
+not a full-footprint exclusion constraint. Any subsequent port, especially Player
+Shop or Exchange, that receives/moves items into or out of account Storage must
+reuse its account-lock, authorization and complete-footprint receiving/transfer
+contract inside the transaction. Do not write Storage custody directly under
+only an item/character lock or assume the starting-cell index prevents overlap.
+
 **Placement:** After the current single-World Economy hardening/SoC and local **MapInstance / CH** lifecycle, and **before** admitting two independent World Processes to the same realm economy. Preparatory contract tests may start earlier, but the plan does not require PostgreSQL for local CH or interrupt [World performance work](world-server-optimization.md). Do not combine it with gameplay/visual changes.
 
 ## Target and non-goals
