@@ -346,7 +346,7 @@ func _release_pending_peer(peer_id: int) -> void:
 func begin_draining(instance: ServerInstance) -> bool:
 	if not is_instance_valid(instance) or instance.get_parent() != self:
 		return false
-	if not instance.instance_resource.use_3d or instance.is_queued_for_deletion():
+	if instance.is_queued_for_deletion():
 		return false
 	instance.admission_state = ServerInstance.AdmissionState.DRAINING
 	return true
@@ -360,7 +360,7 @@ func maintain_instances() -> void:
 			_channel_choices.erase(peer_id)
 			_reject_initial_entry(peer_id, choice.session, "choice_expired")
 	for instance: ServerInstance in _all_instances():
-		if instance.is_queued_for_deletion() or not instance.instance_resource.use_3d:
+		if instance.is_queued_for_deletion():
 			continue
 		for peer_id: int in instance.awaiting_peers.keys():
 			var session: PlayerResource = instance.awaiting_peers[peer_id].get("session")
