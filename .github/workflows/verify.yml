@@ -24,6 +24,15 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Temporary source audit snapshot
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path .godot -Force | Out-Null
+          python -c "import subprocess,zipfile,pathlib; z=zipfile.ZipFile('.godot/source-audit.zip','w',zipfile.ZIP_DEFLATED); [z.write(p) for p in subprocess.check_output(['git','ls-files','-z']).decode().split('\\0') if p.endswith(('.gd','.tscn','.tres','.cfg','.json','.ps1','.py','.ts','.js','.gdshader','.md','.godot')) and pathlib.Path(p).is_file()]; z.close()"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: temporary-source-audit
+          path: .godot/source-audit.zip
       - name: Install Web UI development dependencies
         working-directory: source/client/ui_web
         shell: pwsh
