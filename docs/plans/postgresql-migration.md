@@ -69,6 +69,13 @@ conflicts, provenance constraints and read snapshot consistency are covered;
 Exchange claim creation/ledger/matching and Auction search remain separate ports.
 The existing 200-claim window is preserved; there is no client/runtime switch.
 
+**P1j progress:** [Auction search parity](../development/postgres-auction-search-parity.md)
+adds bounded opt-in native reads and a transactional rolled-affix projection,
+sharing filter/cursor/result logic with the existing SQLite reader. Exact row and
+pagination parity, migration/projection failure recovery and 10k active-offer
+observations are covered. World still uses its current SQLite async scheduler;
+Exchange ledger/matching and P2/P3/P4 remain separate unfinished gates.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must

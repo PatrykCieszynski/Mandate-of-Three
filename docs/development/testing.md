@@ -141,6 +141,13 @@ receiving conflicts. It also checks coherent public reads across native writer
 commits and private account-data isolation. It preserves the 200-claim window and
 does not switch runtime. See [claim parity and limits](postgres-account-claims-parity.md).
 
+`--suite auction-search` compares complete SQLite/PG query rows and cursors across
+filters, ties, negotiable listings and pagination, plus atomic affix backfill/
+mutation/recovery and a read-only native session. Its 10k active-offer observations
+are synchronous SQL/projection measurements, not World/concurrent-load evidence.
+Production remains on the existing async SQLite reader. See
+[Auction parity and limits](postgres-auction-search-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
