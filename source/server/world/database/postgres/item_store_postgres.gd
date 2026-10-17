@@ -22,7 +22,7 @@ func read_state(character_id: int) -> Dictionary:
 	return Commands.read_state(db,character_id)
 
 func inventory(character_id: int) -> Dictionary:
-	var result: Dictionary=db.query("SELECT i.*,c.location,c.position AS bag_position,c.equipment_slot FROM economy.item_instances i JOIN economy.item_custody c ON c.uid=i.uid WHERE i.owner_character_id=:id AND c.owner_id=:id ORDER BY CASE c.location WHEN 'equipment' THEN 0 ELSE 1 END,c.position,i.uid;",{"id":character_id})
+	var result: Dictionary=db.query(ITEM_SELECT+"WHERE i.owner_character_id=:id AND c.owner_id=:id AND c.location IN ('bag','equipment') ORDER BY CASE c.location WHEN 'equipment' THEN 0 ELSE 1 END,c.position,i.uid;",{"id":character_id})
 	if not result.ok or result.truncated: return {"ok":false,"error":"storage"}
 	var items: Array=[]
 	var equipment: Dictionary={}
@@ -50,7 +50,7 @@ func resolve_inventory_position(character_id: int, height: int, requested_positi
 	if requested_position!=-1 and InventoryGrid.cells(requested_position,height).is_empty(): return {"ok":false,"error":"request"}
 	# Protect capacity on this character while validating dependent reads/writes.
 	# This is a local DB row lock, never an application-wide command queue.
-	var result: Dictionary=db.query("SELECT character_id FROM economy.characters WHERE character_id=:id FOR UPDATE;",{"id":character_id})
+	var result: Dictionary=db.query("SELECT character_id FROM economy.characters WHERE character_id=:id FOR NO KEY UPDATE;",{"id":character_id})
 	if not result.ok: return {"ok":false,"error":"storage"}
 	if result.rows.is_empty(): return {"ok":false,"error":"owner"}
 	result=db.query("SELECT i.uid,i.definition_id,c.position FROM economy.item_instances i JOIN economy.item_custody c ON c.uid=i.uid WHERE c.owner_id=:id AND c.location='bag';",{"id":character_id})
@@ -212,7 +212,7 @@ func _equipment_in_transaction(owner: int, uid: String, revision: int, action: S
 	return {"ok":true,"mutated":true}
 
 func _find_item(owner: int, uid: String) -> Dictionary:
-	var result: Dictionary=db.query(ITEM_SELECT+"WHERE i.uid=:uid AND i.owner_character_id=:owner AND c.owner_id=:owner;",{"uid":uid,"owner":owner})
+	var result: Dictionary=db.query(ITEM_SELECT+"WHERE i.uid=:uid AND i.owner_character_id=:owner AND c.owner_id=:owner AND c.location IN ('bag','equipment');",{"uid":uid,"owner":owner})
 	if not result.ok: return _error("storage")
 	if result.rows.is_empty(): return _error("owner")
 	var item:=ItemInstance.from_row(result.rows[0])
@@ -229,7 +229,7 @@ func _increment_revision(uid: String, owner: int) -> bool:
 
 func _begin_character(owner: int) -> Dictionary:
 	if db.in_transaction() or not db.begin(): return _error("storage")
-	var result: Dictionary=db.query("SELECT character_id FROM economy.characters WHERE character_id=:owner FOR UPDATE;",{"owner":owner})
+	var result: Dictionary=db.query("SELECT character_id FROM economy.characters WHERE character_id=:owner FOR NO KEY UPDATE;",{"owner":owner})
 	if not result.ok: return _rollback("storage")
 	if result.rows.is_empty(): return _rollback("owner")
 	return {"ok":true}

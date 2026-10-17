@@ -21,7 +21,7 @@ static func valid_id(value: String) -> bool:
 		if not "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-:".contains(character): return false
 	return true
 
-func begin(owner: int, command: String, kind: String, args: Array) -> bool:
+func begin(owner: int, command: String, kind: String, args: Array, shared_account: bool = false) -> bool:
 	committed=false
 	receipt_replay=false
 	cached={}
@@ -31,9 +31,23 @@ func begin(owner: int, command: String, kind: String, args: Array) -> bool:
 	if db.in_transaction() or not db.begin():
 		cached={"ok":false,"error":"storage"}
 		return false
-	var result: Dictionary=db.query("SELECT account_id FROM economy.characters WHERE character_id=:id FOR UPDATE;",{"id":owner})
+	# Shared Storage must serialize BEFORE receipt lookup as well as capacity:
+	# two alts using one command ID must observe replay/conflict, not a PK error.
+	var locked_account: int=0
+	if shared_account:
+		var scope: Dictionary=db.query("SELECT c.account_id FROM economy.characters c JOIN economy.accounts a ON a.account_id=c.account_id WHERE c.character_id=:id FOR NO KEY UPDATE OF a;",{"id":owner})
+		if not scope.ok or scope.rows.is_empty():
+			cached=rollback("storage" if not scope.ok else "owner")
+			return false
+		locked_account=int(scope.rows[0].account_id)
+	# Serialize character capacity/commands without blocking FK KEY SHARE checks
+	# on an alt's provenance while that alt waits for shared Storage admission.
+	var result: Dictionary=db.query("SELECT account_id FROM economy.characters WHERE character_id=:id FOR NO KEY UPDATE;",{"id":owner})
 	if not result.ok or result.rows.is_empty():
 		cached=rollback("storage" if not result.ok else "owner")
+		return false
+	if shared_account and locked_account!=int(result.rows[0].account_id):
+		cached=rollback("storage")
 		return false
 	account_id=int(result.rows[0].account_id)
 	character_id=owner

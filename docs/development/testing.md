@@ -106,6 +106,13 @@ receipt replay/reopen, full bag, partial-write rollback and native COMMIT faults
 It is opt-in and does not switch World to PostgreSQL or cover account Storage.
 See [Inventory parity](postgres-inventory-parity.md).
 
+`--suite storage` compares account-shared deposit/move/withdrawal with SQLite and
+checks independent native sessions competing for one UID, shared cell and command
+ID. It covers provenance, account/character/kind isolation, partial-write/COMMIT
+faults, full destinations and replay/reopen. The populated schema upgrade must
+preserve existing Inventory. This remains opt-in; no PostgreSQL service is needed
+by default CI. See [Storage parity and limits](postgres-storage-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
