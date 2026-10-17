@@ -45,6 +45,14 @@ SQLite comparisons, partial-write/COMMIT faults and replay/reopen are covered;
 no new schema, recipe/gameplay, client protocol or runtime switch is introduced.
 Player Shop/Exchange ports, the broad P2 gate and P3–P4 remain pending.
 
+**P1g progress:** [Player Shop seller lifecycle](../development/postgres-shop-seller-parity.md)
+adds opt-in listing, offer/Shop edits, direct Inventory withdrawal, escrow/cell
+constraints and account-scoped receipt/reopen parity. Targeted overlapping
+listing/withdrawal/replay fixtures cover this custody boundary. The seller-only
+projection omits unported claims/revenue; purchase/settlement, those projections,
+Auction reads and Exchange still need separate ports. This is not full P1/P2 or
+a live Marketplace backend switch.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must

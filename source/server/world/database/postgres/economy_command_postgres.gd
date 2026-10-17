@@ -8,12 +8,14 @@ var character_id: int
 var cached: Dictionary={}
 var committed:=false
 var receipt_replay:=false
+var rejected: MarketRejectedCommands
 var _command: String
 var _kind: String
 var _request: String
 
-func _init(database: Object) -> void:
+func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -> void:
 	db=database
+	rejected=rejected_commands
 
 static func valid_id(value: String) -> bool:
 	if value.is_empty() or value.length()>96: return false
@@ -58,7 +60,14 @@ func begin(owner: int, command: String, kind: String, args: Array, shared_accoun
 	if not result.ok:
 		cached=rollback("storage")
 		return false
-	if result.rows.is_empty(): return true
+	if result.rows.is_empty():
+		if rejected==null: return true
+		cached=rejected.lookup(account_id,_command,_kind,_request)
+		if cached.is_empty(): return true
+		if not db.rollback():
+			db.close()
+			cached={"ok":false,"error":"storage"}
+		return false
 	var row: Dictionary=result.rows[0]
 	cached=decode(str(row.result_json)) if row.kind==kind and row.request_json==_request else {"ok":false,"error":"command_conflict"}
 	receipt_replay=bool(cached.get("ok",false))
@@ -75,11 +84,19 @@ func rollback(error: String) -> Dictionary:
 	return {"ok":false,"error":error}
 
 func commit(result: Dictionary) -> Dictionary:
-	if not result.ok: return rollback(str(result.get("error","storage")))
+	if not result.ok:
+		if not db.rollback():
+			db.close()
+			return {"ok":false,"error":"storage"}
+		if rejected!=null: rejected.remember(account_id,_command,_kind,_request,result)
+		return result
 	result=result.duplicate(true)
 	result.item_state=read_state(db,character_id)
 	if result.item_state.is_empty(): return rollback("storage")
-	var written: Dictionary=db.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) VALUES(:account,:command,:character,:kind,:request,:result);",{"account":account_id,"command":_command,"character":character_id,"kind":_kind,"request":_request,"result":Codec.encode_result(result)})
+	var stored:=result.duplicate(true)
+	for field: String in ["revision","position","shop_id","price","balance"]:
+		if stored.has(field): stored[field]=str(stored[field])
+	var written: Dictionary=db.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) VALUES(:account,:command,:character,:kind,:request,:result);",{"account":account_id,"command":_command,"character":character_id,"kind":_kind,"request":_request,"result":Codec.encode_result(stored)})
 	if not written.ok: return rollback("storage")
 	if not db.commit():
 		db.close()

@@ -1,6 +1,6 @@
 class_name MarketRejectedCommands
 extends RefCounted
-## Bounded, short-lived negative responses only. Successful receipts stay in SQLite.
+## Bounded, short-lived negative responses only. Success receipts stay in persistence.
 ## MarketplaceService shares one instance between all shops/Exchange instances.
 const MAX_ACCOUNTS := 64
 const MAX_PER_ACCOUNT := 64
