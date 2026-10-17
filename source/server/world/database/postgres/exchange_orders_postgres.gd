@@ -52,6 +52,9 @@ static func price_before(a: Dictionary,b: Dictionary,ascending: bool) -> bool:
 	return left<right if ascending else left>right
 
 func place_order(character: int, p: Dictionary, pending: Dictionary) -> Dictionary:
+	return _transaction.run_with_retry(_place_order_once.bind(character,p.duplicate(true),pending.duplicate(true)))
+
+func _place_order_once(character: int, p: Dictionary, pending: Dictionary) -> Dictionary:
 	if not p.get("command_id") is String or not MarketRequestRules.valid_order(p):
 		_transaction.committed=false
 		return {"ok":false,"error":"request_or_overflow"}
@@ -105,6 +108,9 @@ func place_order(character: int, p: Dictionary, pending: Dictionary) -> Dictiona
 	return _finish({"ok":true,"order_id":order,"remaining":int(taker.remaining),"affected_accounts":affected.keys()},touched,pending)
 
 func cancel_order(character: int, command: String, order: String, revision: int, pending: Dictionary) -> Dictionary:
+	return _transaction.run_with_retry(_cancel_order_once.bind(character,command,order,revision,pending.duplicate(true)))
+
+func _cancel_order_once(character: int, command: String, order: String, revision: int, pending: Dictionary) -> Dictionary:
 	_transaction.committed=false
 	if db.in_transaction(): return {"ok":false,"error":"storage"}
 	# Identity hint survives filled/cancelled orders. Recheck ownership/revision
