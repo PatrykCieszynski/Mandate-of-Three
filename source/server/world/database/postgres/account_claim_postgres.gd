@@ -32,5 +32,19 @@ func claim_item(character: int, command: String, uid: String, revision: int, req
 func receipt(character: int, command: String) -> Dictionary:
 	return Seller.new(db,rejected).receipt(character,command)
 
+## Trusted claim producer (Exchange withdrawal). Caller retains command/receipt
+## ownership; this method never begins/commits or returns a provisional UI grant.
+func receive_in_transaction(item: ItemInstance) -> Dictionary:
+	if not db.in_transaction(): return {"ok":false,"error":"transaction"}
+	if item==null or not ItemInstance.valid_uid(item.uid): return {"ok":false,"error":"request"}
+	var definition:=ItemDefinitions.get_definition(item.definition_id)
+	if definition==null: return {"ok":false,"error":"unknown_definition"}
+	if item.amount<1 or item.amount>definition.stack_limit: return {"ok":false,"error":"request"}
+	var identity: Dictionary=db.query("SELECT c.account_id FROM economy.characters c JOIN economy.accounts a ON a.account_id=c.account_id WHERE c.character_id=:owner FOR NO KEY UPDATE OF a;",{"owner":item.owner_character_id})
+	if not identity.ok or identity.rows.is_empty(): return {"ok":false,"error":"storage" if not identity.ok else "owner"}
+	if not db.execute("INSERT INTO economy.item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision) VALUES(:uid,:owner,:definition,:amount,:upgrade,:affixes,:sockets,:revision);",{"uid":item.uid,"owner":item.owner_character_id,"definition":str(item.definition_id),"amount":item.amount,"upgrade":item.upgrade_level,"affixes":JSON.stringify(item.affixes),"sockets":JSON.stringify(item.sockets),"revision":item.revision}).ok: return {"ok":false,"error":"storage"}
+	if not db.execute("INSERT INTO economy.item_custody(uid,location,owner_id,position,claim_account_id) VALUES(:uid,'account_claim',:owner,-1,:account);",{"uid":item.uid,"owner":item.owner_character_id,"account":int(identity.rows[0].account_id)}).ok: return {"ok":false,"error":"storage"}
+	return {"ok":true,"uid":item.uid}
+
 func _reject(reason: String) -> Dictionary:
 	return _transaction.commit({"ok":false,"error":reason})

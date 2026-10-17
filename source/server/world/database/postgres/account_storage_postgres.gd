@@ -103,6 +103,34 @@ func _account(character: int) -> Dictionary:
 	if result.rows.is_empty(): return _error("owner")
 	return {"ok":true,"account_id":int(result.rows[0].account_id)}
 
+## Trusted in-transaction consumption, currently used by Exchange deposits.
+## Caller owns account-first command admission and rollback/receipt/COMMIT.
+## Removal/partial decrement allocates no cells; transfers still use the full
+## footprint contract above. Never consume another character's bag here.
+func item_in_transaction(character: int, uid: String) -> Dictionary:
+	if not db.in_transaction(): return _error("transaction")
+	var identity:=_account(character)
+	if not identity.ok: return identity
+	var admission: Dictionary=db.query("SELECT account_id FROM economy.accounts WHERE account_id=:account FOR NO KEY UPDATE;",{"account":identity.account_id})
+	if not admission.ok or admission.rows.is_empty(): return _error("storage")
+	var result: Dictionary=db.query(SELECT+"WHERE c.location='account_storage' AND c.storage_account_id=:account AND i.uid=:uid;",{"account":identity.account_id,"uid":uid})
+	if not result.ok: return _error("storage")
+	if result.rows.is_empty(): return _error("owner")
+	var item:=ItemInstance.from_row(result.rows[0])
+	return {"ok":true,"item":item} if item!=null else _error("stale")
+
+func consume_in_transaction(character: int, uid: String, revision: int, amount: int) -> Dictionary:
+	var owned:=item_in_transaction(character,uid)
+	if not owned.ok: return owned
+	var item: ItemInstance=owned.item
+	if item.revision!=revision: return _error("stale")
+	if amount<=0 or amount>item.amount: return _error("request")
+	if amount==item.amount:
+		if not db.execute("DELETE FROM economy.item_custody WHERE uid=:uid;",{"uid":uid}).ok: return _error("storage")
+		if not db.execute("DELETE FROM economy.item_instances WHERE uid=:uid;",{"uid":uid}).ok: return _error("storage")
+	elif not db.execute("UPDATE economy.item_instances SET amount=amount-:amount,revision=revision+1 WHERE uid=:uid;",{"amount":amount,"uid":uid}).ok: return _error("storage")
+	return {"ok":true}
+
 func _fits(position: int, height: int, occupied: Dictionary) -> bool:
 	var footprint:=Grid.cells(position,height)
 	return not footprint.is_empty() and not footprint.any(func(cell: int) -> bool: return occupied.has(cell))

@@ -105,7 +105,7 @@ func commit(result: Dictionary) -> Dictionary:
 	result.item_state=read_state(db,character_id)
 	if result.item_state.is_empty(): return rollback("storage")
 	var stored:=result.duplicate(true)
-	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance"]:
+	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance","amount"]:
 		if stored.has(field): stored[field]=str(stored[field])
 	var written: Dictionary=db.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) VALUES(:account,:command,:character,:kind,:request,:result);",{"account":account_id,"command":_command,"character":character_id,"kind":_kind,"request":_request,"result":Codec.encode_result(stored)})
 	if not written.ok: return rollback("storage")
@@ -123,6 +123,6 @@ static func read_state(database: Object, owner: int) -> Dictionary:
 
 static func decode(json: String) -> Dictionary:
 	var result: Dictionary=Codec.decode_result(json)
-	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance"]:
+	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance","amount"]:
 		if result.has(field): result[field]=int(result[field])
 	return result
