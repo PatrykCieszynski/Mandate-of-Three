@@ -1,16 +1,13 @@
 class_name InstanceHost
 extends SubViewport
-## 2D-independent admission and lifecycle state shared by map hosts.
-## Legacy ServerInstance retains gameplay/RPC compatibility during migration.
+## Data-only admission/lifecycle state shared by instance hosts.
+## Keep this base independent of legacy Player, Map and resource class cycles.
 
 var connected_peers: PackedInt64Array = PackedInt64Array()
 var awaiting_peers: Dictionary[int, Dictionary] = {}
-var instance_resource: InstanceResource
 var identity: Dictionary = {}
-enum AdmissionState { ACCEPTING = 0, DRAINING = 1 }
-enum AccessPolicy { PUBLIC = 0, RESERVED = 1 }
-var admission_state: AdmissionState = AdmissionState.ACCEPTING
-var access_policy: AccessPolicy = AccessPolicy.PUBLIC
+var admission_state: int = 0
+var access_policy: int = 0
 var allowed_character_ids: PackedInt64Array = PackedInt64Array()
 var opened_at_ms: int = 0
 var idle_since_ms: int = -1
@@ -21,14 +18,6 @@ func population() -> int:
 
 func allows_character(character_id: int) -> bool:
 	return character_id > 0 and (
-		access_policy == AccessPolicy.PUBLIC
-		or (access_policy == AccessPolicy.RESERVED and allowed_character_ids.has(character_id))
-	)
-
-func accepts_reservation() -> bool:
-	return (
-		not is_queued_for_deletion()
-		and admission_state == AdmissionState.ACCEPTING
-		and instance_resource != null
-		and population() < instance_resource.max_players
+		access_policy == 0
+		or (access_policy == 1 and allowed_character_ids.has(character_id))
 	)
