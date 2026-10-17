@@ -27,7 +27,16 @@ func checkpoint(deltas: Dictionary) -> Dictionary:
 	if not _begin(): return {"ok":false,"error":"storage"}
 	var balances: Dictionary = {}
 	var states: Array = []
-	for account_id: int in deltas:
+	# Admit every account before touching wallets, in the same order as Shop
+	# settlement/Exchange. Sorting wallet updates alone is insufficient: a match
+	# may flush taker's wallet before maker's while holding both account locks.
+	var accounts: Array = deltas.keys()
+	accounts.sort()
+	for account_id: int in accounts:
+		var admitted: Dictionary=db.query("SELECT account_id FROM economy.accounts WHERE account_id=:account FOR NO KEY UPDATE;",{"account":account_id})
+		if not admitted.ok: return _rollback("storage")
+		if admitted.rows.is_empty(): return _rollback("owner")
+	for account_id: int in accounts:
 		var result := _apply_income(account_id, int(deltas[account_id]))
 		if not result.ok: return _rollback(str(result.error))
 		balances[account_id] = result.balance

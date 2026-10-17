@@ -64,8 +64,8 @@ func claim_revenue(character: int, command: String, pending_income: int) -> Dict
 	var funds:=revenue(account)
 	if not funds.ok: return _transaction.rollback("storage")
 	if int(funds.amount)==0: return _reject("nothing_to_claim")
-	# Wallet checkpoints need no account admission; lock the wallet before
-	# computing headroom, so a concurrent income cannot invalidate partial collect.
+	# Lock before computing headroom; direct wallet credit/spend helpers also
+	# serialize on this row and cannot invalidate partial collection's capacity.
 	var wallet: Dictionary=db.query("SELECT yang FROM economy.account_wallets WHERE account_id=:account FOR NO KEY UPDATE;",{"account":account})
 	if not wallet.ok or wallet.rows.is_empty(): return _transaction.rollback("storage")
 	var balance: int=int(wallet.rows[0].yang)
