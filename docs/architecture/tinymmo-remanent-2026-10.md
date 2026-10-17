@@ -4,7 +4,7 @@
 
 | Area | Evidence | Decision |
 |---|---|---|
-| `addons/tinymmo/plugin.gd` | Active `[editor_plugins]` registration in `project.godot`; commented-out inspector and old debug-instance bootstrap | Removed commented bootstrap and unused inspector registration; then removed the disconnected inspector/property-editor popup subgraph (13 files, including .uid) |
+| `addons/tinymmo/plugin.gd` | Active `[editor_plugins]` registration in `project.godot`; commented-out inspector and old debug-instance bootstrap | Removed commented bootstrap and unused inspector registration; then removed the disconnected inspector/property-editor popup subgraph (11 files, including .uid) |
 | `addons/tinymmo/export_plugin/export_plugin.gd` | Called from active editor plugin; replaces `source/server/*.gd` scripts with reflection-based stubs on client export, excludes SQLite addon and includes raw CEF UI images | **Keep. Production export dependency.** Not safe to remove the addon wholesale |
 | `addons/tinymmo/main_screen/main_panel.gd` | Instantiated and exposed by active plugin, generates content indices and warns about quest prereq cycles | Keep until content-index workflow is separately migrated or retired |
 | `project.godot` user dir | `config/custom_user_dir_name="slayhorizon"` | Do not rename casually: migration of existing user data must be planned |
@@ -15,10 +15,10 @@
 
 ## Next cleanup passes, separately reviewed
 
-1. Enumerate all runtime, scene, autoload, export preset and test references before removing content-index authoring files or old 2D assets. The disconnected `TinyNodePath` inspector helper chain was removed in this pass.
+1. Enumerate all runtime, scene, autoload, export preset and test references before removing content-index authoring files or old 2D assets. The disconnected inspector editor/popup chain was removed; `TinyNodePath` must remain because `source/common/network/sync/property_cache.gd` calls it.
 2. Relocate export stubbing and raw CEF asset rules into a first-party export plugin if removing TinyMMO branding is desired. Test **real exported client/server artifacts**, not only headless Godot unit tests.
 3. Consider removing confirmed-unused legacy assets in small groups, including paired `.import` and resource UID files, and test resources/scenes that reference them.
 
 ## This PR's scope
 
-Removes the disabled editor bootstrap plus its unregistered inspector/property-editor/popup graph (13 files); corrects addon documentation. No gameplay logic, export behavior, config/user-data location or runtime assets were changed. Godot editor startup/export smoke must still be run before merge.
+Removes the disabled editor bootstrap plus its unregistered inspector/property-editor/popup graph (11 files); corrects addon documentation. No gameplay logic, export behavior, config/user-data location or runtime assets were changed. Godot editor startup/export smoke must still be run before merge.
