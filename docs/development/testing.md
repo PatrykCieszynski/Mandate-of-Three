@@ -134,6 +134,13 @@ same-ID buy/collect and reciprocal account locking. It is opt-in and does not
 switch World or complete the broader concurrency/load gates. See
 [settlement parity and limits](postgres-shop-settlement-parity.md).
 
+`--suite account-claims` compares private/public Shop projections and account claim
+receiving against SQLite: original UID/metadata/revisions, full footprint/capacity,
+receipt/reopen, SQL/COMMIT rollback, provenance constraints and independent alt/
+receiving conflicts. It also checks coherent public reads across native writer
+commits and private account-data isolation. It preserves the 200-claim window and
+does not switch runtime. See [claim parity and limits](postgres-account-claims-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC
