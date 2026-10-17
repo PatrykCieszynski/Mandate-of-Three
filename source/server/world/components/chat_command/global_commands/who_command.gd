@@ -12,11 +12,15 @@ func _init() -> void:
 
 func execute(args: PackedStringArray, peer_id: int, server_instance: ServerInstance) -> String:
 	var lines: PackedStringArray = PackedStringArray()
-	for pid: int in server_instance.players_by_peer_id:
-		var p: Player = server_instance.players_by_peer_id[pid]
-		if p == null or p.player_resource == null:
+	var world: GameWorld3D = server_instance.get_node_or_null("GameWorld") as GameWorld3D
+	if world == null:
+		return "No active 3D world in this instance."
+	for pid: int in server_instance.connected_peers:
+		if not world.characters.has(pid):
 			continue
-		var res: PlayerResource = p.player_resource
+		var res: PlayerResource = server_instance.world_server.connected_players.get(pid)
+		if res == null:
+			continue
 		lines.append("- %s @%s (#%d)" % [res.display_name, res.account_name, res.player_id])
 
 	if lines.is_empty():

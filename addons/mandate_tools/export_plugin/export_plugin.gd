@@ -107,7 +107,7 @@ func _generate_stub(path: String) -> String:
 		out.append("class_name %s" % gname)
 	out.append("extends %s" % _base_name(script))
 	out.append("## AUTO-GENERATED CLIENT STUB — the real script is server-only.")
-	out.append("## Generated at export by addons/tinymmo/export_plugin/export_plugin.gd.")
+	out.append("## Generated at export by addons/mandate_tools/export_plugin/export_plugin.gd.")
 	out.append("")
 
 	# Inherited members must not be re-declared (parse error) — collect the

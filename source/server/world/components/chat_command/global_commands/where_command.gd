@@ -22,8 +22,11 @@ func execute(args: PackedStringArray, peer_id: int, server_instance: ServerInsta
 	var inst: ServerInstance = ws.instance_manager.find_instance_for_peer(target.peer_id)
 	if inst == null:
 		return "%s is online but not in any instance." % target.label()
-	var p: Player = inst.get_player(target.peer_id)
-	var pos: Vector2 = p.global_position if p != null else Vector2.ZERO
-	return "%s is in %s at (%d, %d)." % [
-		target.label(), inst.instance_resource.instance_name, int(pos.x), int(pos.y)
+	var world: GameWorld3D = inst.get_node_or_null("GameWorld") as GameWorld3D
+	var actor: PlayerActor3D = world.characters.get(target.peer_id) if world != null else null
+	if actor == null:
+		return "%s is assigned to %s but has not joined the 3D world." % [target.label(), inst.instance_resource.instance_name]
+	var pos: Vector3 = actor.global_position
+	return "%s is in %s at (%d, %d, %d)." % [
+		target.label(), inst.instance_resource.instance_name, int(pos.x), int(pos.y), int(pos.z)
 	]

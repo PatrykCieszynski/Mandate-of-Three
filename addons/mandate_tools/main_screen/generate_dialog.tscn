@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3 uid="uid://cjuoajlc268b8"]
 
-[ext_resource type="Script" uid="uid://bye5rx5hh2swj" path="res://addons/tinymmo/main_screen/generate_dialog.gd" id="1_0am2k"]
+[ext_resource type="Script" uid="uid://bye5rx5hh2swj" path="res://addons/mandate_tools/main_screen/generate_dialog.gd" id="1_0am2k"]
 
 [sub_resource type="Image" id="Image_0am2k"]
 data = {
