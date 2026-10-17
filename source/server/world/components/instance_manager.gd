@@ -407,6 +407,8 @@ func _instances_for(resource: InstanceResource) -> Array[ServerInstance]:
 	return result
 
 func select_entry_instance(resource: InstanceResource) -> ServerInstance:
+	if resource == null or not resource.use_3d:
+		return null
 	var selected: ServerInstance
 	var population := 2147483647
 	var instances: Array[ServerInstance] = []
@@ -444,7 +446,7 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 
 ## Loaded public routing only. Never use InstanceResource array order as access.
 func find_public_instance(resource: InstanceResource) -> ServerInstance:
-	if resource == null:
+	if resource == null or not resource.use_3d:
 		return null
 	for instance: ServerInstance in _instances_for(resource):
 		if instance.get_parent() != self or not instance.is_node_ready():
