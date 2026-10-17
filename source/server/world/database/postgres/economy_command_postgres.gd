@@ -23,7 +23,7 @@ static func valid_id(value: String) -> bool:
 		if not "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-:".contains(character): return false
 	return true
 
-func begin(owner: int, command: String, kind: String, args: Array, shared_account: bool = false) -> bool:
+func begin(owner: int, command: String, kind: String, args: Array, shared_account: bool = false, counterparty: int = 0) -> bool:
 	committed=false
 	receipt_replay=false
 	cached={}
@@ -37,11 +37,22 @@ func begin(owner: int, command: String, kind: String, args: Array, shared_accoun
 	# two alts using one command ID must observe replay/conflict, not a PK error.
 	var locked_account: int=0
 	if shared_account:
-		var scope: Dictionary=db.query("SELECT c.account_id FROM economy.characters c JOIN economy.accounts a ON a.account_id=c.account_id WHERE c.character_id=:id FOR NO KEY UPDATE OF a;",{"id":owner})
+		var scope: Dictionary=db.query("SELECT account_id FROM economy.characters WHERE character_id=:id;",{"id":owner})
 		if not scope.ok or scope.rows.is_empty():
 			cached=rollback("storage" if not scope.ok else "owner")
 			return false
 		locked_account=int(scope.rows[0].account_id)
+		# Shop settlement locks both account domains in ascending order BEFORE
+		# character/receipt/capacity. Reciprocal purchases cannot invert locks.
+		# counterparty is a server-resolved hint; the store rechecks it under lock.
+		var accounts: Array[int]=[locked_account]
+		if counterparty>0 and counterparty!=locked_account: accounts.append(counterparty)
+		accounts.sort()
+		for account: int in accounts:
+			var admission: Dictionary=db.query("SELECT account_id FROM economy.accounts WHERE account_id=:account FOR NO KEY UPDATE;",{"account":account})
+			if not admission.ok or admission.rows.is_empty():
+				cached=rollback("storage")
+				return false
 	# Serialize character capacity/commands without blocking FK KEY SHARE checks
 	# on an alt's provenance while that alt waits for shared Storage admission.
 	var result: Dictionary=db.query("SELECT account_id FROM economy.characters WHERE character_id=:id FOR NO KEY UPDATE;",{"id":owner})
@@ -94,7 +105,7 @@ func commit(result: Dictionary) -> Dictionary:
 	result.item_state=read_state(db,character_id)
 	if result.item_state.is_empty(): return rollback("storage")
 	var stored:=result.duplicate(true)
-	for field: String in ["revision","position","shop_id","price","balance"]:
+	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance"]:
 		if stored.has(field): stored[field]=str(stored[field])
 	var written: Dictionary=db.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) VALUES(:account,:command,:character,:kind,:request,:result);",{"account":account_id,"command":_command,"character":character_id,"kind":_kind,"request":_request,"result":Codec.encode_result(stored)})
 	if not written.ok: return rollback("storage")
@@ -112,6 +123,6 @@ static func read_state(database: Object, owner: int) -> Dictionary:
 
 static func decode(json: String) -> Dictionary:
 	var result: Dictionary=Codec.decode_result(json)
-	for field: String in ["revision","position","shop_id","price","balance"]:
+	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance"]:
 		if result.has(field): result[field]=int(result[field])
 	return result
