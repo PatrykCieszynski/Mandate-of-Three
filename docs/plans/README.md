@@ -1,5 +1,9 @@
 # Active plans and work packages
 
+**Deferred season lifecycle:** [Seasonal-to-Classic transfer](season-close-transfer.md)
+retains the source PDF's offline manifest/conservation requirements. No migrator
+or Classic deployment is implemented or authorized by that document.
+
 **Documentation cleanup:** [File-by-file audit of `main` and `shop`](documentation-file-audit.md) — separate approved deletion/consolidation pass after review. This is not an automatic deletion instruction.
 
 **Current technical priority:** [Pre-alpha architecture hardening and Auction integration](architecture-hardening.md) — ordered, testable PRs for authentication, RPC boundaries, Marketplace, persistence and World synchronization.

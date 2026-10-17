@@ -19,7 +19,7 @@ config/version="0.28.0"
 run/main_scene="res://source/common/main.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="slayhorizon"
-config/features=PackedStringArray("4.6", "Forward Plus")
+config/features=PackedStringArray("4.7", "Forward Plus")
 boot_splash/show_image=false
 config/icon="res://icon.svg"
 
@@ -49,7 +49,6 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/size/window_width_override=1280
 window/size/window_height_override=720
-window/stretch/mode="disabled"
 window/size/min_width=1280
 window/size/min_height=720
 
@@ -69,6 +68,11 @@ folder_colors={
 "res://source/common/": "yellow",
 "res://source/server/": "gray"
 }
+
+[godot_cef]
+
+storage/data_path="user://mandate-cef-profile"
+performance/max_frame_rate=60
 
 [gui]
 
@@ -208,21 +212,12 @@ locale/translations=PackedStringArray("res://data/translations/translations.en_U
 2d_physics/layer_6="harvestable"
 2d_physics/layer_7="interactable"
 
-[rendering]
-
-textures/canvas_textures/default_texture_filter=0
-renderer/rendering_method="forward_plus"
-renderer/rendering_driver.windows="vulkan"
-renderer/rendering_method.mobile="mobile"
-textures/vram_compression/import_etc2_astc=true
-lights_and_shadows/directional_shadow/size=4096
-
-[godot_cef]
-
-security/default_permission_policy=0
-storage/data_path="user://mandate-cef-profile"
-performance/max_frame_rate=60
-
 [network]
 
 api/base_url="http://127.0.0.1:8088"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
+textures/vram_compression/import_etc2_astc=true
+renderer/rendering_driver.windows="vulkan"
