@@ -488,6 +488,8 @@ func recall_player(peer_id: int) -> void:
 
 
 func queue_charge_instance(instance_resource: InstanceResource, callback: Callable) -> void:
+	if instance_resource == null or not instance_resource.use_3d:
+		return
 	for pending: ServerInstance in loading_instances.values():
 		if pending.instance_resource==instance_resource and pending.access_policy == ServerInstance.AccessPolicy.PUBLIC and pending.admission_state == ServerInstance.AdmissionState.ACCEPTING and not pending.is_queued_for_deletion():
 			pending.ready.connect(callback.bind(pending),CONNECT_ONE_SHOT)
