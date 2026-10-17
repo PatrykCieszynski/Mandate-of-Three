@@ -258,6 +258,8 @@ func reserve_entry(peer_id: int, resource: InstanceResource, target: ServerInsta
 		return {"ok": true, "instance": joined, "duplicate": true}
 	if resource == null:
 		return {"ok": false, "error": "map_unavailable"}
+	if not resource.can_join_character(admitted):
+		return {"ok": false, "error": "wardstone_required"}
 	for existing: ServerInstance in _all_instances():
 		if existing.awaiting_peers.has(peer_id):
 			if has_valid_entry(existing, peer_id, admitted):
@@ -306,6 +308,7 @@ func has_valid_entry(instance: ServerInstance, peer_id: int, session: PlayerReso
 		not instance.is_queued_for_deletion() and _is_current_session(peer_id, session)
 		and pending.get("session") == session
 		and instance.allows_character(session.player_id)
+		and instance.instance_resource.can_join_character(session)
 		and (not instance.instance_resource.use_3d
 			or int(pending.get("expires_at_ms", 0)) > Time.get_ticks_msec())
 	)
