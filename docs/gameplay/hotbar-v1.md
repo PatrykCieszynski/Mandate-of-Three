@@ -7,3 +7,9 @@ The current horn PR (#54) still exposes its provisional H key, default/basic tie
 Also deferred: drag/drop UX, action feedback and cooldown overlays, HP/MP projection and layout, binding save/load via account settings and reconnect, keyboard focus rules.
 
 This is intentionally separate from modifying CoreUiController and its CEF front end: use the existing web UI architecture, not a second Godot HUD.
+
+## Bottom CEF preview
+
+The same PR now mounts a persistent bottom-center 8-slot bar in the existing `web/inventory/game.html` CEF page. Its CSS uses the shared `--skin-slot-normal`, `--frame`, `--ink`, and `--muted` values already used by the Metin-inspired inventory skin. The bar is deliberately pointer-transparent and displays empty reference slots, because actual item UID activation, assignment, skill activation and cooldown sync have not yet been wired. It contains no hardcoded health/mana figures.
+
+Before enabling interactions, integrate slot binding state through existing `UiCommandDispatcher` domains and validate item USE authorization on the server. Keep the CEF pointer-region lease accurate once the bar becomes interactive.
