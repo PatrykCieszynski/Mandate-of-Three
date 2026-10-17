@@ -153,6 +153,14 @@ equipment and full-footprint capacity decisions. Starter/pickup/receiving helper
 keep their existing policies; account Storage and seller/claim retry stay separate.
 No schema/protocol/runtime change; broader P2 and P3/P4 remain open.
 
+**P2i progress:** [Shared Storage retry](../development/postgres-transaction-retry.md#p2i--shared-account-storage-commands)
+uses one existing owner for complete deposit/internal move/alt withdrawal attempts.
+Native faults cover custody, provenance/revision, placement, original issuing-
+character replay/conflict, no-op flags, exhaustion and no COMMIT retry. Queued alts
+change source ownership/revision or shared destination footprint before retry.
+In-transaction consumption helpers retain caller ownership, with no nested loop.
+No schema/protocol/runtime change; seller/claim retry and broader P2/P3/P4 remain open.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
