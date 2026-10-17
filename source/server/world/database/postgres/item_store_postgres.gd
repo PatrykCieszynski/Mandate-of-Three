@@ -125,7 +125,7 @@ func inventory_command(owner: int, action: String, uid: String, revision: int, p
 	if action not in ["move","equip","unequip","activate"] or not ItemInstance.valid_uid(uid) or revision<0: return _error("request")
 	if (action in ["activate","equip"] and position!=-1) or position < -1 or position>=InventoryGrid.CAPACITY: return _error("request")
 	var transaction:=Commands.new(db)
-	if not transaction.begin(owner,operation_id,"inventory",[owner,action,uid,revision,position]):
+	if not transaction.begin(owner,operation_id,"inventory",[owner,action,uid,revision,position],true):
 		receipt_replay=transaction.receipt_replay
 		return transaction.cached
 	var result: Dictionary
@@ -229,7 +229,12 @@ func _increment_revision(uid: String, owner: int) -> bool:
 
 func _begin_character(owner: int) -> Dictionary:
 	if db.in_transaction() or not db.begin(): return _error("storage")
-	var result: Dictionary=db.query("SELECT character_id FROM economy.characters WHERE character_id=:owner FOR NO KEY UPDATE;",{"owner":owner})
+	# Starter/pickup also mutate account item watermarks. Use the same account
+	# before character order as receipted Inventory and external receiving flows.
+	var identity: Dictionary=db.query("SELECT c.account_id FROM economy.characters c JOIN economy.accounts a ON a.account_id=c.account_id WHERE c.character_id=:owner FOR NO KEY UPDATE OF a;",{"owner":owner})
+	if not identity.ok: return _rollback("storage")
+	if identity.rows.is_empty(): return _rollback("owner")
+	var result: Dictionary=db.query("SELECT character_id FROM economy.characters WHERE character_id=:owner AND account_id=:account FOR NO KEY UPDATE;",{"owner":owner,"account":int(identity.rows[0].account_id)})
 	if not result.ok: return _rollback("storage")
 	if result.rows.is_empty(): return _rollback("owner")
 	return {"ok":true}

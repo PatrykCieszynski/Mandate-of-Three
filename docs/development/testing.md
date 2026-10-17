@@ -148,6 +148,13 @@ are synchronous SQL/projection measurements, not World/concurrent-load evidence.
 Production remains on the existing async SQLite reader. See
 [Auction parity and limits](postgres-auction-search-parity.md).
 
+`--suite inventory-concurrency` is the opt-in P2 cross-operation custody check:
+cross-alt receipts, equip/list, move/deposit/conversion, full-footprint overlap,
+last-space receiving, starter/pickup and global UID uniqueness. Independent native
+sessions and original-store A/B cover the conflict boundary; no DOM, animation or
+PostgreSQL runtime dependency is added to smoke. See
+[Inventory concurrency](postgres-inventory-concurrency.md).
+
 `--suite wallet-concurrency` is the opt-in P2 cross-operation shared-account check:
 NPC/Upgrade spends, Exchange reservations, partial collection, receipt conflicts,
 checkpoint lock ordering and known-rollback original-ID recovery. Native sessions
