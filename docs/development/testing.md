@@ -148,6 +148,12 @@ are synchronous SQL/projection measurements, not World/concurrent-load evidence.
 Production remains on the existing async SQLite reader. See
 [Auction parity and limits](postgres-auction-search-parity.md).
 
+`--suite exchange-ledger` compares Inventory/Storage stack conversion into account
+balances and Inventory/claim withdrawal against SQLite. It covers original UID
+replay, free/reserved/cap bounds, statement/COMMIT rollback/reopen and independent
+alt/Storage-transfer conflicts. It does not implement order reservation/matching
+or switch runtime. See [ledger parity and limits](postgres-exchange-ledger-parity.md).
+
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
 `run-web-inventory`, `run-npc`, `run-shop`. Choose the affected flow for movement/combat/XP/wallet/RPC

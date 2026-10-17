@@ -76,6 +76,14 @@ pagination parity, migration/projection failure recovery and 10k active-offer
 observations are covered. World still uses its current SQLite async scheduler;
 Exchange ledger/matching and P2/P3/P4 remain separate unfinished gates.
 
+**P1k progress:** [Exchange ledger conversion](../development/postgres-exchange-ledger-parity.md)
+adds opt-in account fungible balances, Inventory/Storage deposits, Inventory or
+explicit claim withdrawals and original operation recovery. Storage owns its
+authorization/consumption; Claims owns new claim production. SQLite parity and
+targeted native alt/withdrawal/Storage-transfer conflicts are covered. Order
+reservations/release, matching and cross-party settlement remain the next separate
+port; runtime and broad P2/P3/P4 are unchanged.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
