@@ -84,6 +84,13 @@ targeted native alt/withdrawal/Storage-transfer conflicts are covered. Order
 reservations/release, matching and cross-party settlement remain the next separate
 port; runtime and broad P2/P3/P4 are unchanged.
 
+**P1l progress:** [Exchange order settlement](../development/postgres-exchange-orders-parity.md)
+adds opt-in pair-coordinated reservation, price-time matching, partial fills,
+cancel/refund and cross-party atomic settlement/receipts. SQLite snapshot parity,
+native independent-session conflicts and placement/cancel COMMIT recovery are
+covered. The planned P1 Exchange domain port is complete; broad P2 race/retry,
+P3 execution/fencing and P4 operational gates remain. Production stays on SQLite.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must

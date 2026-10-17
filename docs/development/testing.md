@@ -148,6 +148,13 @@ are synchronous SQL/projection measurements, not World/concurrent-load evidence.
 Production remains on the existing async SQLite reader. See
 [Auction parity and limits](postgres-auction-search-parity.md).
 
+`--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
+partial fills, cancel/refund, snapshots, original receipts and conservation. Native
+independent sessions cover two takers, cancel/fill, duplicate commands and shared
+accounts across two books; statement/COMMIT faults, reopen, overflow and limits
+are opt-in. World stays on SQLite; no default CI dependency or PostgreSQL network
+claim. See [order settlement parity](postgres-exchange-orders-parity.md).
+
 `--suite exchange-ledger` compares Inventory/Storage stack conversion into account
 balances and Inventory/claim withdrawal against SQLite. It covers original UID
 replay, free/reserved/cap bounds, statement/COMMIT rollback/reopen and independent
