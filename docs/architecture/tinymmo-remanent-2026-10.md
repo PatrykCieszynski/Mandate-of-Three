@@ -15,7 +15,7 @@
 
 ## Next cleanup passes, separately reviewed
 
-1. Enumerate all runtime, scene, autoload, export preset and test references before removing content-index authoring files or old 2D assets. The disconnected inspector editor/popup chain was removed; `TinyNodePath` must remain because `source/common/network/sync/property_cache.gd` calls it.
+1. Enumerate all runtime, scene, autoload, export preset and test references before removing content-index authoring files or old 2D assets. The disconnected inspector editor/popup chain was removed; `TinyNodePath` remains active via `source/common/network/sync/nodepath_helper.gd` because `property_cache.gd` calls it.
 2. Relocate export stubbing and raw CEF asset rules into a first-party export plugin if removing TinyMMO branding is desired. Test **real exported client/server artifacts**, not only headless Godot unit tests.
 3. Consider removing confirmed-unused legacy assets in small groups, including paired `.import` and resource UID files, and test resources/scenes that reference them.
 
