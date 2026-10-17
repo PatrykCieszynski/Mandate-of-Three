@@ -125,6 +125,13 @@ func finished() -> void:
 	if GameMode.is_world_server(): done[multiplayer.get_remote_sender_id()]=true
 
 func run_server() -> void:
+	var legacy_map := InstanceResource.new()
+	legacy_map.instance_name = &"LegacyMapRejected"
+	legacy_map.use_3d = false
+	legacy_map.map_path = "res://tests/fixtures/world3d/test_arena.tscn"
+	var before_legacy := manager.loading_instances.size()
+	check(manager.charge_instance(legacy_map, 1) == null and manager.prepare_instance(legacy_map) == null and manager.loading_instances.size() == before_legacy,
+		"production instance manager must reject 2D resources before construction")
 	var broken:=InstanceResource.new();broken.instance_name=&"BrokenFixture";broken.use_3d=true;broken.map_path="res://tests/inventory_grid.tscn"
 	var loading_before:=manager.loading_instances.size()
 	check(manager.prepare_instance(broken)==null and manager.loading_instances.size()==loading_before and broken.charged_instances.is_empty(),"failed map load leaves no half-registered instance")
