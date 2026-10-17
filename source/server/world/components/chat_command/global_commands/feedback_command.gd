@@ -54,9 +54,10 @@ func execute(args: PackedStringArray, peer_id: int, server_instance: ServerInsta
 	var inst: ServerInstance = ws.instance_manager.find_instance_for_peer(peer_id)
 	if inst != null:
 		instance_name = inst.instance_resource.instance_name
-		var p: Player = inst.get_player(peer_id)
-		if p != null:
-			position = "(%d, %d)" % [int(p.global_position.x), int(p.global_position.y)]
+		var world: GameWorld3D = inst.get_node_or_null("GameWorld") as GameWorld3D
+		var actor: PlayerActor3D = world.characters.get(peer_id) if world != null else null
+		if actor != null:
+			position = "(%d, %d, %d)" % [int(actor.global_position.x), int(actor.global_position.y), int(actor.global_position.z)]
 
 	var version: String = GatewayAPI.game_version()
 
