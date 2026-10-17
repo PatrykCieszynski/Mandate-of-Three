@@ -459,35 +459,6 @@ func find_public_instance(resource: InstanceResource) -> ServerInstance:
 	return null
 
 
-func _on_player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper) -> void:
-	# Jailed players can't traverse warpers — that's the whole point of jail.
-	# We notify them once per attempt so they know it's intentional.
-	if JailList.is_jailed(player.player_resource.account_name):
-		world_server.chat_service.push_system_to_player(
-			current_instance, player.player_resource.player_id,
-			"You are jailed and cannot leave this area."
-		)
-		return
-
-	var instance_index: int = -1 # Will be useful later
-	var target_instance: ServerInstance
-	var instance_resource: InstanceResource = warper.target_instance
-	if not instance_resource:
-		return
-
-	if instance_resource.can_join_instance(player, instance_index):
-		target_instance = find_public_instance(instance_resource)
-		if target_instance:
-			player_switch_instance(target_instance, warper.target_id, player, current_instance)
-		else:
-			queue_charge_instance(
-				instance_resource,
-				player_switch_instance.bind(warper.target_id, player, current_instance)
-			)
-	else:
-		return
-
-
 ## Recall travel: send the peer to the town hub (RECALL_INSTANCE_NAME) at its
 ## default spawn (index 0). A faithful copy of send_player_to_jail — resolve the
 ## current instance authoritatively, charge the hub if it isn't live yet, then
