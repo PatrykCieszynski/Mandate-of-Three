@@ -1,7 +1,8 @@
-# PostgreSQL P2c–P2d — receipt-backed transaction retry
+# PostgreSQL P2c–P2e — receipt-backed transaction retry
 
 These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
-retry for **Shop purchase/revenue collection and Exchange order placement/cancellation**. Production World remains
+retry for **Shop purchase/revenue collection, Exchange order placement/cancellation
+and Exchange stack conversion**. Production World remains
 SQLite; no executor, connection pool, RPC, schema or backend selection is added.
 
 ## Policy and ownership
@@ -31,8 +32,7 @@ path; P3 must provide bounded nonblocking execution before runtime adoption.
 COMMIT failure keeps the existing conservative policy: close and return
 `outcome_unknown`, then discover the original receipt after reconnect. Even a
 COMMIT error carrying `40001`/`40P01` does not enter the statement-rollback loop.
-Unreceipted Wallet checkpoints, Exchange ledger conversion and other domain stores
-are not opted in.
+Unreceipted Wallet checkpoints and other domain stores are not opted in.
 
 PostgreSQL requires retry of the full transaction, including decisions about SQL
 and values. SQLSTATE alone is insufficient for application retry safety. See
@@ -105,6 +105,39 @@ cancelled before buyer retry is no longer matched; an order filled before cancel
 retry cannot be refunded using its old revision. Only those coordination probes
 extend session-local lock/statement timeouts; runner defaults are unchanged.
 
-See [P2d evidence](../evidence/postgres-p2d/README.md). This does not opt ledger
-conversion, Inventory, Storage, Upgrade or seller lifecycle into retry, complete
+See [P2d evidence](../evidence/postgres-p2d/README.md). P2d does not opt ledger
+conversion (added separately in P2e), Inventory, Storage, Upgrade or seller lifecycle into retry, complete
 the broad P2 gate, or provide P3 pending-prefix fencing/nonblocking execution.
+
+## P2e — Exchange stack conversion
+
+`ExchangeLedgerPostgres.deposit()` and `withdraw()` now use the same bounded owner.
+Each attempt redoes account/character admission and receipt lookup, source
+authorization/revision/fungibility or destination capacity, ledger credit/debit,
+item consumption/creation, watermarks and success receipt. Original command
+arguments stay fixed; no first-attempt stack, capacity decision or generated UID
+is reused after rollback. Only the confirmed result exposes the new UID.
+
+Storage remains the owner of shared-item authorization and consumption via
+`item_in_transaction()` and `consume_in_transaction()`. Conversion does not write
+Storage custody directly, weaken account-first locking or bypass full-footprint
+validation. Withdrawal still targets character Inventory or account claims only;
+it does not add a Storage fallback. Ordinary Storage/Inventory commands are not
+automatically opted into retry by this change.
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite exchange-ledger
+```
+
+The expanded existing fixture covers partial/whole bag and shared-Storage stacks,
+Inventory/claim receiving, one durable generated UID, ledger conservation,
+revisions and original-result replay after native statement rollback. Persistent
+retryable errors stop after three attempts; other codes and COMMIT failures do
+not retry. A queued independent Storage withdrawal moves the source stack to an
+alt after converter rollback; retry reauthorizes and rejects the obsolete Storage
+source, without credit or a success receipt. The complete stack remains with its
+new owner. Existing cross-operation capacity/custody regressions remain required.
+
+See [P2e evidence](../evidence/postgres-p2e/README.md). Production remains SQLite.
+P3 pending-prefix/session fencing and nonblocking execution, remaining domains'
+explicit retry adoption and the broader P2/P4 gates remain separate work.

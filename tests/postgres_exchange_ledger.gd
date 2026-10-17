@@ -238,6 +238,7 @@ func _ready() -> void:
 	var candidate:=exercise(Ledger.new(pg),items,Storage.new(pg),Claims.new(pg),Views.new(pg),true)
 	assert(baseline==candidate,"ledger, stack/claim/Storage custody, revisions and receipts match SQLite")
 	await native_checks(items)
+	await retry_checks(items)
 	pg.close()
 	runtime.db=null
 	runtime.free()
@@ -331,3 +332,129 @@ func race_worker(dsn: String, spec: Array, ready: Semaphore) -> Dictionary:
 	var committed: bool=ledger.committed
 	database.close()
 	return {"result":result,"committed":committed}
+
+func retry_checks(items: RefCounted) -> void:
+	assert(Wallet.new(pg).initialize_account(8000).ok)
+	for character: int in [80000,80001]: assert(items.bind_character(character,8000))
+	var ledger:=Ledger.new(pg)
+	var storage:=Storage.new(pg)
+	execute(true,"CREATE SEQUENCE economy.fixture_conversion_attempt;")
+	execute(true,"CREATE FUNCTION economy.fixture_conversion_retry() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE attempt BIGINT; BEGIN attempt:=nextval('economy.fixture_conversion_attempt'); IF attempt<=TG_ARGV[1]::BIGINT THEN IF TG_NARGS>2 THEN PERFORM pg_advisory_xact_lock(95126); END IF; RAISE EXCEPTION 'conversion retry fixture' USING ERRCODE=TG_ARGV[0]; END IF; IF TG_OP='DELETE' THEN RETURN OLD; END IF; RETURN NEW; END; $$;")
+	var index: int=0
+	for source: String in ["bag","account_storage"]:
+		for whole: bool in [false,true]:
+			for code: String in ["40001","40P01"]:
+				var id: int=9100+index
+				seed_item(items,true,80000,id,index,20)
+				var revision: int=0
+				var character: int=80000
+				if source=="account_storage":
+					assert(storage.transfer_command(80000,uid(id),0,"inventory","storage",index,"retry-store-"+str(index)).ok)
+					revision=1
+					character=80001 # Shared account, original stack provenance retained.
+				var amount: int=20 if whole else 7
+				var before: int=retry_balance()
+				# Partial mutation fails after ledger credit; whole deletion fails at
+				# the receipt after custody and instance removal.
+				var table: String="market_commands" if whole else "item_instances"
+				conversion_fault(table,"INSERT" if whole else "UPDATE",code,1)
+				var command: String="retry-deposit-"+str(index)
+				var result: Dictionary=ledger.deposit(character,command,uid(id),revision,amount,source)
+				assert(result.ok and ledger.committed and conversion_attempts()==2 and retry_balance()==before+amount)
+				var stack: Array=rows(true,"SELECT amount,revision,owner_character_id FROM economy.item_instances WHERE uid='"+uid(id)+"';")
+				if whole: assert(stack.is_empty())
+				else: assert(stack.size()==1 and int(stack[0].amount)==13 and int(stack[0].revision)==revision+1 and int(stack[0].owner_character_id)==80000)
+				var state:=native_state()
+				assert(ledger.deposit(character,command,uid(id),revision,amount,source)==result and not ledger.committed and native_state()==state and conversion_attempts()==2)
+				clear_conversion_fault(table)
+				index+=1
+	for destination: String in ["bag","claim"]:
+		for table: String in ["item_custody","market_commands"]:
+			for code: String in ["40001","40P01"]:
+				conversion_fault(table,"INSERT",code,1)
+				var before: int=retry_balance()
+				var count: int=int(rows(true,"SELECT COUNT(*) AS n FROM economy.item_instances;")[0].n)
+				var command: String="retry-withdraw-"+str(index)
+				var result: Dictionary=ledger.withdraw(80001,command,"upgrade_ore",1,destination)
+				assert(result.ok and ledger.committed and conversion_attempts()==2 and retry_balance()==before-1)
+				assert(int(rows(true,"SELECT COUNT(*) AS n FROM economy.item_instances;")[0].n)==count+1,"aborted generated UID cannot survive withdrawal retry")
+				var placement: Dictionary=rows(true,"SELECT i.amount,i.owner_character_id,c.location,c.claim_account_id FROM economy.item_instances i JOIN economy.item_custody c USING(uid) WHERE i.uid='"+result.uid+"';")[0]
+				assert(int(placement.amount)==1 and int(placement.owner_character_id)==80001 and placement.location==("bag" if destination=="bag" else "account_claim"))
+				if destination=="claim": assert(int(placement.claim_account_id)==8000)
+				var state:=native_state()
+				assert(ledger.withdraw(80001,command,"upgrade_ore",1,destination)==result and not ledger.committed and native_state()==state and conversion_attempts()==2)
+				assert(ledger.receipt(80001,command)==result)
+				clear_conversion_fault(table)
+				index+=1
+	seed_item(items,true,80000,9900,30,20)
+	for code: String in ["40001","40P01","23505","55P03","57014"]:
+		for deposit: bool in [true,false]:
+			conversion_fault("market_commands","INSERT",code,99)
+			var before:=native_state()
+			var result: Dictionary=ledger.deposit(80000,"budget-deposit-"+code,uid(9900),0,1,"bag") if deposit else ledger.withdraw(80001,"budget-withdraw-"+code,"upgrade_ore",1,"claim")
+			assert(result.error=="storage" and not ledger.committed and not pg.in_transaction() and native_state()==before)
+			assert(conversion_attempts()==(3 if code in ["40001","40P01"] else 1))
+			clear_conversion_fault("market_commands")
+	for code: String in ["40001","40P01"]:
+		for deposit: bool in [true,false]:
+			conversion_fault("market_commands","INSERT",code,99,true)
+			var before:=native_state()
+			var command: String="commit-retry-"+code+str(deposit)
+			var result: Dictionary=ledger.deposit(80000,command,uid(9900),0,1,"bag") if deposit else ledger.withdraw(80000,command,"upgrade_ore",1,"claim")
+			assert(result.get("outcome_unknown",false) and not ledger.committed and not pg.is_open())
+			assert(pg.open("postgresql",connection) and conversion_attempts()==1)
+			clear_conversion_fault("market_commands")
+			assert(native_state()==before and ledger.receipt(80000,command).error=="unknown_command")
+	await retry_storage_reselection(items)
+	print("POSTGRES_EXCHANGE_CONVERSION_RETRY_OK whole/partial bag/Storage conversion, unique withdrawal UID, replay, bounded attempts, no COMMIT retry and Storage reauthorization")
+
+func retry_balance() -> int:
+	var balances:=rows(true,"SELECT free FROM economy.exchange_assets WHERE account_id=8000 AND asset_id='upgrade_ore';")
+	return 0 if balances.is_empty() else int(balances[0].free)
+
+func conversion_fault(table: String, event: String, code: String, failures: int, deferred: bool = false) -> void:
+	execute(true,"ALTER SEQUENCE economy.fixture_conversion_attempt RESTART WITH 1;")
+	var create: String="CREATE CONSTRAINT TRIGGER fixture_retry AFTER INSERT ON economy.%s DEFERRABLE INITIALLY DEFERRED" % table if deferred else "CREATE TRIGGER fixture_retry BEFORE %s ON economy.%s" % [event,table]
+	execute(true,create+" FOR EACH ROW EXECUTE FUNCTION economy.fixture_conversion_retry('%s','%d');" % [code,failures])
+
+func clear_conversion_fault(table: String) -> void:
+	execute(true,"DROP TRIGGER fixture_retry ON economy."+table+";")
+
+func conversion_attempts() -> int:
+	return int(rows(true,"SELECT last_value FROM economy.fixture_conversion_attempt;")[0].last_value)
+
+func retry_storage_reselection(items: RefCounted) -> void:
+	seed_item(items,true,80000,9901,31,20)
+	assert(Storage.new(pg).transfer_command(80000,uid(9901),0,"inventory","storage",30,"retry-reselect-store").ok)
+	var balance: int=retry_balance()
+	execute(true,"ALTER SEQUENCE economy.fixture_conversion_attempt RESTART WITH 1;")
+	execute(true,"CREATE TRIGGER fixture_retry BEFORE INSERT ON economy.market_commands FOR EACH ROW WHEN (current_setting('application_name')='retry-converter') EXECUTE FUNCTION economy.fixture_conversion_retry('40001','1','gate');")
+	execute(true,"SELECT pg_advisory_lock(95126);")
+	# Session-local coordination only; default fixture limits stay unchanged.
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var converter:=Thread.new()
+	assert(converter.start(race_worker.bind(connection+" application_name=retry-converter"+budgets,[80001,"reselect-deposit","deposit",[uid(9901),1,20,"account_storage"]],ready))==OK)
+	ready.wait()
+	var converter_waiting: bool=await conversion_waiting("retry-converter")
+	var taker:=Thread.new()
+	assert(taker.start(race_worker.bind(connection+" application_name=retry-storage-taker"+budgets,[80001,"reselect-take","storage",[uid(9901),1,30]],ready))==OK)
+	ready.wait()
+	var taker_waiting: bool=await conversion_waiting("retry-storage-taker")
+	execute(true,"SELECT pg_advisory_unlock(95126);")
+	var converted: Dictionary=converter.wait_to_finish()
+	var taken: Dictionary=taker.wait_to_finish()
+	clear_conversion_fault("market_commands")
+	assert(converter_waiting and taker_waiting and taken.result.ok)
+	assert(not converted.result.ok and converted.result.error=="owner" and not converted.committed and conversion_attempts()==1)
+	assert(retry_balance()==balance and Ledger.new(pg).receipt(80001,"reselect-deposit").error=="unknown_command")
+	var received: Array=rows(true,"SELECT i.amount,i.revision,i.owner_character_id,c.location FROM economy.item_instances i JOIN economy.item_custody c USING(uid) WHERE i.uid='"+uid(9901)+"';")
+	assert(received.size()==1 and int(received[0].amount)==20 and int(received[0].revision)==2 and int(received[0].owner_character_id)==80001 and received[0].location=="bag")
+
+func conversion_waiting(label: String) -> bool:
+	var deadline: int=Time.get_ticks_msec()+2000
+	while Time.get_ticks_msec()<deadline:
+		execute(true,"SELECT pg_stat_clear_snapshot();")
+		if int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name=:label AND wait_event_type='Lock';",{"label":label}).rows[0].n)==1: return true
+		await get_tree().create_timer(0.005).timeout
+	return false

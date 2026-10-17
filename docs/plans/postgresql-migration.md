@@ -120,6 +120,15 @@ verify maker and cancellation-revision reselection after rollback. No schema,
 protocol or live backend change; ledger conversion/custody retry, broader P2 and
 P3/P4 remain separate gates.
 
+**P2e progress:** [Exchange stack conversion retry](../development/postgres-transaction-retry.md#p2e--exchange-stack-conversion)
+adds bounded complete deposit/withdraw attempts to the existing owner. Native
+failures verify whole/partial bag and shared-Storage consumption, Inventory/claim
+receiving, one durable generated UID, receipt replay, exhaustion and no COMMIT
+retry. Independent Storage transfer between attempts forces source reauthorization
+without ledger credit. Storage owns its existing lock/authorization/consumption
+contract; no schema, protocol or runtime backend changes. Remaining domain retry,
+broader P2, P3 and P4 are still open.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
