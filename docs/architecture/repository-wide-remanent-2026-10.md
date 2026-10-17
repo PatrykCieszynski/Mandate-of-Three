@@ -30,4 +30,12 @@ Enumerated **3,412 tracked blobs** in the cleanup branch's recursive Git tree (n
 4. Keep preview and multi-client integration scenes until replacements exist.
 5. Relocate TinyMMO's **active** export stubbing to first-party naming in a separate migration with packaged-build verification, rather than deactivating the plugin.
 
+## Deletion boundary confirmed during follow-up
+
+- `source/common/gameplay/characters/entity.gd` is the base of the still-present 2D `Character` -> `Player` inheritance hierarchy. Dead commented synchronization implementation was removed, but the class remains active within the legacy server model.
+- `source/common/gameplay/characters/player/player_resource.gd` contains persisted data fields retained for SQLite compatibility; deleting it or rewriting the save shape is **not** asset cleanup.
+- `source/common/gameplay/combat/ability/ability.gd` is a concrete `AbilityResource` hierarchy, not a standalone unused prototype.
+- The tracked Git tree did not reveal a separately named TinyMMO `review/` directory. Reference source kept outside this checkout must not be deleted or inferred from runtime reachability.
+- GitHub code search returned incomplete results; lack of search hits must not be treated as proof of no callers.
+
 No bulk legacy 2D assets or tests were deleted in this pass; evidence at this stage does not justify that risk.
