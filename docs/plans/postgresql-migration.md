@@ -98,6 +98,13 @@ checkpoint-versus-matching lock cycle are covered. Broader custody/conflict and
 bounded retry policy remain P2 work; unstructured native failure text is not a
 safe retry classifier. Runtime, P3/P4 and pending-income fencing are unchanged.
 
+**P2b progress:** [Inventory custody/receiving conflicts](../development/postgres-inventory-concurrency.md)
+adds account-first native Inventory command/starter/pickup admission and explicit
+cross-alt receipt conflict recovery. Native tests cover one-UID equip/list/deposit/
+conversion, cross-producer full-footprint/last-space receiving and global ground
+UID uniqueness. Storage policy stays in its Store. Broad P2 verification and native
+error classification/whole-transaction retry remain open; P3/P4 are unchanged.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
