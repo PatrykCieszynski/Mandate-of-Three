@@ -32,9 +32,14 @@ func transfer_command(character: int, uid: String, revision: int, source: String
 	committed=false
 	receipt_replay=false
 	var transaction:=Commands.new(db)
+	var result: Dictionary=transaction.run_with_retry(_transfer_once.bind(character,uid,revision,source,destination,position,operation_id,transaction))
+	receipt_replay=transaction.receipt_replay
+	return result
+
+func _transfer_once(character: int, uid: String, revision: int, source: String, destination: String, position: int, operation_id: String, transaction: RefCounted) -> Dictionary:
+	committed=false
 	# Account lock precedes character lock and receipt lookup for every alt.
 	if not transaction.begin(character,operation_id,"storage",[character,uid,revision,source,destination,position],true):
-		receipt_replay=transaction.receipt_replay
 		return transaction.cached
 	var result:=_transfer_in_transaction(character,transaction.account_id,uid,revision,source,destination,position)
 	if not result.ok: return transaction.rollback(str(result.error))
