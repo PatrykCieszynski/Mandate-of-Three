@@ -88,7 +88,7 @@ func _on_preview_file_dialog_canceled() -> void:
 
 func print_plugin(to_print: String) -> void:
 	print_rich(
-		"[color=yellow]TinyMMO plugin - [/color]",
+		"[color=yellow]Mandate Tools - [/color]",
 		to_print
 	)
 
