@@ -644,7 +644,6 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 	instance.tree_exiting.connect(func()->void:
 		loading_instances.erase(str(instance.name))
 		instance_resource.charged_instances.erase(instance),CONNECT_ONE_SHOT)
-	instance.player_entered_warper.connect(_on_player_entered_warper)
 	instance.ready.connect(
 		func():
 			loading_instances.erase(str(instance.name))
