@@ -1,3 +1,4 @@
+import { mountBottomHud } from './bottom-hud.js';
 import { mountExchange } from '../screens/market/exchange-view.js';
 import { mountMarketBrowser } from '../screens/market/browser-view.js';
 import { mountMarket } from '../screens/market/market-view.js';
@@ -29,6 +30,7 @@ const itemIcons = new ItemIconResolver({
     upgrade_ore: new URL('../content/upgrade_ore.svg', import.meta.url).href,
 });
 export const resolveItemIcon = (id) => itemIcons.resolve(id);
+const bottomHud = mountBottomHud(findElement(document, '#bottom-hud', 'aside'));
 export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
 const root = findElement(document, '#inventory', 'main'), storageRoot = findElement(document, '#storage', 'main'), equipmentRoot = findElement(document, '#equipment', 'main'), shopRoot = findElement(document, '#shop', 'main'), exchangeRoot = findElement(document, '#exchange', 'main'), marketBrowserRoot = findElement(document, '#market-browser', 'main'), marketVisitorRoot = findElement(document, '#market-visitor', 'main'), marketRoot = findElement(document, '#market', 'main'), upgradeRoot = findElement(document, '#upgrade', 'main'), npcRoot = findElement(document, '#npc-menu', 'main'), npcServiceRoot = findElement(document, '#npc-service', 'main'), store = new DomainStore();
@@ -285,6 +287,7 @@ regions = reportInteractiveRegions(bridge, [
     ...drag.regions,
 ]);
 window.addEventListener('pagehide', () => {
+    bottomHud.dispose();
     worldDrop.dispose();
     upgrade.dispose();
     shop.dispose();
