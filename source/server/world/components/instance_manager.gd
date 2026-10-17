@@ -551,6 +551,8 @@ func _can_legacy_transfer(target: ServerInstance, player: Player, source: Server
 
 
 func charge_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
+	if instance_resource == null or not instance_resource.use_3d:
+		return null
 	if channel_id>0:
 		for existing: ServerInstance in _instances_for(instance_resource):
 			if int(existing.identity.get("channel_id",0))==channel_id: return existing
