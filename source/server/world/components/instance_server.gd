@@ -17,7 +17,18 @@ var local_role_assignments: Dictionary[int, PackedStringArray]
 
 var players_by_peer_id: Dictionary[int, Player]var last_accessed_time: float
 var instance_map: Map
+var instance_resource: InstanceResource
+enum AdmissionState { ACCEPTING = 0, DRAINING = 1 }
+enum AccessPolicy { PUBLIC = 0, RESERVED = 1 }
 var synchronizer_manager: StateSynchronizerManagerServer
+
+func accepts_reservation() -> bool:
+	return (
+		not is_queued_for_deletion()
+		and admission_state == AdmissionState.ACCEPTING
+		and instance_resource != null
+		and population() < instance_resource.max_players
+	)
 
 
 
