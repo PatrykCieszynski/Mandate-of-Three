@@ -148,6 +148,13 @@ are synchronous SQL/projection measurements, not World/concurrent-load evidence.
 Production remains on the existing async SQLite reader. See
 [Auction parity and limits](postgres-auction-search-parity.md).
 
+`--suite wallet-concurrency` is the opt-in P2 cross-operation shared-account check:
+NPC/Upgrade spends, Exchange reservations, partial collection, receipt conflicts,
+checkpoint lock ordering and known-rollback original-ID recovery. Native sessions
+overlap at real database lock barriers; the checkpoint/matching regression also
+fails against the pre-fix store. This is not a load or PostgreSQL World test.
+See [shared wallet concurrency](postgres-wallet-concurrency.md).
+
 `--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
 partial fills, cancel/refund, snapshots, original receipts and conservation. Native
 independent sessions cover two takers, cancel/fill, duplicate commands and shared

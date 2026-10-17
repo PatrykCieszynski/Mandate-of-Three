@@ -16,7 +16,7 @@ func _init(database: Object) -> void:
 func purchase(owner_id: int, pending_yang: int, shop: ShopDefinition, offer_id: StringName, requested_position: int = -1, operation_id: String = "") -> Dictionary:
 	_transaction.committed=false
 	if shop==null or not shop.validation_errors().is_empty(): return {"ok":false,"error":"invalid_definition"}
-	if not _transaction.begin(owner_id,operation_id,"npc_shop.buy",[owner_id,str(shop.shop_id),str(offer_id),requested_position]): return _transaction.cached
+	if not _transaction.begin(owner_id,operation_id,"npc_shop.buy",[owner_id,str(shop.shop_id),str(offer_id),requested_position],true): return _transaction.cached
 	var offer: ShopOfferDefinition
 	for candidate: ShopOfferDefinition in shop.offers:
 		if candidate.offer_id==offer_id:

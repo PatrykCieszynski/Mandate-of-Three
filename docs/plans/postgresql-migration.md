@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 backend parity in progress (2026-10-17); P2–P4 **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 concurrency hardening in progress (2026-10-17). P3–P4 **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 **P1 progress:** [P1a readiness](../development/postgres-readiness.md) adds a
 disposable Godot/SOCI PostgreSQL probe and a sanitized SQLite schema/source audit.
@@ -90,6 +90,13 @@ cancel/refund and cross-party atomic settlement/receipts. SQLite snapshot parity
 native independent-session conflicts and placement/cancel COMMIT recovery are
 covered. The planned P1 Exchange domain port is complete; broad P2 race/retry,
 P3 execution/fencing and P4 operational gates remain. Production stays on SQLite.
+
+**P2a progress:** [shared wallet concurrency](../development/postgres-wallet-concurrency.md)
+adds account-first NPC/Upgrade and sorted multi-account checkpoint admission.
+Native cross-operation spend/reservation/collect/receipt conflicts and a reproduced
+checkpoint-versus-matching lock cycle are covered. Broader custody/conflict and
+bounded retry policy remain P2 work; unstructured native failure text is not a
+safe retry classifier. Runtime, P3/P4 and pending-income fencing are unchanged.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

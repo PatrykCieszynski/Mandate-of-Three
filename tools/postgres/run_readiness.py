@@ -48,7 +48,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency"), default="readiness")
     args = parser.parse_args()
     extension = ".exe" if os.name == "nt" else ""
     binaries = {name: args.pg_bin.resolve() / (name + extension)
@@ -114,6 +114,7 @@ def main():
             "auction-search": ("postgres_auction_search", "POSTGRES_AUCTION_SEARCH_OK"),
             "exchange-ledger": ("postgres_exchange_ledger", "POSTGRES_EXCHANGE_LEDGER_OK"),
             "exchange-orders": ("postgres_exchange_orders", "POSTGRES_EXCHANGE_ORDERS_OK"),
+            "wallet-concurrency": ("postgres_wallet_concurrency", "POSTGRES_WALLET_CONCURRENCY_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
              f"res://tests/{scene}.tscn", "--quit-after", "1200"],

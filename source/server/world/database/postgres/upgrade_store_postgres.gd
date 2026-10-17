@@ -28,7 +28,7 @@ func candidate(owner: int, uid: String, revision: int, recipe: UpgradeDefinition
 func upgrade(owner: int, pending_yang: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String = "") -> Dictionary:
 	_transaction.committed=false
 	if revision<0 or recipe==null or not recipe.validation_errors().is_empty(): return _error("request")
-	if not _transaction.begin(owner,operation_id,"upgrade",[owner,str(recipe.upgrade_id),uid,revision]): return _transaction.cached
+	if not _transaction.begin(owner,operation_id,"upgrade",[owner,str(recipe.upgrade_id),uid,revision],true): return _transaction.cached
 	var selected:=candidate(owner,uid,revision,recipe)
 	if not selected.ok: return _transaction.rollback(str(selected.error))
 	var item: ItemInstance=selected.item
