@@ -19,10 +19,13 @@
 2. Relocate export stubbing and raw CEF asset rules into a first-party export plugin if removing TinyMMO branding is desired. Test **real exported client/server artifacts**, not only headless Godot unit tests.
 3. Consider removing confirmed-unused legacy assets in small groups, including paired `.import` and resource UID files, and test resources/scenes that reference them.
 
-## This PR's scope
+## This PR's verified scope
 
-Removes the disabled editor bootstrap plus its unregistered inspector/property-editor/popup graph (11 files); corrects addon documentation. No gameplay logic, export behavior, config/user-data location or runtime assets were changed. Godot editor startup/export smoke must still be run before merge.
+The cleanup retires the former `addons/tinymmo` plugin path, keeps the live editor export stubbing and content panel under `addons/mandate_tools`, and relocates `TinyNodePath` without changing its script UID. It also removes confirmed unused editor/popup utilities, selected 2D-only admin commands and callbacks, and blocks authored 2D instance configurations in production client/server routing. The 3D-first admission and map lifecycle cleanup does not replace the legacy host classes.
 
+The core 3D server still inherits `ServerInstance`, and the client still uses `InstanceClient` as its typed host. Their legacy Player, Map, warper, sync and RPC dependencies remain for a separately tested host migration. `PlayerResource`, database/storage, economy, and active export tooling are deliberately preserved.
+
+**Verification completed:** GitHub CI clean checkout Godot 4.7.2 import, architecture boundaries, UI consistency checks and prototype smoke have passed on this PR. **Not equivalent to complete verification:** packaged exported client and server startup and dedicated multi-peer local-map regression have not been shown to pass after addon relocation. Do not claim those are complete or mark the PR merge-ready on that basis alone.
 
 ## Current follow-up
 
