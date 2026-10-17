@@ -1,8 +1,8 @@
-# PostgreSQL P2c–P2f — receipt-backed transaction retry
+# PostgreSQL P2c–P2g — receipt-backed transaction retry
 
 These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
 retry for **Shop purchase/revenue collection, Exchange order placement/cancellation,
-Exchange stack conversion and Upgrade**. Production World remains
+Exchange stack conversion, Upgrade and NPC purchases**. Production World remains
 SQLite; no executor, connection pool, RPC, schema or backend selection is added.
 
 ## Policy and ownership
@@ -178,3 +178,41 @@ extend session-local timeouts; the normal runner budgets remain unchanged.
 See [P2f evidence](../evidence/postgres-p2f/README.md). NPC purchase, ordinary
 Inventory/Storage, Shop seller/claim commands and unreceipted checkpoints are not
 newly opted in. Runtime remains SQLite; broader P2 and P3/P4 gates remain open.
+
+## P2g — NPC purchase and receiving capacity
+
+`NpcShopStorePostgres.purchase()` uses the existing three-attempt whole-use-case
+owner. A deep copy captures the server-owned Shop definition, including nested
+offers, once per accepted call. Command ID, receiving character, offer, requested
+position and pending-income prefix remain fixed across attempts. Each attempt
+reacquires account/character admission, checks the original receipt, revalidates
+current complete-footprint capacity and funds, then repeats item/custody creation,
+wallet mutations, watermarks and receipt persistence. An aborted generated UID is
+discarded; only the final committed UID is returned.
+
+Exact requested placement rejects with `occupied` if another operation takes any
+cell of the footprint between attempts. Automatic placement selects again from
+current capacity. Receipt replay still resolves before occupancy/affordability
+checks and returns the original result without applying new pending income.
+COMMIT failure remains `outcome_unknown` with connection closure and receipt
+discovery, without automatic retry. NPC/service/range admission remains with the
+caller; this opt-in store does not introduce World session fencing or execution.
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite npc-shop
+```
+
+The existing parity fixture now injects statement failures at pending-income
+application, spend, item instance/custody creation and receipt persistence for
+single items and stacks. It checks one UID, one debit, one pending prefix, exact
+replay, bounded exhaustion and no retry of other codes or deferred COMMIT errors.
+Independent queued buyers occupy a nonstarting cell of the requested footprint;
+explicit placement rejects without costs, while automatic placement succeeds
+elsewhere. Editing original offer price/quantity during the barrier does not
+change either accepted call's captured content. Only these diagnostic sessions
+extend their own coordination timeouts; normal fixture budgets are unchanged.
+
+See [P2g evidence](../evidence/postgres-p2g/README.md). Ordinary Inventory/Storage,
+Shop seller/claim commands and unreceipted checkpoints are not newly opted in.
+No schema, protocol, gameplay or runtime backend changes; broader P2 and P3/P4
+remain separate gates.

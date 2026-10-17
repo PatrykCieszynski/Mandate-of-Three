@@ -137,6 +137,14 @@ editors force material reselection or stale-target rejection without partial cos
 No schema, protocol, gameplay or runtime backend change; other domains' explicit
 retry adoption, broader P2 and P3/P4 remain open.
 
+**P2g progress:** [NPC purchase retry](../development/postgres-transaction-retry.md#p2g--npc-purchase-and-receiving-capacity)
+uses the same bounded owner for pending income, spend, Inventory receiving and
+receipt, with captured server offers. Native faults prove one UID/debit/prefix,
+original replay, exhaustion and no COMMIT retry. Queued receiving conflicts cover
+nonstarting footprint cells: explicit placement rejects without costs, automatic
+placement reselects. No schema, protocol, gameplay or runtime backend changes;
+remaining Inventory/Storage/seller/claim retry, broader P2 and P3/P4 remain open.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
