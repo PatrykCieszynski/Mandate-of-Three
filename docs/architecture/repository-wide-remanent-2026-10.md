@@ -2,7 +2,7 @@
 
 ## Coverage and limits
 
-Enumerated **3,412 tracked blobs** in the cleanup branch's recursive Git tree (not merely `addons/tinymmo`). Reviewed the root configuration, README, CI workflow, role dispatcher, export plugin, world-test scripts, terrain preview, legacy currency command and representative resource files. No standalone diagnostic script is included. This GitHub-only review cannot prove absence of dynamic `load()`, UID, generated or string-composed references.
+Enumerated **3,412 tracked blobs** in the cleanup branch's recursive Git tree (not merely `addons/mandate_tools`). Reviewed the root configuration, README, CI workflow, role dispatcher, export plugin, world-test scripts, terrain preview, legacy currency command and representative resource files. No standalone diagnostic script is included. This GitHub-only review cannot prove absence of dynamic `load()`, UID, generated or string-composed references.
 
 ### Cross-project triage
 
@@ -39,3 +39,8 @@ Enumerated **3,412 tracked blobs** in the cleanup branch's recursive Git tree (n
 - GitHub code search returned incomplete results; lack of search hits must not be treated as proof of no callers.
 
 No bulk legacy 2D assets or tests were deleted in this pass; evidence at this stage does not justify that risk.
+
+
+## Current follow-up
+
+The former `addons/tinymmo` addon path has been retired. Active ContentIndex editor UI and the required client/server export-stubbing plugin now live under `addons/mandate_tools`, with source content and script UID identities preserved. `project.godot` now registers the new editor plugin path. Packaged client/server exports still require separate validation beyond import/smoke CI.
