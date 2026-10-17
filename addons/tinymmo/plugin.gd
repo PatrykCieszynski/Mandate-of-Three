@@ -27,7 +27,7 @@ func _get_plugin_icon() -> Texture2D:
 	return EditorInterface.get_editor_theme().get_icon("MultiplayerSpawner", "EditorIcons")
 
 func _get_plugin_name() -> String:
-	return "TinyMMO"
+	return "Mandate Tools"
 
 func _make_visible(visible: bool) -> void:
 	if main_panel_instance:
