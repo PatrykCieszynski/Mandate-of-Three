@@ -2,7 +2,9 @@
 
 Verified 2026-10-18 on Windows, Godot 4.7.2, PostgreSQL 18.6 and pinned official
 SOCI v0.4.3. Branch `codex/postgres-inventory-cache-fence`, based on integrated
-`main` `1eb927d2` (PR #86 squash). No player data or installed PostgreSQL service
+`main` `1eb927d2` (PR #86 squash), then merged with `main` `7e7a9a8c`
+(PR #87 host separation) in `ee3334f3`. Final integration was rerun after refreshing
+the local Godot script-class cache for renamed host types. No player data or installed PostgreSQL service
 is used. All native runs below use fresh owned SCRAM loopback clusters and
 runner-confirmed shutdown.
 
@@ -10,7 +12,8 @@ runner-confirmed shutdown.
 
 `python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite inventory-runtime`
 
-Final expanded run `run-wkgzein0`: PASS, stopped (also `run-h2_w03os`). Existing admission, replay, session
+Final integrated run `run-bov11vpj`: PASS, stopped (also pre-integration
+`run-wkgzein0` and `run-h2_w03os`). Existing admission, replay, session
 takeover, unknown mutation COMMIT and recovery contracts remain covered.
 
 - A successful unequip commits, then a separate account-locked fixture transaction
@@ -53,10 +56,11 @@ stay gated, including its forced initial-ACK window. Existing lost response,
 terminal rejection, reload, real process/relogin journal, missing-ID explicit
 retry and fact/UID/privacy contracts remain covered.
 
-- `inventory-endpoint`: final `run-kpdpkecm` PASS, stopped (also expanded
-  `run-m41b0kcb` and `run-rmxj2e14`). All three actual client logs have PASS
-  markers and no SCRIPT/parse errors.
-- `inventory-session-bridge`: `run-uu00onq2` PASS, stopped.
+- `inventory-endpoint`: final integrated `run-8lbxa_t_` PASS, stopped (also
+  pre-integration `run-kpdpkecm`). All three actual client logs have PASS markers
+  and no SCRIPT/parse errors.
+- `inventory-session-bridge`: final integrated `run-dq6t1he0` PASS, stopped
+  (also pre-integration `run-uu00onq2`).
 - `tests/run-web-inventory.ps1`: SQLite server + two clients PASS.
 - Default smoke: architecture guards + 14 Godot checks + 85 Web contracts PASS.
 - SOCI v0.4.3 pin/hash and `git diff --check`: PASS.
