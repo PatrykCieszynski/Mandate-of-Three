@@ -12,6 +12,7 @@ Measured evidence must state **branch/commit**, platform, test command, runtime 
 - [PostgreSQL P3d Inventory runtime](postgres-p3d/README.md) — main-thread recovery, actual World combat cache and stale-delivery fencing.
 - [PostgreSQL P3e session bridge](postgres-p3e/README.md) — current Master ticket publication after grant COMMIT, native auth/relogin and normal-role SQLite regression.
 - [PostgreSQL P3f Inventory endpoint](postgres-p3f/README.md) — native client processes, stable journal/receipt recovery, private state/public weapon and no SQLite economic fallback.
+- [PostgreSQL P3g cache reconciliation](postgres-p3g/README.md) — command freshness ACK, versioned local invalidations, bounded repair and current client/stat projections.
 - [CI / platform checks](../development/ci.md)
 - [Historical native validation](../history/README.md) (dated results, not current acceptance)
 - [Terrain3D adoption and verification](../world/visuals/visual-upgrade-v4-terrain3d.md)

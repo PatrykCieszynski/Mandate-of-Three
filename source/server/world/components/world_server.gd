@@ -66,14 +66,24 @@ func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> bool:
 	return true
 
 func runtime_attack(owner_id: int) -> int:
+	if not _inventory_combat_ready(owner_id): return -1
 	if not runtime_equipment.has(owner_id): return -1
 	return int(runtime_equipment[owner_id].stats.get("attack", 10))
 
 func runtime_attack_speed_ratio(owner_id: int) -> float:
+	if not _inventory_combat_ready(owner_id): return -1.0
 	if not runtime_equipment.has(owner_id): return -1.0
 	var speed := float(runtime_equipment[owner_id].stats.get("attack_speed",100.0))
 	if not is_finite(speed) or speed <= 0: return -1.0
 	return speed/100.0
+
+func _inventory_combat_ready(owner_id: int) -> bool:
+	return inventory_runtime==null or inventory_runtime.mutations_allowed(player_id_to_peer_id.get(owner_id,0))
+
+func invalidate_runtime_equipment(owner_id: int) -> void:
+	# Preserve the monotonic watermark while denying dependent combat. Only an
+	# authoritative snapshot may rebuild this view; a hit never reads persistence.
+	runtime_equipment.erase(owner_id)
 
 static var curr: WorldServer
 

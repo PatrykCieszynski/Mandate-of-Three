@@ -149,10 +149,22 @@ func run() -> void:
 	var ticks: int=physics_ticks
 	assert((await phase(observer,"other-equip")).ok)
 	assert(physics_ticks>ticks and not map.reports.has("blocked-equip"))
+	assert(world.runtime_attack(character)==-1,"pending Inventory cannot expose dependent cached combat inputs")
 	assert(pg.commit())
 	await wait_for(func() -> bool: return map.reports.has("blocked-equip"))
 	assert(map.reports["blocked-equip"].result.ok)
 	assert(world.runtime_attack(character)>10 and map.characters[actor].weapon_definition_id=="iron_sword")
+	# Controlled external-domain fixture commit, not a new Upgrade UI feature.
+	# Its account revision must invalidate RAM before any dependent combat read.
+	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=21 FOR NO KEY UPDATE;").ok)
+	assert(pg.execute("UPDATE economy.item_instances SET upgrade_level=1,revision=revision+1 WHERE owner_character_id=:owner;",{"owner":character}).ok and pg.commit())
+	var upgraded: Dictionary=Items.new(pg).inventory(character)
+	assert(world.inventory_runtime.invalidate_item_state(upgraded.item_state))
+	assert(world.runtime_attack(character)==-1 and world.runtime_attack_speed_ratio(character)==-1.0)
+	assert(world.runtime_attack(extra_characters.beta)>0)
+	await wait_for(func() -> bool: return world.inventory_runtime.mutations_allowed(actor))
+	assert(world.runtime_attack(character)==int(upgraded.stats.attack))
+	assert((await phase(actor,"cache-refreshed",{"attack":upgraded.stats.attack,"revision":upgraded.item_state.revision})).ok)
 	assert((await phase(actor,"flow")).ok)
 	assert((await phase(observer,"privacy",{"other":actor})).ok)
 	# Force a mutation COMMIT error. Receipt recovery finishes the already-admitted
@@ -176,12 +188,13 @@ func run() -> void:
 		pg.execute("SELECT pg_stat_clear_snapshot();")
 		return int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name LIKE 'mandate-inventory-executor-%' AND wait_event_type='Lock';").rows[0].n)>0)
 	assert(not map.reports.has("restored-ready"),"initial client snapshot waits for readiness ACK")
+	assert(world.runtime_attack(character)==-1 and world.runtime_attack_speed_ratio(character)==-1.0,"hydrated but unacknowledged stats remain gated")
 	assert(pg.execute("SELECT pg_advisory_unlock(940022);").ok)
 	await wait_for(func() -> bool: return map.reports.has("restored-ready"))
 	assert(pg.execute("DROP TRIGGER fixture_endpoint_ready ON economy.inventory_sessions;").ok)
 	actor=map.reports["restored-ready"].peer
 	assert((await phase(actor,"restored")).ok)
-	assert(facts==9,"only nine actual mutations publish facts; no-op, receipts and rejection do not")
+	assert(facts==9,"nine Inventory command mutations; invalidation/replay/no-op/rejection add no commit facts")
 	assert(sqlite.query("SELECT COUNT(*) AS n FROM item_instances;") and int(sqlite.query_result[0].n)==0)
 	assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.item_instances;").rows[0].n)==2)
 	await phase(actor,"exit")
@@ -264,6 +277,9 @@ func run_client() -> void:
 func client_phase(label: String, payload: Dictionary) -> void:
 	var result: Dictionary={"ok":true}
 	match label:
+		"cache-refreshed":
+			assert(item().upgrade_level==1 and map.endpoint.state.stats.attack==payload.attack)
+			assert(map.endpoint.state.item_state.revision>=int(payload.revision))
 		"blocked-equip", "other-equip": result=await command("equipment.equip",{"id":item().uid,"revision":item().revision})
 		"flow":
 			assert((await command("equipment.unequip",{"id":item().uid,"revision":item().revision,"x":0,"y":3,"page":0})).ok)

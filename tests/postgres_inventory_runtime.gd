@@ -18,6 +18,8 @@ var finished: Array[Dictionary]=[]
 var admitted: Array[String]=[]
 var failures: Array[String]=[]
 var change_after_snapshot:=false
+var churn_snapshots: int=0
+var committed_facts: int=0
 
 func _physics_process(_delta: float) -> void: physics_ticks+=1
 
@@ -54,6 +56,12 @@ func native_state(character: int) -> Dictionary:
 
 func receipt_count(operation: String) -> int:
 	return int(pg.query("SELECT COUNT(*) AS n FROM economy.market_commands WHERE command_id=:id;",{"id":operation}).rows[0].n)
+
+func external_material() -> Dictionary:
+	var material:=ItemInstance.create(ItemDefinitions.UPGRADE_ORE,94000,[])
+	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=9400 FOR NO KEY UPDATE;").ok)
+	assert(Items.new(pg).receive_item_in_transaction(material).ok and pg.commit())
+	return native_state(94000).item_state
 
 func verify_projection(character: int) -> void:
 	var snapshot:=native_state(character)
@@ -92,14 +100,17 @@ func _ready() -> void:
 			change_after_snapshot=false
 			# A different economic source commits between hydration and readiness.
 			# The next acknowledgement must reject this now-stale marker.
-			var material:=ItemInstance.create(ItemDefinitions.UPGRADE_ORE,94000,[])
-			assert(pg.begin() and Items.new(pg).receive_item_in_transaction(material,30).ok and pg.commit()))
+			external_material() # Deliberately missing publication: ACK detects it.
+		if churn_snapshots>0:
+			churn_snapshots-=1
+			assert(runtime.invalidate_item_state(external_material())))
 	runtime.operation_admitted.connect(func(_peer: int, id: String) -> void: admitted.append(id))
 	runtime.operation_finished.connect(func(peer: int, id: String, result: Dictionary) -> void:
 		assert(runtime.mutations_allowed(peer))
 		verify_projection(world.connected_players[peer].player_id)
 		finished.append({"peer":peer,"id":id,"result":result.duplicate(true)}))
 	runtime.recovery_failed.connect(func(_peer: int, reason: String) -> void: failures.append(reason))
+	runtime.inventory_committed.connect(func(_peer: int) -> void: committed_facts+=1)
 	# Startup is asynchronous. The owner waits for pool readiness before handing
 	# its exclusive polling responsibility to the runtime delivery component.
 	while not executor.is_ready():
@@ -197,6 +208,82 @@ func _ready() -> void:
 	assert(runtime.retry(101))
 	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
 	assert(finished.back().id=="uncertain-admission" and finished.back().result.ok and receipt_count("uncertain-admission")==1)
+	verify_projection(94000)
+	# Post-command refresh needs the SAME freshness barrier as login. A later
+	# domain commits after the command snapshot, without delivering a notice.
+	change_after_snapshot=true
+	delivered=snapshots.size()
+	assert(runtime.submit(101,"post-command-race","unequip",sword.uid,7,15).queued)
+	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
+	assert(finished.back().id=="post-command-race" and finished.back().result.ok)
+	assert(snapshots.size()>=delivered+2 and receipt_count("post-command-race")==1)
+	verify_projection(94000)
+	# Mutation COMMIT succeeds, but its new freshness-ACK COMMIT is uncertain.
+	# Keep the receipt/body, deny combat and never announce a terminal success or
+	# a change fact until explicit recovery confirms the current view.
+	var facts_before: int=committed_facts
+	var attempts_before: int=int(pg.query("SELECT last_value FROM economy.fixture_runtime_attempt;").rows[0].last_value)
+	assert(pg.execute("CREATE CONSTRAINT TRIGGER fixture_ack AFTER UPDATE ON economy.inventory_sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.fixture_runtime_commit();").ok)
+	assert(runtime.submit(101,"ack-unknown","equip",sword.uid,8,-1).queued)
+	await wait_until(func() -> bool: return runtime.status(101)=="paused")
+	assert(failures.back()=="outcome_unknown" and receipt_count("ack-unknown")==1)
+	assert(committed_facts==facts_before and not finished.any(func(row: Dictionary) -> bool: return row.id=="ack-unknown"))
+	assert(world.runtime_attack(94000)==-1 and runtime.mutations_allowed(200))
+	assert(pg.query("SELECT last_value FROM economy.fixture_runtime_attempt;").rows[0].last_value==attempts_before+1)
+	assert(pg.execute("DROP TRIGGER fixture_ack ON economy.inventory_sessions;").ok and runtime.retry(101))
+	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
+	assert(finished.back().id=="ack-unknown" and finished.back().result.ok and receipt_count("ack-unknown")==1)
+	assert(committed_facts==facts_before+1)
+	verify_projection(94000)
+	# A trusted higher account revision closes only its live owner, immediately
+	# removes dependent combat inputs and coalesces a burst into one hydration.
+	var old_marker: Dictionary=native_state(94000).item_state
+	delivered=snapshots.size()
+	for index: int in 3:
+		assert(runtime.invalidate_item_state(external_material()))
+	assert(not runtime.mutations_allowed(101) and world.runtime_attack(94000)==-1)
+	assert(runtime.mutations_allowed(200) and world.runtime_attack(94010)>0)
+	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
+	assert(snapshots.size()==delivered+1,"burst invalidation is one coherent refresh, not a per-fact queue")
+	verify_projection(94000)
+	var marker: Dictionary=native_state(94000).item_state
+	delivered=snapshots.size()
+	assert(runtime.invalidate_item_state(marker) and runtime.invalidate_item_state(old_marker))
+	assert(runtime.mutations_allowed(101) and snapshots.size()==delivered,"duplicates/reordered old notices cannot regress readiness")
+	# Let SQL ACK actually finish without polling its result, then deliver a newer
+	# committed notice. A delayed successful ACK cannot reopen the old RAM view.
+	assert(pg.execute("CREATE SEQUENCE economy.fixture_cache_ack;").ok)
+	assert(pg.execute("CREATE FUNCTION economy.fixture_cache_ack() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM nextval('economy.fixture_cache_ack'); RETURN NEW; END; $$;").ok)
+	assert(pg.execute("CREATE TRIGGER fixture_cache_ack AFTER UPDATE ON economy.inventory_sessions FOR EACH ROW EXECUTE FUNCTION economy.fixture_cache_ack();").ok)
+	assert(runtime.request_outcome(101,"missing-after-ack").queued)
+	await wait_until(func() -> bool: return runtime.status(101)=="ack")
+	await wait_until(func() -> bool:
+		pg.execute("SELECT pg_stat_clear_snapshot();")
+		return bool(pg.query("SELECT is_called FROM economy.fixture_cache_ack;").rows[0].is_called) and int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name LIKE 'mandate-inventory-executor-%' AND state='active';").rows[0].n)==0,false)
+	assert(runtime.invalidate_item_state(external_material()))
+	assert(not runtime.mutations_allowed(101))
+	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
+	assert(finished.back().id=="missing-after-ack" and finished.back().result.error=="unknown_command")
+	assert(receipt_count("missing-after-ack")==0)
+	verify_projection(94000)
+	assert(pg.execute("DROP TRIGGER fixture_cache_ack ON economy.inventory_sessions;").ok)
+	var unrelated: Dictionary=marker.duplicate(true)
+	unrelated.account_id=999999
+	assert(not runtime.invalidate_item_state(unrelated) and runtime.mutations_allowed(101))
+	var forged_authority: Dictionary=marker.duplicate(true)
+	forged_authority.authority_id="f".repeat(32) if marker.authority_id!="f".repeat(32) else "e".repeat(32)
+	assert(not runtime.invalidate_item_state(forged_authority))
+	assert(runtime.status(101)=="paused" and world.runtime_attack(94000)==-1)
+	assert(runtime.retry(101))
+	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
+	# Continual commits cannot produce an unbounded repair loop or reopen an
+	# unconfirmed combat view. Explicit recovery works once churn stops.
+	churn_snapshots=Runtime.MAX_REPAIRS+1
+	assert(runtime.invalidate_item_state(external_material()))
+	await wait_until(func() -> bool: return runtime.status(101)=="paused")
+	assert(churn_snapshots==0 and failures.back()=="stale_snapshot" and world.runtime_attack(94000)==-1)
+	assert(runtime.retry(101))
+	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
 	verify_projection(94000)
 	change_after_snapshot=true
 	delivered=snapshots.size()
