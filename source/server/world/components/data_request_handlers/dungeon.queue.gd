@@ -4,7 +4,7 @@ extends DataRequestHandler
 ## DungeonService handles the group + private-instance charge.
 
 
-func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
+func data_request_handler(peer_id: int, instance: ServerInstanceHost, args: Dictionary) -> Dictionary:
 	var station: String = str(args.get("station", ""))
 	var action: String = str(args.get("action", "join"))
 	var hard: bool = bool(args.get("hard", false))
