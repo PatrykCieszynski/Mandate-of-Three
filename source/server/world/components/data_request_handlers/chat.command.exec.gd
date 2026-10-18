@@ -3,7 +3,7 @@ extends DataRequestHandler
 
 func data_request_handler(
 	peer_id: int,
-	instance: ServerInstance,
+	instance: ServerInstanceHost,
 	args: Dictionary
 ) -> Dictionary:
 	var command_name: String = args.get("cmd", "")
@@ -32,7 +32,7 @@ func data_request_handler(
 	return {command_name: args}
 
 
-func find_command(command_name: String, instance: ServerInstance) -> ChatCommand:
+func find_command(command_name: String, instance: ServerInstanceHost) -> ChatCommand:
 	var command_list = instance.global_chat_commands
 	if command_name in command_list:
 		return command_list[command_name]
@@ -48,7 +48,7 @@ func find_command(command_name: String, instance: ServerInstance) -> ChatCommand
 func has_command_permission(
 	command: ChatCommand,
 	peer_id: int,
-	instance: ServerInstance
+	instance: ServerInstanceHost
 ) -> bool:
 	var player: PlayerResource = instance.world_server.connected_players.get(peer_id)
 	return CommandPermissions.can_run(command, player, instance)
