@@ -274,10 +274,11 @@ func _apply_node_visual_state(data: Dictionary) -> void:
 	var raw_path: Variant = data.get("node_path", null)
 	if raw_path == null:
 		return
-	if InstanceClient.current == null:
+	var instance: WorldInstanceClient3D = Client.instance_manager.current_instance if Client.instance_manager != null else null
+	if instance == null:
 		return
 	var path: NodePath = raw_path as NodePath
-	var node: Node = InstanceClient.current.get_node_or_null(path)
+	var node: Node = instance.get_node_or_null(path)
 	if node == null or not (node is MineableNode):
 		return
 	(node as MineableNode).apply_visual_state(
