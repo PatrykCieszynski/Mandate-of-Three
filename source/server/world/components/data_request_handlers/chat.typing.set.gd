@@ -11,7 +11,7 @@ extends DataRequestHandler
 
 func data_request_handler(
 	peer_id: int,
-	instance: ServerInstance,
+	instance: ServerInstanceHost,
 	args: Dictionary
 ) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
