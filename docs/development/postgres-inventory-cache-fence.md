@@ -66,8 +66,8 @@ acceptance remain separate gates. No PostgreSQL combat gameplay is activated.
 
 Snapshots may be prepared before ACK; P3f publishes them only on readiness.
 Committed facts move behind ACK too. Reconciliation/coalescing is not an audit or
-exactly-once event-delivery protocol. Pending-only discovery is still deferred:
-recovery pages terminal history today, and must be indexed before load acceptance.
+exactly-once event-delivery protocol. [P3h](postgres-pending-recovery.md) adds
+indexed pending-only recovery without deleting historical outcomes/receipts.
 Pending Yang/handoff, bootstrap/shutdown, P4 soak/migration and cutover remain open.
 
 ## Verification

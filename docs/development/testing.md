@@ -554,3 +554,8 @@ P3g extends the existing PG runtime/endpoint suites with committed cache
 invalidations, post-command and delayed-ACK freshness, ACK COMMIT uncertainty,
 bounded repair and RAM-only combat input gating. No new default suite. See
 [cache fence contract and limits](postgres-inventory-cache-fence.md).
+
+P3h uses the same four PG intent/session/runtime/endpoint suites to verify
+pending-only recovery, transactional v1-to-v2 index migration with data, retained
+history/receipt lookup, int64 cursors and the partial-index plan against 10,033
+terminal records. It adds no default suite; see [pending recovery](postgres-pending-recovery.md).

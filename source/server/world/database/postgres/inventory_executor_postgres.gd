@@ -90,6 +90,7 @@ class SessionWorker extends RefCounted:
 				elif intent=="session_resume": result=store.resume_session(job.session,job.operation_id)
 				elif intent=="session_outcome": result=store.outcome_session(job.session,job.operation_id)
 				elif intent=="session_discover": result=store.discover_session(job.session,job.after,job.limit)
+				elif intent=="session_pending": result=store.discover_pending_session(job.session,job.after,job.limit)
 				elif intent=="session_snapshot": result=store.snapshot_session(job.session)
 				elif intent=="admit": result=store.admit(job.character,job.operation_id,job.action,job.uid,job.revision,job.position)
 				elif intent=="resume": result=store.execute(job.character,job.operation_id)
@@ -192,13 +193,17 @@ func submit_session_discovery(context: Dictionary, after: int = 0, limit: int = 
 	if after<0 or limit<1 or limit>Intents.MAX_PAGE: return {"queued":false,"error":"request"}
 	return _session_job(context,"session_discover","",{"after":after,"limit":limit})
 
+func submit_session_pending_discovery(context: Dictionary, after: int = 0, limit: int = 50) -> Dictionary:
+	if after<0 or limit<1 or limit>Intents.MAX_PAGE: return {"queued":false,"error":"request"}
+	return _session_job(context,"session_pending","",{"after":after,"limit":limit})
+
 func submit_session_snapshot(context: Dictionary) -> Dictionary:
 	return _session_job(context,"session_snapshot","",{})
 
 func _session_job(context: Dictionary, mode: String, operation_id: String, fields: Dictionary) -> Dictionary:
 	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return {"queued":false,"error":"request"}
 	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
-	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_snapshot"]}
+	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_pending","session_snapshot"]}
 	job.merge(fields)
 	return _submit(job)
 

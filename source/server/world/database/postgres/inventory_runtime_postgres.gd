@@ -183,7 +183,7 @@ func _schedule(binding: Dictionary) -> void:
 	var context: Dictionary=binding.context
 	var queued: Dictionary
 	match binding.stage:
-		"discover": queued=_executor.submit_session_discovery(context,binding.cursor,PAGE_SIZE)
+		"discover": queued=_executor.submit_session_pending_discovery(context,binding.cursor,PAGE_SIZE)
 		"recover": queued=_executor.submit_session_resume(context,binding.pending[0])
 		"snapshot", "refresh": queued=_executor.submit_session_snapshot(context)
 		"ack": queued=_executor.submit_inventory_recovery_ready(context,binding.snapshot.item_state)

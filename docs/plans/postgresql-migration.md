@@ -1,6 +1,55 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution, P3b durable Inventory recovery, P3c delegated fencing, P3d World reconciliation and P3e current Master ticket bridge, P3f Inventory endpoint/client flow and P3g local cache reconciliation are opt-in; other domain/bootstrap integration and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 PostgreSQL domain ports and P2 backend concurrency acceptance are
+delivered. P3 has opt-in Inventory execution, durable recovery, delegated sessions,
+Master/World wiring, client RPC delivery, cache reconciliation and indexed pending
+discovery. **Remaining runtime domains/bootstrap and P4 are not completed. Normal
+gameplay remains SQLite.** This roadmap implements the accepted
+[Economy C1–C5](../architecture/economy/README.md) and
+[World Process topology](../architecture/world-instance-architecture.md); every
+package still requires its own review, tests and merge decision.
+
+## Runtime adoption status
+
+**Audited 2026-10-18. This is not the final cleanup of SQLite.** P1/P2 provide
+PostgreSQL stores and backend acceptance; P3 has an opt-in Inventory path.
+Normal server startup still creates the SQLite writer. A complete PostgreSQL
+realm has not yet been enabled or rehearsed.
+
+| Area | Current normal runtime | PostgreSQL adoption still needed |
+| --- | --- | --- |
+| Bootstrap / database ownership | `WorldDatabase.start_database/open_database` creates SQLite and its stores | Configure/provision the authoritative PG backend, pool lifecycle, graceful drain, health/readiness and fail-closed startup; never enable dual economic writers |
+| Inventory / ground-item pickup | `WorldEconomyService` calls SQLite item transactions; PG move/activate/equip/unequip recovery is opt-in | Provisioning/initialization and pickup integration, trusted committed publications, final item-dependent gameplay acceptance |
+| Yang wallet | `WorldDatabase` loads/checkpoints `WalletStoreSqlite`; pending grinding income stays in RAM | Async wallet ownership/reconciliation, checkpoint/retry and critical spends, account/session/handoff fencing for pending deltas |
+| NPC Shop / Upgrade / account Storage | `WorldEconomyService` uses the corresponding SQLite stores | Connect tested PG transactions to authenticated use cases, stable client recovery and committed cache/wallet updates; Storage remains a separate shared-account risk |
+| Player Shop / claims / Exchange | `MarketplaceService` constructs `MarketStoreSqlite` / `ExchangeStoreSqlite` | Nonblocking runtime routing, receipts/recovery, multi-party wallet/item reconciliation and publishers using the existing tested PG ports |
+| Auction reads | `AuctionQueryService` / `AuctionSociReader` uses SOCI's **sqlite3** read-only WAL reader | Integrate PG read scheduling/search with the selected realm backend; SOCI usage alone does not mean PG adoption |
+| Character/profile and other World data | `WorldStoreSqlite` still saves character/quest/guild data; `MailStore` uses SQLite; progression checkpoints stay here | These are not automatically covered by the realm Economy migration. Decide/retain their explicit boundary and identity mappings, or scope a separate port before claiming SQLite can be removed entirely |
+
+Master credentials are a separate existing `AccountResourceCollection` persisted
+as a Godot `.tres` resource by `AuthenticationManager`, not a migrated PostgreSQL
+or SQLite auth store. The roadmap does not silently include moving that authority.
+
+Remaining deliverables before an Economy cutover are substantial:
+
+1. Finish P3 runtime adoption for wallet/pending income and the remaining economic
+   domains, preserving session-qualified recovery and committed-state publication.
+2. Complete provisioning/bootstrap/shutdown and handoff behavior, plus actual
+   end-to-end PG gameplay/network acceptance. Existing optional fixtures are not a
+   playable realm selector.
+3. Run P4 mixed runtime load/fault/soak, then rehearse a quiesced SQLite-to-PG import
+   with account/character mapping, UIDs/custody, Yang/reservations/revenue,
+   revisions and original receipts conserved. Test restore/operational procedures.
+4. Obtain explicit maintainer approval for cutover. Only afterward retire unused
+   SQLite economic runtime paths; parity fixtures/reference code and separately
+   retained profile/progression storage are distinct cleanup decisions.
+
+The next integration priority after P3h is wallet/pending-income ownership and
+its complete runtime flow, not deletion of SQLite files. No percentage or final
+PR count is asserted: unfinished runtime domains and P4 are separate acceptance
+gates, not documentation-only leftovers.
+
+## Delivery history
 
 The progress entries below record each package's scope and deferrals at delivery
 time. The latest acceptance matrix and remaining gates are collected in
@@ -265,6 +314,16 @@ uncertain ACK COMMIT, churn limits and actual client/stat projection repair.
 Other domains must still integrate their committed publishers. Cross-process
 transport/missed idle facts, indexed pending discovery, pending Yang/handoff,
 operational lifecycle and P4 remain open; normal startup stays SQLite.
+
+**P3h progress:** [Indexed pending Inventory recovery](../development/postgres-pending-recovery.md)
+adds transactional intent schema v2 with an account/sequence partial pending
+index and session-qualified pending-only worker discovery. Runtime no longer
+enumerates terminal history during recovery. Historical discovery, original-ID
+outcome lookup and durable receipts remain intact; no history pruning or SQLite
+migration. Native acceptance covers 10,034 terminal history rows, partial-index
+plan, data-preserving v1 upgrade/failure rollback, paging/alt/session isolation,
+and existing actual client recovery. Other runtime domains/bootstrap and P4 remain
+open as detailed in the adoption table above.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

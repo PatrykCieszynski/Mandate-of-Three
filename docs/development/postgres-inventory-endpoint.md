@@ -64,9 +64,8 @@ checks delegated session/readiness. Storage is presented as unsupported, and
 Inventory publication does not call the SQLite Upgrade publisher.
 
 This fixture is **not a playable PG realm**. Other economic domains, their reads,
-wallet income/checkpoints, committed publishers for other domains, pending-only
-discovery, handoff/pending Yang, bootstrap/provisioning and controlled shutdown
-remain migration work. [P3g](postgres-inventory-cache-fence.md) adds post-command
+wallet income/checkpoints, committed publishers for other domains, handoff/pending
+Yang, bootstrap/provisioning and controlled shutdown remain migration work. [P3g](postgres-inventory-cache-fence.md) adds post-command
 freshness ACK and a local versioned invalidation consumer. Do not enable concurrent
 Shop/Storage/Upgrade writers without integrating their publication and recovery contract.
 
