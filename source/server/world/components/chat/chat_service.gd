@@ -12,7 +12,7 @@ func setup_with_db(db: SQLite) -> void:
 
 
 func handle_send_channel_message(
-	instance: ServerInstance,
+	instance: ServerInstanceHost,
 	player: PlayerResource,
 	channel: int,
 	text: String
@@ -31,7 +31,7 @@ func handle_send_channel_message(
 
 
 func handle_send_dm(
-	instance: ServerInstance,
+	instance: ServerInstanceHost,
 	sender: PlayerResource,
 	other_id: int,
 	text: String
@@ -114,7 +114,7 @@ func get_guild_history(guild_id: int, limit: int) -> Array:
 	return _rows_to_payload(rows, convo_id, {"channel": ChatConstants.CHANNEL_GUILD})
 
 
-func _handle_send_world(instance: ServerInstance, player: PlayerResource, text: String) -> Dictionary:
+func _handle_send_world(instance: ServerInstanceHost, player: PlayerResource, text: String) -> Dictionary:
 	# Broadcast to everyone in the same instance/map. World chat is EPHEMERAL and
 	# live-only — never written to SQLite, never replayed on join.
 	return _broadcast_world_to_instance(
@@ -126,14 +126,14 @@ func _handle_send_world(instance: ServerInstance, player: PlayerResource, text: 
 	)
 
 
-func _handle_send_team(instance: ServerInstance, player: PlayerResource, text: String) -> Dictionary:
+func _handle_send_team(instance: ServerInstanceHost, player: PlayerResource, text: String) -> Dictionary:
 	# Placeholder: until we have a team/party system.
 	# "team:<team_id>" later.
 	# For now: either reject or treat as instance-local.
 	return {"error": 30, "ok": false, "message": "Team chat not implemented yet."}
 
 
-func _handle_send_guild(instance: ServerInstance, player: PlayerResource, text: String) -> Dictionary:
+func _handle_send_guild(instance: ServerInstanceHost, player: PlayerResource, text: String) -> Dictionary:
 	if store == null:
 		return {"error": 3, "ok": false, "message": "Chat store not initialized."}
 
@@ -203,7 +203,7 @@ var _system_msg_seq: int = 0
 ## no scrollback (live-only, like zone chat in any MMO). Manual peer loop (not
 ## propagate_rpc) so we can skip recipients who've blocked the sender.
 func _broadcast_world_to_instance(
-	instance: ServerInstance,
+	instance: ServerInstanceHost,
 	player: PlayerResource,
 	channel: int,
 	convo_id: String,
@@ -302,7 +302,7 @@ func _rows_to_payload(rows: Array, conversation_id: String, extra: Dictionary) -
 ## never persisted, so the per-player system log can't pile up dozens of stale MOTDs
 ## across logins. A player offline when one fires simply doesn't get it; these are
 ## courtesy messages (enforcement like mute/jail is applied server-side anyway).
-func push_system_to_player(instance: ServerInstance, player_id: int, text: String) -> void:
+func push_system_to_player(instance: ServerInstanceHost, player_id: int, text: String) -> void:
 	# instance is just a handle to the WorldServer for peer-id lookup; some callers
 	# to WorldServer.curr when null.
 	var ws: WorldServer = instance.world_server if instance != null else WorldServer.curr
