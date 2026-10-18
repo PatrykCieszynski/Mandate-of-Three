@@ -3,7 +3,7 @@ extends SubViewport
 ## Neutral instance session/admission host. Runtime worlds may be 3D or
 ## legacy fixtures; this class does not instantiate Player, Map or 2D sync.
 
-static var world_server: WorldServer
+static var world_server
 static var global_chat_commands: Dictionary[String, ChatCommand]
 static var global_role_definitions: Dictionary[String, Dictionary] = preload("res://source/server/world/data/server_roles.tres").get_roles()
 
