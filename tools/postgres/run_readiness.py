@@ -48,7 +48,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "inventory-session-bridge"), default="readiness")
     args = parser.parse_args()
     extension = ".exe" if os.name == "nt" else ""
     binaries = {name: args.pg_bin.resolve() / (name + extension)
@@ -120,6 +120,7 @@ def main():
             "inventory-intents": ("postgres_inventory_intents", "POSTGRES_INVENTORY_INTENTS_OK"),
             "inventory-sessions": ("postgres_inventory_sessions", "POSTGRES_INVENTORY_SESSIONS_OK"),
             "inventory-runtime": ("postgres_inventory_runtime", "POSTGRES_INVENTORY_RUNTIME_OK"),
+            "inventory-session-bridge": ("postgres_inventory_session_bridge", "POSTGRES_INVENTORY_SESSION_BRIDGE_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
              f"res://tests/{scene}.tscn", "--quit-after", "1200"],

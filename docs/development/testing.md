@@ -206,6 +206,15 @@ the separate native World session fixture checks the ticket fingerprint helper.
 See [Inventory runtime](postgres-inventory-runtime.md). Neither fixture enables a
 live PostgreSQL backend or proves the complete three-process PG login path.
 
+`--suite inventory-session-bridge` verifies P3e's optional Master control owner
+and native World attachment over actual RPC/auth sockets: current issuer identity,
+old grant SQL finishing after supersession, grant COMMIT before ticket delivery,
+native relog/disconnect/revoke, COMMIT unknown without automatic grant retry and
+Master socket loss. It shares ports 18098/18099; run sequentially with network
+suites. Gateway credentials/entry initiation and roster/UI setup are controlled.
+See [Inventory session bridge](postgres-inventory-session-bridge.md) and its
+separate three-normal-process SQLite `run-items -WithSession` regression evidence.
+
 `--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
 partial fills, cancel/refund, snapshots, original receipts and conservation. Native
 independent sessions cover two takers, cancel/fill, duplicate commands and shared

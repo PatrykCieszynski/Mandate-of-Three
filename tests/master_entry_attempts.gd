@@ -33,7 +33,7 @@ class World extends WorldManagerClient:
 	func create_player_character_request(gateway: int, request: int, username: String, _data: Dictionary, _account: int, attempt: String) -> void:
 		requests[request] = {"gateway": gateway, "username": username, "character": 0, "attempt": attempt, "create": true}
 	@rpc("authority")
-	func fetch_token(token: String, _username: String, _character: int, _account: int) -> void:
+	func fetch_token(token: String, _username: String, _character: int, _account: int, _inventory_context: Dictionary = {}) -> void:
 		tickets.append(token)
 		usable.append(token)
 	@rpc("authority")

@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution, P3b durable Inventory recovery, P3c delegated session fencing and P3d World-thread Inventory reconciliation are opt-in; live issuer/endpoint integration and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution, P3b durable Inventory recovery, P3c delegated fencing, P3d World reconciliation and P3e current Master ticket bridge are opt-in; playable endpoint/bootstrap integration and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 The progress entries below record each package's scope and deferrals at delivery
 time. The latest acceptance matrix and remaining gates are collected in
@@ -230,6 +230,18 @@ lost-interest takeover, snapshot freshness, and explicit original-ID recovery
 after admission/mutation COMMIT uncertainty. This component is not wired into
 live login/endpoints: trusted issuer delivery, endpoint/client/publication wiring,
 other domains, handoff/pending Yang and P4 remain open. No backend switch.
+
+**P3e progress:** [Master Inventory session bridge](../development/postgres-inventory-session-bridge.md)
+connects the existing current Master ticket marker to an optional bounded control
+owner: inspect/CAS grant COMMIT precedes authority-only World ticket delivery.
+Native World authentication automatically attaches its delegated context; matching
+disconnect/revocation and Master socket loss close that runtime ownership.
+Tests cover old grant SQL finishing after a new login, failed COMMIT without token
+publication/retry, real auth/relogin/revoke and the actual World combat projection.
+Normal three-process SQLite item/reconnect regression also passes in a disposable
+copy. This is not a playable PG backend selector: normal endpoint/client/public
+publication wiring, other domains, cross-domain invalidation, indexed pending
+discovery, pending Yang/handoff, operational bootstrap/shutdown and P4 remain open.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

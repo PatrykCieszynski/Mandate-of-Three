@@ -81,8 +81,9 @@ class SessionWorker extends RefCounted:
 			var replay:=false
 			if database.is_open() or _open(database):
 				var intent: String=str(job.get("intent",""))
-				var store: RefCounted=Items.new(database) if intent.is_empty() else (Sessions.new(database) if intent in ["session_install","session_revoke","session_ready"] else Intents.new(database))
+				var store: RefCounted=Items.new(database) if intent.is_empty() else (Sessions.new(database) if intent in ["session_install","session_inspect","session_revoke","session_ready"] else Intents.new(database))
 				if intent=="session_install": result=store.install_verified_grant(job.identity,job.expected_epoch)
+				elif intent=="session_inspect": result=store.inspect_grant(job.identity)
 				elif intent=="session_revoke": result=store.revoke(job.session)
 				elif intent=="session_ready": result=store.finish_recovery(job.session,job.marker)
 				elif intent=="session_admit": result=store.admit_session(job.session,job.operation_id,job.action,job.uid,job.revision,job.position)
@@ -163,6 +164,11 @@ func submit_verified_inventory_grant(identity: Dictionary, expected_epoch: int) 
 	if not Sessions.valid_identity(identity) or expected_epoch<0: return {"queued":false,"error":"request"}
 	var safe: Dictionary={"account_id":identity.account_id,"character":identity.character,"session_fingerprint":identity.session_fingerprint}
 	return _submit({"character":safe.character,"operation_id":"","lookup":true,"intent":"session_install","control":true,"identity":safe,"expected_epoch":expected_epoch})
+
+func submit_inventory_grant_inspection(identity: Dictionary) -> Dictionary:
+	if not Sessions.valid_identity(identity): return {"queued":false,"error":"request"}
+	var safe: Dictionary={"account_id":identity.account_id,"character":identity.character,"session_fingerprint":identity.session_fingerprint}
+	return _submit({"character":safe.character,"operation_id":"","lookup":true,"intent":"session_inspect","control":true,"identity":safe})
 
 func submit_inventory_revoke(context: Dictionary) -> Dictionary:
 	return _session_job(context,"session_revoke","",{})

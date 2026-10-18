@@ -2,7 +2,7 @@ class_name WorldManagerClient
 extends BaseMultiplayerEndpoint
 
 
-signal token_received(auth_token: String, username: String, character_id: int, account_id: int)
+signal token_received(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary)
 
 @export var database: WorldDatabase
 @export var world_server: WorldServer
@@ -331,12 +331,17 @@ func _notify_player(player_id: int, message: String) -> void:
 
 
 func _on_connection_failed() -> void:
+	if world_server!=null: world_server.invalidate_inventory_admissions()
 	print("Failed to connect to the MasterServer as WorldServer.")
 	await get_tree().create_timer(3.0).timeout
 	start_client_to_master_server(world_info)
 
 
 func _on_server_disconnected() -> void:
+	if world_server!=null and world_server.inventory_runtime!=null:
+		# An isolated PG World must not retain gameplay ownership after losing its
+		# issuer. Default SQLite reconnect behavior remains unchanged.
+		world_server.invalidate_inventory_admissions()
 	print("WorldServer disconnected from MasterServer.")
 	await get_tree().create_timer(3.0).timeout
 	start_client_to_master_server(world_info)
@@ -348,8 +353,8 @@ func fetch_server_info(_info: Dictionary) -> void:
 
 
 @rpc("authority")
-func fetch_token(auth_token: String, username: String, character_id: int, account_id: int) -> void:
-	token_received.emit(auth_token, username, character_id, account_id)
+func fetch_token(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> void:
+	token_received.emit(auth_token,username,character_id,account_id,inventory_context)
 
 
 @rpc("authority")
