@@ -22,14 +22,25 @@ var _next_projection_version := 0
 var _inventory_version := 0
 var _weapon_versions: Dictionary[int, int] = {}
 var _world: Node
+var _postgres: RefCounted
 func _ready() -> void:
 	_world = get_parent()
 	inventory_changed.connect(_inventory_changed)
+	if GameMode.is_world_server() and services.inventory_runtime()!=null:
+		_postgres=preload("res://source/common/gameplay/world3d/endpoints/inventory_postgres_adapter.gd").new(self,services.inventory_runtime())
+
+func _exit_tree() -> void:
+	if _postgres!=null: _postgres.dispose()
 
 func _store() -> ItemStoreSqlite:
 	return services.item_store()
 
 func initialize_peer(peer_id: int) -> void:
+	if _postgres!=null:
+		_postgres.initialize_peer(peer_id)
+		for other_id: int in public_weapons:
+			receive_weapon.rpc_id(peer_id,other_id,public_weapons[other_id],_weapon_versions[other_id])
+		return
 	var store: ItemStoreSqlite = _store()
 	if store == null:
 		return # Physics-only fixture has no database or item domain.
@@ -43,6 +54,7 @@ func initialize_peer(peer_id: int) -> void:
 		receive_weapon.rpc_id(peer_id, other_id, public_weapons[other_id], _weapon_versions[other_id])
 
 func remove_peer(peer_id: int) -> void:
+	if _postgres!=null: _postgres.remove_peer(peer_id)
 	_authoritative_snapshots.erase(peer_id)
 	public_weapons.erase(peer_id)
 	_weapon_versions.erase(peer_id)
@@ -127,8 +139,16 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96:
 		return
 	var peer_id: int = multiplayer.get_remote_sender_id()
-	if not _world.characters.has(peer_id) or _store() == null:
+	if not _world.characters.has(peer_id):
 		return
+	if _postgres!=null:
+		if Time.get_ticks_msec()-_last_action_ms.get(peer_id,-1000)<100:
+			receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":"too_fast"})
+			return
+		_last_action_ms[peer_id]=Time.get_ticks_msec()
+		_postgres.submit(peer_id,command_id,operation_id,action,uid,revision,position)
+		return
+	if _store()==null: return
 	var result: Dictionary
 	var committed := false
 	var now: int = Time.get_ticks_msec()
@@ -153,7 +173,15 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 func request_inventory_receipt(operation_id: String, command_id: String) -> void:
 	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96: return
 	var peer_id := multiplayer.get_remote_sender_id()
-	if not _world.characters.has(peer_id) or _store() == null: return
+	if not _world.characters.has(peer_id): return
+	if _postgres!=null:
+		if Time.get_ticks_msec()-_last_receipt_ms.get(peer_id,-1000)<100:
+			receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":"too_fast"})
+			return
+		_last_receipt_ms[peer_id]=Time.get_ticks_msec()
+		_postgres.receipt(peer_id,command_id,operation_id)
+		return
+	if _store()==null: return
 	var now := Time.get_ticks_msec()
 	var result: Dictionary = {"ok":false,"error":"too_fast"}
 	if now - _last_receipt_ms.get(peer_id,-1000) >= 100:
@@ -175,6 +203,9 @@ func accept_committed_change(peer_id: int) -> void:
 	if owner_id > 0: inventory_changed.emit(owner_id)
 
 func refresh_authoritative_state(peer_id: int) -> void:
+	if _postgres!=null:
+		_postgres.initialize_peer(peer_id) # Current RAM projection only, no SQL.
+		return
 	# Also used to prepare every account peer before Storage fan-out.
 	var resource: PlayerResource = services.player_for_peer(peer_id)
 	if resource == null or _store() == null: return
@@ -189,6 +220,10 @@ func refresh_authoritative_state(peer_id: int) -> void:
 	snapshot["storage"] = services.economy().storage_snapshot(resource.player_id)
 	if observe.is_valid(): observe.call({"kind":"storage_snapshot","cost_us":Time.get_ticks_usec()-started})
 	snapshot["economic_context"] = services.economy().economic_context(resource.player_id)
+	prepare_inventory_snapshot(peer_id,snapshot)
+
+func prepare_inventory_snapshot(peer_id: int, snapshot: Dictionary) -> void:
+	# Both backends arrive here only after authoritative runtime reconciliation.
 	_next_projection_version += 1
 	snapshot["projection_version"] = _next_projection_version
 	_authoritative_snapshots[peer_id] = snapshot
@@ -200,12 +235,23 @@ func refresh_authoritative_state(peer_id: int) -> void:
 	if body != null:
 		body.set_weapon(definition_id)
 
+func has_inventory_peer(peer_id: int) -> bool:
+	return _world.characters.has(peer_id)
+
+func publish_prepared_inventory(peer_id: int) -> void:
+	_send_state(peer_id)
+
+func publish_inventory_change(peer_id: int) -> void:
+	var owner_id: int=services.owner_id_for_peer(peer_id)
+	if owner_id>0: inventory_changed.emit(owner_id)
+
 func resynchronize(peer_id: int, error: String = "") -> void:
 	# Entry and rejected/stale commands repair state without claiming a commit.
 	refresh_authoritative_state(peer_id)
 	_send_state(peer_id, error)
 
 func _inventory_changed(owner_id: int) -> void:
+	if _postgres!=null: return # Runtime snapshot was already published before this fact.
 	for peer_id: int in _world.characters:
 		var resource: PlayerResource = services.player_for_peer(peer_id)
 		if resource != null and resource.player_id == owner_id: _send_state(peer_id)
@@ -219,7 +265,7 @@ func _send_state(peer_id: int, error: String = "") -> void:
 	receive_inventory.rpc_id(peer_id, snapshot)
 	if observe.is_valid(): observe.call({"kind":"inventory_rpc_enqueue","cost_us":Time.get_ticks_usec()-started})
 	started = Time.get_ticks_usec() if observe.is_valid() else 0
-	if _world.upgrade_endpoint != null: _world.upgrade_endpoint.publish(peer_id)
+	if _postgres==null and _world.upgrade_endpoint != null: _world.upgrade_endpoint.publish(peer_id)
 	if observe.is_valid(): observe.call({"kind":"upgrade_projection","cost_us":Time.get_ticks_usec()-started})
 	if not snapshot.ok: return
 	started = Time.get_ticks_usec() if observe.is_valid() else 0

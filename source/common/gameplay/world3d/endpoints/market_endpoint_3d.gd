@@ -62,7 +62,7 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	return response
 
 func _publish(peer_id: int) -> void:
-	if _owner(peer_id)<=0: return
+	if _owner(peer_id)<=0 or services.economy()==null: return
 	var started := Time.get_ticks_usec() if observe.is_valid() else 0
 	var snapshot: Dictionary = services.economy().market_snapshot(_owner(peer_id))
 	if observe.is_valid(): observe.call({"kind":"market_snapshot","cost_us":Time.get_ticks_usec()-started})
@@ -177,6 +177,7 @@ func receive_query(request_id: String,result: Dictionary) -> void:
 
 signal exchange_state_changed(snapshot: Dictionary)
 func _publish_exchange(peer_id: int) -> void:
+	if services.economy()==null: return
 	var started := Time.get_ticks_usec() if observe.is_valid() else 0
 	var snapshot: Dictionary=services.economy().market_query(_owner(peer_id),"exchange",{})
 	if observe.is_valid(): observe.call({"kind":"exchange_snapshot","cost_us":Time.get_ticks_usec()-started})

@@ -27,6 +27,7 @@ func authorization(peer_id: int, instance_id: String, service_id: StringName) ->
 func select_for_peer(peer_id: int, instance_id: String, service_id: StringName, uid: String, revision: int) -> Dictionary:
 	var auth: Dictionary = authorization(peer_id,instance_id,service_id)
 	if not auth.ok: return auth
+	if services.economy()==null: return {"ok":false,"error":"unsupported"}
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
 	var candidate: Dictionary = services.economy().upgrade_candidate(player.player_id,uid,revision,auth.recipe)
@@ -53,6 +54,7 @@ func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName,
 	return operation.response()
 
 func receipt_for_peer(peer_id: int, operation_id: String, now: int) -> Dictionary:
+	if services.economy()==null: return {"ok":false,"error":"unsupported"}
 	if now - _last_receipt.get(peer_id,-1000) < 100: return {"ok":false,"error":"too_fast"}
 	_last_receipt[peer_id] = now
 	var player: PlayerResource = services.player_for_peer(peer_id)
@@ -65,6 +67,7 @@ func receipt_for_peer(peer_id: int, operation_id: String, now: int) -> Dictionar
 	return operation.response()
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
+	if services.item_store()==null: return {"active":false}
 	var context: NpcInteractionContext = _world.npc_endpoint.contexts.get(peer_id)
 	if context == null:
 		_selected.erase(peer_id)

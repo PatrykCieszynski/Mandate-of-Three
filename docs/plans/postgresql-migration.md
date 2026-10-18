@@ -243,6 +243,18 @@ copy. This is not a playable PG backend selector: normal endpoint/client/public
 publication wiring, other domains, cross-domain invalidation, indexed pending
 discovery, pending Yang/handoff, operational bootstrap/shutdown and P4 remain open.
 
+**P3f progress:** [Inventory endpoint/client flow](../development/postgres-inventory-endpoint.md)
+routes existing native move/activate/equip/unequip and receipt RPCs through the
+optional runtime. Stable client journal IDs survive lost replies, browser reload
+and process/relogin recovery; terminal rejection can close its journal after
+receipt confirmation. Current stats precede private Inventory/public weapon
+publication, and receipt/no-op/rejection are not new commit facts. Separate native
+client processes exercise the path on owned PG, including one blocked account
+while another progresses. SQLite economics are unavailable through the Mandate
+adapter in this opt-in mode; soft progression stays separate. Normal bootstrap
+still uses SQLite. Other domains, cross-domain invalidation, indexed pending-only
+discovery, pending Yang/handoff, operational lifecycle and P4 remain open.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
