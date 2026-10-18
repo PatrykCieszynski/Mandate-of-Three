@@ -6,15 +6,6 @@ signal player_entered_warper(player: Player, current_instance: ServerInstance, w
 
 const PLAYER: PackedScene = preload("res://source/common/gameplay/characters/player/player.tscn")
 
-static var world_server: WorldServer
-
-static var global_chat_commands: Dictionary[String, ChatCommand]
-static var global_role_definitions: Dictionary[String, Dictionary] = preload("res://source/server/world/data/server_roles.tres").get_roles()
-
-var local_chat_commands: Dictionary[String, ChatCommand]
-var local_role_definitions: Dictionary[String, Dictionary]
-var local_role_assignments: Dictionary[int, PackedStringArray]
-
 var players_by_peer_id: Dictionary[int, Player]
 var last_accessed_time: float
 var instance_map: Map
