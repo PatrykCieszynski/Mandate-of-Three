@@ -182,6 +182,13 @@ bounded buffered/unconsumed work, replay/discovery, COMMIT unknown/reopen,
 timeout recovery and clean drain/restart. It is not World/session fencing or a
 production PostgreSQL switch. See [Inventory execution](postgres-inventory-executor.md).
 
+`--suite inventory-intents` verifies P3b durable Inventory admission/recovery:
+an owned child process terminates after admission COMMIT; another owner discovers
+and resumes its random ID. It also covers concurrent resume/admission, reserved-ID
+conflicts, atomic terminal success/rejection, storage/COMMIT failure containment,
+pending bounds and paged/int64 discovery. All SQL uses the owned fixture cluster.
+See [Inventory identity/recovery](postgres-inventory-intents.md).
+
 `--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
 partial fills, cancel/refund, snapshots, original receipts and conservation. Native
 independent sessions cover two takers, cancel/fill, duplicate commands and shared
