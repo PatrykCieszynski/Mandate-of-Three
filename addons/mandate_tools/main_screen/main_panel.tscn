@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://dsvir1p20d8qp"]
 
-[ext_resource type="Script" uid="uid://bdo6vhrtb1efa" path="res://addons/tinymmo/main_screen/main_panel.gd" id="1_qau0y"]
+[ext_resource type="Script" uid="uid://bdo6vhrtb1efa" path="res://addons/mandate_tools/main_screen/main_panel.gd" id="1_qau0y"]
 
 [sub_resource type="GDScriptSyntaxHighlighter" id="GDScriptSyntaxHighlighter_qau0y"]
 
@@ -49,13 +49,7 @@ text = "Clear Preview"
 custom_minimum_size = Vector2(100, 300)
 layout_mode = 2
 size_flags_vertical = 3
-text = "## Hello it's horizon, just to say you can edit / select there like in editor.
-## It supports GDScript Highlighter.
-func _ready() -> void:
-	pass
-{&\"id\": 1}
-Array[StringName]
-# But doesn't support error check and other features."
+text = "Select a ContentIndex to preview its entries."
 syntax_highlighter = SubResource("GDScriptSyntaxHighlighter_qau0y")
 draw_tabs = true
 

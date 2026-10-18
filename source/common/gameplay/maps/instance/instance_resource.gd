@@ -15,7 +15,7 @@ enum SpawnOverride {
 @export var map_id: StringName
 @export_range(1, 8) var startup_copies: int = 1
 @export_group("Local 3D admission")
-## Safety limits, not measured hosting capacity. Legacy 2D routing is unchanged.
+## Safety limits for authored 3D maps, not measured hosting capacity.
 @export_range(1, 1024) var max_players: int = 64
 ## Total local public copies, including loading/startup copies; not private runs.
 @export_range(1, 16) var max_public_copies: int = 2
@@ -25,7 +25,8 @@ enum SpawnOverride {
 @export_group("")
 @export_file("*.tscn") var map_path: String
 @export var load_at_startup: bool = false
-@export var use_3d: bool = false
+## Compatibility flag for existing resources; new maps default to the only supported runtime.
+@export var use_3d: bool = true
 @export var spawn_override: SpawnOverride = SpawnOverride.DEFAULT
 
 @export_group("Zone display")
@@ -68,15 +69,18 @@ func level_band() -> String:
 	return "Level %d+" % level_min
 
 
-@warning_ignore("unused_parameter")
-func can_join_instance(player: Player, index: int = -1) -> bool:
-	# Wardstone gate (docs/wardstones.md): character-wide progress key, no
-	# level or party bypass. Everything else stays open.
+## Dimension-independent wardstone gate: use persisted character data,
+## never a scene actor. This is the entry point for 3D and future map hosts.
+func can_join_character(player: PlayerResource) -> bool:
 	if required_wardstone.is_empty():
 		return true
-	if player == null or player.player_resource == null:
-		return false
-	return player.player_resource.wardstones.has(String(required_wardstone))
+	return player != null and player.wardstones.has(String(required_wardstone))
+
+
+@warning_ignore("unused_parameter")
+func can_join_instance(player: Player, index: int = -1) -> bool:
+	# Legacy 2D adapter kept until the old warper/Player APIs are removed.
+	return can_join_character(player.player_resource if player != null else null)
 
 
 func get_instance(index: int = -1) -> Node:

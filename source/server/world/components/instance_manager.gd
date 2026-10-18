@@ -22,7 +22,6 @@ var instance_collection: Dictionary[String, InstanceResource]
 var default_instance: InstanceResource
 ## Bounded by current sessions; expiry cannot be renewed before transport teardown.
 var _rejected_entries: Dictionary[int, PlayerResource] = {}
-var _last_legacy_unload_ms: int = 0
 var _channel_choices: Dictionary[int, Dictionary] = {}
 var _channel_request_ids: Dictionary[int, int] = {}
 var transfers := preload("res://source/server/world/components/local_channel_transfer.gd").new(self)
@@ -259,6 +258,8 @@ func reserve_entry(peer_id: int, resource: InstanceResource, target: ServerInsta
 		return {"ok": true, "instance": joined, "duplicate": true}
 	if resource == null:
 		return {"ok": false, "error": "map_unavailable"}
+	if not resource.can_join_character(admitted):
+		return {"ok": false, "error": "wardstone_required"}
 	for existing: ServerInstance in _all_instances():
 		if existing.awaiting_peers.has(peer_id):
 			if has_valid_entry(existing, peer_id, admitted):
@@ -271,7 +272,7 @@ func reserve_entry(peer_id: int, resource: InstanceResource, target: ServerInsta
 			existing.awaiting_peers.erase(peer_id)
 	var instance := target
 	if target != null:
-		if not _instances_for(resource).has(target) or not target.instance_resource.use_3d:
+		if not _instances_for(resource).has(target):
 			return {"ok": false, "error": "map_unavailable"}
 		if target.get_parent() != self and loading_instances.get(str(target.name)) != target:
 			return {"ok": false, "error": "map_unavailable"}
@@ -307,8 +308,8 @@ func has_valid_entry(instance: ServerInstance, peer_id: int, session: PlayerReso
 		not instance.is_queued_for_deletion() and _is_current_session(peer_id, session)
 		and pending.get("session") == session
 		and instance.allows_character(session.player_id)
-		and (not instance.instance_resource.use_3d
-			or int(pending.get("expires_at_ms", 0)) > Time.get_ticks_msec())
+		and instance.instance_resource.can_join_character(session)
+		and int(pending.get("expires_at_ms", 0)) > Time.get_ticks_msec()
 	)
 
 
@@ -345,7 +346,7 @@ func _release_pending_peer(peer_id: int) -> void:
 func begin_draining(instance: ServerInstance) -> bool:
 	if not is_instance_valid(instance) or instance.get_parent() != self:
 		return false
-	if not instance.instance_resource.use_3d or instance.is_queued_for_deletion():
+	if instance.is_queued_for_deletion():
 		return false
 	instance.admission_state = ServerInstance.AdmissionState.DRAINING
 	return true
@@ -359,7 +360,7 @@ func maintain_instances() -> void:
 			_channel_choices.erase(peer_id)
 			_reject_initial_entry(peer_id, choice.session, "choice_expired")
 	for instance: ServerInstance in _all_instances():
-		if instance.is_queued_for_deletion() or not instance.instance_resource.use_3d:
+		if instance.is_queued_for_deletion():
 			continue
 		for peer_id: int in instance.awaiting_peers.keys():
 			var session: PlayerResource = instance.awaiting_peers[peer_id].get("session")
@@ -384,10 +385,6 @@ func maintain_instances() -> void:
 		# No admission can race this retirement on the main thread.
 		instance.admission_state = ServerInstance.AdmissionState.DRAINING
 		instance.queue_free()
-	# Preserve the old 20-second cleanup cadence for unrelated legacy 2D maps.
-	if now - _last_legacy_unload_ms >= 20000:
-		_last_legacy_unload_ms = now
-		unload_unused_instances()
 
 func _publish_entry(peer_id: int, admitted: PlayerResource, instance: ServerInstance) -> void:
 	if not is_instance_valid(instance):
@@ -410,6 +407,8 @@ func _instances_for(resource: InstanceResource) -> Array[ServerInstance]:
 	return result
 
 func select_entry_instance(resource: InstanceResource) -> ServerInstance:
+	if resource == null or not resource.use_3d:
+		return null
 	var selected: ServerInstance
 	var population := 2147483647
 	var instances: Array[ServerInstance] = []
@@ -417,7 +416,7 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 		if candidate.access_policy == ServerInstance.AccessPolicy.PUBLIC:
 			instances.append(candidate)
 	for instance: ServerInstance in instances:
-		if resource.use_3d and not instance.accepts_reservation():
+		if not instance.accepts_reservation():
 			continue
 		var count := instance.population()
 		if count<population:
@@ -428,11 +427,11 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 	if instances.is_empty():
 		# An empty host can bootstrap; a busy host must not bypass the CPU guard
 		# by asking for a map that currently has only private/no public copies.
-		if resource.use_3d and not _all_instances().is_empty() and not provision_budget.has_headroom(Time.get_ticks_msec()):
+		if not _all_instances().is_empty() and not provision_budget.has_headroom(Time.get_ticks_msec()):
 			return null
 		return charge_instance(resource)
 	# Grow only a full accepting set. Draining is an explicit retirement decision.
-	if not resource.use_3d or instances.size() >= resource.max_public_copies:
+	if instances.size() >= resource.max_public_copies:
 		return null
 	for instance: ServerInstance in instances:
 		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
@@ -447,7 +446,7 @@ func select_entry_instance(resource: InstanceResource) -> ServerInstance:
 
 ## Loaded public routing only. Never use InstanceResource array order as access.
 func find_public_instance(resource: InstanceResource) -> ServerInstance:
-	if resource == null:
+	if resource == null or not resource.use_3d:
 		return null
 	for instance: ServerInstance in _instances_for(resource):
 		if instance.get_parent() != self or not instance.is_node_ready():
@@ -456,39 +455,10 @@ func find_public_instance(resource: InstanceResource) -> ServerInstance:
 			continue
 		if instance.admission_state != ServerInstance.AdmissionState.ACCEPTING:
 			continue
-		if resource.use_3d and not instance.accepts_reservation():
+		if not instance.accepts_reservation():
 			continue
 		return instance
 	return null
-
-
-func _on_player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper) -> void:
-	# Jailed players can't traverse warpers — that's the whole point of jail.
-	# We notify them once per attempt so they know it's intentional.
-	if JailList.is_jailed(player.player_resource.account_name):
-		world_server.chat_service.push_system_to_player(
-			current_instance, player.player_resource.player_id,
-			"You are jailed and cannot leave this area."
-		)
-		return
-
-	var instance_index: int = -1 # Will be useful later
-	var target_instance: ServerInstance
-	var instance_resource: InstanceResource = warper.target_instance
-	if not instance_resource:
-		return
-
-	if instance_resource.can_join_instance(player, instance_index):
-		target_instance = find_public_instance(instance_resource)
-		if target_instance:
-			player_switch_instance(target_instance, warper.target_id, player, current_instance)
-		else:
-			queue_charge_instance(
-				instance_resource,
-				player_switch_instance.bind(warper.target_id, player, current_instance)
-			)
-	else:
-		return
 
 
 ## Recall travel: send the peer to the town hub (RECALL_INSTANCE_NAME) at its
@@ -518,6 +488,8 @@ func recall_player(peer_id: int) -> void:
 
 
 func queue_charge_instance(instance_resource: InstanceResource, callback: Callable) -> void:
+	if instance_resource == null or not instance_resource.use_3d:
+		return
 	for pending: ServerInstance in loading_instances.values():
 		if pending.instance_resource==instance_resource and pending.access_policy == ServerInstance.AccessPolicy.PUBLIC and pending.admission_state == ServerInstance.AdmissionState.ACCEPTING and not pending.is_queued_for_deletion():
 			pending.ready.connect(callback.bind(pending),CONNECT_ONE_SHOT)
@@ -583,6 +555,8 @@ func _can_legacy_transfer(target: ServerInstance, player: Player, source: Server
 
 
 func charge_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
+	if instance_resource == null or not instance_resource.use_3d:
+		return null
 	if channel_id>0:
 		for existing: ServerInstance in _instances_for(instance_resource):
 			if int(existing.identity.get("channel_id",0))==channel_id: return existing
@@ -603,35 +577,35 @@ func charge_reserved_instance(instance_resource: InstanceResource, character_ids
 func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 	access_policy: ServerInstance.AccessPolicy = ServerInstance.AccessPolicy.PUBLIC,
 	character_ids: PackedInt64Array = PackedInt64Array()) -> ServerInstance:
+	if instance_resource == null or not instance_resource.use_3d:
+		return null
 	if access_policy not in [ServerInstance.AccessPolicy.PUBLIC, ServerInstance.AccessPolicy.RESERVED]:
 		return null
 	if access_policy == ServerInstance.AccessPolicy.RESERVED:
-		if instance_resource == null or not instance_resource.use_3d or channel_id != 0 or character_ids.is_empty():
+		if channel_id != 0 or character_ids.is_empty():
 			return null
 		for character_id: int in character_ids:
 			if character_id <= 0:
 				return null
 	elif not character_ids.is_empty():
 		return null
-	if instance_resource==null or not ResourceLoader.exists(instance_resource.map_path):
+	# ServerInstance remains for transport/type compatibility during migration.
+	if not ResourceLoader.exists(instance_resource.map_path):
 		push_error("Cannot load map instance: missing map resource")
 		return null
 	if _all_instances().size() >= max_host_instances:
 		return null
-	if instance_resource.use_3d and access_policy == ServerInstance.AccessPolicy.PUBLIC:
+	if access_policy == ServerInstance.AccessPolicy.PUBLIC:
 		var copies := 0
 		for existing: ServerInstance in _all_instances():
 			if existing.instance_resource == instance_resource and existing.access_policy == ServerInstance.AccessPolicy.PUBLIC:
 				copies += 1
 		if copies >= instance_resource.max_public_copies:
 			return null
-	var instance: ServerInstance = ServerInstance.new()
-	if instance_resource.use_3d:
-		instance.free()
-		instance = preload("res://source/server/world/components/world_instance_3d.gd").new()
+	var instance: ServerInstance = preload("res://source/server/world/components/world_instance_3d.gd").new()
 	instance.access_policy = access_policy
 	instance.allowed_character_ids = character_ids.duplicate()
-	if instance_resource.use_3d and channel_id==0 and access_policy == ServerInstance.AccessPolicy.PUBLIC:
+	if channel_id==0 and access_policy == ServerInstance.AccessPolicy.PUBLIC:
 		channel_id=1
 		for existing: ServerInstance in _instances_for(instance_resource): channel_id=maxi(channel_id,int(existing.identity.get("channel_id",0))+1)
 	instance.identity=MapIdentity.create(realm_id,instance_resource.resolved_map_id(),host_id,channel_id)
@@ -646,7 +620,6 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 	instance.tree_exiting.connect(func()->void:
 		loading_instances.erase(str(instance.name))
 		instance_resource.charged_instances.erase(instance),CONNECT_ONE_SHOT)
-	instance.player_entered_warper.connect(_on_player_entered_warper)
 	instance.ready.connect(
 		func():
 			loading_instances.erase(str(instance.name))
@@ -654,7 +627,7 @@ func prepare_instance(instance_resource: InstanceResource, channel_id: int = 0,
 		CONNECT_ONE_SHOT
 	)
 	instance.load_map(instance_resource.map_path)
-	if instance_resource.use_3d and instance.get_node_or_null("GameWorld")==null:
+	if instance.get_node_or_null("GameWorld") == null:
 		loading_instances.erase(str(instance.name))
 		instance.free()
 		return null
@@ -674,28 +647,21 @@ func set_instance_collection() -> void:
 		if loaded == null or not (loaded is InstanceResource):
 			continue
 		var instance_resource: InstanceResource = loaded
-		if instance_resource.use_3d and instance_resource.load_at_startup and instance_resource.startup_copies > instance_resource.max_public_copies:
+		# Authored production maps are 3D-only. Keep legacy ServerInstance
+		# compatibility for isolated fixtures, but never register a 2D map
+		# from the production content directory.
+		if not instance_resource.use_3d:
+			push_error("Unsupported legacy 2D map configuration: " + file_path)
+			continue
+		if instance_resource.load_at_startup and instance_resource.startup_copies > instance_resource.max_public_copies:
 			push_error("Map startup copies exceed its public instance limit: " + str(instance_resource.instance_name))
 			continue
 		if instance_resource.load_at_startup:
-			for copy: int in (instance_resource.startup_copies if instance_resource.use_3d else 1):
-				charge_instance(instance_resource,copy+1 if instance_resource.use_3d else 0)
+			for copy: int in instance_resource.startup_copies:
+				charge_instance(instance_resource, copy + 1)
 		if instance_resource.instance_name == DEFAULT_INSTANCE_NAME:
 			default_instance = instance_resource
 		instance_collection.set(instance_resource.instance_name, instance_resource)
-
-
-func unload_unused_instances() -> void:
-	for child: Node in get_children():
-		if not child is ServerInstance: continue
-		var instance := child as ServerInstance
-		if instance.instance_resource.use_3d: continue # Managed by the bounded lifecycle above.
-		if instance.instance_resource.load_at_startup:
-			continue
-		if instance.connected_peers or not instance.awaiting_peers.is_empty():
-			continue
-		instance.instance_resource.charged_instances.erase(instance)
-		instance.queue_free()
 
 
 func get_instance_server_by_id(id: String) -> ServerInstance:

@@ -42,17 +42,12 @@ func population() -> int:
 
 
 func allows_character(character_id: int) -> bool:
-	return character_id > 0 and (
-		access_policy == AccessPolicy.PUBLIC
-		or (access_policy == AccessPolicy.RESERVED and allowed_character_ids.has(character_id))
-	)
+	return InstanceAdmissionRules.allows_character(character_id, access_policy, allowed_character_ids)
 
 
 func accepts_reservation() -> bool:
-	return (
-		not is_queued_for_deletion()
-		and admission_state == AdmissionState.ACCEPTING
-		and population() < instance_resource.max_players
+	return instance_resource != null and InstanceAdmissionRules.accepts_reservation(
+		is_queued_for_deletion(), admission_state, population(), instance_resource.max_players
 	)
 
 

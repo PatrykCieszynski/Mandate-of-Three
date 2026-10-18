@@ -1,0 +1,83 @@
+# Whole-repository legacy inventory — 2026-10-17
+
+## Coverage and limits
+
+Enumerated **3,412 tracked blobs** in the cleanup branch's recursive Git tree (not merely `addons/mandate_tools`). Reviewed the root configuration, README, CI workflow, role dispatcher, export plugin, world-test scripts, terrain preview, legacy currency command and representative resource files. No standalone diagnostic script is included. This GitHub-only review cannot prove absence of dynamic `load()`, UID, generated or string-composed references.
+
+### Cross-project triage
+
+| Area | Evidence from inspected sources / tree | Action |
+|---|---|---|
+| Editor addons | TinyMMO editor export plugin actively generates server-class stubs; Godot SQLite, Terrain3D and sky plugins configured | **Retain**; rename/restructure only with client export regression |
+| Old editor inspector | Not registered by active TinyMMO plugin; private popup, helper and property editor chain | **Removed** on this PR; 11 files including UID sidecars |
+| Legacy 2D gameplay/content | 2D sprite trees, hundreds of sprite frames and 2D-style item Resources coexist with new 3D item domain | **Audit next**: likely significant savings but indexed content / older game roles may load dynamically |
+| Terrain3D spike | `terrain_spike.gd` is an isolated preview of production actors, nav terrain, movement and water; `tools/terrain3d/*spike*` author/validate it | **Retain pending mapping-workflow replacement**: currently useful for terrain editor experiments |
+| Old network tests | `tests/run-spike3d.ps1` launches headless server and two clients, asserting network success markers | **Retain**: a network regression despite its name |
+| Tests and CI | `verify.yml` checks cold Godot import, formatting, boundary rules, headless gameplay smoke, Web UI generated assets | **Retain** and use to validate removals; test-name age is not obsolescence |
+| Web UI | `skins/legacy.js` is imported by live `inventory/game.js` | **Retain**; it is the active CEF skin adapter |
+| Economy | `gold_command.gd` uses legacy `Inventory.add_item` / `Economy.gold_id()`, whereas current world uses Yang wallet; `gold.tres` is old resource | **Investigate** command registration and migration before removing; it could be an intentional admin/dev tool |
+| Client/server entrypoints | `source/common/main.gd` dispatches all four roles via flags | **Retain**; no blind removal of any role |
+| Persistence | `project.godot` retains `custom_user_dir_name="slayhorizon"` | **Migration required** before rename to avoid losing local saved-data lookup |
+| Placeholder scenes | `assets/placeholders/**` contains old warriors, wolves etc. | **Candidate**, but first run literal/UID lookup and inspect dynamic constructors |
+| Translation/themes/icons | Many historical assets retained and some referenced through registries/skins | **Candidate inventory only**, not bulk delete |
+| Docs | Older prototype documents coexist with current source-of-truth notes | **Keep** or label archived; documentation has no runtime footprint |
+
+## Cleanup sequencing
+
+1. Inspect candidate references in code/scenes and run a Godot cold import; verify scene/resource UID references.
+2. Map the whole old 2D inventory/economy registry against the new `ItemDefinition` / `ItemInstance` domain, including commands; only then remove confirmed orphan assets and matching `.import`/UID sidecars.
+3. Map all 2D scene dependencies, animations and content indexes. Delete small groups behind smoke + exported client/server checks.
+4. Keep preview and multi-client integration scenes until replacements exist.
+5. Relocate TinyMMO's **active** export stubbing to first-party naming in a separate migration with packaged-build verification, rather than deactivating the plugin.
+
+## Deletion boundary confirmed during follow-up
+
+- `source/common/gameplay/characters/entity.gd` is the base of the still-present 2D `Character` -> `Player` inheritance hierarchy. Dead commented synchronization implementation was removed, but the class remains active within the legacy server model.
+- `source/common/gameplay/characters/player/player_resource.gd` contains persisted data fields retained for SQLite compatibility; deleting it or rewriting the save shape is **not** asset cleanup.
+- `source/common/gameplay/combat/ability/ability.gd` is a concrete `AbilityResource` hierarchy, not a standalone unused prototype.
+- The tracked Git tree did not reveal a separately named TinyMMO `review/` directory. Reference source kept outside this checkout must not be deleted or inferred from runtime reachability.
+- GitHub code search returned incomplete results; lack of search hits must not be treated as proof of no callers.
+
+No bulk legacy 2D assets or tests were deleted in this pass; evidence at this stage does not justify that risk.
+
+
+## Current follow-up
+
+The former `addons/tinymmo` addon path has been retired. Active ContentIndex editor UI and the required client/server export-stubbing plugin now live under `addons/mandate_tools`, with source content and script UID identities preserved. `project.godot` now registers the new editor plugin path. Packaged client/server exports still require separate validation beyond import/smoke CI.
+
+## Production 3D-only boundary (follow-up)
+
+The only checked-in authored instance resource in `source/common/gameplay/maps/instance/instance_collection/` is `first_region.tres`, explicitly `use_3d = true`. `InstanceManagerServer.prepare_instance()` selects `WorldInstance3D` for that resource; `WorldInstance3D` overrides legacy `load_map`, `_ready`, and the old ready-to-enter RPC so it does not instantiate the 2D Player scene. The `GameWorld3D` service still shares `PlayerResource` data.
+
+The content-registry loader now **rejects authored `use_3d = false` instances** rather than silently entering the old 2D path. This does not yet remove `ServerInstance`, `Player`, `Character`, or `Entity`: 3D instances subclass `ServerInstance`, and old types still appear in the shared instance manager and ancillary services. Eliminating those classes requires separating the shared lifecycle/session host from the old Map/Player implementation, not deleting a folder. The local-map regression rejects 2D resource admission and keeps checkpoint-failure coverage in the supported 3D channel-transfer flow. Its obsolete Player/Map transfer scenario has been retired with 2D routing.
+
+## Neutral admission extraction (no host inheritance change)
+
+An attempted extraction of `InstanceHost : SubViewport` exposed a Godot script-class resolution regression in CI; this incomplete base was reverted. `ServerInstance` remains the known-good `SubViewport` host, and `WorldInstance3D` continues to subclass it for now.
+
+`source/server/world/components/instance_admission_rules.gd` now contains pure admission predicates independent of 2D `Player`, `Map`, or RPC types. The existing host delegates access/capacity decisions to this helper, preserving serialized state, enums, and network interfaces. A full independent 3D host still requires migrating manager/transfer/WorldServer type contracts and legacy-only callbacks together; do not delete 2D classes until that has passed import, smoke and exported artifact tests.
+
+## 3D-only client/server routing cleanup
+
+After validating that the checked-in production collection contains only a 3D FirstRegion, `InstanceManagerServer.prepare_instance()` now constructs only `WorldInstance3D` and refuses direct 2D resources. The startup loader no longer branches on 2D copy counts. The old 20-second `unload_unused_instances()` sweep was removed because the production manager cannot register or create those legacy worlds. On the client, `InstanceManagerClient.charge_new_instance()` accepts only `GameWorld3D` scenes; its unused branch instantiating a 2D `Map` and `InstanceClient` has been removed. The shared `InstanceClient` class and its old 2D RPC implementation remain until the client-side inheritance/type contract is migrated; no claim that those methods are gone.
+
+## Legacy admin command removal
+
+The command registry dynamically loads every `.gd` under `source/server/world/components/chat_command/global_commands/`; merely leaving a legacy command in that directory exposes it to the live server. Removed eight obsolete commands plus their UID sidecars (16 files): `/size` (2D sprite scale), `/set` (2D StateSynchronizer and NodePath mutation), `/heal` (legacy Player stats), `/goto` and `/summon` (2D Player positions and teleport), `/worldboss` (2D Map and replicated-props spawn API), `/gold` and `/give` (old inventory/currency resource IDs instead of new Yang and ItemInstance authority). Other administrative functionality, notably PlayerResource-based progression, roles and moderation, remains. Restoring any of these capabilities should implement a 3D/domain-native command rather than reactivating old 2D actor access.
+
+The moderator `/where` and `/who` commands and player `/feedback` remain, with their location/roster lookup migrated from `Player`/`Map` 2D to `GameWorld3D.characters` and current `PlayerResource` sessions. Moderation, roles, progression and account-state commands remain; their shared server/session logic is not 2D implementation.
+
+## Confirmed parser-coupled legacy services
+
+Attempted removal of the old `ZonePatch2D` and `DungeonMaster` classes exposed still-parsed dependencies in `source/common/gameplay/maps/map.gd`, `source/common/network/sync/state_synchronizer_manager_server.gd`, and `source/common/gameplay/dungeon/dungeon_service.gd` via Godot cold-import failures. Both classes and their UID/scene files were restored; these are **not standalone dead files** despite no authored production 2D instance. Removing them safely depends on separating `ServerInstance`/old map synchronization and legacy dungeon service from active 3D infrastructure. The orphaned 2D `EventService` world-boss orchestration, whose sole admin entry was retired, has been removed.
+
+## PR #67 closure boundary — separate follow-up PRs
+
+This branch is a bounded legacy cleanup, **not** a rewrite of the live session architecture. Do not widen it into a wholesale 2D deletion without rebuilding the host contracts and exercising the multiplayer integration tests. The following follow-ups are deliberately deferred:
+
+1. **Server host migration:** create a 3D-only instance base or replace `WorldInstance3D : ServerInstance` after migrating `InstanceManagerServer`, `WorldServer`, local channel transfers, admin commands and RPC-compatible paths. Retain session identity, admission, disconnection checkpoints, authoritative economy and `PlayerResource` persistence.
+2. **Client host migration:** replace `WorldInstance3D : InstanceClient` on the client and its `InstanceManagerClient` signal/current-instance contract while keeping scene/node RPC paths compatible during handoff.
+3. **Remove 2D gameplay hierarchy:** only after both hosts no longer reference the old implementation, audit and delete `Player` / `Character` / `Entity`, 2D `Map`, synchronizers, warper/dungeon systems and their scenes/resources together with their true consumers. The historical class or a 2D filename alone does not authorize deletion.
+4. **Build and multiplayer verification:** before merging the present branch, verify real packaged client/server exports with the relocated first-party export plugin, plus dedicated multi-peer local-map/channel-transfer regressions; the default CI smoke and cold-import pipeline does not establish these outcomes. Run relevant isolated domain tests after each future host deletion.
+
+Keep this separation explicit when planning subsequent PRs; speculative removal of active persistence, moderation, inventory or export code would exceed this cleanup's scope.
