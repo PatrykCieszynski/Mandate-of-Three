@@ -1,0 +1,198 @@
+extends RefCounted
+## Opt-in server-local execution boundary, NOT durable admission or a World API.
+## Main-thread caller polls copied results. Each worker owns its native session
+## from open through full store transaction/retry to close; no async SQL hopping.
+const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
+const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
+enum State { STOPPED = 0, STARTING = 1, RUNNING = 2, DRAINING = 3 }
+const MAX_WORKERS: int=4
+const MAX_CAPACITY_PER_WORKER: int=16
+var state: State=State.STOPPED
+var startup_error: String=""
+var _slots: Array=[]
+var _pending: Dictionary={}
+var _capacity: int
+var _next_ticket: int=0
+var _ready_count: int=0
+
+class SessionWorker extends RefCounted:
+	var _connection: String
+	var _mutex:=Mutex.new()
+	var _wake:=Semaphore.new()
+	var _queue: Array=[]
+	var _events: Array=[]
+	var _closing:=false
+
+	func _init(connection: String) -> void:
+		_connection=connection
+
+	func enqueue(job: Dictionary) -> void:
+		_mutex.lock()
+		_queue.append(job.duplicate(true))
+		_mutex.unlock()
+		_wake.post()
+
+	func drain() -> void:
+		_mutex.lock()
+		_closing=true
+		_mutex.unlock()
+		_wake.post()
+
+	func take_events() -> Array:
+		_mutex.lock()
+		var events:=_events
+		_events=[]
+		_mutex.unlock()
+		return events
+
+	func _publish(event: Dictionary) -> void:
+		_mutex.lock()
+		_events.append(event.duplicate(true))
+		_mutex.unlock()
+
+	func _open(database: Object) -> bool:
+		if not database.open("postgresql",_connection): return false
+		# Server-side SQL budgets, not cancellation or a hard network deadline.
+		for setting: String in ["SET statement_timeout=2000;","SET lock_timeout=1000;","SET idle_in_transaction_session_timeout=5000;"]:
+			if not database.execute(setting).ok:
+				database.close()
+				return false
+		return true
+
+	func run() -> void:
+		var database: Object=ClassDB.instantiate("GodotSociDatabase")
+		var opened: bool=_open(database)
+		_publish({"kind":"ready","ok":opened})
+		if not opened:
+			database.close()
+			return
+		while true:
+			_wake.wait()
+			_mutex.lock()
+			var stop: bool=_closing and _queue.is_empty()
+			var job: Dictionary={} if _queue.is_empty() else _queue.pop_front()
+			_mutex.unlock()
+			if stop: break
+			if job.is_empty(): continue
+			var result: Dictionary={"ok":false,"error":"storage"}
+			var committed:=false
+			var replay:=false
+			if database.is_open() or _open(database):
+				var store:=Items.new(database)
+				if job.lookup:
+					result=store.inventory_receipt(job.character,job.operation_id)
+				else:
+					result=store.inventory_command(job.character,job.action,job.uid,job.revision,job.position,job.operation_id)
+					committed=store.committed
+					replay=store.receipt_replay
+				# Unexpected transaction leakage must not poison another job/session.
+				if database.in_transaction():
+					database.close()
+					result={"ok":false,"error":"storage"} if job.lookup else {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
+					committed=false
+					replay=false
+			_publish({"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"result":result,"committed":committed,"receipt_replay":replay})
+		database.close()
+		_connection=""
+
+## Configuration/submit/poll/drain are owned by ONE main-thread caller. Native
+## connect and SQL never execute here. Start failure must also be polled to STOPPED.
+func start(connection: String, workers: int = 2, capacity_per_worker: int = 2) -> bool:
+	if state!=State.STOPPED: return false
+	if connection.is_empty() or workers<1 or workers>MAX_WORKERS or capacity_per_worker<1 or capacity_per_worker>MAX_CAPACITY_PER_WORKER: return false
+	if not ClassDB.class_exists("GodotSociDatabase"): return false
+	state=State.STARTING
+	startup_error=""
+	_ready_count=0
+	_slots=[]
+	_capacity=capacity_per_worker
+	for index: int in workers:
+		var owner:=SessionWorker.new(connection+" application_name=mandate-inventory-executor-"+str(index))
+		var thread:=Thread.new()
+		var slot: Dictionary={"owner":owner,"thread":thread,"load":0,"joined":false}
+		_slots.append(slot)
+		if thread.start(owner.run)!=OK:
+			slot.joined=true
+			startup_error="thread"
+			begin_drain()
+			return false
+	return true
+
+func is_ready() -> bool: return state==State.RUNNING
+func is_stopped() -> bool: return state==State.STOPPED
+func pending_count() -> int: return _pending.size()
+
+func submit_inventory(character: int, operation_id: String, action: String, uid: String, revision: int, position: int = -1) -> Dictionary:
+	if action not in ["move","equip","unequip","activate"] or not ItemInstance.valid_uid(uid) or revision<0: return {"queued":false,"error":"request"}
+	return _submit({"character":character,"operation_id":operation_id,"lookup":false,"action":action,"uid":uid,"revision":revision,"position":position})
+
+func submit_receipt(character: int, operation_id: String) -> Dictionary:
+	return _submit({"character":character,"operation_id":operation_id,"lookup":true})
+
+func _submit(job: Dictionary) -> Dictionary:
+	if int(job.character)<=0 or not Commands.valid_id(str(job.operation_id)): return {"queued":false,"error":"request"}
+	if state!=State.RUNNING: return {"queued":false,"error":"unavailable"}
+	var selected: int=-1
+	for index: int in _slots.size():
+		if int(_slots[index].load)<_capacity and (selected<0 or int(_slots[index].load)<int(_slots[selected].load)): selected=index
+	if selected<0: return {"queued":false,"error":"busy"}
+	_next_ticket+=1
+	job.ticket=_next_ticket
+	_pending[_next_ticket]={"slot":selected,"ticket":_next_ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup}
+	_slots[selected].load+=1
+	_slots[selected].owner.enqueue(job)
+	# Volatile local transfer ONLY; never publish this as C2 durable admission.
+	return {"queued":true,"ticket":_next_ticket}
+
+## Poll never joins an active thread. Completed-but-unpolled results retain
+## capacity, so a slow consumer cannot grow the queues or completion buffers.
+func poll() -> Array:
+	var completed: Array=[]
+	for index: int in _slots.size():
+		var slot: Dictionary=_slots[index]
+		_consume(slot,completed)
+		if not slot.joined and not slot.thread.is_alive():
+			slot.thread.wait_to_finish()
+			slot.joined=true
+			# Drain a completion published between the first read and thread exit.
+			_consume(slot,completed)
+			if state in [State.STARTING,State.RUNNING]:
+				startup_error="worker"
+				begin_drain()
+			# A dead worker cannot leave local tickets hanging or become a target
+			# for new work. Missing results are conservative unknown, never busy.
+			for ticket: int in _pending.keys():
+				if int(_pending[ticket].slot)!=index: continue
+				var lost: Dictionary=_pending[ticket].duplicate(true)
+				lost.erase("slot")
+				lost.result={"ok":false,"error":"outcome_unknown","outcome_unknown":true}
+				lost.committed=false
+				lost.receipt_replay=false
+				completed.append(lost)
+				_pending.erase(ticket)
+				slot.load-=1
+	if state==State.DRAINING and _pending.is_empty() and _slots.all(func(slot: Dictionary) -> bool: return slot.joined):
+		state=State.STOPPED
+		_slots=[]
+	return completed
+
+func _consume(slot: Dictionary, completed: Array) -> void:
+	for event: Dictionary in slot.owner.take_events():
+		if event.kind=="ready":
+			_ready_count+=1
+			if not event.ok:
+				startup_error="storage"
+				begin_drain()
+			elif state==State.STARTING and _ready_count==_slots.size(): state=State.RUNNING
+		else:
+			_pending.erase(event.ticket)
+			slot.load-=1
+			event.erase("kind")
+			completed.append(event)
+
+## Finish all buffered work; no timeout/caller disconnect cancels a transaction.
+## Owner must keep polling through STOPPED before dropping the executor.
+func begin_drain() -> void:
+	if state in [State.STOPPED,State.DRAINING]: return
+	state=State.DRAINING
+	for slot: Dictionary in _slots: slot.owner.drain()

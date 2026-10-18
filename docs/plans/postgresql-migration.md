@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for the current operations (2026-10-18), subject to this package's review/merge. P3–P4 **not implemented**; production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a local Inventory execution is opt-in; the P3 runtime integration/fencing gate and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 The progress entries below record each package's scope and deferrals at delivery
 time. The latest acceptance matrix and remaining gates are collected in
@@ -189,6 +189,15 @@ Shop/Exchange progress while a different account transaction is blocked. The
 full native matrix and default smoke are recorded in the evidence report. This
 closes backend correctness acceptance for current operations, not runtime
 execution, pending-income/session fencing, load/soak or production cutover.
+
+**P3a progress:** [Bounded Inventory execution](../development/postgres-inventory-executor.md)
+adds opt-in worker-owned native sessions for full existing Inventory transactions
+and receipt lookup, bounded per-worker work/results, main-thread polling and
+nonblocking drain. Native tests cover independent completion/SceneTree physics
+during blocked SQL, unconsumed-result capacity, replay/restart, COMMIT unknown,
+lock timeout and session cleanup. Volatile `queued` is NOT durable admission;
+session/epoch fencing, unresolved discovery, pending-income ownership, actual
+World integration, other domains and P4 remain separate. No live backend switch.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
