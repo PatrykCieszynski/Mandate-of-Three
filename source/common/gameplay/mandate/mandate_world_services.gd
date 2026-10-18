@@ -32,7 +32,7 @@ func owner_id_for_peer(peer_id: int) -> int:
 	var player := player_for_peer(peer_id)
 	return 0 if player == null else player.player_id
 
-func can_join_map_instance(peer_id: int, instance: ServerInstance) -> bool:
+func can_join_map_instance(peer_id: int, instance: ServerInstanceHost) -> bool:
 	return _server()!=null and _server().can_join_map_instance(peer_id,instance)
 
 func peers() -> Array:
@@ -71,6 +71,6 @@ func interrupt_transfer(peer_id: int, reason: String) -> void:
 	if server!=null and server.instance_manager!=null:
 		server.instance_manager.transfers.interrupt(peer_id,reason)
 
-func hydrate_transfer(peer_id: int, host: ServerInstance) -> Dictionary:
+func hydrate_transfer(peer_id: int, host: ServerInstanceHost) -> Dictionary:
 	var server := _server()
 	return {} if server==null or server.instance_manager==null else server.instance_manager.transfers.hydrate(peer_id,host)
