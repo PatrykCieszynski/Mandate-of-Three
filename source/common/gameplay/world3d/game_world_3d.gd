@@ -365,7 +365,7 @@ func receive_roster(roster: Dictionary) -> void:
 	for peer_id: int in roster:
 		if not characters.has(peer_id):
 			_add_character(peer_id, str(roster[peer_id]))
-	var instance := get_parent() as InstanceClient
+	var instance := get_parent() as WorldInstanceClient3D
 	var channel := int(instance.identity.get("channel_id",0)) if instance!=null else 0
 	var title := "First Region" if region != null else "Test Arena"
 	if channel>0: title += " · CH %d" % channel
