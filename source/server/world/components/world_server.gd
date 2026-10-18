@@ -35,6 +35,14 @@ const ItemStateVersion = preload("res://source/common/gameplay/items/domain/item
 ## UTC epoch gives restart/process continuity without a database write per tick.
 var world_time := WorldTime.authority(preload("res://source/common/gameplay/world_time/world_time_settings.tres"))
 
+## Server-side identity check for asynchronous delivery owners. A client cannot
+## choose the character or reuse a retired peer's token through this helper.
+func session_ticket_fingerprint(peer_id: int, character_id: int) -> String:
+	var player: PlayerResource=connected_players.get(peer_id)
+	if player==null or player.player_id!=character_id or player.current_peer_id!=peer_id or player_id_to_peer_id.get(character_id,0)!=peer_id: return ""
+	var token: String=_session_tokens.get(peer_id,"")
+	return "" if token.is_empty() else token.sha256_text()
+
 func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> bool:
 	if not snapshot.get("ok", false):
 		runtime_equipment.erase(owner_id)

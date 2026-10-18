@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution, P3b durable Inventory recovery and P3c delegated session fencing are opt-in; the P3 issuer/World integration gate and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution, P3b durable Inventory recovery, P3c delegated session fencing and P3d World-thread Inventory reconciliation are opt-in; live issuer/endpoint integration and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 The progress entries below record each package's scope and deferrals at delivery
 time. The latest acceptance matrix and remaining gates are collected in
@@ -219,6 +219,17 @@ recovery, failed COMMIT without retry, reopen and int64 epochs. The privileged
 grant API does not authenticate a Master ticket: the actual trusted issuer
 bridge, World result filtering/reconciliation, handoff/pending Yang and other
 domains remain open. No live PostgreSQL route or full C5 completion is claimed.
+
+**P3d progress:** [World Inventory delivery](../development/postgres-inventory-runtime.md)
+adds a bounded World-thread owner for discovery/resume, hydration into the actual
+World equipment/stat cache, fresh-marker acknowledgement, and command delivery
+after authoritative repair. Captured native peer/ticket identity plus local
+binding generation suppress stale completions after disconnect/replacement.
+Native tests cover independent progress during blocked SQL, rejection replay,
+lost-interest takeover, snapshot freshness, and explicit original-ID recovery
+after admission/mutation COMMIT uncertainty. This component is not wired into
+live login/endpoints: trusted issuer delivery, endpoint/client/publication wiring,
+other domains, handoff/pending Yang and P4 remain open. No backend switch.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

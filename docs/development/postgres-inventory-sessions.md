@@ -80,3 +80,7 @@ alt recovery, snapshot freshness, failed COMMIT without retry, and reopen.
 Actual issuer validation/delivery, World/runtime reconciliation, endpoint and
 client retry integration, handoff with pending Yang, other domains, and P4 load,
 soak and cutover remain open. No full C5, multi-World, Linux or physical CEF claim.
+
+The follow-up [P3d runtime owner](postgres-inventory-runtime.md) adds opt-in
+World-thread recovery and actual combat projection reconciliation; live issuer,
+endpoint and publication wiring still remain separate integration work.

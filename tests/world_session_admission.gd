@@ -129,6 +129,8 @@ func run() -> void:
 	await wait_for(func() -> bool: return first.connected and server.connected_players.size() == 1)
 	var first_id := first.multiplayer_api.get_unique_id()
 	assert(server.player_id_to_peer_id[characters[0]] == first_id)
+	assert(server.session_ticket_fingerprint(first_id,characters[0])=="first".sha256_text())
+	assert(server.session_ticket_fingerprint(first_id,characters[1]).is_empty())
 	var replay := connect_client("first")
 	await wait_for(func() -> bool: return replay.ended)
 	assert(not replay.connected and not first.ended and server.connected_players.size() == 1)
@@ -152,6 +154,8 @@ func run() -> void:
 	server._on_peer_disconnected(first_id) # Delayed duplicate after admission.
 	assert(server.player_id_to_peer_id[characters[0]] == new_id)
 	assert(server.connected_players[new_id].current_peer_id == new_id)
+	assert(server.session_ticket_fingerprint(first_id,characters[0]).is_empty())
+	assert(server.session_ticket_fingerprint(new_id,characters[0])=="replacement".sha256_text())
 	assert(not master.retire_world_session(8, "alpha", "replacement"), "wrong World cannot retire another World's session")
 
 	assert(issue("other-character", "alpha", characters[1], 21))
