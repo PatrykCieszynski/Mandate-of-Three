@@ -56,7 +56,7 @@ func _ready() -> void:
 		api.connected_to_server.connect(func() -> void:
 			var instance: WorldInstanceClient3D = preload("res://source/client/network/world_instance_3d.gd").new()
 			instance.name = "Instance"
-			_check(not (instance is InstanceClient), "3D client must not inherit legacy InstanceClient")
+			_check(not ((instance as Node) is InstanceClient), "3D client must not inherit legacy InstanceClient")
 			world = load("res://tests/fixtures/world3d/test_arena.tscn").instantiate()
 			world.input_enabled = false
 			instance.add_child(world)
