@@ -1,7 +1,7 @@
 extends DataRequestHandler
 
 
-func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
+func data_request_handler(peer_id: int, instance: ServerInstanceHost, args: Dictionary) -> Dictionary:
 	# Anti-spam: 5 messages per 10s per peer. Generous for normal chat, blocks
 	# bot-style flooding. Tune in one place if it turns out to be too tight.
 	if not RateLimiter.check(peer_id, &"chat.send", 5, 10_000):
