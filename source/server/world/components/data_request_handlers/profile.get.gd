@@ -1,6 +1,6 @@
 extends DataRequestHandler
 
-func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
+func data_request_handler(peer_id: int, instance: ServerInstanceHost, args: Dictionary) -> Dictionary:
 	var ws: WorldServer = instance.world_server
 
 	var from_player: PlayerResource = ws.connected_players.get(peer_id)
