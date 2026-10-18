@@ -11,7 +11,7 @@ const MIN_PRIORITY: int = 100
 
 func data_request_handler(
 	peer_id: int,
-	instance: ServerInstance,
+	instance: ServerInstanceHost,
 	args: Dictionary
 ) -> Dictionary:
 	var pr: PlayerResource = instance.world_server.connected_players.get(peer_id, null)
