@@ -459,7 +459,7 @@ func _ready() -> void:
 
 ## If no instance_id is provided, will use all peers connected in the world.
 func propagate_rpc(callable: Callable, instance_id: String = "") -> void:
-	var instance: ServerInstance = instance_manager.get_instance_server_by_id(instance_id)
+	var instance: ServerInstanceHost = instance_manager.get_instance_server_by_id(instance_id)
 	if instance:
 		for peer_id: int in instance.connected_peers:
 			callable.rpc_id(peer_id)
@@ -496,7 +496,7 @@ func _data_request(
 ## Shared admission for the generic World request protocol. Identity comes only
 ## from authenticated server session maps; omitted instance means the peer's own
 ## joined instance, never a configured default or client-selected path.
-func request_instance(peer_id: int, instance_id: String = "") -> ServerInstance:
+func request_instance(peer_id: int, instance_id: String = "") -> ServerInstanceHost:
 	var player: PlayerResource = connected_players.get(peer_id)
 	if peer_id <= 1 or player == null or player.player_id <= 0 or player.account_name.is_empty():
 		return null
@@ -504,7 +504,7 @@ func request_instance(peer_id: int, instance_id: String = "") -> ServerInstance:
 		return null
 	if instance_manager == null:
 		return null
-	var instance: ServerInstance = instance_manager.find_instance_for_peer(peer_id) if instance_id.is_empty() else instance_manager.get_instance_server_by_id(instance_id)
+	var instance: ServerInstanceHost = instance_manager.find_instance_for_peer(peer_id) if instance_id.is_empty() else instance_manager.get_instance_server_by_id(instance_id)
 	if instance == null or instance.instance_resource == null or not instance.connected_peers.has(peer_id):
 		return null
 	if instance.instance_resource.use_3d:
@@ -512,14 +512,15 @@ func request_instance(peer_id: int, instance_id: String = "") -> ServerInstance:
 		if world == null or not world.characters.has(peer_id):
 			return null
 	else:
-		var actor: Player = instance.players_by_peer_id.get(peer_id)
+		var legacy: ServerInstance = instance as ServerInstance
+		var actor: Player = legacy.players_by_peer_id.get(peer_id) if legacy != null else null
 		if actor == null or actor.player_resource != player:
 			return null
 	return instance
 
 ## Initial 3D join must match both the current session and its server assignment.
 ## Standalone hosts use the same session-qualified pending assignment.
-func can_join_map_instance(peer_id: int, instance: ServerInstance) -> bool:
+func can_join_map_instance(peer_id: int, instance: ServerInstanceHost) -> bool:
 	var player: PlayerResource = connected_players.get(peer_id)
 	if peer_id<=1 or player==null or player.player_id<=0 or player.current_peer_id!=peer_id or player_id_to_peer_id.get(player.player_id,0)!=peer_id: return false
 	if instance==null or not instance.awaiting_peers.has(peer_id) or instance.connected_peers.has(peer_id): return false
