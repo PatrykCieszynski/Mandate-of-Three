@@ -1,5 +1,6 @@
-extends InstanceClient
-## Login and teardown keep the existing instance type; gameplay is native 3D.
+class_name ClientWorldInstance3D
+extends Node
+## Minimal 3D instance host. The world owns gameplay, input and join RPCs.
+## Keep this node between InstanceManagerClient and GameWorld for stable paths.
 
-func _ready() -> void:
-	current = self
+var identity: Dictionary = {}
