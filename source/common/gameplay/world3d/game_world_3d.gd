@@ -300,7 +300,7 @@ func join_world() -> void:
 	if not _server:
 		return
 	var peer_id: int = multiplayer.get_remote_sender_id()
-	var host: ServerInstance = get_parent() as ServerInstance
+	var host: ServerInstanceHost = get_parent() as ServerInstanceHost
 	if not services.can_join_map_instance(peer_id,host) or characters.has(peer_id):
 		return
 	var resource: PlayerResource = services.player_for_peer(peer_id)
@@ -321,7 +321,7 @@ func join_world() -> void:
 	print("SPIKE3D_JOIN: ", peer_id)
 
 func remove_peer(peer_id: int, checkpoint_already_saved: bool = false) -> void:
-	var host: ServerInstance = get_parent() as ServerInstance
+	var host: ServerInstanceHost = get_parent() as ServerInstanceHost
 	if _server and not characters.has(peer_id) and (host==null or not host.awaiting_peers.has(peer_id)): return
 	if _server and not checkpoint_already_saved:
 		var resource: PlayerResource = services.player_for_peer(peer_id)
