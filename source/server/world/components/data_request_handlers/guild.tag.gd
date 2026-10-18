@@ -11,14 +11,15 @@ const TAG_COOLDOWN_MS: int = 30000
 static var _last_tag_ms: Dictionary[int, int] = {}
 
 
-func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
+func data_request_handler(peer_id: int, instance: ServerInstanceHost, args: Dictionary) -> Dictionary:
+	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
 	var world_server: WorldServer = instance.world_server
 	var store: WorldStoreSqlite = world_server.database.store
 
 	var player: PlayerResource = world_server.connected_players.get(peer_id)
 	if player == null:
 		return {"error": 1, "ok": false, "message": ""}
-	var player_node: Player = instance.players_by_peer_id.get(peer_id)
+	var player_node: Player = legacy_players.get(peer_id)
 	if player_node == null:
 		return {"error": 1, "ok": false, "message": ""}
 
@@ -63,7 +64,7 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	# Keep the client's ClientState.active_guild_id in sync (drives ally tints etc.).
 	world_server.data_push.rpc_id(peer_id, &"active_guild_id.set", {"active_guild_id": player.active_guild_id})
 	# Sync the player node's tag so OTHER players re-tint this player's ally bar live.
-	var pnode: Player = instance.players_by_peer_id.get(peer_id)
+	var pnode: Player = legacy_players.get(peer_id)
 	if pnode != null:
 		pnode.state_synchronizer.set_by_path(^":active_guild_id", player.active_guild_id)
 
