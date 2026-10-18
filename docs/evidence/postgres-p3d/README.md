@@ -7,7 +7,7 @@ cluster, not the installed service/player data. Runner confirms shutdown.
 
 ## World-thread boundary
 
-Final `inventory-runtime` fixture `run-7xzyvi3_`: PASS.
+Latest `inventory-runtime` fixture `run-f6co8t8q` (including review regressions): PASS.
 
 - The fixture seeds World peer maps, then uses production native PG workers,
   Inventory transactions, durable intents/session grants and the actual
@@ -50,6 +50,7 @@ Final `inventory-runtime` fixture `run-7xzyvi3_`: PASS.
 | inventory-runtime, repair/lane coverage | `run-j96btwl4` PASS |
 | inventory-runtime, including admission uncertainty | `run-sr0lgsk0` PASS |
 | inventory-runtime, final including paged history | `run-7xzyvi3_` PASS |
+| inventory-runtime, duplicate-attach review regression | `run-f6co8t8q` PASS |
 | inventory-sessions | `run-68q7tqze` PASS |
 | inventory-intents | `run-dc0aaa9o` PASS |
 | inventory-executor | `run-ycx222a5` PASS |
@@ -78,3 +79,18 @@ publication remain open. The component provides its local dependent-action gate;
 callers must wire it before live use. Other domains, pending Yang/CH handoff,
 multi-World, Linux, physical CEF and P4 mixed-load/soak/cutover are not established.
 Production remains SQLite.
+
+## PR #84 review follow-up
+
+Repeated attach for the identical peer/context is now idempotent. Native run
+`run-f6co8t8q` covers a ready session, admission actually blocked on an account
+lock, and paused COMMIT uncertainty in both mutation and admission. The duplicate
+does not reset the workflow: the blocked command delivers one terminal outcome,
+explicit recovery after mutation uncertainty keeps the original intent, and
+recovery after admission uncertainty reuses its captured ID/body even though the
+failed admission left no durable row. Genuine replacement/disconnect recovery
+continues to pass. Intentional fresh recovery in the fixture now detaches first.
+
+Cross-domain post-command invalidation/reconciliation and indexed pending-only
+recovery discovery remain explicit integration/load prerequisites, documented in
+the development guide. Neither is implemented by this small review fix.

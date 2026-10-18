@@ -24,6 +24,12 @@ account, character and current grant/epoch in each session transaction.
 The helper does not authenticate a ticket supplied by a client, issue a grant,
 or establish that Master has delivered its latest revocation.
 
+Repeating `attach()` for the identical peer and complete session context is an
+idempotent success. It preserves the active command/body, outstanding ticket,
+readiness and paused/unknown state without emitting another lifecycle change.
+Use explicit `retry()` for paused recovery; a different peer or context still
+creates a replacement binding with a new local generation.
+
 At most 64 account bindings exist. Each has one local Inventory workflow and at
 most one outstanding executor ticket. A command during recovery/another workflow
 is rejected locally with `recovery_required`, not buffered behind it. Independent
@@ -90,6 +96,18 @@ economy domains remain to integrate. Callers must consult its gate for dependent
 actions; merely constructing the component does not gate a live character.
 Handoff with pending Yang, real mixed World/network PostgreSQL traffic and P4
 load/soak/cutover remain open. No backend switch or dual writes are enabled.
+
+Before adding concurrent NPC Shop, Storage or other item-mutating domains,
+integrate versioned invalidation/reconciliation across those domains. The current
+post-command refresh opens the local Inventory lane after applying its snapshot;
+it does not perform another backend revision acknowledgement and cannot fence a
+different domain's commit after that snapshot was read. The attach/recovery
+barrier is not a substitute for cross-domain synchronization.
+
+Recovery currently scans terminal history as well as pending intents. Paging
+bounds each request and memory use, but not total recovery work as history grows.
+Plan indexed pending-only discovery before the P3/P4 production/load gate, keeping
+full original-ID receipt/outcome lookup and its replay guarantees intact.
 
 Run `tools/postgres/run_readiness.py --suite inventory-runtime` on owned fixtures.
 The fixture uses real PostgreSQL workers, SceneTree physics and production World

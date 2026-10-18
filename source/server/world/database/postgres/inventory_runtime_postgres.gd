@@ -31,6 +31,9 @@ func attach(peer_id: int, context: Dictionary) -> bool:
 	if _world.session_ticket_fingerprint(peer_id,int(context.character))!=context.session_fingerprint: return false
 	if not _bindings.has(context.account_id) and _bindings.size()>=MAX_BINDINGS: return false
 	var previous: Dictionary=_bindings.get(context.account_id,{})
+	# Repeated lifecycle delivery is not a new session. Preserve the original
+	# command/body, outstanding ticket and paused/unknown recovery state.
+	if not previous.is_empty() and previous.peer==peer_id and Sessions.same_context(previous.context,context): return true
 	_generation+=1
 	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
 	var binding: Dictionary={"peer":peer_id,"context":safe,"generation":_generation,"stage":"discover","ticket":0,"cursor":0,"pending":[],"more":false,"repairs":0,"command":{},"retry":false,"snapshot":{},"terminal":{}}

@@ -115,6 +115,9 @@ func _ready() -> void:
 	verify_projection(94000)
 	assert(not world.runtime_equipment[94000].equipment.is_empty())
 	assert(receipt_count("before-runtime")==1)
+	var initial_deliveries: int=snapshots.size()
+	assert(runtime.attach(100,a) and runtime.mutations_allowed(100))
+	assert(snapshots.size()==initial_deliveries,"duplicate attach of ready session does not restart hydration")
 	# One account blocked in real SQL must not freeze World physics, another
 	# account's Inventory or the main-thread delivery owner.
 	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=9400 FOR NO KEY UPDATE;").ok)
@@ -124,8 +127,13 @@ func _ready() -> void:
 	await wait_until(func() -> bool: return finished.any(func(row: Dictionary) -> bool: return row.id=="other-equip"))
 	assert(physics_ticks>before and not runtime.mutations_allowed(100))
 	assert(not finished.any(func(row: Dictionary) -> bool: return row.id=="unequip"))
+	assert(pg.execute("SELECT pg_stat_clear_snapshot();").ok)
+	assert(int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name LIKE 'mandate-inventory-executor-%' AND wait_event_type='Lock';").rows[0].n)==1)
+	assert(runtime.status(100)=="admit" and runtime.attach(100,a))
+	assert(runtime.status(100)=="admit","duplicate attach preserves the in-flight admission")
 	assert(pg.commit())
 	await wait_until(func() -> bool: return runtime.mutations_allowed(100))
+	assert(finished.filter(func(row: Dictionary) -> bool: return row.id=="unequip" and row.result.ok).size()==1)
 	verify_projection(94000)
 	assert(world.runtime_equipment[94000].equipment.is_empty())
 	assert(runtime.submit(100,"overlap-a","equip",sword.uid,2,-1).queued)
@@ -170,6 +178,7 @@ func _ready() -> void:
 	assert(pg.query("SELECT last_value FROM economy.fixture_runtime_attempt;").rows[0].last_value==1)
 	assert(not finished.any(func(row: Dictionary) -> bool: return row.id=="uncertain-unequip"))
 	assert(Intents.new(pg).outcome(94000,"uncertain-unequip").state=="pending")
+	assert(runtime.attach(101,c) and runtime.status(101)=="paused","duplicate attach must not restart uncertain work")
 	assert(pg.execute("DROP TRIGGER fixture_commit ON economy.market_commands;").ok)
 	assert(runtime.retry(101))
 	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
@@ -183,6 +192,7 @@ func _ready() -> void:
 	assert(failures.back()=="outcome_unknown" and not admitted.has("uncertain-admission"))
 	assert(Intents.new(pg).outcome(94000,"uncertain-admission").error=="unknown_command")
 	assert(pg.query("SELECT last_value FROM economy.fixture_runtime_attempt;").rows[0].last_value==2)
+	assert(runtime.attach(101,c) and runtime.status(101)=="paused","keep the original body even when admission left no durable row")
 	assert(pg.execute("DROP TRIGGER fixture_admission ON economy.inventory_intents;").ok)
 	assert(runtime.retry(101))
 	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
@@ -190,6 +200,7 @@ func _ready() -> void:
 	verify_projection(94000)
 	change_after_snapshot=true
 	delivered=snapshots.size()
+	runtime.detach(101) # Deliberate fresh recovery, not duplicate attach.
 	assert(runtime.attach(101,c))
 	await wait_until(func() -> bool: return runtime.mutations_allowed(101))
 	assert(snapshots.size()>=delivered+2 and not change_after_snapshot)
