@@ -24,9 +24,22 @@ var _pending_admissions: Dictionary[int, Dictionary] = {}
 var _session_tokens: Dictionary[int, String] = {}
 ## Explicit opt-in owner only; normal gameplay has no PostgreSQL backend switch.
 var inventory_runtime: RefCounted
+var wallet_runtime: RefCounted
 
 func _process(_delta: float) -> void:
 	if inventory_runtime!=null: inventory_runtime.poll()
+	if wallet_runtime!=null: wallet_runtime.poll(_delta)
+
+## Nonblocking checkpoint barrier. A failure/unknown result refuses a graceful
+## handoff/shutdown; dirty income remains owned in RAM for recovery.
+func flush_postgres_wallets(shutdown: bool = false) -> bool:
+	if wallet_runtime==null: return true
+	if shutdown: wallet_runtime.begin_drain()
+	else: wallet_runtime.checkpoint_all()
+	var deadline: int=Time.get_ticks_msec()+8000
+	while not (wallet_runtime.shutdown_complete() if shutdown else wallet_runtime.drained()) and Time.get_ticks_msec()<deadline:
+		await get_tree().process_frame
+	return wallet_runtime.shutdown_complete() if shutdown else wallet_runtime.drained()
 
 ## {peer_id: PlayerResource}
 var connected_players: Dictionary[int, PlayerResource]
@@ -90,10 +103,10 @@ static var curr: WorldServer
 ## PG admission depends on the live trusted control connection, not just a
 ## cached ticket or durable grant. SQLite keeps its existing lifecycle policy.
 func inventory_master_available() -> bool:
-	return inventory_runtime==null or (world_manager!=null and world_manager.multiplayer_api!=null and world_manager.multiplayer_api.has_multiplayer_peer() and world_manager.multiplayer_api.multiplayer_peer.get_connection_status()==MultiplayerPeer.CONNECTION_CONNECTED)
+	return (inventory_runtime==null and wallet_runtime==null) or (world_manager!=null and world_manager.multiplayer_api!=null and world_manager.multiplayer_api.has_multiplayer_peer() and world_manager.multiplayer_api.multiplayer_peer.get_connection_status()==MultiplayerPeer.CONNECTION_CONNECTED)
 
 func invalidate_inventory_admissions() -> void:
-	if inventory_runtime==null: return
+	if inventory_runtime==null and wallet_runtime==null: return
 	token_list.clear()
 	var pending: Array=_pending_admissions.keys()
 	_pending_admissions.clear() # Invalidate suspended continuations before closing sockets.
@@ -106,13 +119,14 @@ func invalidate_inventory_admissions() -> void:
 	for peer_id: int in pending:
 		if live.has(peer_id): peer.disconnect_peer(peer_id)
 	for peer_id: int in connected_players.keys():
-		inventory_runtime.detach(peer_id)
+		if inventory_runtime!=null: inventory_runtime.detach(peer_id)
+		if wallet_runtime!=null: wallet_runtime.detach(peer_id)
 		if live.has(peer_id): peer.disconnect_peer(peer_id)
 
 ## Internal Master connection only; public clients submit a token, never an ID.
 func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> bool:
 	if not inventory_master_available(): return false
-	if inventory_runtime!=null:
+	if inventory_runtime!=null or wallet_runtime!=null:
 		if not inventory_context.get("epoch") is int or inventory_context.epoch<=0 or inventory_context.get("account_id")!=account_id or inventory_context.get("character")!=character_id or inventory_context.get("session_fingerprint")!=auth_token.sha256_text(): return false
 	elif not inventory_context.is_empty(): return false # Never silently use SQLite for a PG ticket.
 	if not database.wallet_ready: return false
@@ -136,9 +150,11 @@ func accept_master_handoff(auth_token: String, username: String, character_id: i
 
 
 func revoke_account_admission(username: String) -> void:
-	if inventory_runtime!=null:
+	if inventory_runtime!=null or wallet_runtime!=null:
 		for peer_id: int in connected_players:
-			if connected_players[peer_id].account_name==username: inventory_runtime.detach(peer_id)
+			if connected_players[peer_id].account_name==username:
+				if inventory_runtime!=null: inventory_runtime.detach(peer_id)
+				if wallet_runtime!=null: wallet_runtime.detach(peer_id)
 	for token: String in token_list.keys():
 		if token_list[token].account == username:
 			token_list.erase(token)
@@ -215,6 +231,9 @@ func start_world_server() -> void:
 
 
 func _on_periodic_save() -> void:
+	if not await flush_postgres_wallets():
+		push_error("Periodic save refused: PostgreSQL wallet checkpoint unresolved.")
+		return
 	# Refresh last-seen for everyone online so a crash only loses at most one
 	# save interval of it (the authoritative stamp is on disconnect).
 	var now_unix_ms: int = int(Time.get_unix_time_from_system() * 1000.0)
@@ -245,6 +264,9 @@ func _notification(what: int) -> void:
 	if database == null:
 		return
 	get_tree().auto_accept_quit=false
+	if not await flush_postgres_wallets(true):
+		push_error("Window shutdown refused: PostgreSQL wallet checkpoint unresolved.")
+		return
 	if database.save_all_connected(connected_players)<0 or not await database.shutdown_database():
 		push_error("Window shutdown refused: checkpoint or auction reader drain failed.")
 		return
@@ -283,12 +305,16 @@ func _on_peer_connected(peer_id: int) -> void:
 	if inventory_runtime!=null and not inventory_runtime.attach(peer_id,ticket.get("inventory_context",{})):
 		peer.disconnect_peer(peer_id)
 		return
+	if wallet_runtime!=null and not wallet_runtime.attach(peer_id,ticket.get("inventory_context",{})):
+		peer.disconnect_peer(peer_id)
+		return
 	_publish_authenticated_state(peer_id, player)
 	ServerLog.info("Peer %d connected." % peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if inventory_runtime!=null: inventory_runtime.detach(peer_id)
+	if wallet_runtime!=null: wallet_runtime.detach(peer_id)
 	var session_token: String = _session_tokens.get(peer_id, "")
 	_session_tokens.erase(peer_id)
 	ServerLog.info("Peer %d disconnected." % peer_id)

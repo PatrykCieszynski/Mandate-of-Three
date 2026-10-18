@@ -559,3 +559,16 @@ P3h uses the same four PG intent/session/runtime/endpoint suites to verify
 pending-only recovery, transactional v1-to-v2 index migration with data, retained
 history/receipt lookup, int64 cursors and the partial-index plan against 10,033
 terminal records. It adds no default suite; see [pending recovery](postgres-pending-recovery.md).
+
+## PostgreSQL wallet runtime (P3i, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite wallet-runtime`
+uses a fresh owned SCRAM cluster. It covers RAM-only ground currency, captured
+income prefixes, independent-account progress under SQL locks, pending-funded
+spend, reservations, successful COMMIT with lost completion, native failed COMMIT,
+same-ID scheduled retry, alt/relogin, offline dirty retention after revocation,
+forced worker drain and wallet recreation. The existing `inventory-endpoint`
+suite additionally checks actual client currency RPCs/snapshots and process relog,
+with unchanged SQLite wallet rows. These are optional suites, not added to smoke.
+See [wallet runtime](postgres-wallet-runtime.md) for the supplied fixture boundaries
+and remaining production/multi-World adoption work.

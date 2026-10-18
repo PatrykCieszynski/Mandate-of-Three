@@ -10,7 +10,7 @@ func available() -> bool:
 	return _server() != null
 
 func economy() -> WorldDatabase:
-	return null if _server() == null or _server().inventory_runtime != null else _server().database
+	return null if _server() == null or _server().inventory_runtime != null or _server().wallet_runtime != null else _server().database
 
 func progression() -> WorldDatabase:
 	return null if _server() == null else _server().database
@@ -20,10 +20,17 @@ func world_time() -> WorldTime:
 
 func item_store() -> ItemStoreSqlite:
 	var server := _server()
-	return null if server == null or server.inventory_runtime != null or server.database == null else server.database.item_store
+	return null if server == null or server.inventory_runtime != null or server.wallet_runtime != null or server.database == null else server.database.item_store
 
 func inventory_runtime() -> RefCounted:
 	return null if _server()==null else _server().inventory_runtime
+
+func wallet_runtime() -> RefCounted:
+	return null if _server()==null else _server().wallet_runtime
+
+func currency_allowed(peer_id: int) -> bool:
+	if transfer_pending(peer_id): return false
+	return mutations_allowed(peer_id) if wallet_runtime()==null else wallet_runtime().ready(peer_id)
 
 func item_domain_ready() -> bool:
 	return item_store() != null
@@ -68,7 +75,7 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 func mutations_allowed(peer_id: int) -> bool:
 	# Other economics are not ported to the asynchronous runtime yet. Never let
 	# an opt-in Inventory fixture fall back to synchronous SQLite mutations.
-	return inventory_runtime()==null and not transfer_pending(peer_id)
+	return inventory_runtime()==null and wallet_runtime()==null and not transfer_pending(peer_id)
 
 func transfer_pending(peer_id: int) -> bool:
 	var server := _server()

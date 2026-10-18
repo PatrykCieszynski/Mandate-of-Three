@@ -2,11 +2,25 @@ extends "res://tests/postgres_inventory_session_bridge.gd"
 ## Actual client processes use the production endpoint, bridge, journal and item
 ## adapter. Master/World run on native isolated sockets in this server fixture;
 ## Gateway credentials and map/actor construction remain controlled.
+class CurrencyMap extends GameWorld3D:
+	func _ready() -> void:
+		combat_endpoint=CombatEndpoint3D.new()
+		combat_endpoint._world=self
+		currency_endpoint=CurrencyEndpoint3D.new()
+		currency_endpoint.name="Currency"
+		currency_endpoint.services=services
+		add_child(currency_endpoint)
+	func _process(_delta: float) -> void: pass
+	func _physics_process(_delta: float) -> void: pass
+	func _exit_tree() -> void: combat_endpoint.free()
+	func has_line_of_sight(_from: Vector3, _to: Vector3) -> bool: return true
+
 class FixtureMap extends Node3D:
 	var characters: Dictionary[int,PlayerActor3D]={}
 	var upgrade_endpoint: Node
 	var endpoint: InventoryEndpoint3D
 	var reports: Dictionary={}
+	var currency_map: CurrencyMap
 	signal joined(peer: int)
 	signal phase_received(phase: String, payload: Dictionary)
 	func _ready() -> void:
@@ -14,6 +28,9 @@ class FixtureMap extends Node3D:
 		endpoint.name="Inventory"
 		endpoint.services=MandateWorldServices.new()
 		add_child(endpoint)
+		currency_map=CurrencyMap.new()
+		currency_map.name="CurrencyMap"
+		add_child(currency_map)
 	@rpc("any_peer","call_remote","reliable",1)
 	func join() -> void:
 		if GameMode.is_world_server(): joined.emit(multiplayer.get_remote_sender_id())
@@ -35,6 +52,7 @@ var ui_snapshots: Array[Dictionary]=[]
 var client_processes: Array[int]=[]
 var fixture_dir: String
 var facts: int=0
+var wallet_execution: RefCounted
 
 func _ready() -> void:
 	get_tree().create_timer(45).timeout.connect(func() -> void: get_tree().quit(1))
@@ -116,23 +134,30 @@ func run() -> void:
 	world_id=link.multiplayer_api.get_unique_id()
 	control=Executor.new()
 	execution=Executor.new()
-	assert(control.start(connection,2,2) and execution.start(connection,2,2))
-	while not control.is_ready() or not execution.is_ready():
+	wallet_execution=Executor.new()
+	assert(control.start(connection,2,2) and execution.start(connection,2,2) and wallet_execution.start(connection,2,2))
+	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready():
 		control.poll()
 		execution.poll()
+		wallet_execution.poll()
 		await get_tree().process_frame
 	master.inventory_session_issuer=Issuer.new(master,control)
 	world.inventory_runtime=Runtime.new(world,execution)
+	world.wallet_runtime=load("res://source/server/world/database/postgres/wallet_runtime_postgres.gd").new(world,wallet_execution)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
 		var body:=PlayerActor3D.new()
 		map.add_child(body)
 		map.characters[peer]=body
-		map.endpoint.initialize_peer(peer))
+		map.currency_map.characters[peer]=body
+		map.endpoint.initialize_peer(peer)
+		map.currency_map.currency_endpoint.initialize_peer(peer))
 	world.multiplayer_api.peer_disconnected.connect(func(peer: int) -> void:
 		if map.characters.has(peer): map.characters[peer].queue_free()
 		map.characters.erase(peer)
+		map.currency_map.characters.erase(peer)
+		map.currency_map.currency_endpoint.remove_peer(peer)
 		map.endpoint.remove_peer(peer))
 	map.endpoint.inventory_changed.connect(func(_owner: int) -> void: facts+=1)
 	await start_client(201,"alpha","actor")
@@ -142,6 +167,15 @@ func run() -> void:
 	var observer: int=map.reports["observer-ready"].peer
 	assert(map.reports["actor-ready"].result.account==21 and map.reports["observer-ready"].result.account==22)
 	assert(map.endpoint.services.item_store()==null and map.endpoint.services.economy()==null and not map.endpoint.services.mutations_allowed(actor),"other domains cannot fall back to SQLite")
+	await wait_for(func() -> bool: return world.wallet_runtime.ready(actor) and world.wallet_runtime.ready(observer))
+	var drop: int=map.currency_map.currency_endpoint.spawn_currency(Vector3(2,0,0),character,"alpha",Time.get_ticks_msec(),100)
+	assert((await phase(actor,"wallet-pickup",{"drop":drop,"balance":1600})).ok)
+	assert(int(Wallet.new(pg).load_wallet(21).balance)==1500,"actual client pickup updates RAM before SQL checkpoint")
+	world.wallet_runtime.checkpoint(actor)
+	await wait_for(func() -> bool: return world.wallet_runtime.ready(actor) and int(Wallet.new(pg).load_wallet(21).balance)==1600)
+	assert((await phase(actor,"wallet-spend",{"balance":1550})).ok)
+	assert(int(Wallet.new(pg).load_wallet(21).balance)==1550)
+	assert((await phase(observer,"wallet-balance",{"balance":1500,"account":22})).ok)
 	# Hold one real account row. The other client's RPC/commit and physics continue.
 	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=21 FOR NO KEY UPDATE;").ok)
 	map.phase.rpc_id(actor,"blocked-equip",{})
@@ -193,13 +227,16 @@ func run() -> void:
 	await wait_for(func() -> bool: return map.reports.has("restored-ready"))
 	assert(pg.execute("DROP TRIGGER fixture_endpoint_ready ON economy.inventory_sessions;").ok)
 	actor=map.reports["restored-ready"].peer
+	assert((await phase(actor,"wallet-balance",{"balance":1550,"account":21})).ok)
 	assert((await phase(actor,"restored")).ok)
 	assert(facts==9,"nine Inventory command mutations; invalidation/replay/no-op/rejection add no commit facts")
 	assert(sqlite.query("SELECT COUNT(*) AS n FROM item_instances;") and int(sqlite.query_result[0].n)==0)
 	assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.item_instances;").rows[0].n)==2)
+	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	await phase(actor,"exit")
 	await phase(observer,"exit")
 	await wait_for(func() -> bool: return client_processes.all(func(pid: int) -> bool: return not OS.is_process_running(pid)))
+	assert(await world.flush_postgres_wallets(true))
 	control.begin_drain()
 	execution.begin_drain()
 	while not control.is_stopped() or not execution.is_stopped(): await get_tree().process_frame
@@ -215,7 +252,7 @@ func run() -> void:
 	authentication.free()
 	assert(sqlite.close_db())
 	pg.close()
-	print("POSTGRES_INVENTORY_ENDPOINT_OK native client commands, independent SQL, receipt/rejection/reload/process-relogin recovery, private inventory/public weapon and no SQLite item writes")
+	print("POSTGRES_INVENTORY_ENDPOINT_OK native client commands, independent SQL, receipt/rejection/reload/process-relogin recovery, private inventory/public weapon, PG wallet pickup/spend/relog and no SQLite item/wallet writes")
 	get_tree().quit()
 
 func compose_ui() -> void:
@@ -277,6 +314,15 @@ func run_client() -> void:
 func client_phase(label: String, payload: Dictionary) -> void:
 	var result: Dictionary={"ok":true}
 	match label:
+		"wallet-pickup":
+			map.currency_map.currency_endpoint.request_pickup.rpc_id(1,int(payload.drop))
+			await wait_for(func() -> bool: return map.currency_map.currency_endpoint.state.get("balance",-1)==int(payload.balance))
+		"wallet-spend":
+			map.currency_map.currency_endpoint.request_test_spend.rpc_id(1,0)
+			await wait_for(func() -> bool: return map.currency_map.currency_endpoint.state.get("balance",-1)==int(payload.balance))
+		"wallet-balance":
+			await wait_for(func() -> bool: return map.currency_map.currency_endpoint.state.get("balance",-1)==int(payload.balance))
+			assert(map.currency_map.currency_endpoint.state.wallet_state.account_id==int(payload.account))
 		"cache-refreshed":
 			assert(item().upgrade_level==1 and map.endpoint.state.stats.attack==payload.attack)
 			assert(map.endpoint.state.item_state.revision>=int(payload.revision))
