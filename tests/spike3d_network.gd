@@ -39,6 +39,8 @@ func _ready() -> void:
 		host.instance_resource.instance_name = &"FirstRegion"
 		host.load_map("res://tests/fixtures/world3d/test_arena.tscn")
 		add_child(host)
+		_check(not (host is LegacyServerInstance2D), "3D server host must not inherit 2D runtime")
+		_check(host.get_node_or_null("StateSynchronizerManager") == null, "3D server must not initialize legacy 2D synchronizers")
 		world = host.get_node("GameWorld")
 		api.peer_connected.connect(func(id: int) -> void:
 			var resource := PlayerResource.new()
@@ -54,6 +56,7 @@ func _ready() -> void:
 		api.connected_to_server.connect(func() -> void:
 			var instance: WorldInstanceClient3D = preload("res://source/client/network/world_instance_3d.gd").new()
 			instance.name = "Instance"
+			_check(not (instance is InstanceClient), "3D client must not inherit legacy InstanceClient")
 			world = load("res://tests/fixtures/world3d/test_arena.tscn").instantiate()
 			world.input_enabled = false
 			instance.add_child(world)
