@@ -1,5 +1,5 @@
 class_name ServerInstance
-extends SubViewport
+extends ServerInstanceHost
 
 
 signal player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper)
@@ -16,39 +16,9 @@ var local_role_definitions: Dictionary[String, Dictionary]
 var local_role_assignments: Dictionary[int, PackedStringArray]
 
 var players_by_peer_id: Dictionary[int, Player]
-## Current connected peers to the instance.
-var connected_peers: PackedInt64Array = PackedInt64Array()
-## Peers coming from another instance.
-var awaiting_peers: Dictionary[int, Dictionary] = {}#[int, Player]
-
 var last_accessed_time: float
-
 var instance_map: Map
-var instance_resource: InstanceResource
-var identity: Dictionary = {}
-enum AdmissionState { ACCEPTING = 0, DRAINING = 1 }
-enum AccessPolicy { PUBLIC = 0, RESERVED = 1 }
-var admission_state: AdmissionState = AdmissionState.ACCEPTING
-var access_policy: AccessPolicy = AccessPolicy.PUBLIC
-var allowed_character_ids: PackedInt64Array = PackedInt64Array()
-var opened_at_ms: int = 0
-var idle_since_ms: int = -1
-var is_overflow_copy: bool = false
 var synchronizer_manager: StateSynchronizerManagerServer
-
-
-func population() -> int:
-	return connected_peers.size() + awaiting_peers.size()
-
-
-func allows_character(character_id: int) -> bool:
-	return InstanceAdmissionRules.allows_character(character_id, access_policy, allowed_character_ids)
-
-
-func accepts_reservation() -> bool:
-	return instance_resource != null and InstanceAdmissionRules.accepts_reservation(
-		is_queued_for_deletion(), admission_state, population(), instance_resource.max_players
-	)
 
 
 func _ready() -> void:
