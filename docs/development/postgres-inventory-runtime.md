@@ -98,12 +98,12 @@ actions; merely constructing the component does not gate a live character.
 Handoff with pending Yang, real mixed World/network PostgreSQL traffic and P4
 load/soak/cutover remain open. No backend switch or dual writes are enabled.
 
-Before adding concurrent NPC Shop, Storage or other item-mutating domains,
-integrate versioned invalidation/reconciliation across those domains. The current
-post-command refresh opens the local Inventory lane after applying its snapshot;
-it does not perform another backend revision acknowledgement and cannot fence a
-different domain's commit after that snapshot was read. The attach/recovery
-barrier is not a substitute for cross-domain synchronization.
+[P3g cache reconciliation](postgres-inventory-cache-fence.md) now acknowledges
+post-command/receipt snapshots too, and consumes trusted account-revision
+invalidations with a coalesced floor, bounded repair and RAM-only combat gating.
+Future Shop/Storage/Upgrade ports must deliver their committed markers before
+dependent gameplay proceeds. Their publishers and distributed transport/missed
+idle notifications remain unimplemented; no broader domain activation is implied.
 
 Recovery currently scans terminal history as well as pending intents. Paging
 bounds each request and memory use, but not total recovery work as history grows.

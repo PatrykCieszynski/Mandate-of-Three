@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution, P3b durable Inventory recovery, P3c delegated fencing, P3d World reconciliation and P3e current Master ticket bridge are opt-in; playable endpoint/bootstrap integration and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution, P3b durable Inventory recovery, P3c delegated fencing, P3d World reconciliation and P3e current Master ticket bridge, P3f Inventory endpoint/client flow and P3g local cache reconciliation are opt-in; other domain/bootstrap integration and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 The progress entries below record each package's scope and deferrals at delivery
 time. The latest acceptance matrix and remaining gates are collected in
@@ -254,6 +254,17 @@ while another progresses. SQLite economics are unavailable through the Mandate
 adapter in this opt-in mode; soft progression stays separate. Normal bootstrap
 still uses SQLite. Other domains, cross-domain invalidation, indexed pending-only
 discovery, pending Yang/handoff, operational lifecycle and P4 remain open.
+
+**P3g progress:** [Inventory cache reconciliation](../development/postgres-inventory-cache-fence.md)
+acknowledges post-command/receipt snapshots against the backend before reopening
+local operations and publishing terminal results/change facts. Trusted committed
+account markers close/gate stale views, coalesce a revision floor, and trigger
+bounded asynchronous refresh; stale ACK delivery cannot override a newer notice.
+Native tests cover external commits, lost notices before ACK, delayed ACK,
+uncertain ACK COMMIT, churn limits and actual client/stat projection repair.
+Other domains must still integrate their committed publishers. Cross-process
+transport/missed idle facts, indexed pending discovery, pending Yang/handoff,
+operational lifecycle and P4 remain open; normal startup stays SQLite.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

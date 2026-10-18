@@ -549,3 +549,8 @@ acceptance with separate headless client processes, current Master tickets and
 World runtime on owned fixtures. It uses ports 18098/18099 sequentially. See
 [scope and failure/recovery behavior](postgres-inventory-endpoint.md). No CEF
 rendering or production bootstrap/cutover is claimed.
+
+P3g extends the existing PG runtime/endpoint suites with committed cache
+invalidations, post-command and delayed-ACK freshness, ACK COMMIT uncertainty,
+bounded repair and RAM-only combat input gating. No new default suite. See
+[cache fence contract and limits](postgres-inventory-cache-fence.md).

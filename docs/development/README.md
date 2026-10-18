@@ -8,6 +8,7 @@
 - [PostgreSQL Inventory runtime](postgres-inventory-runtime.md) — P3d opt-in World-thread recovery and combat projection reconciliation; live login/endpoint wiring remains pending.
 - [PostgreSQL Inventory session bridge](postgres-inventory-session-bridge.md) — P3e opt-in current Master ticket to durable grant/native World recovery; playable endpoint/bootstrap integration remains pending.
 - [PostgreSQL Inventory endpoint](postgres-inventory-endpoint.md) — P3f opt-in RPC/client journal, private state and public weapon delivery; other domains/bootstrap remain pending.
+- [PostgreSQL Inventory cache reconciliation](postgres-inventory-cache-fence.md) — P3g freshness ACK, versioned local invalidations and RAM-only combat-input gates.
 - [World RPC admission](world-rpc-admission.md) — A2 authorization contract and network checks.
 - [World session admission](world-session-admission.md) — single-use handoff tickets and account replacement.
 - [Economy command boundary](economy-command-boundary.md) — Stage 2 validation, operation results and commit/replay effects.

@@ -37,7 +37,7 @@ func attach(peer_id: int, context: Dictionary) -> bool:
 	if not previous.is_empty() and previous.peer==peer_id and Sessions.same_context(previous.context,context): return true
 	_generation+=1
 	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
-	var binding: Dictionary={"peer":peer_id,"context":safe,"generation":_generation,"stage":"discover","ticket":0,"cursor":0,"pending":[],"more":false,"repairs":0,"command":{},"retry":false,"snapshot":{},"terminal":{},"changed":false}
+	var binding: Dictionary={"peer":peer_id,"context":safe,"generation":_generation,"stage":"discover","ticket":0,"cursor":0,"pending":[],"more":false,"repairs":0,"command":{},"retry":false,"snapshot":{},"terminal":{},"changed":false,"required":{}}
 	_bindings[safe.account_id]=binding
 	if not previous.is_empty(): ready_changed.emit(previous.peer,false)
 	if _still_bound(binding): ready_changed.emit(peer_id,false)
@@ -71,6 +71,39 @@ func snapshot_for_peer(peer_id: int) -> Dictionary:
 	var binding:=_for_peer(peer_id)
 	return {} if binding.is_empty() else binding.snapshot.duplicate(true)
 
+## Trusted application-side committed marker only, NOT a client RPC. Revisions
+## are account-wide: an alt's mutation can invalidate this character's view.
+## Coalesce notices into a floor; never enqueue work per notification or cancel SQL.
+func invalidate_item_state(marker: Dictionary) -> bool:
+	if not Versions.valid(marker): return false
+	var binding: Dictionary=_bindings.get(marker.account_id,{})
+	if binding.is_empty() or not _current(binding): return false
+	var known: Dictionary=binding.snapshot.get("item_state",{})
+	if not binding.required.is_empty() and (known.is_empty() or binding.required.revision>known.revision): known=binding.required
+	if not known.is_empty():
+		if marker.authority_id!=known.authority_id:
+			_pause(binding,"authority_mismatch")
+			return false
+		if marker.revision<=known.revision: return true # Old/duplicate notice.
+	binding.required=marker.duplicate(true)
+	_world.invalidate_runtime_equipment(binding.context.character)
+	if binding.stage=="ready":
+		binding.repairs=0
+		_restart_recovery(binding)
+	ready_changed.emit(binding.peer,false)
+	return true
+
+func _satisfies_floor(binding: Dictionary, marker: Dictionary) -> bool:
+	var required: Dictionary=binding.required
+	return required.is_empty() or (marker.authority_id==required.authority_id and marker.account_id==required.account_id and marker.revision>=required.revision)
+
+func _repair(binding: Dictionary, reason: String) -> void:
+	if binding.repairs>=MAX_REPAIRS:
+		_pause(binding,reason)
+		return
+	binding.repairs+=1
+	_restart_recovery(binding)
+
 ## Receipt discovery never invents a body or admits a missing command. Pending
 ## durable work may finish; unknown IDs are returned to the caller for an
 ## explicit same-ID/body retry. Also repairs a paused/uncertain binding first.
@@ -78,6 +111,7 @@ func request_outcome(peer_id: int, operation_id: String) -> Dictionary:
 	var binding:=_for_peer(peer_id)
 	if binding.is_empty(): return {"queued":false,"error":"stale_session"}
 	if not Commands.valid_id(operation_id): return {"queued":false,"error":"request"}
+	if binding.ticket!=0: return {"queued":false,"error":"operation_pending"}
 	if binding.stage not in ["ready","paused"]: return {"queued":false,"error":"operation_pending"}
 	if not binding.command.is_empty() and binding.command.id!=operation_id: return {"queued":false,"error":"recovery_required"}
 	if binding.command.is_empty(): binding.command={"id":operation_id}
@@ -104,7 +138,7 @@ func submit(peer_id: int, operation_id: String, action: String, uid: String, rev
 ## retry of an uncertain mutation; original ID/body stays in this binding.
 func retry(peer_id: int) -> bool:
 	var binding:=_for_peer(peer_id)
-	if binding.is_empty() or binding.stage!="paused": return false
+	if binding.is_empty() or binding.stage!="paused" or binding.ticket!=0: return false
 	binding.retry=binding.command.has_all(["action","uid","revision","position"])
 	binding.repairs=0
 	_restart_recovery(binding)
@@ -118,6 +152,7 @@ func _restart_recovery(binding: Dictionary) -> void:
 
 func _pause(binding: Dictionary, reason: String) -> void:
 	binding.stage="paused"
+	_world.invalidate_runtime_equipment(binding.context.character)
 	ready_changed.emit(binding.peer,false)
 	recovery_failed.emit(binding.peer,reason)
 
@@ -133,6 +168,7 @@ func poll() -> void:
 		if not _current(binding) or not Sessions.same_context(completion.session,binding.context):
 			detach(binding.peer)
 			continue
+		if binding.stage=="paused": continue # Drain, never revive an invalidated lane.
 		if job.stage in ["resume","recover"] and completion.get("committed",false) and not completion.get("receipt_replay",false): binding.changed=true
 		_complete(binding,job.stage,completion.result)
 	for account: int in _bindings.keys():
@@ -166,18 +202,14 @@ func _schedule(binding: Dictionary) -> void:
 func _complete(binding: Dictionary, stage: String, result: Dictionary) -> void:
 	if not result.get("ok",false):
 		var reason: String=str(result.get("error","storage"))
-		if stage=="ack" and reason in ["operations_pending","stale_snapshot"] and binding.repairs<MAX_REPAIRS:
-			binding.repairs+=1
-			_restart_recovery(binding)
+		if stage=="ack" and reason in ["operations_pending","stale_snapshot"]:
+			_repair(binding,reason)
 		elif stage=="outcome" and reason=="unknown_command" and binding.retry:
 			binding.stage="admit" # Explicit same-ID retry after outcome discovery.
 			binding.retry=false
 		elif stage=="outcome" and reason=="unknown_command":
-			var id: String=binding.command.id
-			binding.command={}
-			binding.stage="ready"
-			ready_changed.emit(binding.peer,true)
-			if _still_bound(binding): operation_finished.emit(binding.peer,id,result.duplicate(true))
+			binding.terminal=result.duplicate(true)
+			binding.stage="refresh" # A missing receipt cannot bypass reconciliation.
 		else: _pause(binding,reason)
 		return
 	match stage:
@@ -199,6 +231,9 @@ func _complete(binding: Dictionary, stage: String, result: Dictionary) -> void:
 			if not Versions.valid(marker) or marker.account_id!=binding.context.account_id or marker.character_id!=binding.context.character:
 				_pause(binding,"snapshot_identity")
 				return
+			if not _satisfies_floor(binding,marker):
+				_repair(binding,"stale_snapshot")
+				return
 			if not _world.update_runtime_equipment(binding.context.character,result):
 				_pause(binding,"snapshot_rejected")
 				return
@@ -206,24 +241,13 @@ func _complete(binding: Dictionary, stage: String, result: Dictionary) -> void:
 			snapshot_applied.emit(binding.peer,result.duplicate(true))
 			# Signal handlers may detach/replace the binding. Never acknowledge or
 			# finish another session as a consequence of that callback.
-			if not _still_bound(binding): return
-			if binding.changed:
-				binding.changed=false
-				inventory_committed.emit(binding.peer)
-				if not _still_bound(binding): return
-			if stage=="snapshot": binding.stage="ack"
-			else:
-				var command: Dictionary=binding.command
-				var terminal: Dictionary=binding.terminal
-				binding.command={}
-				binding.terminal={}
-				binding.stage="ready"
-				ready_changed.emit(binding.peer,true)
-				if _still_bound(binding): operation_finished.emit(binding.peer,command.id,terminal.duplicate(true))
+			if not _still_bound(binding) or binding.stage=="paused": return
+			binding.stage="ack" # Both entry AND post-command refresh need backend ACK.
 		"ack":
-			if binding.command.is_empty():
-				binding.stage="ready"
-				ready_changed.emit(binding.peer,true)
+			# A newer committed notice can arrive after SQL ACK but before delivery.
+			if not _satisfies_floor(binding,binding.snapshot.item_state):
+				_repair(binding,"stale_snapshot")
+			elif binding.command.is_empty() or not binding.terminal.is_empty(): _finish_ready(binding)
 			else: binding.stage="outcome"
 		"admit", "resume", "outcome":
 			if result.get("state","")=="pending":
@@ -233,6 +257,22 @@ func _complete(binding: Dictionary, stage: String, result: Dictionary) -> void:
 				binding.terminal=result.result.duplicate(true)
 				binding.stage="refresh" # Rehydrate before any terminal publication.
 			else: _pause(binding,"invalid_outcome")
+
+func _finish_ready(binding: Dictionary) -> void:
+	var command: Dictionary=binding.command
+	var terminal: Dictionary=binding.terminal
+	if binding.changed:
+		binding.changed=false
+		inventory_committed.emit(binding.peer)
+		if not _still_bound(binding) or binding.stage=="paused": return
+		if not _satisfies_floor(binding,binding.snapshot.item_state):
+			_repair(binding,"stale_snapshot")
+			return
+	binding.command={}
+	binding.terminal={}
+	binding.stage="ready"
+	ready_changed.emit(binding.peer,true)
+	if _still_bound(binding) and binding.stage=="ready" and not command.is_empty(): operation_finished.emit(binding.peer,command.id,terminal.duplicate(true))
 
 func _next_page(binding: Dictionary) -> void:
 	binding.stage="recover" if not binding.pending.is_empty() else ("discover" if binding.more else "snapshot")
