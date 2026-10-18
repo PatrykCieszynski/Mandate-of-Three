@@ -1,4 +1,4 @@
-extends ServerInstance
+extends ServerInstanceHost
 ## Session adapter: preserves the authenticated instance lifecycle, bypassing
 ## legacy Player/Map/weapon/status systems until their domains are rebuilt.
 
@@ -17,7 +17,7 @@ func load_map(map_path: String) -> void:
 	add_child(map_3d)
 
 func _ready() -> void:
-	world_server.multiplayer_api.peer_disconnected.connect(map_3d.remove_peer)
+	WorldServer.curr.multiplayer_api.peer_disconnected.connect(map_3d.remove_peer)
 
 @rpc("any_peer", "call_remote", "reliable", 0)
 func ready_to_enter_instance() -> void:
