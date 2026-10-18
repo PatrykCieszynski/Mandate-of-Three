@@ -72,8 +72,19 @@ are installed does World automatically attach that context. P3d then discovers,
 resumes and hydrates before its local Inventory lane becomes ready. Native
 disconnect detaches its own peer; explicit account revocation detaches that
 account's runtime bindings. Losing the actual Master socket in this opt-in mode
-detaches and disconnects game peers, rather than continuing from an old grant.
-SQLite's existing reconnect behavior is unchanged.
+invalidates every unused ticket, clears pending admissions before closing their
+native authentication sockets, and detaches/disconnects active game peers.
+Connection failure uses the same cleanup. SQLite's existing reconnect behavior
+is unchanged.
+
+PG ticket acceptance, native authentication start/continuation/completion and
+token validation also require the control peer to be currently connected. Runtime
+fingerprint checks fail closed on the same condition. These boundary checks deny
+admission even before the disconnect cleanup callback runs; a persisted PG grant
+is not sufficient authority while Master is unavailable. Reconnecting does not
+restore discarded tickets or pending auth: a fresh current Master handoff is
+required. This does not cancel previously accepted SQL or depend on successful
+database revocation after an issuer crash.
 
 ## Bootstrap limits and next integration
 

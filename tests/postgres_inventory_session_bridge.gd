@@ -10,6 +10,9 @@ const Wallet = preload("res://source/server/world/database/postgres/wallet_store
 
 class Master extends WorldManagerServer:
 	var responses: Dictionary={}
+	var pause_issuer:=false
+	func _process(delta: float) -> void:
+		if not pause_issuer: super._process(delta)
 	func _ready() -> void: pass
 	func _on_peer_connected(id: int) -> void:
 		connected_worlds[id]={"info":{"name":"BridgeFixture"},"address":"127.0.0.1","port":18098}
@@ -23,16 +26,23 @@ class World extends WorldServer:
 	func _publish_authenticated_state(_id: int, _player: PlayerResource) -> void: pass
 
 class ControlLink extends WorldManagerClient:
+	var hold_disconnect:=false
+	var disconnect_observed:=false
 	func _on_connection_succeeded() -> void: pass
+	func _on_server_disconnected() -> void:
+		disconnect_observed=true
+		while hold_disconnect: await get_tree().process_frame
+		super._on_server_disconnected()
 
 class WireClient extends BaseMultiplayerEndpoint:
 	var token: String
+	var finish_auth:=true
 	var connected:=false
 	var ended:=false
 	func _connect_multiplayer_api_signals(api: SceneMultiplayer) -> void:
 		api.auth_callback=func(_peer: int, _data: PackedByteArray) -> void:
 			api.send_auth(1,var_to_bytes(token))
-			api.complete_auth(1)
+			if finish_auth: api.complete_auth(1)
 		api.connected_to_server.connect(func() -> void: connected=true)
 		api.connection_failed.connect(func() -> void: ended=true)
 		api.peer_authentication_failed.connect(func(_id: int) -> void: ended=true)
@@ -49,6 +59,7 @@ var control: RefCounted
 var execution: RefCounted
 var clients: Array[WireClient]=[]
 var character: int
+var extra_characters: Dictionary={}
 var world_id: int
 var physics_ticks: int=0
 
@@ -60,16 +71,18 @@ func wait_for(predicate: Callable) -> void:
 	while not predicate.call() and Time.get_ticks_msec()<deadline: await get_tree().process_frame
 	assert(predicate.call(),"bounded native bridge wait")
 
-func issue(request: int) -> String:
-	var attempt: String=master.begin_entry_attempt("alpha",world_id,42,request,&"login",character)
+func issue(request: int, username: String = "alpha", selected_character: int = 0) -> String:
+	if selected_character==0: selected_character=character
+	var attempt: String=master.begin_entry_attempt(username,world_id,42,request,&"login",selected_character)
 	assert(not attempt.is_empty())
-	link.result_login.rpc_id(1,OK,42,request,"alpha",character,attempt)
+	link.result_login.rpc_id(1,OK,42,request,username,selected_character,attempt)
 	return attempt
 
-func connect_client(token: String) -> WireClient:
+func connect_client(token: String, finish_auth: bool = true) -> WireClient:
 	var client:=WireClient.new()
 	client.name="WireClient"+str(clients.size())
 	client.token=token
+	client.finish_auth=finish_auth
 	clients.append(client)
 	add_child(client)
 	assert(client.create(BaseMultiplayerEndpoint.Role.CLIENT,"127.0.0.1",18098)==OK)
@@ -96,6 +109,13 @@ func run() -> void:
 	assert(database.store.bind_account_identity("alpha",21,true))
 	character=database.store.create_player_character("alpha",{"name":"Bridge","skin":1})
 	assert(character>0 and database.prepare_account_wallets({"alpha":21}).ok)
+	for username: String in ["beta","gamma"]:
+		var account_id: int=22 if username=="beta" else 23
+		assert(database.store.bind_account_identity(username,account_id,true))
+		extra_characters[username]=database.store.create_player_character(username,{"name":username,"skin":1})
+		assert(extra_characters[username]>0)
+		assert(Wallet.new(pg).initialize_account(account_id).ok and Items.new(pg).bind_character(extra_characters[username],account_id))
+	assert(database.prepare_account_wallets({"alpha":21,"beta":22,"gamma":23}).ok)
 	# SQLite carries identity/soft-character metadata only in this fixture. No
 	# Inventory initializer, legacy map endpoint or economy mutation is installed.
 	assert(Wallet.new(pg).initialize_account(21).ok and Items.new(pg).bind_character(character,21))
@@ -107,6 +127,12 @@ func run() -> void:
 	account.username="alpha"
 	authentication.account_collection.collection["alpha"]=account
 	authentication.active_accounts["alpha"]=account
+	for username: String in ["beta","gamma"]:
+		var extra:=AccountResource.new()
+		extra.id=22 if username=="beta" else 23
+		extra.username=username
+		authentication.account_collection.collection[username]=extra
+		authentication.active_accounts[username]=extra
 	master.authentication_manager=authentication
 	master.name="Master"
 	add_child(master)
@@ -196,13 +222,41 @@ func run() -> void:
 	var third:=connect_client(master.responses[104]["auth-token"])
 	await wait_for(func() -> bool: return third.connected and world.inventory_runtime.mutations_allowed(third.multiplayer_api.get_unique_id()))
 	assert(int(grant_row().epoch)==4)
-	# Losing the actual Master socket closes the PG World's runtime/native peers.
+	# Preserve an unused grant and another half-open native auth, alongside the
+	# active alpha peer. Freeze the issuer to model a crash with NO DB revocation.
+	issue(105,"beta",extra_characters.beta)
+	await wait_for(func() -> bool: return master.responses.has(105))
+	var unused: String=master.responses[105]["auth-token"]
+	assert(world.token_list.has(unused))
+	issue(106,"gamma",extra_characters.gamma)
+	await wait_for(func() -> bool: return master.responses.has(106))
+	var pending:=connect_client(master.responses[106]["auth-token"],false)
+	await wait_for(func() -> bool: return not world._pending_admissions.is_empty())
+	assert(not pending.connected and world.token_list.has(unused) and control.pending_count()==0)
+	master.pause_issuer=true
+	link.hold_disconnect=true
 	master.peer.disconnect_peer(world_id)
-	await wait_for(func() -> bool: return third.ended and world.connected_players.is_empty() and grant_row().phase=="revoked")
+	await wait_for(func() -> bool: return link.disconnect_observed)
+	# Delay cleanup to prove checks are also at admission, not just the callback.
+	assert(world.token_list.has(unused) and not world.is_valid_authentication_token(unused))
+	assert(not world.accept_master_handoff(unused,"beta",extra_characters.beta,22,world.token_list[unused].inventory_context))
+	var late_before_cleanup:=connect_client(unused)
+	await wait_for(func() -> bool: return late_before_cleanup.ended)
+	assert(not late_before_cleanup.connected and not world.inventory_runtime.mutations_allowed(late_before_cleanup.multiplayer_api.get_unique_id()))
+	link.hold_disconnect=false
+	await wait_for(func() -> bool: return third.ended and pending.ended and world.connected_players.is_empty() and world._pending_admissions.is_empty() and world.token_list.is_empty() and world.multiplayer_api.get_authenticating_peers().is_empty())
+	var retained: Dictionary=pg.query("SELECT session_fingerprint,phase FROM economy.inventory_sessions WHERE account_id=22;").rows[0]
+	assert(retained.session_fingerprint==unused.sha256_text() and retained.phase=="recovering" and grant_row().phase=="ready","test must not rely on successful PG revocation")
+	var late_after_cleanup:=connect_client(unused)
+	await wait_for(func() -> bool: return late_after_cleanup.ended)
+	assert(not late_after_cleanup.connected and world.connected_players.is_empty())
 	assert(sqlite.query("SELECT COUNT(*) AS n FROM item_instances;") and int(sqlite.query_result[0].n)==0,"no dual economic writes to SQLite")
 	control.begin_drain()
 	execution.begin_drain()
-	await wait_for(func() -> bool: return control.is_stopped() and execution.is_stopped())
+	# The crashed issuer remains frozen; only consume its already drained pool.
+	while not control.is_stopped() or not execution.is_stopped():
+		control.poll()
+		await get_tree().process_frame
 	for endpoint: BaseMultiplayerEndpoint in clients+[link,world,master]:
 		endpoint.peer.close()
 		endpoint.multiplayer_api.auth_callback=Callable()

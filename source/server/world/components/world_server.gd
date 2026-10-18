@@ -43,6 +43,7 @@ var world_time := WorldTime.authority(preload("res://source/common/gameplay/worl
 ## Server-side identity check for asynchronous delivery owners. A client cannot
 ## choose the character or reuse a retired peer's token through this helper.
 func session_ticket_fingerprint(peer_id: int, character_id: int) -> String:
+	if not inventory_master_available(): return ""
 	var player: PlayerResource=connected_players.get(peer_id)
 	if player==null or player.player_id!=character_id or player.current_peer_id!=peer_id or player_id_to_peer_id.get(character_id,0)!=peer_id: return ""
 	var token: String=_session_tokens.get(peer_id,"")
@@ -76,8 +77,31 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 
 static var curr: WorldServer
 
+## PG admission depends on the live trusted control connection, not just a
+## cached ticket or durable grant. SQLite keeps its existing lifecycle policy.
+func inventory_master_available() -> bool:
+	return inventory_runtime==null or (world_manager!=null and world_manager.multiplayer_api!=null and world_manager.multiplayer_api.has_multiplayer_peer() and world_manager.multiplayer_api.multiplayer_peer.get_connection_status()==MultiplayerPeer.CONNECTION_CONNECTED)
+
+func invalidate_inventory_admissions() -> void:
+	if inventory_runtime==null: return
+	token_list.clear()
+	var pending: Array=_pending_admissions.keys()
+	_pending_admissions.clear() # Invalidate suspended continuations before closing sockets.
+	var live: Array=[]
+	if multiplayer_api!=null and multiplayer_api.has_multiplayer_peer():
+		live=Array(multiplayer_api.get_peers())
+		for peer_id: int in multiplayer_api.get_authenticating_peers():
+			live.append(peer_id)
+			if not pending.has(peer_id): pending.append(peer_id)
+	for peer_id: int in pending:
+		if live.has(peer_id): peer.disconnect_peer(peer_id)
+	for peer_id: int in connected_players.keys():
+		inventory_runtime.detach(peer_id)
+		if live.has(peer_id): peer.disconnect_peer(peer_id)
+
 ## Internal Master connection only; public clients submit a token, never an ID.
 func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> bool:
+	if not inventory_master_available(): return false
 	if inventory_runtime!=null:
 		if not inventory_context.get("epoch") is int or inventory_context.epoch<=0 or inventory_context.get("account_id")!=account_id or inventory_context.get("character")!=character_id or inventory_context.get("session_fingerprint")!=auth_token.sha256_text(): return false
 	elif not inventory_context.is_empty(): return false # Never silently use SQLite for a PG ticket.
@@ -230,7 +254,8 @@ func _on_peer_connected(peer_id: int) -> void:
 	# Both sides completed native authentication. Until this signal there is no
 	# gameplay authority, even if our complete_auth has already succeeded.
 	var ticket: Dictionary = _pending_admissions.get(peer_id, {})
-	if ticket.is_empty():
+	if ticket.is_empty() or not inventory_master_available():
+		_pending_admissions.erase(peer_id)
 		peer.disconnect_peer(peer_id)
 		return
 	_pending_admissions.erase(peer_id)
@@ -321,6 +346,9 @@ func _notify_master_disconnected(account_name: String, session_token: String = "
 
 
 func _on_peer_authenticating(peer_id: int) -> void:
+	if not inventory_master_available():
+		peer.disconnect_peer(peer_id)
+		return
 	print("Peer: %d is trying to authenticate." % peer_id)
 	multiplayer.send_auth(peer_id, "data_from_server".to_ascii_buffer())
 
@@ -334,6 +362,10 @@ func _on_peer_authentication_failed(peer_id: int) -> void:
 
 
 func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
+	if not inventory_master_available():
+		_pending_admissions.erase(peer_id)
+		peer.disconnect_peer(peer_id)
+		return
 	# A duplicate packet cannot start another continuation for an admitted ticket.
 	if _pending_admissions.has(peer_id): return
 	if data.size() > 1024:
@@ -360,6 +392,10 @@ func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
 	while true:
 		await get_tree().process_frame
 		if _pending_admissions.get(peer_id, {}).get("token", "") != auth_token: return
+		if not inventory_master_available():
+			_pending_admissions.erase(peer_id)
+			peer.disconnect_peer(peer_id)
+			return
 		if Time.get_ticks_msec() >= cleanup_deadline or not multiplayer_api.get_authenticating_peers().has(peer_id):
 			peer.disconnect_peer(peer_id)
 			return
@@ -381,6 +417,7 @@ func _publish_authenticated_state(peer_id: int, player: PlayerResource) -> void:
 
 
 func is_valid_authentication_token(auth_token: String) -> bool:
+	if not inventory_master_available(): return false
 	prune_handoff_tickets()
 	return token_list.has(auth_token)
 

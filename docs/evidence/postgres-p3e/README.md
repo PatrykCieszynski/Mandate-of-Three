@@ -7,7 +7,7 @@ runner-confirmed shutdown. No installed service or player data is used.
 
 ## Native bridge
 
-Final `inventory-session-bridge` run `run-9nothqjx`: PASS.
+Latest `inventory-session-bridge` run `run-jrvgy1ct` (Master-loss review): PASS.
 
 - The real Master login-result handler verifies the existing entry attempt and
   sender, then uses its own current ticket/account/character marker to request a
@@ -29,8 +29,11 @@ Final `inventory-session-bridge` run `run-9nothqjx`: PASS.
   known-aborted fixture row remains revoked. A fresh explicit login installs
   epoch 4 and recovers successfully. This does not prove arbitrary lost COMMIT
   response outcomes; withdrawal/inspection handle those conservatively.
-- Losing the real Master socket detaches/disconnects the PG World's client and
-  withdraws its grant. Owned pools drain; SQLite's Inventory remains empty.
+- Losing the real Master socket detaches/disconnects active peers, discards unused
+  tickets and aborts pending native authentication. The final review scenario
+  freezes the issuer: grants remain valid in PostgreSQL, yet later admission
+  fails both before delayed disconnect cleanup and after it. Owned pools drain;
+  SQLite's Inventory remains empty.
 
 Gateway credential/entry initiation, the roster handshake and post-auth UI are
 controlled. The Master/World RPC and World/client authentication are real sockets
@@ -45,6 +48,8 @@ legacy Inventory endpoints are not switched to PostgreSQL.
 | bridge, SQL-in-flight takeover | `run-fr6woaxf` PASS |
 | bridge, final including rejection checks | `run-innsuy6i` PASS |
 | bridge, final including disconnected-Master cleanup guard | `run-9nothqjx` PASS |
+| bridge, Master-loss review with valid unused grant/pending auth | `run-jrvgy1ct` PASS |
+| inventory-runtime, Master-loss review regression | `run-6rv1ysom` PASS |
 | inventory-runtime | `run-gek5yy_k` PASS |
 | inventory-sessions | `run-w9kllge0` PASS |
 | inventory-intents | `run-k902aow_` PASS |
@@ -93,3 +98,17 @@ three-process PG authentication, production bootstrap/shutdown and Master restar
 recovery/failover remain open. Single-Master ownership is assumed. Cross-domain
 invalidation, indexed pending discovery, pending Yang/CH handoff and P4
 load/soak/migration are not closed by this package. Linux/physical CEF not verified.
+
+## PR #85 Master-loss review regression
+
+`run-jrvgy1ct` retains an unused beta ticket, a half-open gamma authentication and
+an active alpha session. Issuer polling is deliberately frozen before closing the
+real control socket, so it cannot revoke their grants. The disconnect callback is
+also held temporarily: the unused ticket is still in World RAM, but token
+validation, new ticket admission and a real late client's authentication already
+fail because the control peer is disconnected. Releasing cleanup empties both
+ticket/pending maps, closes native authentication peers and disconnects alpha.
+Another late client is rejected after cleanup too. PostgreSQL still reports the
+unused grant as recovering and alpha's grant as ready; denial does not depend on
+revocation or ticket expiry. The relevant Inventory runtime regression and all
+five existing account/Gateway/World/Master admission suites were rerun and pass.
