@@ -21,7 +21,7 @@ foreach ($taskPreset in @('Windows','ServerWindows','ServerUbuntu')) {
                 $stubEntry = $taskZip.GetEntry($taskStub)
                 if ($null -ne $stubEntry) {
                     $stubName = [IO.Path]::GetFileName($taskStub)
-                    $stubOut = Join-Path $taskLogs "Windows.exported.$stubName"
+                    $stubOut = Join-Path $taskLogs "Windows.exported.$stubName.log"
                     [IO.Compression.ZipFileExtensions]::ExtractToFile($stubEntry, $stubOut, $true)
                 }
             }
