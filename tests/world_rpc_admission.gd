@@ -11,7 +11,7 @@ class Session extends WorldServer:
 	func _data_response(id: int, _type: String, data: Dictionary) -> void:
 		answers[id] = data
 
-class Instance extends ServerInstance:
+class Instance extends LegacyServerInstance2D:
 	func _ready() -> void:
 		pass
 
