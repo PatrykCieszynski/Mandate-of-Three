@@ -4,7 +4,7 @@ extends DataRequestHandler
 ## rank at or above their own authority (grade); the leader can assign any rank.
 
 
-func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
+func data_request_handler(peer_id: int, instance: ServerInstanceHost, args: Dictionary) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
 	var store: WorldStoreSqlite = world_server.database.store
 
