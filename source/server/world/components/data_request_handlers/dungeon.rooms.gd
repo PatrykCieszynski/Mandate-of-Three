@@ -7,7 +7,7 @@ extends DataRequestHandler
 ## DungeonService owns the room state + the dungeon.room.update pushes.
 
 
-func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
+func data_request_handler(peer_id: int, instance: ServerInstanceHost, args: Dictionary) -> Dictionary:
 	var station: String = str(args.get("station", ""))
 	var action: String = str(args.get("action", "list"))
 	return DungeonService.handle_room_request(instance, peer_id, station, action, args)
