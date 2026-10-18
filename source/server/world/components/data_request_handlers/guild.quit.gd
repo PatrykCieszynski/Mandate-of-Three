@@ -2,6 +2,7 @@ extends DataRequestHandler
 
 
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
+	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
 	var world_server: WorldServer = instance.world_server
 	var store: WorldStoreSqlite = world_server.database.store
 
@@ -49,7 +50,7 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 
 	# Sync the client's cached active_guild_id (it may have been cleared above).
 	world_server.data_push.rpc_id(peer_id, &"active_guild_id.set", {"active_guild_id": player.active_guild_id})
-	var pnode: Player = instance.players_by_peer_id.get(peer_id)
+	var pnode: Player = legacy_players.get(peer_id)
 	if pnode != null:
 		pnode.state_synchronizer.set_by_path(^":active_guild_id", player.active_guild_id)
 

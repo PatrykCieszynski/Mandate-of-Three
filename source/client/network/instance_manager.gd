@@ -2,13 +2,13 @@ class_name InstanceManagerClient
 extends Node
 
 
-signal instance_changed(instance: InstanceClient)
+signal instance_changed(instance: WorldInstanceClient3D)
 signal channels_changed(catalogue: Dictionary)
 signal channel_selection_finished(result: Dictionary)
 signal transfer_changed(result: Dictionary)
 
 
-var current_instance: InstanceClient
+var current_instance: WorldInstanceClient3D
 var auto_select_channel: bool = true
 var channels: Dictionary = {}
 var _next_channel_request: int = 1
@@ -127,7 +127,7 @@ func _charge_3d_instance(map: Node3D, instance_id: String, identity: Dictionary 
 	InstanceClient.local_player = null
 	ClientState.local_player = null
 	ClientState.menu_open = false
-	var instance: InstanceClient = preload("res://source/client/network/world_instance_3d.gd").new()
+	var instance: WorldInstanceClient3D = preload("res://source/client/network/world_instance_3d.gd").new()
 	instance.name = instance_id
 	instance.identity=identity.duplicate(true)
 	current_instance = instance

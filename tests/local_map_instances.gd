@@ -85,7 +85,7 @@ func _ready() -> void:
 			check(catalogue.get("ok",false),"authenticated public catalogue")
 			check(catalogue.channels.size()==2 and catalogue.channels.all(func(row: Dictionary)->bool:return row.keys().size()==4 and row.channel_id in [1,2]),"public catalogue excludes reserved IDs, sessions and host metadata")
 			client_manager.select_initial_channel(number))
-		client_manager.instance_changed.connect(func(instance: InstanceClient)->void:
+		client_manager.instance_changed.connect(func(instance: WorldInstanceClient3D)->void:
 			if recovery_items!=null:
 				recovery_session.close("teardown")
 				recovery_items.dispose()
@@ -138,6 +138,8 @@ func run_server() -> void:
 	var a:=manager.find_instance_for_peer(first)
 	var b:=manager.find_instance_for_peer(second)
 	check(a!=null and b!=null and a!=b,"initial admission distributes players between configured copies")
+	check(not (a is LegacyServerInstance2D) and not (b is LegacyServerInstance2D), "production 3D hosts do not inherit legacy 2D gameplay")
+	check(a.get_node_or_null("StateSynchronizerManager") == null and b.get_node_or_null("StateSynchronizerManager") == null, "3D instance hosts never start the 2D state synchronizer")
 	check(a.instance_resource==b.instance_resource and a.identity.map_id==b.identity.map_id,"two copies of one map definition")
 	check(a.identity.instance_id!=b.identity.instance_id and a.identity.channel_id!=b.identity.channel_id,"instance/channel identities distinct")
 	check(a.identity.realm_id==b.identity.realm_id and a.identity.host_id==b.identity.host_id,"one local realm and host")

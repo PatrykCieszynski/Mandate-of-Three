@@ -84,7 +84,7 @@ func _ready() -> void:
 		check(peer.create_client("ws://127.0.0.1:%d" % PORT) == OK, "client socket")
 		api.multiplayer_peer = peer
 		api.connected_to_server.connect(func() -> void:
-			var instance: InstanceClient = preload("res://source/client/network/world_instance_3d.gd").new()
+			var instance: WorldInstanceClient3D = preload("res://source/client/network/world_instance_3d.gd").new()
 			instance.name = "Instance"
 			world = load(map_scene_path).instantiate()
 			world.input_enabled = false

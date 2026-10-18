@@ -129,7 +129,7 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 	var item := prepare_claim_item(uid, owner_id, drop)
 	if item == null:
 		return {"ok": false, "error": "request"}
-	var operation := _services.economy().claim_ground_item_operation(owner_id, uid, item)
+	var operation: Variant = _services.economy().claim_ground_item_operation(owner_id, uid, item)
 	var result: Dictionary = operation.response()
 	if result.ok or result.get("error", "") == "claimed":
 		drops.erase(uid)

@@ -98,7 +98,7 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 		if (source == "inventory" and destination == "inventory") or (not quick and (x < 0 or x >= columns or y < 0 or y >= 9 or page < 0 or page >= pages)):
 			result = {"ok":false,"error":"request"}
 		else:
-			var operation := services.economy().storage_operation(resource.player_id, uid, revision, source, destination, -1 if quick else position, operation_id)
+			var operation: Variant = services.economy().storage_operation(resource.player_id, uid, revision, source, destination, -1 if quick else position, operation_id)
 			result = operation.response()
 			committed = operation.new_commit
 	_publish_storage_account(peer_id,committed)
@@ -159,7 +159,7 @@ func _handle_command(action: String, uid: String, revision: int, position: int, 
 	else:
 		_last_action_ms[peer_id] = now
 		var resource: PlayerResource = services.player_for_peer(peer_id)
-		var operation := services.economy().inventory_operation(resource.player_id, action, uid, revision, position, operation_id)
+		var operation: Variant = services.economy().inventory_operation(resource.player_id, action, uid, revision, position, operation_id)
 		result = operation.response()
 		committed = operation.new_commit
 	if committed:

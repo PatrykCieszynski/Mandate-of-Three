@@ -148,6 +148,13 @@ func _generate_stub(path: String) -> String:
 			# Preloaded resource or similar — the asset may be excluded from the
 			# client build, so don't reference it.
 			out.append("const %s = null # stub: server-only object constant" % cname)
+		elif value is Array:
+			# Typed array serialization uses a constructor expression, which
+			# cannot initialize a GDScript constant in exported stubs.
+			var literal: String = var_to_str(value)
+			if literal.begins_with("Array[") and literal.ends_with(")"):
+				literal = literal.substr(literal.find("(") + 1, literal.length() - literal.find("(") - 2)
+			out.append("const %s = %s" % [cname, literal])
 		else:
 			out.append("const %s = %s" % [cname, var_to_str(value)])
 

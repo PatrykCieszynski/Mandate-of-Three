@@ -14,7 +14,7 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v7
@@ -88,6 +88,18 @@ jobs:
         shell: pwsh
         run: |
           & ./tests/run-smoke.ps1
+      - name: 3D host multiplayer regression
+        shell: pwsh
+        run: |
+          & ./tests/run-spike3d.ps1
+          & ./tests/run-pve.ps1
+      - name: Verify exported client and server packs
+        shell: pwsh
+        run: |
+          python ./tools/cef_client/setup.py
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned CEF installation failed' }
+          & ./tests/run-cef-export.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged client/server export verification failed' }
       - name: Python staging tests
         if: github.event_name == 'workflow_dispatch' && inputs.extended
         shell: pwsh
