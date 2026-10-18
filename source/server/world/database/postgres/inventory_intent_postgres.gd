@@ -71,10 +71,19 @@ func snapshot_session(context: Dictionary) -> Dictionary:
 	return _session_commit(snapshot)
 
 func discover_session(context: Dictionary, after: int = 0, limit: int = 50) -> Dictionary:
+	return _discover_session(context,after,limit,false)
+
+## Recovery uses the indexed pending set. Historical/terminal outcomes remain
+## available through discover_session and original-ID lookup, never pruned here.
+func discover_pending_session(context: Dictionary, after: int = 0, limit: int = 50) -> Dictionary:
+	return _discover_session(context,after,limit,true)
+
+func _discover_session(context: Dictionary, after: int, limit: int, pending_only: bool) -> Dictionary:
 	if after<0 or limit<1 or limit>MAX_PAGE: return {"ok":false,"error":"request"}
 	var begun:=Sessions.new(db).begin_context(context)
 	if not begun.ok: return begun
-	var found: Dictionary=db.query("SELECT * FROM economy.inventory_intents WHERE account_id=:account AND sequence>:after ORDER BY sequence LIMIT :limit;",{"account":context.account_id,"after":after,"limit":limit+1},limit+1)
+	var condition: String=" AND state='pending'" if pending_only else ""
+	var found: Dictionary=db.query("SELECT * FROM economy.inventory_intents WHERE account_id=:account AND sequence>:after"+condition+" ORDER BY sequence LIMIT :limit;",{"account":context.account_id,"after":after,"limit":limit+1},limit+1)
 	if not found.ok or found.truncated: return _session_rollback("storage")
 	var rows: Array=found.rows.slice(0,limit)
 	return _session_commit({"ok":true,"operations":rows.map(_view),"more":found.rows.size()>limit,"cursor":after if rows.is_empty() else int(rows.back().sequence)})

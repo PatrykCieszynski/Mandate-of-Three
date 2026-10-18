@@ -8,6 +8,7 @@ const Sessions = preload("res://source/server/world/database/postgres/inventory_
 const Intents = preload("res://source/server/world/database/postgres/inventory_intent_postgres.gd")
 const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 const Wallet = preload("res://source/server/world/database/postgres/wallet_store_postgres.gd")
+const IntentSchema = preload("res://source/server/world/database/postgres/inventory_intent_schema_postgres.gd")
 var pg: Object
 var executor: RefCounted
 var runtime: RefCounted
@@ -63,6 +64,12 @@ func external_material() -> Dictionary:
 	assert(Items.new(pg).receive_item_in_transaction(material).ok and pg.commit())
 	return native_state(94000).item_state
 
+func pending_index_used(plan: Dictionary) -> bool:
+	if plan.get("Index Name","")=="inventory_intents_pending_account": return true
+	for child: Dictionary in plan.get("Plans",[]):
+		if pending_index_used(child): return true
+	return false
+
 func verify_projection(character: int) -> void:
 	var snapshot:=native_state(character)
 	assert(world.runtime_equipment[character].equipment==snapshot.equipment)
@@ -77,15 +84,54 @@ func _ready() -> void:
 	assert(pg.open("postgresql",connection) and Schema.ensure_schema(pg))
 	var sword:=seed_item(9400,94000)
 	var other:=seed_item(9401,94010)
-	# Recovery must scan past historical terminal pages to find later pending work.
+	# Large terminal history remains queryable but must not be enumerated by
+	# recovery. Bulk history copies already validated no-op receipts in this owned
+	# fixture only; it never creates items or replays their mutations.
 	for index: int in Runtime.PAGE_SIZE+1:
 		var history: String="history-"+str(index)
 		assert(Intents.new(pg).admit(94000,history,"move",sword.uid,0,0).state=="pending")
 		assert(Intents.new(pg).execute(94000,history).state=="committed")
+	assert(pg.execute("INSERT INTO economy.inventory_intents(account_id,operation_id,character_id,action,item_uid,expected_revision,position,request_json,state,result_json) SELECT i.account_id,'bulk-history-'||g.n,i.character_id,i.action,i.item_uid,i.expected_revision,i.position,i.request_json,i.state,i.result_json FROM economy.inventory_intents i CROSS JOIN generate_series(1,10000) g(n) WHERE i.operation_id='history-0';").ok)
+	assert(pg.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) SELECT account_id,operation_id,character_id,'inventory',request_json,result_json FROM economy.inventory_intents WHERE operation_id LIKE 'bulk-history-%';").ok)
+	var history_before: Dictionary=Intents.new(pg).outcome(94000,"history-0")
+	# Recreate precisely the v1 table/index layout, with durable data present.
+	# A conflicting relation forces index migration to roll back its version.
+	assert(pg.execute("DROP INDEX economy.inventory_intents_pending_account;").ok)
+	assert(pg.execute("UPDATE economy.schema_versions SET version=1 WHERE feature='inventory_intents';").ok)
+	assert(pg.execute("CREATE TABLE economy.inventory_intents_pending_account(blocker INTEGER);").ok)
+	assert(not IntentSchema.ensure_schema(pg) and not pg.in_transaction())
+	assert(int(pg.query("SELECT version FROM economy.schema_versions WHERE feature='inventory_intents';").rows[0].version)==1)
+	assert(Intents.new(pg).outcome(94000,"history-0")==history_before)
+	assert(pg.execute("DROP TABLE economy.inventory_intents_pending_account;").ok)
+	assert(IntentSchema.ensure_schema(pg) and IntentSchema.ensure_schema(pg))
+	assert(int(pg.query("SELECT version FROM economy.schema_versions WHERE feature='inventory_intents';").rows[0].version)==2)
+	assert(Intents.new(pg).outcome(94000,"history-0")==history_before and receipt_count("bulk-history-10000")==1)
+	assert(Intents.new(pg).admit(94000,"recovery-noop","move",sword.uid,0,0).state=="pending")
+	var alternate:=seed_item(9400,94001)
+	assert(Intents.new(pg).admit(94001,"recovery-alt","equip",alternate.uid,0,-1).state=="pending")
 	# Work admitted by a previous owner must finish BEFORE runtime becomes ready.
 	assert(Intents.new(pg).admit(94000,"before-runtime","equip",sword.uid,0,-1).state=="pending")
 	var a:=grant(9400,94000,"verified-A",0)
 	var b:=grant(9401,94010,"verified-B",0)
+	var pending_page: Dictionary=Intents.new(pg).discover_pending_session(a,0,1)
+	assert(pending_page.ok and pending_page.more and pending_page.operations.size()==1 and pending_page.operations[0].operation_id=="recovery-noop")
+	# A row may finish between pages; keyset recovery must still find the later
+	# pending alt and main operations, without exposing terminal history.
+	assert(Intents.new(pg).resume_session(a,"recovery-noop").state=="committed")
+	pending_page=Intents.new(pg).discover_pending_session(a,pending_page.cursor,1)
+	assert(pending_page.more and pending_page.operations[0].operation_id=="recovery-alt" and pending_page.operations[0].character==94001)
+	var last_page: Dictionary=Intents.new(pg).discover_pending_session(a,pending_page.cursor,1)
+	assert(not last_page.more and last_page.operations[0].operation_id=="before-runtime")
+	assert(Intents.new(pg).discover_pending_session(b).operations.is_empty())
+	assert(Intents.new(pg).discover_session(a,0,1).operations[0].state=="committed","historical discovery remains available")
+	assert(Intents.new(pg).outcome_session(a,"bulk-history-10000").state=="committed","original-ID lookup retains old terminal outcomes")
+	assert(pg.execute("ANALYZE economy.inventory_intents;").ok)
+	var explained: Dictionary=pg.query("EXPLAIN (ANALYZE,FORMAT JSON) SELECT * FROM economy.inventory_intents WHERE account_id=9400 AND sequence>0 AND state='pending' ORDER BY sequence LIMIT 33;")
+	assert(explained.ok)
+	var plan: Dictionary=JSON.parse_string(str(explained.rows[0]["QUERY PLAN"]))[0].Plan
+	assert(pending_index_used(plan) and int(plan["Actual Rows"])==2,"recovery reads the indexed pending set despite 10000 terminal rows")
+	var terminal_count: int=int(pg.query("SELECT COUNT(*) AS n FROM economy.inventory_intents WHERE account_id=9400 AND state='terminal';").rows[0].n)
+	print("PENDING_RECOVERY_PLAN pending_rows=",plan["Actual Rows"]," history_rows=",terminal_count," execution_ms=",JSON.parse_string(str(explained.rows[0]["QUERY PLAN"]))[0]["Execution Time"])
 	bind_peer(100,94000,"verified-A")
 	bind_peer(200,94010,"verified-B")
 	assert(world.session_ticket_fingerprint(999,94000).is_empty())
@@ -126,6 +172,8 @@ func _ready() -> void:
 	verify_projection(94000)
 	assert(not world.runtime_equipment[94000].equipment.is_empty())
 	assert(receipt_count("before-runtime")==1)
+	assert(receipt_count("recovery-alt")==1 and native_state(94001).equipment.get("weapon","")==alternate.uid)
+	assert(native_state(94000).items.all(func(row: Dictionary) -> bool: return row.uid!=alternate.uid),"account recovery never retargets an alt item")
 	var initial_deliveries: int=snapshots.size()
 	assert(runtime.attach(100,a) and runtime.mutations_allowed(100))
 	assert(snapshots.size()==initial_deliveries,"duplicate attach of ready session does not restart hydration")
