@@ -154,7 +154,7 @@ func _send_snapshot(only_peer: int = -1) -> void:
 			drops[id] = {"amount": drop.amount, "position": drop.position,
 				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner),
 				"reserved_for": drop.owner_name if now < int(drop.protected_until) else ""}
-		var snapshot := _database().wallet_snapshot(_owner(peer_id))
+		var snapshot: Variant = _database().wallet_snapshot(_owner(peer_id))
 		_projection_version += 1
 		snapshot.merge({"drops":drops,"projection_version":_projection_version})
 		receive_state.rpc_id(peer_id,snapshot)
