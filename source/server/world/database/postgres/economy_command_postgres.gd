@@ -17,6 +17,7 @@ var rejected: MarketRejectedCommands
 var _command: String
 var _kind: String
 var _request: String
+var _resuming_inventory:=false
 
 func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -> void:
 	db=database
@@ -95,6 +96,10 @@ func admit_in_transaction(owner: int, command: String, kind: String, args: Array
 		cached=rollback("storage")
 		return false
 	if result.rows.is_empty():
+		var reservation:=_reserved_inventory_id()
+		if not reservation.is_empty():
+			cached=rollback(reservation)
+			return false
 		if rejected==null: return true
 		cached=rejected.lookup(account_id,_command,_kind,_request)
 		if cached.is_empty(): return true
@@ -110,6 +115,25 @@ func admit_in_transaction(owner: int, command: String, kind: String, args: Array
 		cached={"ok":false,"error":"storage"}
 		receipt_replay=false
 	return false
+
+## Explicit resume bypasses only the matching Inventory reservation. Ordinary
+## commands, including other domains, cannot execute a reserved pending ID.
+func begin_inventory_intent(owner: int, command: String, args: Array) -> bool:
+	_resuming_inventory=true
+	var admitted:=begin(owner,command,"inventory",args,true)
+	_resuming_inventory=false
+	return admitted
+
+func _reserved_inventory_id() -> String:
+	var present: Dictionary=db.query("SELECT CASE WHEN to_regclass('economy.inventory_intents') IS NULL THEN 0 ELSE 1 END AS present;")
+	if not present.ok: return "storage"
+	if int(present.rows[0].present)==0: return "unknown_command" if _resuming_inventory else ""
+	var found: Dictionary=db.query("SELECT character_id,request_json FROM economy.inventory_intents WHERE account_id=:account AND operation_id=:command;",{"account":account_id,"command":_command})
+	if not found.ok: return "storage"
+	if found.rows.is_empty(): return "unknown_command" if _resuming_inventory else ""
+	var row: Dictionary=found.rows[0]
+	if _kind!="inventory" or int(row.character_id)!=character_id or str(row.request_json)!=_request: return "command_conflict"
+	return "" if _resuming_inventory else "operation_pending"
 
 func rollback(error: String) -> Dictionary:
 	_rolled_back_sqlstate=""
@@ -142,15 +166,31 @@ func run_with_retry(operation: Callable) -> Dictionary:
 	return result
 
 func commit(result: Dictionary) -> Dictionary:
-	if not result.ok:
+	return _commit_receipt(result,false)
+
+## Only Inventory's explicit durable-intent path persists business rejection.
+## Other stores keep their existing bounded negative-cache policy.
+func finish_inventory_intent(result: Dictionary) -> Dictionary:
+	return _commit_receipt(result,true)
+
+func commit_inventory_admission() -> Dictionary:
+	_commit_attempted=true
+	if not db.commit():
+		db.close()
+		return {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
+	return {"ok":true,"state":"pending"}
+
+func _commit_receipt(result: Dictionary, finish_intent: bool) -> Dictionary:
+	if not result.ok and not finish_intent:
 		if not db.rollback():
 			db.close()
 			return {"ok":false,"error":"storage"}
 		if rejected!=null: rejected.remember(account_id,_command,_kind,_request,result)
 		return result
 	result=result.duplicate(true)
-	result.item_state=read_state(db,character_id)
-	if result.item_state.is_empty(): return rollback("storage")
+	if result.ok:
+		result.item_state=read_state(db,character_id)
+		if result.item_state.is_empty(): return rollback("storage")
 	var stored:=result.duplicate(true)
 	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance","amount","remaining","refunded"]:
 		if stored.has(field): stored[field]=str(stored[field])
@@ -158,6 +198,9 @@ func commit(result: Dictionary) -> Dictionary:
 		stored.affected_accounts=stored.affected_accounts.map(func(account: Variant) -> String: return str(account))
 	var written: Dictionary=db.execute("INSERT INTO economy.market_commands(account_id,command_id,character_id,kind,request_json,result_json) VALUES(:account,:command,:character,:kind,:request,:result);",{"account":account_id,"command":_command,"character":character_id,"kind":_kind,"request":_request,"result":Codec.encode_result(stored)})
 	if not written.ok: return rollback("storage")
+	if finish_intent:
+		var finished: Dictionary=db.query("UPDATE economy.inventory_intents SET state='terminal',result_json=:result WHERE account_id=:account AND operation_id=:command AND character_id=:character AND state='pending' RETURNING operation_id;",{"result":Codec.encode_result(stored),"account":account_id,"command":_command,"character":character_id})
+		if not finished.ok or finished.rows.size()!=1: return rollback("storage")
 	_commit_attempted=true
 	if not db.commit():
 		db.close()

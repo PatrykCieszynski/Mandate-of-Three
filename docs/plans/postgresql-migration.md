@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a local Inventory execution is opt-in; the P3 runtime integration/fencing gate and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution and P3b durable Inventory identity/recovery are opt-in; the P3 runtime integration/fencing gate and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 The progress entries below record each package's scope and deferrals at delivery
 time. The latest acceptance matrix and remaining gates are collected in
@@ -198,6 +198,16 @@ during blocked SQL, unconsumed-result capacity, replay/restart, COMMIT unknown,
 lock timeout and session cleanup. Volatile `queued` is NOT durable admission;
 session/epoch fencing, unresolved discovery, pending-income ownership, actual
 World integration, other domains and P4 remain separate. No live backend switch.
+
+**P3b progress:** [Durable Inventory identity/recovery](../development/postgres-inventory-intents.md)
+adds explicit admission COMMIT, immutable ID/body reservation, original-ID resume
+and bounded discovery after process loss. Item mutation, success/rejection receipt
+and terminal intent finalize atomically. Other command paths respect pending
+reservations; transient storage errors leave admitted work pending. Tests cover
+actual producer-process termination, duplicate admission/resume, conflicts,
+finalization rollback/retry, COMMIT unknown and bounded/int64 recovery pages.
+Session/epoch authorization, World reconciliation, handoff and other domains
+remain later P3 work; no live PostgreSQL route is enabled.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

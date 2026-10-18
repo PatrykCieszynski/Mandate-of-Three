@@ -4,6 +4,7 @@ extends RefCounted
 ## from open through full store transaction/retry to close; no async SQL hopping.
 const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
+const Intents = preload("res://source/server/world/database/postgres/inventory_intent_postgres.gd")
 enum State { STOPPED = 0, STARTING = 1, RUNNING = 2, DRAINING = 3 }
 const MAX_WORKERS: int=4
 const MAX_CAPACITY_PER_WORKER: int=16
@@ -78,20 +79,25 @@ class SessionWorker extends RefCounted:
 			var committed:=false
 			var replay:=false
 			if database.is_open() or _open(database):
-				var store:=Items.new(database)
-				if job.lookup:
+				var intent: String=str(job.get("intent",""))
+				var store: RefCounted=Items.new(database) if intent.is_empty() else Intents.new(database)
+				if intent=="admit": result=store.admit(job.character,job.operation_id,job.action,job.uid,job.revision,job.position)
+				elif intent=="resume": result=store.execute(job.character,job.operation_id)
+				elif intent=="outcome": result=store.outcome(job.character,job.operation_id)
+				elif intent=="discover": result=store.discover(job.character,job.after,job.limit)
+				elif job.lookup:
 					result=store.inventory_receipt(job.character,job.operation_id)
 				else:
 					result=store.inventory_command(job.character,job.action,job.uid,job.revision,job.position,job.operation_id)
-					committed=store.committed
-					replay=store.receipt_replay
+				committed=store.committed
+				replay=store.receipt_replay
 				# Unexpected transaction leakage must not poison another job/session.
 				if database.in_transaction():
 					database.close()
 					result={"ok":false,"error":"storage"} if job.lookup else {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
 					committed=false
 					replay=false
-			_publish({"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"result":result,"committed":committed,"receipt_replay":replay})
+			_publish({"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"result":result,"committed":committed,"receipt_replay":replay})
 		database.close()
 		_connection=""
 
@@ -129,8 +135,22 @@ func submit_inventory(character: int, operation_id: String, action: String, uid:
 func submit_receipt(character: int, operation_id: String) -> Dictionary:
 	return _submit({"character":character,"operation_id":operation_id,"lookup":true})
 
+func submit_inventory_admission(character: int, operation_id: String, action: String, uid: String, revision: int, position: int = -1) -> Dictionary:
+	if not Items.valid_inventory_request(action,uid,revision,position): return {"queued":false,"error":"request"}
+	return _submit({"character":character,"operation_id":operation_id,"lookup":false,"intent":"admit","action":action,"uid":uid,"revision":revision,"position":position})
+
+func submit_inventory_resume(character: int, operation_id: String) -> Dictionary:
+	return _submit({"character":character,"operation_id":operation_id,"lookup":false,"intent":"resume"})
+
+func submit_inventory_outcome(character: int, operation_id: String) -> Dictionary:
+	return _submit({"character":character,"operation_id":operation_id,"lookup":true,"intent":"outcome"})
+
+func submit_inventory_discovery(character: int, after: int = 0, limit: int = 50) -> Dictionary:
+	if after<0 or limit<1 or limit>Intents.MAX_PAGE: return {"queued":false,"error":"request"}
+	return _submit({"character":character,"operation_id":"","lookup":true,"intent":"discover","after":after,"limit":limit})
+
 func _submit(job: Dictionary) -> Dictionary:
-	if int(job.character)<=0 or not Commands.valid_id(str(job.operation_id)): return {"queued":false,"error":"request"}
+	if int(job.character)<=0 or (job.get("intent","")!="discover" and not Commands.valid_id(str(job.operation_id))): return {"queued":false,"error":"request"}
 	if state!=State.RUNNING: return {"queued":false,"error":"unavailable"}
 	var selected: int=-1
 	for index: int in _slots.size():
@@ -138,7 +158,7 @@ func _submit(job: Dictionary) -> Dictionary:
 	if selected<0: return {"queued":false,"error":"busy"}
 	_next_ticket+=1
 	job.ticket=_next_ticket
-	_pending[_next_ticket]={"slot":selected,"ticket":_next_ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup}
+	_pending[_next_ticket]={"slot":selected,"ticket":_next_ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent","")}
 	_slots[selected].load+=1
 	_slots[selected].owner.enqueue(job)
 	# Volatile local transfer ONLY; never publish this as C2 durable admission.

@@ -90,3 +90,8 @@ Other economy domains, fairness/limits under load, network/restart/fencing tests
 P4 soak and cutover remain separate. No runtime backend toggle is added here.
 
 Evidence: [P3a native execution](../evidence/postgres-p3a/README.md).
+
+The separate [P3b Inventory identity/recovery](postgres-inventory-intents.md) path
+adds explicit durable admission and original-ID resume/discovery through this
+executor. It does not turn the original immediate `queued` response into a
+durability acknowledgment or enable live World/session routing.

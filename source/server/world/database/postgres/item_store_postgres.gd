@@ -122,11 +122,37 @@ func claim_ground_item(owner: int, drop_uid: String, item: ItemInstance) -> Dict
 func inventory_command(owner: int, action: String, uid: String, revision: int, position: int, operation_id: String) -> Dictionary:
 	committed=false
 	receipt_replay=false
-	if action not in ["move","equip","unequip","activate"] or not ItemInstance.valid_uid(uid) or revision<0: return _error("request")
-	if (action in ["activate","equip"] and position!=-1) or position < -1 or position>=InventoryGrid.CAPACITY: return _error("request")
+	if not valid_inventory_request(action,uid,revision,position): return _error("request")
 	var transaction:=Commands.new(db)
 	var result: Dictionary=transaction.run_with_retry(_inventory_command_once.bind(owner,action,uid,revision,position,operation_id,transaction))
 	receipt_replay=transaction.receipt_replay
+	return result
+
+static func valid_inventory_request(action: String, uid: String, revision: int, position: int) -> bool:
+	return action in ["move","equip","unequip","activate"] and ItemInstance.valid_uid(uid) and revision>=0 and position>=-1 and position<InventoryGrid.CAPACITY and (action not in ["activate","equip"] or position==-1)
+
+## Intent body is server-loaded, never supplied by the resume caller.
+func execute_inventory_intent(owner: int, operation_id: String, body: Dictionary) -> Dictionary:
+	committed=false
+	receipt_replay=false
+	var transaction:=Commands.new(db)
+	var result: Dictionary=transaction.run_with_retry(_inventory_intent_once.bind(owner,operation_id,body.duplicate(true),transaction))
+	receipt_replay=transaction.receipt_replay
+	return result
+
+func _inventory_intent_once(owner: int, operation_id: String, body: Dictionary, transaction: RefCounted) -> Dictionary:
+	committed=false
+	if not transaction.begin_inventory_intent(owner,operation_id,[owner,body.action,body.item_uid,int(body.expected_revision),int(body.position)]): return transaction.cached
+	if not db.execute("SAVEPOINT inventory_apply;").ok: return transaction.rollback("storage")
+	var result:=_apply_inventory(owner,body.action,body.item_uid,int(body.expected_revision),int(body.position))
+	var mutated: bool=bool(result.get("mutated",false))
+	if not result.ok:
+		if result.error=="storage": return transaction.rollback("storage")
+		if not db.execute("ROLLBACK TO SAVEPOINT inventory_apply;").ok: return transaction.rollback("storage")
+		result={"ok":false,"error":result.error}
+	else: result={"ok":true}
+	result=transaction.finish_inventory_intent(result)
+	committed=transaction.committed and mutated
 	return result
 
 func _inventory_command_once(owner: int, action: String, uid: String, revision: int, position: int, operation_id: String, transaction: RefCounted) -> Dictionary:
@@ -136,15 +162,19 @@ func _inventory_command_once(owner: int, action: String, uid: String, revision: 
 	committed=false
 	if not transaction.begin(owner,operation_id,"inventory",[owner,action,uid,revision,position],true):
 		return transaction.cached
+	var result:=_apply_inventory(owner,action,uid,revision,position)
+	if not result.ok: return transaction.rollback(str(result.error))
+	var mutated:=bool(result.mutated)
+	result=transaction.commit({"ok":true})
+	committed=transaction.committed and mutated
+	return result
+
+func _apply_inventory(owner: int, action: String, uid: String, revision: int, position: int) -> Dictionary:
 	var result: Dictionary
 	match action:
 		"activate": result=_activate_in_transaction(owner,uid,revision)
 		"move": result=_move_in_transaction(owner,uid,revision,position)
 		_: result=_equipment_in_transaction(owner,uid,revision,action,position)
-	if not result.ok: return transaction.rollback(str(result.error))
-	var mutated:=bool(result.mutated)
-	result=transaction.commit({"ok":true})
-	committed=transaction.committed and mutated
 	return result
 
 func inventory_receipt(owner: int, operation_id: String) -> Dictionary:
@@ -156,7 +186,7 @@ func inventory_receipt(owner: int, operation_id: String) -> Dictionary:
 	if not result.ok: return _error("storage")
 	if result.rows.is_empty(): return _error("unknown_command")
 	var decoded:=Commands.decode(str(result.rows[0].result_json))
-	return decoded if decoded.get("ok",false) else _error("storage")
+	return decoded if decoded.has("ok") else _error("storage")
 
 func _activate_in_transaction(owner: int, uid: String, revision: int) -> Dictionary:
 	var found:=_find_item(owner,uid)
