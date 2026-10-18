@@ -457,8 +457,10 @@ func set_camera_zoom(zoom: Vector2) -> void:
 	camera_2d.zoom = zoom
 
 
-func _on_instance_changed_camera_limits(instance: InstanceClient) -> void:
-	_apply_camera_limits(instance.instance_map if instance != null else null)
+func _on_instance_changed_camera_limits(instance: Node) -> void:
+	# The 3D host has its own camera and no legacy Map bounds.
+	var legacy_map: Map = instance.instance_map if instance is InstanceClient else null
+	_apply_camera_limits(legacy_map)
 
 
 ## Clamp the camera to [param map]'s per-edge limits. Each edge defaults to ±CAMERA_LIMIT
