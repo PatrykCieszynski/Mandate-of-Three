@@ -10,7 +10,8 @@ func data_request_handler(
 	instance: ServerInstance,
 	args: Dictionary
 ) -> Dictionary:
-	var player: Player = instance.players_by_peer_id.get(peer_id, null)
+	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
+	var player: Player = legacy_players.get(peer_id, null)
 	if not player:
 		return {"ok": false}
 
