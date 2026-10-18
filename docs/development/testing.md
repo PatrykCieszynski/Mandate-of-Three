@@ -543,3 +543,9 @@ client waiting at the picker, refresh without reservation/deadline renewal, and
 expiry cleanup. `run-items.ps1 -WithSession` retains programmatic automatic mode.
 Visual QA of the existing pre-world Transition picker is separate from these
 network contracts; see [initial channel selection](initial-channel-selection.md).
+
+PostgreSQL P3f `--suite inventory-endpoint` adds native Inventory RPC/client journal
+acceptance with separate headless client processes, current Master tickets and
+World runtime on owned fixtures. It uses ports 18098/18099 sequentially. See
+[scope and failure/recovery behavior](postgres-inventory-endpoint.md). No CEF
+rendering or production bootstrap/cutover is claimed.

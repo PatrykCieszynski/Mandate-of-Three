@@ -90,10 +90,10 @@ database revocation after an issuer crash.
 
 There is deliberately no player-facing setting, export switch, DSN in tracked
 configuration, or normal startup enabling this bridge. It is exercised by an
-isolated acceptance fixture. A playable PG realm still requires the real
-Inventory endpoint/client/private/public publication integration and fail-closed
-gates for other economy domains. **Do not inject this into the current normal
-map endpoints and mix their SQLite item/wallet writes with PostgreSQL.**
+isolated acceptance fixture. [P3f](postgres-inventory-endpoint.md) adds an opt-in
+Inventory endpoint/client path and closes legacy SQLite economics in that mode.
+A playable PG realm still requires operational bootstrap and the remaining
+economic domain ports. **Do not enable mixed SQLite/PG economic writers.**
 
 Schemas/account/character mappings must be provisioned before grant installation.
 The bridge does not migrate identity storage or provision a newly created World

@@ -48,7 +48,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "inventory-session-bridge"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
     args = parser.parse_args()
     extension = ".exe" if os.name == "nt" else ""
     binaries = {name: args.pg_bin.resolve() / (name + extension)
@@ -121,13 +121,19 @@ def main():
             "inventory-sessions": ("postgres_inventory_sessions", "POSTGRES_INVENTORY_SESSIONS_OK"),
             "inventory-runtime": ("postgres_inventory_runtime", "POSTGRES_INVENTORY_RUNTIME_OK"),
             "inventory-session-bridge": ("postgres_inventory_session_bridge", "POSTGRES_INVENTORY_SESSION_BRIDGE_OK"),
+            "inventory-endpoint": ("postgres_inventory_endpoint", "POSTGRES_INVENTORY_ENDPOINT_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
-             f"res://tests/{scene}.tscn", "--quit-after", "1200"],
+             f"res://tests/{scene}.tscn"] + ([] if args.suite == "inventory-endpoint" else ["--quit-after", "1200"]),
             env=env, log=directory / "godot.log", timeout=60)
         output = (directory / "godot.log").read_text(encoding="utf-8", errors="replace")
         if marker not in output or any(word in output for word in ("SCRIPT ERROR", "Parse Error", "POSTGRES_READINESS_FAILED")):
             raise RuntimeError("Godot readiness contract failed; see " + str(directory.relative_to(ROOT) / "godot.log"))
+        if args.suite == "inventory-endpoint":
+            for role in ("actor", "observer", "restored"):
+                client_output = (directory / f"client-{role}.log").read_text(encoding="utf-8", errors="replace")
+                if "POSTGRES_INVENTORY_ENDPOINT_CLIENT_OK" not in client_output or any(word in client_output for word in ("SCRIPT ERROR", "Parse Error")):
+                    raise RuntimeError(f"Native client {role} failed; see {directory.relative_to(ROOT)}")
         summary["result"] = "PASS"
     finally:
         password_file.unlink(missing_ok=True)

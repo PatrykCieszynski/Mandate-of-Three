@@ -10,17 +10,20 @@ func available() -> bool:
 	return _server() != null
 
 func economy() -> WorldDatabase:
-	return null if _server() == null else _server().database
+	return null if _server() == null or _server().inventory_runtime != null else _server().database
 
 func progression() -> WorldDatabase:
-	return economy()
+	return null if _server() == null else _server().database
 
 func world_time() -> WorldTime:
 	return null if _server() == null else _server().world_time
 
 func item_store() -> ItemStoreSqlite:
 	var server := _server()
-	return null if server == null or server.database == null else server.database.item_store
+	return null if server == null or server.inventory_runtime != null or server.database == null else server.database.item_store
+
+func inventory_runtime() -> RefCounted:
+	return null if _server()==null else _server().inventory_runtime
 
 func item_domain_ready() -> bool:
 	return item_store() != null
@@ -63,8 +66,13 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 	return -1.0 if _server() == null else _server().runtime_attack_speed_ratio(owner_id)
 
 func mutations_allowed(peer_id: int) -> bool:
+	# Other economics are not ported to the asynchronous runtime yet. Never let
+	# an opt-in Inventory fixture fall back to synchronous SQLite mutations.
+	return inventory_runtime()==null and not transfer_pending(peer_id)
+
+func transfer_pending(peer_id: int) -> bool:
 	var server := _server()
-	return server==null or server.instance_manager==null or not server.instance_manager.transfers.gated(peer_id)
+	return server!=null and server.instance_manager!=null and server.instance_manager.transfers.gated(peer_id)
 
 func interrupt_transfer(peer_id: int, reason: String) -> void:
 	var server := _server()

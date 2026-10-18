@@ -177,6 +177,8 @@ func run() -> void:
 	issue(101)
 	await wait_for(func() -> bool: return master.responses.has(100))
 	assert(master.responses[100].has("error") and not master.responses[100].has("auth-token"))
+	await get_tree().physics_frame # A supersession reply can arrive within one physics tick.
+	await get_tree().process_frame # physics_frame is emitted before _physics_process.
 	assert(world.token_list.is_empty() and grant_row().is_empty() and physics_ticks>before)
 	assert(pg.execute("SELECT pg_advisory_unlock(940021);").ok)
 	await wait_for(func() -> bool: return master.responses.has(101))

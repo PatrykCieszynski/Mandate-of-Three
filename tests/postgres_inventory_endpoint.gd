@@ -1,0 +1,311 @@
+extends "res://tests/postgres_inventory_session_bridge.gd"
+## Actual client processes use the production endpoint, bridge, journal and item
+## adapter. Master/World run on native isolated sockets in this server fixture;
+## Gateway credentials and map/actor construction remain controlled.
+class FixtureMap extends Node3D:
+	var characters: Dictionary[int,PlayerActor3D]={}
+	var upgrade_endpoint: Node
+	var endpoint: InventoryEndpoint3D
+	var reports: Dictionary={}
+	signal joined(peer: int)
+	signal phase_received(phase: String, payload: Dictionary)
+	func _ready() -> void:
+		endpoint=InventoryEndpoint3D.new()
+		endpoint.name="Inventory"
+		endpoint.services=MandateWorldServices.new()
+		add_child(endpoint)
+	@rpc("any_peer","call_remote","reliable",1)
+	func join() -> void:
+		if GameMode.is_world_server(): joined.emit(multiplayer.get_remote_sender_id())
+	@rpc("authority","call_remote","reliable",1)
+	func phase(label: String, payload: Dictionary) -> void:
+		if GameMode.is_client(): phase_received.emit(label,payload)
+	@rpc("any_peer","call_remote","reliable",1)
+	func report(label: String, result: Dictionary) -> void:
+		if GameMode.is_world_server(): reports[label]={"peer":multiplayer.get_remote_sender_id(),"result":result}
+
+var map: FixtureMap
+var wire: WireClient
+var adapter: ItemUiAdapter
+var session: UiCommandSession
+var dispatcher: UiCommandDispatcher
+var bridge: WebUiBridge
+var ui_results: Dictionary={}
+var ui_snapshots: Array[Dictionary]=[]
+var client_processes: Array[int]=[]
+var fixture_dir: String
+var facts: int=0
+
+func _ready() -> void:
+	get_tree().create_timer(45).timeout.connect(func() -> void: get_tree().quit(1))
+	if GameMode.is_client(): run_client.call_deferred()
+	else: super._ready()
+
+func wait_for(predicate: Callable) -> void:
+	var deadline: int=Time.get_ticks_msec()+15000
+	while not predicate.call() and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	assert(predicate.call(),"bounded endpoint/client fixture wait")
+
+func add_map(parent: Node) -> FixtureMap:
+	var result:=FixtureMap.new()
+	result.name="Map"
+	parent.add_child(result)
+	return result
+
+func start_client(request: int, username: String, role: String) -> void:
+	issue(request,username,character if username=="alpha" else extra_characters[username])
+	await wait_for(func() -> bool: return master.responses.has(request))
+	assert(master.responses[request].has("auth-token"))
+	var arguments: Array[String]=["--headless","--path",ProjectSettings.globalize_path("res://"),"--mode=client","res://tests/postgres_inventory_endpoint.tscn","--fixture-token="+master.responses[request]["auth-token"],"--fixture-role="+role,"--fixture-dir="+ProjectSettings.globalize_path(fixture_dir),"--log-file",ProjectSettings.globalize_path(fixture_dir+"/client-"+role+".log")]
+	var pid:=OS.create_process(OS.get_executable_path(),arguments,false)
+	assert(pid>0)
+	client_processes.append(pid)
+
+func phase(peer: int, label: String, payload: Dictionary = {}) -> Dictionary:
+	map.reports.erase(label)
+	map.phase.rpc_id(peer,label,payload)
+	await wait_for(func() -> bool: return map.reports.has(label))
+	assert(map.reports[label].peer==peer)
+	return map.reports[label].result
+
+func run() -> void:
+	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster")
+	var connection: String=OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")
+	fixture_dir=OS.get_environment("MANDATE_PG_FIXTURE_DIR")
+	pg=ClassDB.instantiate("GodotSociDatabase")
+	assert(pg.open("postgresql",connection) and Schema.ensure_schema(pg))
+	sqlite.path=fixture_dir+"/identity.db"
+	assert(sqlite.open_db())
+	WorldSchema.ensure_schema(sqlite)
+	database.db=sqlite
+	database.store=WorldStoreSqlite.new(sqlite)
+	assert(WalletStoreSqlite.migrate_accounts(sqlite,{}).ok)
+	authentication.account_collection=AccountResourceCollection.new()
+	for username: String in ["alpha","beta"]:
+		var id: int=21 if username=="alpha" else 22
+		assert(database.store.bind_account_identity(username,id,true))
+		var owner: int=database.store.create_player_character(username,{"name":username,"skin":1})
+		if username=="alpha": character=owner
+		else: extra_characters[username]=owner
+		assert(owner>0 and Wallet.new(pg).initialize_account(id).ok and Items.new(pg).bind_character(owner,id))
+		var sword:=ItemInstance.create(ItemDefinitions.IRON_SWORD,owner,[])
+		assert(pg.begin() and Items.new(pg).receive_item_in_transaction(sword,0).ok and pg.commit())
+		var account:=AccountResource.new()
+		account.id=id
+		account.username=username
+		authentication.account_collection.collection[username]=account
+		authentication.active_accounts[username]=account
+	assert(database.prepare_account_wallets({"alpha":21,"beta":22}).ok)
+	master.authentication_manager=authentication
+	master.name="Master"
+	add_child(master)
+	assert(master.create(BaseMultiplayerEndpoint.Role.SERVER,"127.0.0.1",18099)==OK)
+	world.name="World"
+	world.database=database
+	world.world_manager=link
+	add_child(world)
+	assert(world.create(BaseMultiplayerEndpoint.Role.SERVER,"127.0.0.1",18098)==OK)
+	WorldServer.curr=world
+	link.name="ControlLink"
+	link.database=database
+	link.world_server=world
+	link.token_received.connect(world.accept_master_handoff)
+	add_child(link)
+	assert(link.create(BaseMultiplayerEndpoint.Role.CLIENT,"127.0.0.1",18099)==OK)
+	await wait_for(func() -> bool: return master.connected_worlds.size()==1)
+	world_id=link.multiplayer_api.get_unique_id()
+	control=Executor.new()
+	execution=Executor.new()
+	assert(control.start(connection,2,2) and execution.start(connection,2,2))
+	while not control.is_ready() or not execution.is_ready():
+		control.poll()
+		execution.poll()
+		await get_tree().process_frame
+	master.inventory_session_issuer=Issuer.new(master,control)
+	world.inventory_runtime=Runtime.new(world,execution)
+	map=add_map(world)
+	map.joined.connect(func(peer: int) -> void:
+		assert(world.connected_players.has(peer))
+		var body:=PlayerActor3D.new()
+		map.add_child(body)
+		map.characters[peer]=body
+		map.endpoint.initialize_peer(peer))
+	world.multiplayer_api.peer_disconnected.connect(func(peer: int) -> void:
+		if map.characters.has(peer): map.characters[peer].queue_free()
+		map.characters.erase(peer)
+		map.endpoint.remove_peer(peer))
+	map.endpoint.inventory_changed.connect(func(_owner: int) -> void: facts+=1)
+	await start_client(201,"alpha","actor")
+	await start_client(202,"beta","observer")
+	await wait_for(func() -> bool: return map.reports.has("actor-ready") and map.reports.has("observer-ready"))
+	var actor: int=map.reports["actor-ready"].peer
+	var observer: int=map.reports["observer-ready"].peer
+	assert(map.reports["actor-ready"].result.account==21 and map.reports["observer-ready"].result.account==22)
+	assert(map.endpoint.services.item_store()==null and map.endpoint.services.economy()==null and not map.endpoint.services.mutations_allowed(actor),"other domains cannot fall back to SQLite")
+	# Hold one real account row. The other client's RPC/commit and physics continue.
+	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=21 FOR NO KEY UPDATE;").ok)
+	map.phase.rpc_id(actor,"blocked-equip",{})
+	await get_tree().create_timer(0.15).timeout
+	var ticks: int=physics_ticks
+	assert((await phase(observer,"other-equip")).ok)
+	assert(physics_ticks>ticks and not map.reports.has("blocked-equip"))
+	assert(pg.commit())
+	await wait_for(func() -> bool: return map.reports.has("blocked-equip"))
+	assert(map.reports["blocked-equip"].result.ok)
+	assert(world.runtime_attack(character)>10 and map.characters[actor].weapon_definition_id=="iron_sword")
+	assert((await phase(actor,"flow")).ok)
+	assert((await phase(observer,"privacy",{"other":actor})).ok)
+	# Force a mutation COMMIT error. Receipt recovery finishes the already-admitted
+	# body, then returns the same ID. No automatic new business ID or SQLite write.
+	assert(pg.execute("CREATE FUNCTION economy.fixture_endpoint_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'endpoint commit fixture' USING ERRCODE='40001'; END; $$;").ok)
+	assert(pg.execute("CREATE CONSTRAINT TRIGGER fixture_endpoint AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.fixture_endpoint_fail();").ok)
+	assert((await phase(actor,"uncertain")).error=="inventory_pending")
+	assert(pg.execute("DROP TRIGGER fixture_endpoint ON economy.market_commands;").ok)
+	assert((await phase(actor,"recover")).ok)
+	# Destroy the actual client process after an accepted move lost its response.
+	assert((await phase(actor,"lost-restart")).error=="inventory_pending")
+	await phase(actor,"exit")
+	await wait_for(func() -> bool: return not world.connected_players.has(actor))
+	# Force the hydration/ACK window: the client's first journal lookup must not
+	# race the still-closed backend lane. No initial snapshot is published early.
+	assert(pg.execute("CREATE FUNCTION economy.fixture_endpoint_ready() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.phase='ready' THEN PERFORM pg_advisory_xact_lock(940022); END IF; RETURN NEW; END; $$;").ok)
+	assert(pg.execute("CREATE TRIGGER fixture_endpoint_ready BEFORE UPDATE ON economy.inventory_sessions FOR EACH ROW EXECUTE FUNCTION economy.fixture_endpoint_ready();").ok)
+	assert(pg.execute("SELECT pg_advisory_lock(940022);").ok)
+	await start_client(203,"alpha","restored")
+	await wait_for(func() -> bool:
+		pg.execute("SELECT pg_stat_clear_snapshot();")
+		return int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name LIKE 'mandate-inventory-executor-%' AND wait_event_type='Lock';").rows[0].n)>0)
+	assert(not map.reports.has("restored-ready"),"initial client snapshot waits for readiness ACK")
+	assert(pg.execute("SELECT pg_advisory_unlock(940022);").ok)
+	await wait_for(func() -> bool: return map.reports.has("restored-ready"))
+	assert(pg.execute("DROP TRIGGER fixture_endpoint_ready ON economy.inventory_sessions;").ok)
+	actor=map.reports["restored-ready"].peer
+	assert((await phase(actor,"restored")).ok)
+	assert(facts==9,"only nine actual mutations publish facts; no-op, receipts and rejection do not")
+	assert(sqlite.query("SELECT COUNT(*) AS n FROM item_instances;") and int(sqlite.query_result[0].n)==0)
+	assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.item_instances;").rows[0].n)==2)
+	await phase(actor,"exit")
+	await phase(observer,"exit")
+	await wait_for(func() -> bool: return client_processes.all(func(pid: int) -> bool: return not OS.is_process_running(pid)))
+	control.begin_drain()
+	execution.begin_drain()
+	while not control.is_stopped() or not execution.is_stopped(): await get_tree().process_frame
+	for endpoint: BaseMultiplayerEndpoint in [link,world,master]:
+		endpoint.peer.close()
+		endpoint.multiplayer_api.auth_callback=Callable()
+		get_tree().set_multiplayer(null,endpoint.get_path())
+		endpoint.queue_free()
+	await get_tree().process_frame
+	WorldServer.curr=null
+	database.db=null
+	database.free()
+	authentication.free()
+	assert(sqlite.close_db())
+	pg.close()
+	print("POSTGRES_INVENTORY_ENDPOINT_OK native client commands, independent SQL, receipt/rejection/reload/process-relogin recovery, private inventory/public weapon and no SQLite item writes")
+	get_tree().quit()
+
+func compose_ui() -> void:
+	session=UiCommandSession.new()
+	bridge=WebUiBridge.new()
+	dispatcher=UiCommandDispatcher.new()
+	add_child(bridge)
+	add_child(dispatcher)
+	dispatcher.attach(bridge)
+	adapter=ItemUiAdapter.new()
+	adapter.journal.directory=fixture_dir+"/journal"
+	adapter.attach(map.endpoint,dispatcher,session,get_tree())
+	bridge.outgoing.connect(func(json: String) -> void:
+		var envelope: Dictionary=JSON.parse_string(json)
+		if envelope.type=="command.result": ui_results[envelope.id]=envelope.payload
+		if envelope.type=="ui.snapshot": ui_snapshots.append(envelope.payload))
+	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+
+func close_ui() -> void:
+	adapter.dispose()
+	session.close("teardown")
+	dispatcher.dispose()
+	dispatcher.queue_free()
+	bridge.queue_free()
+
+func command(type: String, payload: Dictionary) -> Dictionary:
+	var id: String="fixture-"+str(ui_results.size())
+	bridge.receive(JSON.stringify({"v":1,"id":id,"type":type,"payload":payload}))
+	await wait_for(func() -> bool: return ui_results.has(id))
+	await get_tree().create_timer(0.12).timeout
+	return ui_results[id]
+
+func item() -> Dictionary: return map.endpoint.state.items[0]
+
+func lose_response(type: String, payload: Dictionary) -> Dictionary:
+	map.endpoint.operation_finished.disconnect(session.finish)
+	var result:=await command(type,payload)
+	map.endpoint.operation_finished.connect(session.finish)
+	assert(result.error=="inventory_pending" and not adapter.journal.load_pending().entry.is_empty())
+	return result
+
+func run_client() -> void:
+	get_tree().create_timer(40).timeout.connect(func() -> void: get_tree().quit(1))
+	fixture_dir=str(CmdlineUtils.get_parsed_args()["fixture-dir"])
+	wire=WireClient.new()
+	wire.name="Client"
+	wire.token=str(CmdlineUtils.get_parsed_args()["fixture-token"])
+	add_child(wire)
+	assert(wire.create(BaseMultiplayerEndpoint.Role.CLIENT,"127.0.0.1",18098)==OK)
+	map=add_map(wire)
+	map.phase_received.connect(client_phase)
+	await wait_for(func() -> bool: return wire.connected)
+	map.join.rpc_id(1)
+	await wait_for(func() -> bool: return map.endpoint.state.get("ok",false))
+	compose_ui()
+	var role: String=str(CmdlineUtils.get_parsed_args()["fixture-role"])
+	map.report.rpc_id(1,role+"-ready",{"ok":true,"account":map.endpoint.state.economic_context.account_id})
+
+func client_phase(label: String, payload: Dictionary) -> void:
+	var result: Dictionary={"ok":true}
+	match label:
+		"blocked-equip", "other-equip": result=await command("equipment.equip",{"id":item().uid,"revision":item().revision})
+		"flow":
+			assert((await command("equipment.unequip",{"id":item().uid,"revision":item().revision,"x":0,"y":3,"page":0})).ok)
+			var invalid:=await command("inventory.move_item",{"id":item().uid,"revision":item().revision,"x":0,"y":8,"page":0})
+			assert(not invalid.ok and invalid.get("terminal",false),"out-of-bounds footprint is a durable rejection")
+			var before: Dictionary=map.endpoint.state.duplicate(true)
+			await lose_response("inventory.move_item",{"id":item().uid,"revision":item().revision-1,"x":2,"y":2,"page":0})
+			assert((await command("inventory.retry",{})).error=="stale")
+			assert(adapter.journal.load_pending().entry.is_empty() and item().revision==before.items[0].revision)
+			await lose_response("inventory.move_item",{"id":item().uid,"revision":item().revision,"x":2,"y":2,"page":0})
+			bridge.reset_transport()
+			bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+			assert(ui_snapshots.back().inventory.recoveryPending)
+			assert((await command("inventory.retry",{})).ok)
+			assert((await command("item.activate",{"id":item().uid,"revision":item().revision})).ok)
+			assert((await command("equipment.equip",{"id":item().uid,"revision":item().revision})).ok) # no-op
+			assert((await command("equipment.unequip",{"id":item().uid,"revision":item().revision})).ok)
+		"privacy":
+			assert(map.endpoint.state.items.size()==1 and map.endpoint.state.economic_context.account_id==22)
+			assert(map.endpoint.public_weapons.get(int(payload.other),"missing")=="")
+		"uncertain": result=await command("equipment.equip",{"id":item().uid,"revision":item().revision})
+		"recover": result=await command("inventory.retry",{})
+		"lost-restart": result=await lose_response("equipment.unequip",{"id":item().uid,"revision":item().revision})
+		"restored":
+			await wait_for(func() -> bool: return adapter.journal.load_pending().entry.is_empty())
+			assert(item().location=="bag" and map.endpoint.state.stats.attack==10)
+			# A saved but never sent body is read-only on restore, and executes only
+			# after an explicit retry, retaining its original operation identity.
+			var id: String="inventory-"+Crypto.new().generate_random_bytes(16).hex_encode()
+			assert(adapter.journal.save_pending(id,{"action":"move","item":{"id":item().uid,"revision":item().revision,"x":3,"y":3,"page":2}}))
+			close_ui()
+			compose_ui()
+			await get_tree().create_timer(0.3).timeout
+			assert(adapter.journal.load_pending().entry.id==id and item().bag_position!=108)
+			result=await command("inventory.retry",{})
+			assert(result.ok and adapter.journal.load_pending().entry.is_empty())
+		"exit":
+			map.report.rpc_id(1,label,result)
+			await get_tree().create_timer(0.1).timeout
+			close_ui()
+			wire.peer.close()
+			print("POSTGRES_INVENTORY_ENDPOINT_CLIENT_OK")
+			get_tree().quit()
+			return
+	map.report.rpc_id(1,label,result)
