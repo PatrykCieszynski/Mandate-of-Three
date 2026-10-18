@@ -9,6 +9,7 @@ extends DataRequestHandler
 
 
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
+	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
 	var world_server: WorldServer = instance.world_server
 	var store: WorldStoreSqlite = world_server.database.store
 
@@ -58,7 +59,7 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 		if member == null:
 			continue
 		world_server.data_push.rpc_id(member_peer, &"active_guild_id.set", {"active_guild_id": member.active_guild_id})
-		var pnode: Player = instance.players_by_peer_id.get(member_peer)
+		var pnode: Player = legacy_players.get(member_peer)
 		if pnode != null:
 			pnode.state_synchronizer.set_by_path(^":active_guild_id", member.active_guild_id)
 		world_server.chat_service.push_system_to_player(

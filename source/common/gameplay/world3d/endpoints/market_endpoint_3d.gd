@@ -45,8 +45,8 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	var owner := _owner(peer_id)
 	if owner<=0: return {"ok":false,"error":"owner"}
 	if action=="open": return {"ok":true}
-	var operation := services.economy().market_operation(owner, action, payload)
-	var response := operation.response()
+	var operation: Variant = services.economy().market_operation(owner, action, payload)
+	var response: Variant = operation.response()
 	var recovered_receipt := action == "receipt" and bool(response.get("ok", false))
 	if response.get("ok", false) and (recovered_receipt or action in ["list","cancel","claim","buy","deposit","withdraw"]):
 		if operation.new_commit:

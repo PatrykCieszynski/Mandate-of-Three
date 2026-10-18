@@ -43,7 +43,7 @@ func upgrade_for_peer(peer_id: int, instance_id: String, service_id: StringName,
 	if not auth.ok: return {"ok":false,"error":auth.error}
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
-	var operation := services.economy().upgrade_operation(player.player_id, auth.recipe, uid, revision, operation_id)
+	var operation: Variant = services.economy().upgrade_operation(player.player_id, auth.recipe, uid, revision, operation_id)
 	if operation.new_commit:
 		# Commit + wallet RAM are complete; cache refresh precedes fan-out.
 		_world.inventory_endpoint.accept_committed_change(peer_id)
@@ -60,7 +60,7 @@ func receipt_for_peer(peer_id: int, operation_id: String, now: int) -> Dictionar
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
 	# Authenticated character only. Lookup cannot admit, spend or mutate an item.
-	var operation := services.economy().upgrade_receipt(player.player_id,operation_id)
+	var operation: Variant = services.economy().upgrade_receipt(player.player_id,operation_id)
 	if operation.response().get("ok",false):
 		_world.inventory_endpoint.resynchronize(peer_id)
 		_world.currency_endpoint.resynchronize(peer_id)

@@ -573,7 +573,8 @@ func request_instance(peer_id: int, instance_id: String = "") -> ServerInstance:
 		if world == null or not world.characters.has(peer_id):
 			return null
 	else:
-		var actor: Player = instance.players_by_peer_id.get(peer_id)
+		var legacy: ServerInstance = instance as ServerInstance
+		var actor: Player = legacy.players_by_peer_id.get(peer_id) if legacy != null else null
 		if actor == null or actor.player_resource != player:
 			return null
 	return instance

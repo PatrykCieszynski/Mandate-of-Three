@@ -9,13 +9,17 @@ func data_request_handler(
 	instance: ServerInstance,
 	args: Dictionary
 ) -> Dictionary:
-	var player: Player = instance.players_by_peer_id.get(peer_id, null)
+	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
+	var legacy_map: Map = (instance as ServerInstance).instance_map if instance is ServerInstance else null
+	if legacy_map == null:
+		return {"ok": false, "error": ERR_UNAVAILABLE}
+	var player: Player = legacy_players.get(peer_id, null)
 	if not player:
 		return {"ok": false}
 
 	# Authorize: the shop must be present in the player's current map.
 	var shop_key: StringName = StringName(str(args.get("shop_key", "")))
-	var shop: ShopResource = instance.instance_map.get_shop(shop_key)
+	var shop: ShopResource = legacy_map.get_shop(shop_key)
 	if shop == null:
 		return {"ok": false}
 

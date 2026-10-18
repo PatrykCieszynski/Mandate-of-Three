@@ -1,6 +1,6 @@
 class_name MandateWorldServices
 extends RefCounted
-## Narrow TinyMMO boundary. Resolve current session/store references on demand:
+## Resolve current world session/store references on demand:
 ## reconnects and disposable test stores must not leave stale captured objects.
 
 func _server() -> WorldServer:
