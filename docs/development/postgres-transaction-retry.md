@@ -1,9 +1,9 @@
-# PostgreSQL P2c–P2j — receipt-backed transaction retry
+# PostgreSQL P2c–P2k — receipt-backed transaction retry
 
 These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
 retry for **Shop purchase/revenue collection, Exchange order placement/cancellation,
 Exchange stack conversion, Upgrade, NPC purchases and receipted Inventory/Storage/
-Shop seller commands**. Production World remains
+Shop seller commands, plus account claim receiving**. Production World remains
 SQLite; no executor, connection pool, RPC, schema or backend selection is added.
 
 ## Policy and ownership
@@ -328,3 +328,36 @@ sessions extend their own diagnostic coordination timeouts.
 See [P2j evidence](../evidence/postgres-p2j/README.md). Claims, starter/pickup and
 unreceipted checkpoints retain their policies. Production remains SQLite;
 broader P2, P3 execution/fencing and P4 remain separate gates.
+
+## P2k — Account claim receiving
+
+`AccountClaimPostgres.claim_item()` uses the existing bounded whole-command owner.
+Each attempt reacquires account-first admission, checks the original receipt and
+rereads current claim custody, expected item revision and receiving Inventory
+footprint. UID, initiating character, requested placement and command ID remain
+fixed. Automatic placement may select a different free footprint after rollback.
+The claim producer's `receive_in_transaction()` remains inside its caller-owned
+transaction and does not introduce a nested retry loop.
+
+Receiving preserves UID/amount/upgrade/affixes/sockets, changes provenance to the
+receiving character, increments item revision and removes claim-account custody
+atomically. Unlike seller commands, the existing claim fingerprint includes the
+**receiving character**: another alt using the same ID conflicts, while authorized
+account-scoped discovery still returns the original outcome. Receipt replay does
+not mutate or redirect the item.
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite account-claims
+```
+
+The expanded existing fixture injects statement failures at item update, custody
+transfer and receipt persistence for explicit and automatic receiving. It checks
+whole-attempt rollback, preserved rolls/UID, one revision, exact replay after
+reconnect, bounded exhaustion and no automatic COMMIT retry. Independently queued
+editors receive the same claim or occupy a nonstarting destination cell before
+retry: current owner/capacity wins, with automatic placement reselected.
+
+See [P2k evidence](../evidence/postgres-p2k/README.md). Starter/pickup, unreceipted
+checkpoints and caller-owned helpers retain their existing policies. This closes
+the listed receipted-domain retry adoption, not the entire P2 acceptance gate.
+Production remains SQLite; P3 nonblocking execution/fencing and P4 remain open.

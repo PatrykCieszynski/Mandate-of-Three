@@ -218,6 +218,7 @@ func _ready() -> void:
 	var candidate:=exercise(Claims.new(pg),Queries.new(pg),Seller.new(pg),items,Storage.new(pg),true)
 	assert(baseline==candidate,"complete private/public projections, claim receiver/revisions and Inventory/Storage match SQLite")
 	await native_checks(items)
+	await retry_checks(items)
 	pg.close()
 	runtime.db=null
 	runtime.free()
@@ -345,5 +346,134 @@ func race_worker(dsn: String, spec: Array, ready: Semaphore) -> Dictionary:
 	var claims:=Claims.new(database)
 	var result: Dictionary=claims.claim_item(spec[0],spec[1],spec[2],0,spec[3])
 	var committed: bool=claims.committed
+	database.close()
+	return {"result":result,"committed":committed}
+
+func retry_checks(items: RefCounted) -> void:
+	assert(Wallet.new(pg).initialize_account(8600).ok)
+	assert(pg.execute("CREATE SEQUENCE economy.fixture_claim_attempt;").ok)
+	assert(pg.execute("CREATE FUNCTION economy.fixture_claim_retry() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE attempt BIGINT; BEGIN attempt:=nextval('economy.fixture_claim_attempt'); IF attempt<=TG_ARGV[1]::BIGINT THEN IF TG_NARGS>2 THEN PERFORM pg_advisory_xact_lock(95132); END IF; RAISE EXCEPTION 'claim retry fixture' USING ERRCODE=TG_ARGV[0]; END IF; RETURN NEW; END; $$;").ok)
+	var claims:=Claims.new(pg)
+	var index: int=0
+	for code: String in ["40001","40P01"]:
+		for table: String in ["item_instances","item_custody","market_commands"]:
+			for explicit_position: bool in [false,true]:
+				var owner: int=86000+index*2
+				var receiver: int=owner+1
+				assert(items.bind_character(owner,8600) and items.bind_character(receiver,8600))
+				var definition: ItemDefinition=ItemDefinitions.IRON_SWORD if explicit_position else ItemDefinitions.UPGRADE_ORE
+				seed_claim(items,true,owner,900000+index,8600,definition)
+				var item_uid: String=uid(900000+index)
+				assert(pg.execute("UPDATE economy.item_instances SET amount=:amount,upgrade_level=:upgrade WHERE uid=:uid;",{"uid":item_uid,"amount":1 if explicit_position else 7,"upgrade":3 if explicit_position else 0}).ok)
+				var original: Dictionary=pg.query("SELECT amount,upgrade_level,affixes_json,sockets_json FROM economy.item_instances WHERE uid=:uid;",{"uid":item_uid}).rows[0]
+				claim_retry_fault(table,code,1)
+				var destination: int=20 if explicit_position else -1
+				var command_id: String="retry-claim-"+str(index)
+				var result: Dictionary=claims.claim_item(receiver,command_id,item_uid,0,destination)
+				assert(result.ok and claims.committed and claim_attempts()==2)
+				clear_claim_retry(table)
+				var inventory: Array=items.inventory(receiver).items
+				assert(inventory.size()==1 and inventory[0].uid==item_uid and inventory[0].owner_character_id==receiver and inventory[0].revision==1 and inventory[0].bag_position==result.position)
+				assert(inventory[0].affixes==JSON.parse_string(original.affixes_json) and inventory[0].sockets==JSON.parse_string(original.sockets_json))
+				assert(inventory[0].amount==int(original.amount) and inventory[0].upgrade_level==int(original.upgrade_level))
+				assert(result.position==(20 if explicit_position else 0))
+				assert(pg.query("SELECT uid FROM economy.item_custody WHERE uid=:uid AND location='bag' AND owner_id=:owner AND claim_account_id IS NULL;",{"uid":item_uid,"owner":receiver}).rows.size()==1)
+				var state:=native_state()
+				assert(claims.claim_item(receiver,command_id,item_uid,0,destination)==result and not claims.committed)
+				assert(claims.claim_item(owner,command_id,item_uid,0,destination).error=="command_conflict" and claims.receipt(owner,command_id)==result)
+				pg.close()
+				assert(pg.open("postgresql",connection) and claims.claim_item(receiver,command_id,item_uid,0,destination)==result and not claims.committed and native_state()==state)
+				index+=1
+	var owner: int=86900
+	assert(items.bind_character(owner,8600))
+	seed_claim(items,true,owner,910000,8600)
+	for code: String in ["40001","40P01","23505","55P03","57014"]:
+		claim_retry_fault("market_commands",code,99)
+		var state:=native_state()
+		assert(claims.claim_item(owner,"exhausted-claim-"+code,uid(910000),0).error=="storage" and not claims.committed)
+		assert(claim_attempts()==(3 if code in ["40001","40P01"] else 1) and native_state()==state)
+		clear_claim_retry("market_commands")
+	for code: String in ["40001","40P01"]:
+		claim_retry_fault("market_commands",code,99,true)
+		var state:=native_state()
+		var command_id: String="commit-retry-claim-"+code
+		var result: Dictionary=claims.claim_item(owner,command_id,uid(910000),0)
+		assert(result.get("outcome_unknown",false) and not claims.committed and not pg.is_open())
+		assert(pg.open("postgresql",connection) and claim_attempts()==1)
+		clear_claim_retry("market_commands")
+		assert(native_state()==state and claims.receipt(owner,command_id).error=="unknown_command")
+	# Storage errors are not permanent rejections: the original ID can recover.
+	assert(claims.claim_item(owner,"exhausted-claim-40001",uid(910000),0).ok)
+	for scenario: String in ["owner","explicit_capacity","auto_capacity"]:
+		await retry_reselection(items,scenario)
+	print("POSTGRES_ACCOUNT_CLAIMS_RETRY_OK complete claims, UID/provenance/revisions, fixed receiver/replay, bounded failures, no COMMIT retry and current custody/capacity")
+
+func claim_attempts() -> int:
+	return int(pg.query("SELECT last_value FROM economy.fixture_claim_attempt;").rows[0].last_value)
+
+func claim_retry_fault(table: String, code: String, count: int, deferred: bool = false) -> void:
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_claim_attempt RESTART WITH 1;").ok)
+	var operation: String="INSERT" if table=="market_commands" else "UPDATE"
+	var create: String="CREATE CONSTRAINT TRIGGER fixture_retry AFTER "+operation+" ON economy."+table+" DEFERRABLE INITIALLY DEFERRED" if deferred else "CREATE TRIGGER fixture_retry BEFORE "+operation+" ON economy."+table
+	assert(pg.execute(create+" FOR EACH ROW EXECUTE FUNCTION economy.fixture_claim_retry('%s','%d');" % [code,count]).ok)
+
+func clear_claim_retry(table: String) -> void:
+	assert(pg.execute("DROP TRIGGER fixture_retry ON economy."+table+";").ok)
+
+func retry_reselection(items: RefCounted, scenario: String) -> void:
+	var index: int=["owner","explicit_capacity","auto_capacity"].find(scenario)
+	var owner: int=86910+index*2
+	var receiver: int=owner+1
+	assert(items.bind_character(owner,8600) and items.bind_character(receiver,8600))
+	seed_claim(items,true,owner,920000+index,8600)
+	var item_uid: String=uid(920000+index)
+	var blocked: int=InventoryGrid.cells(0,ItemDefinitions.IRON_SWORD.inventory_height).back()
+	if scenario!="owner": seed_item(items,true,receiver,930000+index,20,ItemDefinitions.UPGRADE_ORE)
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_claim_attempt RESTART WITH 1;").ok)
+	assert(pg.execute("CREATE TRIGGER fixture_retry BEFORE INSERT ON economy.market_commands FOR EACH ROW WHEN (current_setting('application_name')='retry-claim') EXECUTE FUNCTION economy.fixture_claim_retry('40001','1','gate');").ok)
+	assert(pg.execute("SELECT pg_advisory_lock(95132);").ok)
+	# Coordination slack is limited to these diagnostic worker sessions.
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var actor:=Thread.new()
+	var command_id: String="reselect-claim-"+scenario
+	assert(actor.start(race_worker.bind(connection+" application_name=retry-claim"+budgets,[receiver,command_id,item_uid,-1 if scenario=="auto_capacity" else 0],ready))==OK)
+	ready.wait()
+	var acting: bool=await claim_waiting("retry-claim")
+	var editor:=Thread.new()
+	assert(editor.start(claim_editor.bind(connection+" application_name=retry-claim-editor"+budgets,owner if scenario=="owner" else receiver,item_uid if scenario=="owner" else uid(930000+index),scenario=="owner",blocked,ready))==OK)
+	ready.wait()
+	var editing: bool=await claim_waiting("retry-claim-editor")
+	assert(pg.execute("SELECT pg_advisory_unlock(95132);").ok)
+	var acted: Dictionary=actor.wait_to_finish()
+	var edited: Dictionary=editor.wait_to_finish()
+	clear_claim_retry("market_commands")
+	assert(acting and editing and edited.result.ok and edited.committed)
+	if scenario=="auto_capacity":
+		assert(acted.result.ok and acted.committed and acted.result.position!=0 and claim_attempts()==2)
+		assert(not InventoryGrid.cells(int(acted.result.position),ItemDefinitions.IRON_SWORD.inventory_height).has(blocked))
+		assert(items.inventory(receiver).items.any(func(item: Dictionary) -> bool: return item.uid==item_uid and item.owner_character_id==receiver and item.revision==1))
+	else:
+		assert(acted.result.error==("owner" if scenario=="owner" else "occupied") and not acted.committed and claim_attempts()==1)
+		assert(Claims.new(pg).receipt(receiver,command_id).error=="unknown_command")
+		var custody: Dictionary=pg.query("SELECT location,owner_id,claim_account_id FROM economy.item_custody WHERE uid=:uid;",{"uid":item_uid}).rows[0]
+		assert((custody.location=="bag" and int(custody.owner_id)==owner) if scenario=="owner" else (custody.location=="account_claim" and int(custody.claim_account_id)==8600))
+
+func claim_waiting(label: String) -> bool:
+	var deadline: int=Time.get_ticks_msec()+2000
+	while Time.get_ticks_msec()<deadline:
+		assert(pg.execute("SELECT pg_stat_clear_snapshot();").ok)
+		if int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name=:label AND wait_event_type='Lock';",{"label":label}).rows[0].n)==1: return true
+		await get_tree().create_timer(0.005).timeout
+	return false
+
+func claim_editor(dsn: String, character: int, item_uid: String, claim: bool, position: int, ready: Semaphore) -> Dictionary:
+	var database: Object=ClassDB.instantiate("GodotSociDatabase")
+	var opened: bool=database.open("postgresql",dsn)
+	ready.post()
+	if not opened: return {"result":{"ok":false,"error":"fixture_connection"},"committed":false}
+	var store: RefCounted=Claims.new(database) if claim else Items.new(database)
+	var result: Dictionary=store.claim_item(character,"claim-editor-"+item_uid,item_uid,0,0) if claim else store.inventory_command(character,"move",item_uid,0,position,"claim-editor-"+item_uid)
+	var committed: bool=store.committed
 	database.close()
 	return {"result":result,"committed":committed}
