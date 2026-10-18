@@ -6,6 +6,7 @@
 - [PostgreSQL Inventory identity/recovery](postgres-inventory-intents.md) — P3b durable admission, terminal outcomes and discovery.
 - [PostgreSQL Inventory session fence](postgres-inventory-sessions.md) — P3c delegated backend epochs and recovery barrier; actual issuer/World integration remains pending.
 - [PostgreSQL Inventory runtime](postgres-inventory-runtime.md) — P3d opt-in World-thread recovery and combat projection reconciliation; live login/endpoint wiring remains pending.
+- [PostgreSQL Inventory session bridge](postgres-inventory-session-bridge.md) — P3e opt-in current Master ticket to durable grant/native World recovery; playable endpoint/bootstrap integration remains pending.
 - [World RPC admission](world-rpc-admission.md) — A2 authorization contract and network checks.
 - [World session admission](world-session-admission.md) — single-use handoff tickets and account replacement.
 - [Economy command boundary](economy-command-boundary.md) — Stage 2 validation, operation results and commit/replay effects.

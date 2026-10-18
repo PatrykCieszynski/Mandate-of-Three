@@ -8,6 +8,11 @@ extends BaseMultiplayerEndpoint
 var connected_worlds: Dictionary[int, Dictionary]
 ## Latest issued World ticket also fences delayed disconnect notifications.
 var _world_sessions: Dictionary[String, Dictionary] = {}
+## Injected only by an opt-in PostgreSQL realm bootstrap/fixture. Default is SQLite.
+var inventory_session_issuer: RefCounted
+
+func _process(_delta: float) -> void:
+	if inventory_session_issuer!=null: inventory_session_issuer.poll()
 ## One current, bounded-lifetime request per account, recorded BEFORE World work.
 var _entry_attempts: Dictionary[String, Dictionary] = {}
 const ENTRY_ATTEMPT_TTL_MS: int = 30_000
@@ -227,7 +232,7 @@ func tell_world_to_revoke_role(world_id: int, player_id: int, role: String) -> b
 
 
 @rpc("authority")
-func fetch_token(_auth_token: String, _username: String, _character_id: int, _account_id: int) -> void:
+func fetch_token(_auth_token: String, _username: String, _character_id: int, _account_id: int, _inventory_context: Dictionary = {}) -> void:
 	pass
 
 
@@ -263,8 +268,31 @@ func _entry_response(gateway_id: int, request_id: int, response: Dictionary) -> 
 
 
 ## Called only when issuing a trusted ticket; character identity stays in World.
-func register_world_session(world_id: int, username: String, token: String) -> void:
-	_world_sessions[username] = {"world_id": world_id, "token": token}
+func register_world_session(world_id: int, username: String, token: String, character_id: int = 0, account_id: int = 0) -> void:
+	_world_sessions[username] = {"world_id":world_id,"token":token,"character_id":character_id,"account_id":account_id}
+
+## Privileged projection of an EXISTING current Master ticket. Never an RPC or
+## a World-supplied account/character assertion; used by the optional PG issuer.
+func verified_inventory_ticket(world_id: int, username: String, token: String) -> Dictionary:
+	if authentication_manager==null or authentication_manager.account_collection==null: return {}
+	var session: Dictionary=_world_sessions.get(username,{})
+	var account: AccountResource=authentication_manager.account_collection.collection.get(username)
+	if not connected_worlds.has(world_id) or session.is_empty() or token.is_empty() or account==null: return {}
+	if session.world_id!=world_id or session.token!=token or int(session.get("character_id",0))<=0 or int(session.get("account_id",0))!=account.id: return {}
+	return {"account_id":account.id,"character":int(session.character_id),"session_fingerprint":token.sha256_text()}
+
+func _prepare_world_ticket(world_id: int, username: String, token: String, character_id: int, account_id: int) -> Dictionary:
+	register_world_session(world_id,username,token,character_id,account_id)
+	if inventory_session_issuer==null: return {"ok":true,"context":{}}
+	var request: Dictionary=inventory_session_issuer.request_grant(world_id,username,token)
+	var deadline: int=Time.get_ticks_msec()+ENTRY_ATTEMPT_TTL_MS
+	while request.queued and not request.done and Time.get_ticks_msec()<deadline:
+		await get_tree().process_frame
+	var current:=not verified_inventory_ticket(world_id,username,token).is_empty()
+	if not request.done or not current or not request.result.get("ok",false):
+		if current: revoke_world_session(username)
+		return {"ok":false,"error":ERR_UNAUTHORIZED}
+	return request.result.duplicate(true)
 
 
 func retire_world_session(world_id: int, username: String, token: String) -> bool:
@@ -272,6 +300,7 @@ func retire_world_session(world_id: int, username: String, token: String) -> boo
 	if not connected_worlds.has(world_id) or session.is_empty() or token.is_empty(): return false
 	if session.world_id != world_id or session.token != token: return false
 	_world_sessions.erase(username)
+	if inventory_session_issuer!=null: inventory_session_issuer.retire(username,token)
 	var account: AccountResource = authentication_manager.account_collection.collection.get(username)
 	if account != null:
 		account.peer_id = 0
@@ -284,6 +313,7 @@ func revoke_world_session(username: String) -> void:
 	_entry_attempts.erase(username)
 	var session: Dictionary = _world_sessions.get(username, {})
 	_world_sessions.erase(username)
+	if inventory_session_issuer!=null and not session.is_empty(): inventory_session_issuer.retire(username,session.token)
 	if not session.is_empty() and connected_worlds.has(int(session.world_id)):
 		revoke_account_admission.rpc_id(int(session.world_id), username)
 
@@ -320,8 +350,11 @@ func player_character_creation_result(gateway_id: int, peer_id: int, username: S
 		# release build. (Was gated on "debug", which masked this on the debug server.)
 		authentication_manager.save_account_collection()
 		var auth_token: String = authentication_manager.generate_random_token()
-		register_world_session(world_id, username, auth_token)
-		fetch_token.rpc_id(world_id, auth_token, username, result_code, account.id)
+		var ticket: Dictionary=await _prepare_world_ticket(world_id,username,auth_token,result_code,account.id)
+		if not ticket.ok:
+			_entry_response(gateway_id,peer_id,{"error":ERR_UNAUTHORIZED})
+			return
+		fetch_token.rpc_id(world_id,auth_token,username,result_code,account.id,ticket.context)
 		
 		_entry_response(
 			gateway_id,
@@ -360,8 +393,11 @@ func result_login(result_code: int, gateway_id: int, peer_id: int, username: Str
 		if account == null: return
 		account.peer_id = peer_id
 		var auth_token: String = authentication_manager.generate_random_token()
-		register_world_session(world_id, username, auth_token)
-		fetch_token.rpc_id(world_id, auth_token, username, character_id, account.id)
+		var ticket: Dictionary=await _prepare_world_ticket(world_id,username,auth_token,character_id,account.id)
+		if not ticket.ok:
+			_entry_response(gateway_id,peer_id,{"error":ERR_UNAUTHORIZED})
+			return
+		fetch_token.rpc_id(world_id,auth_token,username,character_id,account.id,ticket.context)
 		await get_tree().create_timer(0.5).timeout
 		# A newer login or world disconnect may have retired this attempt.
 		if _world_sessions.get(username, {}).get("token", "") != auth_token or not connected_worlds.has(world_id):

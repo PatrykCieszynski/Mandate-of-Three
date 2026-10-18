@@ -76,6 +76,15 @@ func install_verified_grant(identity: Dictionary, expected_epoch: int) -> Dictio
 	if not updated.ok: return _rollback("storage")
 	return _finish({"ok":true,"context":_context(updated.rows[0]),"phase":"recovering"})
 
+## Privileged issuer recovery/read, never a client session lookup. Account lock
+## orders inspection after an earlier uncertain grant/revoke attempt.
+func inspect_grant(identity: Dictionary) -> Dictionary:
+	var begun:=_begin(identity)
+	if not begun.ok: return begun
+	var found: Dictionary=db.query("SELECT * FROM economy.inventory_sessions WHERE account_id=:account;",{"account":identity.account_id})
+	if not found.ok: return _rollback("storage")
+	return _finish({"ok":true,"context":{} if found.rows.is_empty() else _context(found.rows[0]),"phase":"absent" if found.rows.is_empty() else str(found.rows[0].phase)})
+
 func revoke(context: Dictionary) -> Dictionary:
 	var begun:=begin_context(context,false,true)
 	if not begun.ok: return begun

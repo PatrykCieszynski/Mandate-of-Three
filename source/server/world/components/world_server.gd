@@ -22,6 +22,11 @@ var _periodic_save_count: int = 0
 var token_list: Dictionary[String, Dictionary] = {}
 var _pending_admissions: Dictionary[int, Dictionary] = {}
 var _session_tokens: Dictionary[int, String] = {}
+## Explicit opt-in owner only; normal gameplay has no PostgreSQL backend switch.
+var inventory_runtime: RefCounted
+
+func _process(_delta: float) -> void:
+	if inventory_runtime!=null: inventory_runtime.poll()
 
 ## {peer_id: PlayerResource}
 var connected_players: Dictionary[int, PlayerResource]
@@ -72,7 +77,10 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 static var curr: WorldServer
 
 ## Internal Master connection only; public clients submit a token, never an ID.
-func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int) -> bool:
+func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> bool:
+	if inventory_runtime!=null:
+		if not inventory_context.get("epoch") is int or inventory_context.epoch<=0 or inventory_context.get("account_id")!=account_id or inventory_context.get("character")!=character_id or inventory_context.get("session_fingerprint")!=auth_token.sha256_text(): return false
+	elif not inventory_context.is_empty(): return false # Never silently use SQLite for a PG ticket.
 	if not database.wallet_ready: return false
 	var player: PlayerResource = database.get_player_resource(character_id)
 	if auth_token.is_empty() or player == null or player.account_name != username: return false
@@ -88,11 +96,15 @@ func accept_master_handoff(auth_token: String, username: String, character_id: i
 	token_list[auth_token] = {
 		"account": username, "character_id": character_id,
 		"expires_at": Time.get_ticks_msec() + maxi(1, handoff_ttl_ms),
+		"inventory_context":inventory_context.duplicate(true),
 	}
 	return true
 
 
 func revoke_account_admission(username: String) -> void:
+	if inventory_runtime!=null:
+		for peer_id: int in connected_players:
+			if connected_players[peer_id].account_name==username: inventory_runtime.detach(peer_id)
 	for token: String in token_list.keys():
 		if token_list[token].account == username:
 			token_list.erase(token)
@@ -233,11 +245,15 @@ func _on_peer_connected(peer_id: int) -> void:
 	player.session_start_ms = Time.get_ticks_msec()
 	player_id_to_peer_id[player.player_id] = peer_id
 	BlockList.set_for(player.player_id, player.blocked_ids)
+	if inventory_runtime!=null and not inventory_runtime.attach(peer_id,ticket.get("inventory_context",{})):
+		peer.disconnect_peer(peer_id)
+		return
 	_publish_authenticated_state(peer_id, player)
 	ServerLog.info("Peer %d connected." % peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	if inventory_runtime!=null: inventory_runtime.detach(peer_id)
 	var session_token: String = _session_tokens.get(peer_id, "")
 	_session_tokens.erase(peer_id)
 	ServerLog.info("Peer %d disconnected." % peer_id)
@@ -300,7 +316,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _notify_master_disconnected(account_name: String, session_token: String = "") -> void:
-	if world_manager != null and world_manager.multiplayer_api != null and world_manager.multiplayer_api.has_multiplayer_peer():
+	if world_manager != null and world_manager.multiplayer_api != null and world_manager.multiplayer_api.has_multiplayer_peer() and world_manager.multiplayer_api.multiplayer_peer.get_connection_status()==MultiplayerPeer.CONNECTION_CONNECTED:
 		world_manager.player_disconnected.rpc_id(1, account_name, session_token)
 
 

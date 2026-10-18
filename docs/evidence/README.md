@@ -10,6 +10,7 @@ Measured evidence must state **branch/commit**, platform, test command, runtime 
 - [PostgreSQL P3b Inventory recovery](postgres-p3b/README.md) — durable identity, terminal outcomes and discovery after producer-process loss.
 - [PostgreSQL P3c Inventory sessions](postgres-p3c/README.md) — delegated grant fencing and recovery barrier on disposable native PostgreSQL.
 - [PostgreSQL P3d Inventory runtime](postgres-p3d/README.md) — main-thread recovery, actual World combat cache and stale-delivery fencing.
+- [PostgreSQL P3e session bridge](postgres-p3e/README.md) — current Master ticket publication after grant COMMIT, native auth/relogin and normal-role SQLite regression.
 - [CI / platform checks](../development/ci.md)
 - [Historical native validation](../history/README.md) (dated results, not current acceptance)
 - [Terrain3D adoption and verification](../world/visuals/visual-upgrade-v4-terrain3d.md)

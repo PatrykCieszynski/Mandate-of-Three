@@ -90,8 +90,9 @@ running worker on the simulation thread.
 ## Integration boundary and evidence
 
 This component is deliberately not instantiated by normal login or endpoints yet.
-The trusted Master grant bridge, automatic attach/detach wiring, endpoint/client
-correlation/retry, actual private Inventory/public weapon publication and other
+The follow-up [P3e bridge](postgres-inventory-session-bridge.md) adds an optional
+current Master grant owner and native World attach/detach. Normal bootstrap,
+endpoint/client correlation/retry, actual private Inventory/public weapon publication and other
 economy domains remain to integrate. Callers must consult its gate for dependent
 actions; merely constructing the component does not gate a live character.
 Handoff with pending Yang, real mixed World/network PostgreSQL traffic and P4
