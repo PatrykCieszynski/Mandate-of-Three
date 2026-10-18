@@ -1,5 +1,6 @@
-extends InstanceClient
-## Login and teardown keep the existing instance type; gameplay is native 3D.
+class_name WorldInstanceClient3D
+extends Node
+## The 3D world is a pure session container. Legacy InstanceClient RPC,
+## Player and Map2D behavior is intentionally not inherited.
 
-func _ready() -> void:
-	current = self
+var identity: Dictionary = {}
