@@ -3,9 +3,7 @@ extends ServerInstance
 ## Isolated 2D runtime compatibility implementation; never used by production
 ## instance provisioning. This owns all legacy Player/Map/synchronizer logic.
 
-signal player_entered_warper(player: Player, current_instance: ServerInstance, warper: Warper)
 const PLAYER: PackedScene = preload("res://source/common/gameplay/characters/player/player.tscn")
-var last_accessed_time: float
 var synchronizer_manager: StateSynchronizerManagerServer
 
 func _ready() -> void:
@@ -95,19 +93,6 @@ func load_map(map_path: String) -> void:
 func _on_player_entered_interaction_area(player: Player, interaction_area: InteractionArea) -> void:
 	if player.has_recently_teleported():
 		return
-	if interaction_area is Warper and interaction_area.target_instance:
-		var warper: Warper = interaction_area
-		# Wardstone gate (docs/wardstones.md): the ONE hard access rule — no level
-		# or party bypass. Levels stay advisory (client-side warn + hesitation
-		# window only). SILENT refusal: the client renders the sealed state + its
-		# own banner (other portal outcomes never touch chat — consistency); this
-		# is purely the authoritative backstop against modified clients.
-		if not warper.target_instance.can_join_instance(player):
-			return
-		if warper.warp_delay_s > 0.0:
-			_warp_after_dwell(player, warper)
-		else:
-			player_entered_warper.emit.call_deferred(player, self, warper)
 	if interaction_area is Teleporter:
 		var teleporter: Teleporter = interaction_area
 		# No target = an unconfigured teleporter, or the landing end of a ONE-WAY pair (leave the
@@ -122,23 +107,6 @@ func _on_player_entered_interaction_area(player: Player, interaction_area: Inter
 		# (it overwrites with its own input next frame). Push the explicit player.teleport that
 		# teleport_peer_to / recall use so the client actually snaps to the destination.
 		WorldServer.curr.data_push.rpc_id(player.name.to_int(), &"player.teleport", {"position": dest})
-
-
-## Portal-style delayed warp: fire only if the player is still inside the warper once
-## its dwell elapses — stepping out cancels, mirroring the client-side fade cancel.
-## An under-leveled player gets the hesitation window on top (the client holds its
-## fade for the same span, so both ends stay in sync — see Warper.GATE_WARN_EXTRA_S).
-## Runs outside the physics callback (post-await), so the emit needs no defer.
-func _warp_after_dwell(player: Player, warper: Warper) -> void:
-	# Mirror the client's phases exactly: [hesitation if warned] + spin-up + fade.
-	var total_s: float = Warper.SPIN_UP_S + warper.warp_delay_s \
-		+ warper.warn_extra_for(player.player_resource.level)
-	await get_tree().create_timer(total_s).timeout
-	if not is_instance_valid(self) or not is_instance_valid(player) or not is_instance_valid(warper):
-		return
-	if not warper.overlaps_body(player) or player.has_recently_teleported():
-		return
-	player_entered_warper.emit(player, self, warper)
 
 
 @rpc("any_peer", "call_remote", "reliable", 0)
