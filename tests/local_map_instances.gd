@@ -85,7 +85,7 @@ func _ready() -> void:
 			check(catalogue.get("ok",false),"authenticated public catalogue")
 			check(catalogue.channels.size()==2 and catalogue.channels.all(func(row: Dictionary)->bool:return row.keys().size()==4 and row.channel_id in [1,2]),"public catalogue excludes reserved IDs, sessions and host metadata")
 			client_manager.select_initial_channel(number))
-		client_manager.instance_changed.connect(func(instance: InstanceClient)->void:
+		client_manager.instance_changed.connect(func(instance: WorldInstanceClient3D)->void:
 			if recovery_items!=null:
 				recovery_session.close("teardown")
 				recovery_items.dispose()
