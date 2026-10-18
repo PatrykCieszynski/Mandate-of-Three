@@ -10,6 +10,8 @@ or Classic deployment is implemented or authorized by that document.
 
 **Deferred performance:** [World Server optimization plan W0–W7](world-server-optimization.md) — post-Economy/post-SoC packages for player movement, terrain/combat parity, AOI and real-client capacity. Proposal only; no runtime changes authorized.
 
+**Deferred technical candidates:** [World extension/infrastructure backlog](world-technical-candidates.md) — plugin contracts, optional Redis for multi-World, AOI comparison after physics, and packet codec generation later. The physics plan remains W0–W7.
+
 **Planned persistence implementation:** [PostgreSQL migration and concurrent Economy P1–P4](postgresql-migration.md) — adapter/schema parity, safe row-level concurrent transactions, nonblocking World integration and real PostgreSQL load/recovery/cutover tests. Schedule after local MapInstance/CH and current SoC hardening, **before** two World Processes share a realm economy; not a prerequisite for local CH and not implemented yet.
 
 **Gameplay / visuals:** [Project direction](../decisions/project-direction.md), [first region](../world/first-region-graybox.md), [Visual V4 Terrain3D](../world/visuals/visual-upgrade-v4-terrain3d.md), [Warrior feel](../gameplay/combat/warrior-action-polish.md).
