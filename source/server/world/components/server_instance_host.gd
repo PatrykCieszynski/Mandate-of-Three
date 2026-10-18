@@ -3,6 +3,15 @@ extends SubViewport
 ## Transport-neutral world instance: peer membership, admission and lifecycle.
 ## No legacy Player/Map/StateSynchronizer or 2D gameplay dependencies.
 
+## Shared RPC/session services, never 2D gameplay nodes.
+static var world_server
+static var global_chat_commands: Dictionary = {}
+static var global_role_definitions: Dictionary = preload("res://source/server/world/data/server_roles.tres").get_roles()
+
+var local_chat_commands: Dictionary = {}
+var local_role_definitions: Dictionary = {}
+var local_role_assignments: Dictionary = {}
+
 enum AdmissionState { ACCEPTING = 0, DRAINING = 1 }
 enum AccessPolicy { PUBLIC = 0, RESERVED = 1 }
 
