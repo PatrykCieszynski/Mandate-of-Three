@@ -88,6 +88,11 @@ jobs:
         shell: pwsh
         run: |
           & ./tests/run-smoke.ps1
+      - name: 3D host multiplayer regression
+        shell: pwsh
+        run: |
+          & ./tests/run-spike3d.ps1
+          & ./tests/run-pve.ps1
       - name: Python staging tests
         if: github.event_name == 'workflow_dispatch' && inputs.extended
         shell: pwsh
