@@ -168,6 +168,15 @@ watermarks, account-scoped cross-alt replay, exhaustion and no COMMIT retry.
 Queued editors force current custody, Shop/offer revision and both grids' capacity
 decisions. No schema/protocol/runtime change; claims and broader P2/P3/P4 remain open.
 
+**P2k progress:** [Account claim receiving retry](../development/postgres-transaction-retry.md#p2k--account-claim-receiving)
+uses bounded full attempts for claim-to-Inventory receiving, preserving the
+original receiver/ID and account discovery. Native faults cover item/custody/
+receipt rollback, explicit/automatic capacity, replay/reconnect, exhaustion and
+no COMMIT retry. Independent queued editors force current claim ownership and
+destination footprint checks. Listed receipted-domain retry adoption is covered;
+this does not close broader P2 acceptance, P3 execution/fencing or P4 cutover.
+No schema, public contract or production backend change.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
