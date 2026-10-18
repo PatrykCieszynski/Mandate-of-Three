@@ -176,6 +176,12 @@ completion while another account's purchase remains blocked. The full opt-in
 [P2 backend acceptance matrix](postgres-concurrency-acceptance.md) maps these and
 the domain fixtures to the migration gate; it is not added to default CI.
 
+`--suite inventory-executor` verifies the opt-in P3a full-transaction worker
+boundary: blocked native SQL versus SceneTree progress, independent completion,
+bounded buffered/unconsumed work, replay/discovery, COMMIT unknown/reopen,
+timeout recovery and clean drain/restart. It is not World/session fencing or a
+production PostgreSQL switch. See [Inventory execution](postgres-inventory-executor.md).
+
 `--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
 partial fills, cancel/refund, snapshots, original receipts and conservation. Native
 independent sessions cover two takers, cancel/fill, duplicate commands and shared

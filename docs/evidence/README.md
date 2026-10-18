@@ -6,6 +6,7 @@ Measured evidence must state **branch/commit**, platform, test command, runtime 
 
 - [Testing policy and reproduction](../development/testing.md)
 - [PostgreSQL P2 backend acceptance](postgres-p2l/README.md) — disposable native correctness runs, distinct from P3/P4 runtime adoption.
+- [PostgreSQL P3a Inventory execution](postgres-p3a/README.md) — local worker ownership, backpressure and lifecycle, without a live backend switch.
 - [CI / platform checks](../development/ci.md)
 - [Historical native validation](../history/README.md) (dated results, not current acceptance)
 - [Terrain3D adoption and verification](../world/visuals/visual-upgrade-v4-terrain3d.md)
