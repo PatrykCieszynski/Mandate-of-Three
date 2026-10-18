@@ -1,6 +1,10 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 concurrency hardening in progress (2026-10-18). P3–P4 **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for the current operations (2026-10-18), subject to this package's review/merge. P3–P4 **not implemented**; production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+
+The progress entries below record each package's scope and deferrals at delivery
+time. The latest acceptance matrix and remaining gates are collected in
+[P2 backend concurrency acceptance](../development/postgres-concurrency-acceptance.md).
 
 **P1 progress:** [P1a readiness](../development/postgres-readiness.md) adds a
 disposable Godot/SOCI PostgreSQL probe and a sanitized SQLite schema/source audit.
@@ -176,6 +180,15 @@ no COMMIT retry. Independent queued editors force current claim ownership and
 destination footprint checks. Listed receipted-domain retry adoption is covered;
 this does not close broader P2 acceptance, P3 execution/fencing or P4 cutover.
 No schema, public contract or production backend change.
+
+**P2l progress:** [Backend concurrency acceptance](../development/postgres-concurrency-acceptance.md)
+maps the current domain/race/retry fixtures to P2 guarantees. The shared-wallet
+fixture now covers Shop purchase versus Exchange reservation/immediate matching,
+Yang/material conservation, simultaneous sale/partial collection and unrelated
+Shop/Exchange progress while a different account transaction is blocked. The
+full native matrix and default smoke are recorded in the evidence report. This
+closes backend correctness acceptance for current operations, not runtime
+execution, pending-income/session fencing, load/soak or production cutover.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

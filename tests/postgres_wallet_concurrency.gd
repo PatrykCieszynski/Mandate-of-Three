@@ -7,6 +7,7 @@ const Npc = preload("res://source/server/world/database/postgres/npc_shop_store_
 const Upgrade = preload("res://source/server/world/database/postgres/upgrade_store_postgres.gd")
 const Orders = preload("res://source/server/world/database/postgres/exchange_orders_postgres.gd")
 const Settlement = preload("res://source/server/world/database/postgres/shop_settlement_postgres.gd")
+const Seller = preload("res://source/server/world/database/postgres/shop_seller_postgres.gd")
 const MAX_YANG: int=9000000000000000
 var pg: Object
 var connection: String
@@ -70,6 +71,8 @@ func _ready() -> void:
 	await receipt_namespace()
 	await checkpoint_matching()
 	await checkpoint_recovery()
+	await shop_exchange_conflicts()
+	await independent_progress()
 	pg.close()
 	print("POSTGRES_WALLET_CONCURRENCY_OK cross-operation funds/reservations, partial collection, account receipts, checkpoint lock order and explicit timeout recovery")
 	get_tree().quit()
@@ -181,6 +184,102 @@ func checkpoint_recovery() -> void:
 	assert(npc.purchase(1060,0,shop(),&"ore",-1,"timeout-npc")==original and not npc.committed)
 	assert(balance(106).balance==900 and inventory(1060).size()==1)
 
+func listing(account: int, command: String) -> Dictionary:
+	var item_uid:=seed_item(account*10,&"iron_sword",0)
+	var result: Dictionary=Seller.new(pg).list_item(account*10,command,item_uid,0,0,100)
+	assert(result.ok)
+	result.uid=item_uid
+	return result
+
+func shop_exchange_conflicts() -> void:
+	# Both a resting reservation and immediate maker settlement must compete with
+	# a Shop spend on the same account, even when issued by different alts.
+	for fill: bool in [false,true]:
+		var buyer: int=110 if not fill else 113
+		var seller: int=buyer+1
+		var maker: int=buyer+2
+		identity(buyer,100)
+		identity(seller,0)
+		identity(maker,0)
+		var offered:=listing(seller,"mixed-list-"+str(buyer))
+		var order:=request("buy","mixed-order-"+str(buyer))
+		order.want_asset="beast_hide" if fill else "bandit_token"
+		var resting: Dictionary={}
+		if fill:
+			sql("INSERT INTO economy.exchange_assets VALUES(:account,'beast_hide',1,0);",{"account":maker})
+			var sell:=request("sell","mixed-maker")
+			sell.have_asset="beast_hide"
+			resting=Orders.new(pg).place_order(maker*10,sell,{})
+			assert(resting.ok)
+		var results:=await race([["buy",buyer*10,["mixed-buy-"+str(buyer),offered]],["order",buyer*10+1,order]],buyer,"shop-exchange-"+str(buyer))
+		assert(int(results[0].ok)+int(results[1].ok)==1)
+		assert(int(results[0].committed)+int(results[1].committed)==1)
+		assert((results[0] if not results[0].ok else results[1]).error=="funds")
+		var wallet:=balance(buyer)
+		assert(wallet.balance-wallet.reserved_yang==0)
+		assert(balance(buyer).balance+balance(seller).balance+balance(maker).balance+int(Settlement.new(pg).revenue(seller).amount)==100,"wallets plus offline proceeds conserve Yang across Shop and Exchange")
+		assert(inventory(buyer*10).size()==int(results[0].ok))
+		assert(pg.query("SELECT uid FROM economy.item_custody WHERE uid=:uid;",{"uid":offered.uid}).rows.size()==1)
+		var material: Dictionary=pg.query("SELECT free,reserved FROM economy.exchange_assets WHERE account_id=:account AND asset_id='beast_hide';",{"account":buyer})
+		if fill:
+			assert(pg.query("SELECT SUM(free+reserved) AS amount FROM economy.exchange_assets WHERE account_id IN (:buyer,:maker) AND asset_id='beast_hide';",{"buyer":buyer,"maker":maker}).rows[0].amount==1)
+			assert(pg.query("SELECT fill_id FROM economy.exchange_fills WHERE maker_id=:id;",{"id":resting.order_id}).rows.size()==int(results[1].ok))
+		if fill and results[1].ok:
+			assert(wallet.balance==0 and wallet.reserved_yang==0 and material.rows.size()==1 and int(material.rows[0].free)==1)
+		elif results[1].ok:
+			assert(wallet.balance==100 and wallet.reserved_yang==100)
+			assert(Orders.new(pg).cancel_order(buyer*10+1,"mixed-cancel",results[1].order_id,0,{}).ok)
+		if fill and results[0].ok: assert(Orders.new(pg).cancel_order(maker*10,"mixed-clear-maker",resting.order_id,0,{}).ok)
+	# A sale and partial collection must not overwrite newly credited revenue.
+	identity(116,MAX_YANG-50)
+	identity(117,100)
+	sql("INSERT INTO economy.account_shop_revenue VALUES(116,100);")
+	var offered:=listing(116,"sale-collect-list")
+	var results:=await race([["buy",1170,["sale-during-collect",offered]],["collect",1161,"collect-during-sale"]],116,"sale-collect")
+	assert(results[0].ok and results[1].ok and results[1].claimed==50)
+	assert(balance(116).balance==MAX_YANG and balance(117).balance==0 and int(Settlement.new(pg).revenue(116).amount)==150)
+	print("POSTGRES_MIXED_SETTLEMENT_OK Shop versus Exchange reserve/fill funds, Yang/UID conservation and concurrent offline proceeds collection")
+
+func independent_progress() -> void:
+	for account: int in range(130,136): identity(account,1000)
+	var held:=listing(131,"held-list")
+	var other:=listing(133,"independent-list")
+	sql("INSERT INTO economy.exchange_assets VALUES(134,'beast_hide',1,0);")
+	var sell:=request("sell","independent-maker")
+	sell.have_asset="beast_hide"
+	assert(Orders.new(pg).place_order(1340,sell,{}).ok)
+	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=130 FOR NO KEY UPDATE;").rows.size()==1)
+	var ready:=Semaphore.new()
+	var blocked:=Thread.new()
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	assert(blocked.start(worker.bind(connection+" application_name=independence-held"+budgets,["buy",1300,["held-buy",held]],ready))==OK)
+	ready.wait()
+	var waiting: int=await wait_locked(["independence-held"])
+	var shop_worker:=Thread.new()
+	var exchange_worker:=Thread.new()
+	var buy:=request("buy","independent-taker")
+	buy.want_asset="beast_hide"
+	assert(shop_worker.start(worker.bind(connection+" application_name=independence-shop"+budgets,["buy",1320,["independent-buy",other]],ready))==OK)
+	assert(exchange_worker.start(worker.bind(connection+" application_name=independence-exchange"+budgets,["order",1350,buy],ready))==OK)
+	ready.wait()
+	ready.wait()
+	var deadline: int=Time.get_ticks_msec()+3000
+	while (shop_worker.is_alive() or exchange_worker.is_alive()) and Time.get_ticks_msec()<deadline:
+		# Keep the fixture's open blocker alive; this is a completion barrier,
+		# not a latency assertion or a benchmark of application throughput.
+		sql("SELECT 1;")
+		await get_tree().create_timer(0.005).timeout
+	var independent: bool=not shop_worker.is_alive() and not exchange_worker.is_alive() and blocked.is_alive()
+	assert(pg.commit())
+	var bought: Dictionary=shop_worker.wait_to_finish()
+	var matched: Dictionary=exchange_worker.wait_to_finish()
+	var released: Dictionary=blocked.wait_to_finish()
+	assert(waiting==1 and independent and bought.ok and matched.ok and released.ok,"unrelated Shop and Exchange must commit while a different account transaction is blocked")
+	assert(inventory(1320).size()==1 and balance(132).balance==900 and int(Settlement.new(pg).revenue(133).amount)==100)
+	assert(balance(134).balance==1100 and balance(135).balance==900 and balance(135).reserved_yang==0)
+	assert(pg.query("SELECT free FROM economy.exchange_assets WHERE account_id=135 AND asset_id='beast_hide';").rows[0].free==1)
+	print("POSTGRES_INDEPENDENT_PROGRESS_OK blocked account does not serialize unrelated Shop purchase or Exchange matching")
+
 func race(specs: Array, account: int, label: String) -> Array:
 	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=:account FOR NO KEY UPDATE;",{"account":account}).rows.size()==1)
 	var ready:=Semaphore.new()
@@ -228,6 +327,9 @@ func worker(dsn: String, spec: Array, ready: Semaphore) -> Dictionary:
 		"collect":
 			store=Settlement.new(database)
 			result=store.claim_revenue(spec[1],spec[2],0)
+		"buy":
+			store=Settlement.new(database)
+			result=store.purchase(spec[1],spec[2][0],spec[2][1].shop_id,spec[2][1].offer_id,0,100,{})
 		"checkpoint": result=Wallet.new(database).checkpoint(spec[2])
 	result.committed=false if store==null else store.committed
 	database.close()

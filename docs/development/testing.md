@@ -170,6 +170,12 @@ overlap at real database lock barriers; the checkpoint/matching regression also
 fails against the pre-fix store. This is not a load or PostgreSQL World test.
 See [shared wallet concurrency](postgres-wallet-concurrency.md).
 
+The same fixture also covers Player Shop purchase versus Exchange reservation/
+immediate fill, concurrent sale/partial collection, and independent Shop/Exchange
+completion while another account's purchase remains blocked. The full opt-in
+[P2 backend acceptance matrix](postgres-concurrency-acceptance.md) maps these and
+the domain fixtures to the migration gate; it is not added to default CI.
+
 `--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
 partial fills, cancel/refund, snapshots, original receipts and conservation. Native
 independent sessions cover two takers, cancel/fill, duplicate commands and shared
