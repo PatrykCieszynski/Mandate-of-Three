@@ -4,7 +4,7 @@ var services := MandateWorldServices.new()
 var mob_system := MobSystem.new()
 var ground_loot := GroundLootSystem.new()
 var kill_rewards := KillRewardResolver.new()
-## Shared RPC endpoint under the authenticated TinyMMO instance path.
+## Shared RPC endpoint under the authenticated world instance path.
 ## Position never comes from a client: only a bounded movement intention does.
 
 const INPUT_INTERVAL: float = 1.0 / 20.0
