@@ -2,6 +2,7 @@ extends RefCounted
 ## PostgreSQL command/receipt ownership, by composition. One native session owns
 ## read/validate/mutation/receipt/COMMIT; no arbitrary async statement dispatch.
 const Codec = preload("res://source/server/world/database/economy_receipt_codec.gd")
+const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
 var db: Object
 var account_id: int
 var character_id: int
@@ -18,6 +19,7 @@ var _command: String
 var _kind: String
 var _request: String
 var _resuming_inventory:=false
+var _inventory_context: Dictionary={}
 
 func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -> void:
 	db=database
@@ -91,6 +93,11 @@ func admit_in_transaction(owner: int, command: String, kind: String, args: Array
 	_command=command
 	_kind=kind
 	_request=JSON.stringify(args)
+	if kind=="inventory" and not _resuming_inventory:
+		var session_error:=Sessions.check_in_transaction(db,account_id,owner,_inventory_context)
+		if not session_error.is_empty():
+			cached=rollback(session_error)
+			return false
 	result=db.query("SELECT kind,request_json,result_json FROM economy.market_commands WHERE account_id=:account AND command_id=:command;",{"account":account_id,"command":_command})
 	if not result.ok:
 		cached=rollback("storage")
@@ -122,6 +129,12 @@ func begin_inventory_intent(owner: int, command: String, args: Array) -> bool:
 	_resuming_inventory=true
 	var admitted:=begin(owner,command,"inventory",args,true)
 	_resuming_inventory=false
+	return admitted
+
+func begin_inventory_session(owner: int, command: String, args: Array, context: Dictionary) -> bool:
+	_inventory_context=context.duplicate(true)
+	var admitted:=begin(owner,command,"inventory",args,true)
+	_inventory_context={}
 	return admitted
 
 func _reserved_inventory_id() -> String:

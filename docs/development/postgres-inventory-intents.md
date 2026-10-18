@@ -6,6 +6,10 @@ original-ID resume/outcome and bounded discovery. It does not yet bind an active
 World/session epoch or reconcile runtime equipment; these remain prerequisites
 for live integration.
 
+The follow-up [P3c session fence](postgres-inventory-sessions.md) adds an opt-in
+delegated backend grant and recovery barrier; its trusted issuer bridge and
+actual World reconciliation remain unimplemented.
+
 ## Durable boundary
 
 `inventory_intent_schema_postgres.gd` explicitly installs schema feature

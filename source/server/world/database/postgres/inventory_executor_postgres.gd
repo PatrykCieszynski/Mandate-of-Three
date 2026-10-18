@@ -5,6 +5,7 @@ extends RefCounted
 const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
 const Intents = preload("res://source/server/world/database/postgres/inventory_intent_postgres.gd")
+const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
 enum State { STOPPED = 0, STARTING = 1, RUNNING = 2, DRAINING = 3 }
 const MAX_WORKERS: int=4
 const MAX_CAPACITY_PER_WORKER: int=16
@@ -80,8 +81,16 @@ class SessionWorker extends RefCounted:
 			var replay:=false
 			if database.is_open() or _open(database):
 				var intent: String=str(job.get("intent",""))
-				var store: RefCounted=Items.new(database) if intent.is_empty() else Intents.new(database)
-				if intent=="admit": result=store.admit(job.character,job.operation_id,job.action,job.uid,job.revision,job.position)
+				var store: RefCounted=Items.new(database) if intent.is_empty() else (Sessions.new(database) if intent in ["session_install","session_revoke","session_ready"] else Intents.new(database))
+				if intent=="session_install": result=store.install_verified_grant(job.identity,job.expected_epoch)
+				elif intent=="session_revoke": result=store.revoke(job.session)
+				elif intent=="session_ready": result=store.finish_recovery(job.session,job.marker)
+				elif intent=="session_admit": result=store.admit_session(job.session,job.operation_id,job.action,job.uid,job.revision,job.position)
+				elif intent=="session_resume": result=store.resume_session(job.session,job.operation_id)
+				elif intent=="session_outcome": result=store.outcome_session(job.session,job.operation_id)
+				elif intent=="session_discover": result=store.discover_session(job.session,job.after,job.limit)
+				elif intent=="session_snapshot": result=store.snapshot_session(job.session)
+				elif intent=="admit": result=store.admit(job.character,job.operation_id,job.action,job.uid,job.revision,job.position)
 				elif intent=="resume": result=store.execute(job.character,job.operation_id)
 				elif intent=="outcome": result=store.outcome(job.character,job.operation_id)
 				elif intent=="discover": result=store.discover(job.character,job.after,job.limit)
@@ -97,7 +106,7 @@ class SessionWorker extends RefCounted:
 					result={"ok":false,"error":"storage"} if job.lookup else {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
 					committed=false
 					replay=false
-			_publish({"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"result":result,"committed":committed,"receipt_replay":replay})
+			_publish({"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"session":job.get("session",{}),"result":result,"committed":committed,"receipt_replay":replay})
 		database.close()
 		_connection=""
 
@@ -149,8 +158,46 @@ func submit_inventory_discovery(character: int, after: int = 0, limit: int = 50)
 	if after<0 or limit<1 or limit>Intents.MAX_PAGE: return {"queued":false,"error":"request"}
 	return _submit({"character":character,"operation_id":"","lookup":true,"intent":"discover","after":after,"limit":limit})
 
+## Privileged issuer input only; never a client/World-provided login assertion.
+func submit_verified_inventory_grant(identity: Dictionary, expected_epoch: int) -> Dictionary:
+	if not Sessions.valid_identity(identity) or expected_epoch<0: return {"queued":false,"error":"request"}
+	var safe: Dictionary={"account_id":identity.account_id,"character":identity.character,"session_fingerprint":identity.session_fingerprint}
+	return _submit({"character":safe.character,"operation_id":"","lookup":true,"intent":"session_install","control":true,"identity":safe,"expected_epoch":expected_epoch})
+
+func submit_inventory_revoke(context: Dictionary) -> Dictionary:
+	return _session_job(context,"session_revoke","",{})
+
+func submit_inventory_recovery_ready(context: Dictionary, item_state: Dictionary) -> Dictionary:
+	if not item_state.get("revision") is int or not item_state.get("authority_id") is String or not item_state.get("account_id") is int or not item_state.get("character_id") is int: return {"queued":false,"error":"request"}
+	var marker: Dictionary={"revision":item_state.revision,"authority_id":item_state.authority_id,"account_id":item_state.account_id,"character_id":item_state.character_id}
+	return _session_job(context,"session_ready","",{"marker":marker})
+
+func submit_session_inventory(context: Dictionary, operation_id: String, action: String, uid: String, revision: int, position: int) -> Dictionary:
+	if not Items.valid_inventory_request(action,uid,revision,position): return {"queued":false,"error":"request"}
+	return _session_job(context,"session_admit",operation_id,{"action":action,"uid":uid,"revision":revision,"position":position})
+
+func submit_session_resume(context: Dictionary, operation_id: String) -> Dictionary:
+	return _session_job(context,"session_resume",operation_id,{})
+
+func submit_session_outcome(context: Dictionary, operation_id: String) -> Dictionary:
+	return _session_job(context,"session_outcome",operation_id,{})
+
+func submit_session_discovery(context: Dictionary, after: int = 0, limit: int = 50) -> Dictionary:
+	if after<0 or limit<1 or limit>Intents.MAX_PAGE: return {"queued":false,"error":"request"}
+	return _session_job(context,"session_discover","",{"after":after,"limit":limit})
+
+func submit_session_snapshot(context: Dictionary) -> Dictionary:
+	return _session_job(context,"session_snapshot","",{})
+
+func _session_job(context: Dictionary, mode: String, operation_id: String, fields: Dictionary) -> Dictionary:
+	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return {"queued":false,"error":"request"}
+	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
+	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_snapshot"]}
+	job.merge(fields)
+	return _submit(job)
+
 func _submit(job: Dictionary) -> Dictionary:
-	if int(job.character)<=0 or (job.get("intent","")!="discover" and not Commands.valid_id(str(job.operation_id))): return {"queued":false,"error":"request"}
+	if int(job.character)<=0 or (not job.get("control",false) and job.get("intent","")!="discover" and not Commands.valid_id(str(job.operation_id))): return {"queued":false,"error":"request"}
 	if state!=State.RUNNING: return {"queued":false,"error":"unavailable"}
 	var selected: int=-1
 	for index: int in _slots.size():
@@ -158,7 +205,7 @@ func _submit(job: Dictionary) -> Dictionary:
 	if selected<0: return {"queued":false,"error":"busy"}
 	_next_ticket+=1
 	job.ticket=_next_ticket
-	_pending[_next_ticket]={"slot":selected,"ticket":_next_ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent","")}
+	_pending[_next_ticket]={"slot":selected,"ticket":_next_ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"session":job.get("session",{})}
 	_slots[selected].load+=1
 	_slots[selected].owner.enqueue(job)
 	# Volatile local transfer ONLY; never publish this as C2 durable admission.
