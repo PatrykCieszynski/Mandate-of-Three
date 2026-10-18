@@ -373,7 +373,7 @@ func maintain_instances() -> void:
 			continue
 		if instance.idle_since_ms < 0:
 			instance.idle_since_ms = now
-		var resource := instance.instance_resource
+		var resource: InstanceResource = instance.instance_resource
 		var draining := instance.admission_state == ServerInstance.AdmissionState.DRAINING
 		if not draining:
 			if resource.load_at_startup and instance.access_policy == ServerInstance.AccessPolicy.PUBLIC and not instance.is_overflow_copy:
