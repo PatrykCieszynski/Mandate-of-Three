@@ -6,11 +6,13 @@ extends DataRequestHandler
 ## you reach from the DungeonExit station at the entrance.
 
 
-func data_request_handler(peer_id: int, instance: ServerInstance, _args: Dictionary) -> Dictionary:
+func data_request_handler(peer_id: int, instance: ServerInstanceHost, _args: Dictionary) -> Dictionary:
+	if not instance is ServerInstance:
+		return {"ok": false, "error": ERR_UNAVAILABLE}
 	if WorldServer.curr == null:
 		return {"ok": false, "reason": "no_server"}
 	# Leave the run topped up (HP + mana), like the auto-eject on clear/fail — saves potions.
-	var player: Player = instance.get_player(peer_id) as Player
+	var player: Player = (instance as ServerInstance).get_player(peer_id) as Player
 	if player != null:
 		player.restore_full()
 	WorldServer.curr.instance_manager.recall_player(peer_id)
