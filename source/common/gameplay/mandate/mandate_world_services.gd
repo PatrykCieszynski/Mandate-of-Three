@@ -28,6 +28,13 @@ func inventory_runtime() -> RefCounted:
 func wallet_runtime() -> RefCounted:
 	return null if _server()==null else _server().wallet_runtime
 
+func npc_runtime() -> RefCounted:
+	return null if _server()==null else _server().npc_runtime
+
+func npc_interactions_allowed(peer: int) -> bool:
+	if transfer_pending(peer): return false
+	return mutations_allowed(peer) if npc_runtime()==null else inventory_runtime()!=null and inventory_runtime().mutations_allowed(peer)
+
 func currency_allowed(peer_id: int) -> bool:
 	if transfer_pending(peer_id): return false
 	return mutations_allowed(peer_id) if wallet_runtime()==null else wallet_runtime().ready(peer_id)

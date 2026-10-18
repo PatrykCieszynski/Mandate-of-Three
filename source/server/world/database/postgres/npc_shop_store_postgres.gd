@@ -8,6 +8,13 @@ var db: Object
 var _transaction: RefCounted
 var committed: bool:
 	get: return _transaction.committed
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+var income_token: String=""
+
+func authorize_session(context: Dictionary, token: String) -> void:
+	_transaction.npc_context=context.duplicate(true)
+	income_token=token
 
 func _init(database: Object) -> void:
 	db=database
@@ -39,7 +46,9 @@ func _purchase_once(owner_id: int, pending_yang: int, shop: ShopDefinition, offe
 	item.amount=offer.quantity
 	var inserted:=items.receive_item_in_transaction(item,int(receiving.position))
 	if not inserted.ok: return _transaction.rollback(str(inserted.error))
-	return _transaction.commit({"ok":true,"balance":spent.balance,"wallet_states":[spent.wallet_state],"uid":inserted.uid,"position":inserted.position})
+	var result: Dictionary={"ok":true,"balance":spent.balance,"wallet_states":[spent.wallet_state],"uid":inserted.uid,"position":inserted.position}
+	if not income_token.is_empty(): result.income_token=income_token
+	return _transaction.commit(result)
 
 func purchase_receipt(owner_id: int, operation_id: String) -> Dictionary:
 	if not Commands.valid_id(operation_id): return {"ok":false,"error":"request"}

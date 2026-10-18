@@ -9,10 +9,16 @@ var _open: Dictionary[int, Dictionary] = {}
 var _published: Dictionary[int, Dictionary] = {}
 var _last_buy: Dictionary[int, int] = {}
 var _last_receipt: Dictionary[int, int] = {}
+var _postgres: RefCounted
 
 func _ready() -> void:
 	_world = get_parent()
 	_world.npc_endpoint.context_changed.connect(_context_changed)
+	if GameMode.is_world_server() and services.npc_runtime()!=null:
+		_postgres=preload("res://source/common/gameplay/world3d/endpoints/npc_postgres_adapter.gd").new(self,services.npc_runtime(),"buy")
+
+func _exit_tree() -> void:
+	if _postgres!=null: _postgres.dispose()
 
 func _authorization(peer_id: int, instance_id: String, service_id: StringName) -> Dictionary:
 	var result: Dictionary = _world.npc_endpoint.resolve_npc_service(peer_id, instance_id, service_id, NpcServiceDefinition.Kind.SHOP)
@@ -90,6 +96,20 @@ func request_shop(action: String, instance_id: String, service_id: String, offer
 	if not GameMode.is_world_server() or command_id.length() > 80 or instance_id.length() > 80 or service_id.length() > 64 or offer_id.length() > 64 or operation_id.length() > 96: return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id): return
+	if _postgres!=null and action in ["buy","receipt"]:
+		var now: int=Time.get_ticks_msec()
+		if _postgres.busy(peer_id) or now-_last_buy.get(peer_id,-1000)<100:
+			receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":"storage"})
+			return
+		_last_buy[peer_id]=now
+		if action=="receipt": _postgres.receipt(peer_id,command_id,operation_id)
+		else:
+			var auth:=_authorization(peer_id,instance_id,StringName(service_id))
+			if not auth.ok or services.transfer_pending(peer_id):
+				receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":auth.get("error","transfer_pending")})
+				return
+			_postgres.buy(peer_id,command_id,operation_id,auth.shop,StringName(offer_id),position)
+		return
 	var result: Dictionary
 	match action:
 		"open": result = open_for_peer(peer_id, instance_id, StringName(service_id))
@@ -101,6 +121,7 @@ func request_shop(action: String, instance_id: String, service_id: String, offer
 	receive_operation.rpc_id(peer_id, command_id, {"ok":true} if result.ok else {"ok":false, "error":result.error})
 
 func remove_peer(peer_id: int) -> void:
+	if _postgres!=null: _postgres.remove_peer(peer_id)
 	_open.erase(peer_id)
 	_published.erase(peer_id)
 	_last_buy.erase(peer_id)
