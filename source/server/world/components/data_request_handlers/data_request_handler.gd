@@ -3,7 +3,7 @@ class_name DataRequestHandler
 
 func data_request_handler(
 	peer_id: int,
-	instance: ServerInstance,
+	instance: ServerInstanceHost,
 	args: Dictionary
 ) -> Dictionary:
 	return {}
