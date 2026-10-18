@@ -1,8 +1,9 @@
-# PostgreSQL P2c–P2i — receipt-backed transaction retry
+# PostgreSQL P2c–P2j — receipt-backed transaction retry
 
 These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
 retry for **Shop purchase/revenue collection, Exchange order placement/cancellation,
-Exchange stack conversion, Upgrade, NPC purchases and receipted Inventory/Storage commands**. Production World remains
+Exchange stack conversion, Upgrade, NPC purchases and receipted Inventory/Storage/
+Shop seller commands**. Production World remains
 SQLite; no executor, connection pool, RPC, schema or backend selection is added.
 
 ## Policy and ownership
@@ -288,3 +289,42 @@ transfer. Only those diagnostic sessions extend their coordination timeouts.
 See [P2i evidence](../evidence/postgres-p2i/README.md). Shop seller/claim retry,
 starter/pickup and unreceipted checkpoints retain their existing policies.
 Production remains SQLite; broader P2 and P3/P4 are not completed by this slice.
+
+## P2j — Player Shop seller lifecycle
+
+`ShopSellerPostgres.list_item()`, `configure()`, `edit_offer()` and `cancel_offer()`
+use the existing bounded whole-command owner. Each attempt reacquires account-
+first admission and the original receipt, then rereads current item/custody,
+Shop/offer revision, Shop cells and receiving Inventory footprint as needed.
+Original character, command ID and scalar arguments stay fixed. Aborted Shop/
+offer creation and partial cell writes roll back with the entire transaction.
+
+Listing preserves UID/rolls in exclusive escrow. Offer Only and fixed-price edits
+keep their existing representation; a price-only edit changes offer revision
+without changing item revision/watermark. Withdrawal returns the same UID to the
+initiating character's Inventory, assigning owner and removing offer/cells
+atomically. Automatic receiving reselects current capacity. Configuration rechecks
+expected Shop revision before applying name/status.
+
+Existing **account-scoped** seller fingerprints/discovery are unchanged: another
+alt may replay the original result, including its original receiving character.
+Replay is not a new commit and cannot retarget the item. Definitive business
+rejections retain the bounded negative-cache policy; storage errors do not become
+permanent rejection receipts. COMMIT failure still closes and returns
+`outcome_unknown` for discovery, never automatic retry.
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin 'Y:/Software/PostgreSQL/bin' --suite shop-seller
+```
+
+The expanded fixture injects statement faults after earlier Shop cells were
+written and at configuration, withdrawal custody and receipt persistence. Full
+list/configure/edit/price-only/withdraw cycles check one offer/cell footprint,
+item/provenance/revisions, Offer Only, cross-alt replay, exhaustion and no COMMIT
+retry. Independently queued editors change custody, offer/Shop revision or Shop/
+Inventory occupancy before retry; current state is honored. Only these barrier
+sessions extend their own diagnostic coordination timeouts.
+
+See [P2j evidence](../evidence/postgres-p2j/README.md). Claims, starter/pickup and
+unreceipted checkpoints retain their policies. Production remains SQLite;
+broader P2, P3 execution/fencing and P4 remain separate gates.

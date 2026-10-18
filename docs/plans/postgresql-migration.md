@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 concurrency hardening in progress (2026-10-17). P3–P4 **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 concurrency hardening in progress (2026-10-18). P3–P4 **not implemented**. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 **P1 progress:** [P1a readiness](../development/postgres-readiness.md) adds a
 disposable Godot/SOCI PostgreSQL probe and a sanitized SQLite schema/source audit.
@@ -160,6 +160,13 @@ character replay/conflict, no-op flags, exhaustion and no COMMIT retry. Queued a
 change source ownership/revision or shared destination footprint before retry.
 In-transaction consumption helpers retain caller ownership, with no nested loop.
 No schema/protocol/runtime change; seller/claim retry and broader P2/P3/P4 remain open.
+
+**P2j progress:** [Player Shop seller retry](../development/postgres-transaction-retry.md#p2j--player-shop-seller-lifecycle)
+adds bounded full list/configure/edit/withdraw attempts using the same owner.
+Native faults cover partial cells, revisions/provenance, Offer Only, price-only
+watermarks, account-scoped cross-alt replay, exhaustion and no COMMIT retry.
+Queued editors force current custody, Shop/offer revision and both grids' capacity
+decisions. No schema/protocol/runtime change; claims and broader P2/P3/P4 remain open.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
