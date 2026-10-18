@@ -154,6 +154,12 @@ func add_yang(character_id: int, amount: int) -> bool:
 	return true
 
 func flush_wallet(character_id: int = -1) -> bool:
+	var runtime:=_postgres_wallet_runtime()
+	if runtime!=null:
+		if character_id<0:
+			runtime.checkpoint_all()
+			return runtime.drained()
+		return runtime.checkpoint(WorldServer.curr.player_id_to_peer_id.get(character_id,0))
 	if not wallet_ready: return dirty_wallet.is_empty()
 	var owner_id := wallet_account_id(character_id) if character_id >= 0 else -1
 	if character_id >= 0 and owner_id <= 0: return false
@@ -302,11 +308,17 @@ func _process(delta: float) -> void:
 	_wallet_elapsed += delta
 	if _wallet_elapsed >= WALLET_SAVE_SECONDS:
 		_wallet_elapsed = fmod(_wallet_elapsed, WALLET_SAVE_SECONDS)
-		if not flush_wallet(): push_error("Wallet checkpoint failed; pending income retained for retry.")
+		# The PG owner runs its own ordinary (non-quiescing) 30-second batching.
+		# Do not turn that into a forced save through this legacy timer as well.
+		if _postgres_wallet_runtime()==null and not flush_wallet(): push_error("Wallet checkpoint failed; pending income retained for retry.")
 	_progression_elapsed += delta
 	if _progression_elapsed < PROGRESSION_SAVE_SECONDS: return
 	_progression_elapsed = fmod(_progression_elapsed, PROGRESSION_SAVE_SECONDS)
 	if not flush_progression(): push_error("Progression checkpoint failed; dirty characters retained for retry.")
+
+func _postgres_wallet_runtime() -> RefCounted:
+	var world:=WorldServer.curr
+	return null if world==null or world.database!=self else world.wallet_runtime
 
 
 func start_database(world_info: Dictionary) -> void:

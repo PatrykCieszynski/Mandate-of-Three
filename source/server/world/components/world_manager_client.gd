@@ -133,6 +133,9 @@ func heartbeat(_snapshot: Dictionary) -> void:
 func master_save() -> void:
 	if world_server == null or database == null:
 		return
+	if not await world_server.flush_postgres_wallets():
+		push_error("Save refused: PostgreSQL wallet checkpoint unresolved.")
+		return
 	var saved: int = database.save_all_connected(world_server.connected_players)
 	var ok: bool = await database.coordinated_backup()
 	ServerLog.info("Dashboard 'save' triggered: %d player(s), backup %s." % [saved, "ok" if ok else "FAILED"])
@@ -144,6 +147,9 @@ func master_shutdown() -> void:
 	if world_server == null or database == null:
 		return
 	ServerLog.info("Dashboard 'shutdown' triggered — saving + quitting.")
+	if not await world_server.flush_postgres_wallets(true):
+		push_error("Graceful shutdown cancelled: PostgreSQL wallet checkpoint unresolved.")
+		return
 	if database.save_all_connected(world_server.connected_players) < 0:
 		push_error("Graceful shutdown cancelled: character checkpoint failed.")
 		return
@@ -176,6 +182,9 @@ func master_restart(seconds: int, message: String) -> void:
 		await get_tree().create_timer(remaining).timeout
 	# Insurance save in case the deploy's stop is delayed or never lands.
 	if database != null:
+		if not await world_server.flush_postgres_wallets(true):
+			push_error("Restart save refused: PostgreSQL wallet checkpoint unresolved.")
+			return
 		var saved: int = database.save_all_connected(world_server.connected_players)
 		var ok: bool=await database.coordinated_backup(10,false,true)
 		ServerLog.info("Restart countdown elapsed — final save (%d player(s)), reader drain/backup %s; awaiting stop." % [saved,"ok" if ok else "FAILED"])
@@ -338,7 +347,7 @@ func _on_connection_failed() -> void:
 
 
 func _on_server_disconnected() -> void:
-	if world_server!=null and world_server.inventory_runtime!=null:
+	if world_server!=null and (world_server.inventory_runtime!=null or world_server.wallet_runtime!=null):
 		# An isolated PG World must not retain gameplay ownership after losing its
 		# issuer. Default SQLite reconnect behavior remains unchanged.
 		world_server.invalidate_inventory_admissions()
