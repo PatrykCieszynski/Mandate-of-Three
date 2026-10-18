@@ -22,10 +22,10 @@ func gated(peer: int) -> bool:
 	var a: Dictionary = attempts.get(peer,{})
 	return a.get("phase","") in ["countdown","preparing","loading"] and manager._is_current_session(peer,a.session)
 
-func _world(host: ServerInstance) -> GameWorld3D:
+func _world(host: ServerInstanceHost) -> GameWorld3D:
 	return host.get_node_or_null("GameWorld") as GameWorld3D if is_instance_valid(host) else null
 
-func _eligibility(peer: int, source: ServerInstance, now: int) -> String:
+func _eligibility(peer: int, source: ServerInstanceHost, now: int) -> String:
 	var world := _world(source)
 	if world==null or not world.characters.has(peer): return "source"
 	var intent: Dictionary = world.intentions.get(peer,{})
@@ -49,14 +49,14 @@ func start(peer: int, channel: int, now: int = Time.get_ticks_msec()) -> Diction
 		previous={}
 	if gated(peer):
 		return {"ok":true} if previous.session==session and previous.channel==channel else {"ok":false,"error":"transfer_pending"}
-	var source: ServerInstance = manager.world_server.request_instance(peer)
-	if source==null or not source.instance_resource.use_3d or source.access_policy!=ServerInstance.AccessPolicy.PUBLIC:
+	var source: ServerInstanceHost = manager.world_server.request_instance(peer)
+	if source==null or not source.instance_resource.use_3d or source.access_policy!=ServerInstanceHost.AccessPolicy.PUBLIC:
 		return {"ok":false,"error":"source"}
 	var reason := _eligibility(peer,source,now)
 	if not reason.is_empty(): return {"ok":false,"error":reason}
-	var target: ServerInstance
-	for candidate: ServerInstance in manager._instances_for(source.instance_resource):
-		if candidate.get_parent()==manager and candidate.access_policy==ServerInstance.AccessPolicy.PUBLIC and int(candidate.identity.channel_id)==channel:
+	var target: ServerInstanceHost
+	for candidate: ServerInstanceHost in manager._instances_for(source.instance_resource):
+		if candidate.get_parent()==manager and candidate.access_policy==ServerInstanceHost.AccessPolicy.PUBLIC and int(candidate.identity.channel_id)==channel:
 			target=candidate
 			break
 	if target==source: return {"ok":false,"error":"same_channel"}
@@ -85,7 +85,7 @@ func interrupt(peer: int, reason: String) -> void:
 	if attempts.get(peer,{}).get("phase")=="countdown": _abort(peer,reason)
 
 func _release(peer: int, a: Dictionary) -> void:
-	var target: ServerInstance = a.target
+	var target: ServerInstanceHost = a.target
 	if is_instance_valid(target) and target.awaiting_peers.get(peer,{}).get("transfer_attempt")==a.id:
 		target.awaiting_peers.erase(peer)
 
@@ -100,11 +100,11 @@ func release_peer(peer: int) -> void:
 	if attempts.has(peer): _release(peer,attempts[peer])
 	attempts.erase(peer)
 
-func permits_join(peer: int, target: ServerInstance) -> bool:
+func permits_join(peer: int, target: ServerInstanceHost) -> bool:
 	var a: Dictionary = attempts.get(peer,{})
 	return a.get("phase")=="loading" and a.target==target and target.awaiting_peers.get(peer,{}).get("transfer_attempt")==a.id
 
-func hydrate(peer: int, target: ServerInstance) -> Dictionary:
+func hydrate(peer: int, target: ServerInstanceHost) -> Dictionary:
 	if not permits_join(peer,target): return {}
 	var a: Dictionary = attempts[peer]
 	if not manager._is_current_session(peer,a.session): return {}
@@ -122,8 +122,8 @@ func tick(now: int = Time.get_ticks_msec()) -> void:
 			release_peer(peer)
 			continue
 		if a.phase!="countdown": continue
-		var target: ServerInstance = a.target
-		if not is_instance_valid(target) or target.get_parent()!=manager or target.is_queued_for_deletion() or target.access_policy!=ServerInstance.AccessPolicy.PUBLIC or target.admission_state!=ServerInstance.AdmissionState.ACCEPTING or target.population()>target.instance_resource.max_players or not manager.has_valid_entry(target,peer,a.session):
+		var target: ServerInstanceHost = a.target
+		if not is_instance_valid(target) or target.get_parent()!=manager or target.is_queued_for_deletion() or target.access_policy!=ServerInstanceHost.AccessPolicy.PUBLIC or target.admission_state!=ServerInstanceHost.AdmissionState.ACCEPTING or target.population()>target.instance_resource.max_players or not manager.has_valid_entry(target,peer,a.session):
 			_abort(peer,"channel_unavailable")
 			continue
 		if manager.world_server.request_instance(peer)!=a.source:
