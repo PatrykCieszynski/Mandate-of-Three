@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution and P3b durable Inventory identity/recovery are opt-in; the P3 runtime integration/fencing gate and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
+**Status:** P1 domain ports delivered; P2 backend concurrency acceptance verified for current operations (2026-10-18). P3a execution, P3b durable Inventory recovery and P3c delegated session fencing are opt-in; the P3 issuer/World integration gate and P4 are **not completed**. Production remains SQLite. This plan adds a concrete delivery milestone for the accepted [Economy C1–C5](../architecture/economy/README.md) and [World Process topology](../architecture/world-instance-architecture.md); each implementation package still requires its own review, tests, and merge decision.
 
 The progress entries below record each package's scope and deferrals at delivery
 time. The latest acceptance matrix and remaining gates are collected in
@@ -208,6 +208,17 @@ actual producer-process termination, duplicate admission/resume, conflicts,
 finalization rollback/retry, COMMIT unknown and bounded/int64 recovery pages.
 Session/epoch authorization, World reconciliation, handoff and other domains
 remain later P3 work; no live PostgreSQL route is enabled.
+
+**P3c progress:** [Inventory session fence](../development/postgres-inventory-sessions.md)
+adds an optional delegated grant projection, account-locked CAS epochs/revocation,
+session checks before Inventory receipt/admission and an account-wide pending
+recovery plus fresh-snapshot readiness barrier. Previously admitted work may
+finish for its original character; results retain their captured context.
+Native lock-order tests cover takeover/revocation races, stale contexts, alt
+recovery, failed COMMIT without retry, reopen and int64 epochs. The privileged
+grant API does not authenticate a Master ticket: the actual trusted issuer
+bridge, World result filtering/reconciliation, handoff/pending Yang and other
+domains remain open. No live PostgreSQL route or full C5 completion is claimed.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

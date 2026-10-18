@@ -189,6 +189,14 @@ conflicts, atomic terminal success/rejection, storage/COMMIT failure containment
 pending bounds and paged/int64 discovery. All SQL uses the owned fixture cluster.
 See [Inventory identity/recovery](postgres-inventory-intents.md).
 
+`--suite inventory-sessions` verifies P3c's opt-in delegated Inventory grants:
+CAS epochs/revoke replay, queued admission versus takeover/revocation, stale
+contexts, account-wide recovery without retargeting the original character,
+fresh-snapshot readiness, failed COMMIT without automatic retry, reopen and
+native int64 epochs. It models already verified Master grants; it does not test
+an actual issuer bridge or enable live PostgreSQL sessions.
+See [Inventory session fence](postgres-inventory-sessions.md).
+
 `--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
 partial fills, cancel/refund, snapshots, original receipts and conservation. Native
 independent sessions cover two takers, cancel/fill, duplicate commands and shared

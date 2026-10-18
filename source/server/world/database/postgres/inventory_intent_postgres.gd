@@ -3,6 +3,7 @@ extends RefCounted
 ## authorization is not inferred from supplied character IDs.
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
 const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
+const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
 const MAX_PENDING_PER_ACCOUNT: int=8
 const MAX_PAGE: int=100
 var db: Object
@@ -12,18 +13,24 @@ var receipt_replay:=false
 func _init(database: Object) -> void: db=database
 
 func admit(character: int, operation_id: String, action: String, uid: String, revision: int, position: int) -> Dictionary:
+	return _admission(character,operation_id,action,uid,revision,position,{})
+
+func admit_session(context: Dictionary, operation_id: String, action: String, uid: String, revision: int, position: int) -> Dictionary:
+	return _admission(int(context.get("character",0)),operation_id,action,uid,revision,position,context.duplicate(true))
+
+func _admission(character: int, operation_id: String, action: String, uid: String, revision: int, position: int, context: Dictionary) -> Dictionary:
 	committed=false
 	receipt_replay=false
 	if not Items.valid_inventory_request(action,uid,revision,position): return {"ok":false,"error":"request"}
 	var transaction:=Commands.new(db)
-	return transaction.run_with_retry(_admit_once.bind(character,operation_id,action,uid,revision,position,transaction))
+	return transaction.run_with_retry(_admit_once.bind(character,operation_id,action,uid,revision,position,transaction,context))
 
-func _admit_once(character: int, operation_id: String, action: String, uid: String, revision: int, position: int, transaction: RefCounted) -> Dictionary:
+func _admit_once(character: int, operation_id: String, action: String, uid: String, revision: int, position: int, transaction: RefCounted, context: Dictionary) -> Dictionary:
 	var args: Array=[character,action,uid,revision,position]
-	if not transaction.begin(character,operation_id,"inventory",args,true):
+	if not transaction.begin_inventory_session(character,operation_id,args,context):
 		if transaction.cached.get("error","") in ["operation_pending"]: return outcome(character,operation_id)
 		if transaction.cached.get("ok",false): return {"ok":true,"state":"committed","operation_id":operation_id,"result":transaction.cached,"replayed":true}
-		if transaction.cached.get("error","") not in ["command_conflict","storage"]:
+		if transaction.cached.get("error","") not in ["command_conflict","storage","stale_session","session_required","recovery_required"]:
 			var prior:=outcome(character,operation_id)
 			if prior.get("state","")=="rejected": return prior
 		return transaction.cached
@@ -35,6 +42,52 @@ func _admit_once(character: int, operation_id: String, action: String, uid: Stri
 	var result: Dictionary=transaction.commit_inventory_admission()
 	if result.ok: result.operation_id=operation_id
 	return result
+
+## Session-scoped recovery may finish the account's earlier alt commands, but
+## always under their ORIGINAL issuing character, never retargeting the item.
+func resume_session(context: Dictionary, operation_id: String) -> Dictionary:
+	var loaded:=_session_load(context,operation_id)
+	if not loaded.ok: return loaded
+	return execute(int(loaded.row.character_id),operation_id)
+
+func outcome_session(context: Dictionary, operation_id: String) -> Dictionary:
+	var loaded:=_session_load(context,operation_id)
+	return _view(loaded.row) if loaded.ok else loaded
+
+func _session_load(context: Dictionary, operation_id: String) -> Dictionary:
+	if not Commands.valid_id(operation_id): return {"ok":false,"error":"request"}
+	var begun:=Sessions.new(db).begin_context(context)
+	if not begun.ok: return begun
+	var found: Dictionary=db.query("SELECT * FROM economy.inventory_intents WHERE account_id=:account AND operation_id=:command;",{"account":context.account_id,"command":operation_id})
+	if not found.ok: return _session_rollback("storage")
+	if found.rows.is_empty(): return _session_rollback("unknown_command")
+	return _session_commit({"ok":true,"row":found.rows[0]})
+
+func snapshot_session(context: Dictionary) -> Dictionary:
+	var begun:=Sessions.new(db).begin_context(context)
+	if not begun.ok: return begun
+	var snapshot:=Items.new(db).inventory(int(context.character))
+	if not snapshot.ok: return _session_rollback(str(snapshot.error))
+	return _session_commit(snapshot)
+
+func discover_session(context: Dictionary, after: int = 0, limit: int = 50) -> Dictionary:
+	if after<0 or limit<1 or limit>MAX_PAGE: return {"ok":false,"error":"request"}
+	var begun:=Sessions.new(db).begin_context(context)
+	if not begun.ok: return begun
+	var found: Dictionary=db.query("SELECT * FROM economy.inventory_intents WHERE account_id=:account AND sequence>:after ORDER BY sequence LIMIT :limit;",{"account":context.account_id,"after":after,"limit":limit+1},limit+1)
+	if not found.ok or found.truncated: return _session_rollback("storage")
+	var rows: Array=found.rows.slice(0,limit)
+	return _session_commit({"ok":true,"operations":rows.map(_view),"more":found.rows.size()>limit,"cursor":after if rows.is_empty() else int(rows.back().sequence)})
+
+func _session_commit(result: Dictionary) -> Dictionary:
+	if not db.commit():
+		db.close()
+		return {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
+	return result
+
+func _session_rollback(reason: String) -> Dictionary:
+	if not db.rollback(): db.close()
+	return {"ok":false,"error":reason}
 
 func execute(character: int, operation_id: String) -> Dictionary:
 	committed=false
