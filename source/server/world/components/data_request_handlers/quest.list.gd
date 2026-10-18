@@ -5,10 +5,14 @@ extends DataRequestHandler
 
 func data_request_handler(
 	peer_id: int,
-	instance: ServerInstance,
+	instance: ServerInstanceHost,
 	args: Dictionary
 ) -> Dictionary:
-	var player: Player = instance.players_by_peer_id.get(peer_id, null)
+	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
+	var legacy_map: Map = (instance as ServerInstance).instance_map if instance is ServerInstance else null
+	if legacy_map == null:
+		return {"ok": false, "error": ERR_UNAVAILABLE}
+	var player: Player = legacy_players.get(peer_id, null)
 	if not player:
 		return {}
 
@@ -32,7 +36,7 @@ func data_request_handler(
 		var visit_updates: Array = QuestService.on_visit(resource, giver_key, peer_id, instance)
 		if not visit_updates.is_empty():
 			WorldServer.curr.data_push.rpc_id(peer_id, &"quest.update", {"messages": visit_updates})
-		var giver: Object = instance.instance_map.get_quest_giver(giver_key)
+		var giver: Object = legacy_map.get_quest_giver(giver_key)
 		if giver:
 			giver_name = str(giver.get(&"giver_name"))
 			for quest: QuestResource in giver.get(&"quests"):
