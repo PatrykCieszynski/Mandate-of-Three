@@ -197,6 +197,15 @@ native int64 epochs. It models already verified Master grants; it does not test
 an actual issuer bridge or enable live PostgreSQL sessions.
 See [Inventory session fence](postgres-inventory-sessions.md).
 
+`--suite inventory-runtime` verifies P3d's World-thread Inventory owner with real
+PostgreSQL and the production World combat projection: recovery before readiness,
+equip/unequip and rejection repair, physics/independent progress during blocked
+SQL, takeover/disconnect stale delivery, fresh-marker repair and explicit same-ID
+recovery after admission or mutation COMMIT uncertainty. Its peer maps are seeded;
+the separate native World session fixture checks the ticket fingerprint helper.
+See [Inventory runtime](postgres-inventory-runtime.md). Neither fixture enables a
+live PostgreSQL backend or proves the complete three-process PG login path.
+
 `--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
 partial fills, cancel/refund, snapshots, original receipts and conservation. Native
 independent sessions cover two takers, cancel/fill, duplicate commands and shared
