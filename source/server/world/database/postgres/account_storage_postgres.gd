@@ -8,6 +8,9 @@ const SELECT = "SELECT i.*,'storage' AS location,c.position AS bag_position,'' A
 var db: Object
 var committed:=false
 var receipt_replay:=false
+var _session: Dictionary={}
+
+func authorize_session(context: Dictionary) -> void: _session=context.duplicate(true)
 
 func _init(database: Object) -> void:
 	db=database
@@ -32,6 +35,7 @@ func transfer_command(character: int, uid: String, revision: int, source: String
 	committed=false
 	receipt_replay=false
 	var transaction:=Commands.new(db)
+	transaction.economic_context=_session
 	var result: Dictionary=transaction.run_with_retry(_transfer_once.bind(character,uid,revision,source,destination,position,operation_id,transaction))
 	receipt_replay=transaction.receipt_replay
 	return result

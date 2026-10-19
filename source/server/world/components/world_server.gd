@@ -26,19 +26,23 @@ var _session_tokens: Dictionary[int, String] = {}
 var inventory_runtime: RefCounted
 var wallet_runtime: RefCounted
 var npc_runtime: RefCounted
+var storage_runtime: RefCounted
 
 func _process(_delta: float) -> void:
 	if inventory_runtime!=null: inventory_runtime.poll()
 	if wallet_runtime!=null: wallet_runtime.poll(_delta)
 	if npc_runtime!=null: npc_runtime.poll()
+	if storage_runtime!=null: storage_runtime.poll()
 
 ## Nonblocking checkpoint barrier. A failure/unknown result refuses a graceful
 ## handoff/shutdown; dirty income remains owned in RAM for recovery.
 func flush_postgres_wallets(shutdown: bool = false) -> bool:
-	if wallet_runtime==null: return npc_runtime==null
+	if wallet_runtime==null and npc_runtime!=null: return false
+	if shutdown and storage_runtime!=null: storage_runtime.begin_drain()
 	if shutdown and npc_runtime!=null: npc_runtime.begin_drain()
-	if shutdown: wallet_runtime.begin_drain()
-	else: wallet_runtime.checkpoint_all()
+	if wallet_runtime!=null:
+		if shutdown: wallet_runtime.begin_drain()
+		else: wallet_runtime.checkpoint_all()
 	var deadline: int=Time.get_ticks_msec()+8000
 	while not _postgres_economy_settled(shutdown) and Time.get_ticks_msec()<deadline:
 		await get_tree().process_frame
@@ -46,8 +50,9 @@ func flush_postgres_wallets(shutdown: bool = false) -> bool:
 
 func _postgres_economy_settled(shutdown: bool) -> bool:
 	var npc_ok: bool=npc_runtime==null or (npc_runtime.shutdown_complete() if shutdown else npc_runtime.drained())
-	var wallet_ok: bool=wallet_runtime.shutdown_complete() if shutdown else wallet_runtime.drained()
-	return npc_ok and wallet_ok
+	var wallet_ok: bool=wallet_runtime==null or (wallet_runtime.shutdown_complete() if shutdown else wallet_runtime.drained())
+	var storage_ok: bool=storage_runtime==null or (storage_runtime.shutdown_complete() if shutdown else storage_runtime.drained())
+	return npc_ok and wallet_ok and storage_ok
 
 ## {peer_id: PlayerResource}
 var connected_players: Dictionary[int, PlayerResource]

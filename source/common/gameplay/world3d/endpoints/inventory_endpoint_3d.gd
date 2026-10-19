@@ -82,6 +82,19 @@ func request_move_item(uid: String, revision: int, x: int, y: int, page: int, co
 func request_storage(uid: String, revision: int, source: String, destination: String, x: int, y: int, page: int, quick: bool, command_id: String, operation_id: String = "") -> void:
 	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96: return
 	var peer_id: int = multiplayer.get_remote_sender_id()
+	if _postgres!=null:
+		if not has_inventory_peer(peer_id): return
+		var columns: int=15 if destination=="storage" else InventoryGrid.COLUMNS
+		var pages: int=2 if destination=="storage" else InventoryGrid.PAGES
+		if not quick and (x<0 or x>=columns or y<0 or y>=9 or page<0 or page>=pages):
+			receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":"request"})
+			return
+		if Time.get_ticks_msec()-_last_action_ms.get(peer_id,-1000)<100:
+			receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":"too_fast"})
+			return
+		_last_action_ms[peer_id]=Time.get_ticks_msec()
+		_postgres.storage_submit(peer_id,command_id,operation_id,{"uid":uid,"revision":revision,"source":source,"destination":destination,"position":-1 if quick else page*columns*9+y*columns+x})
+		return
 	if not _world.characters.has(peer_id) or _store() == null: return
 	var now: int = Time.get_ticks_msec()
 	var result: Dictionary = {"ok":false,"error":"too_fast"}
@@ -108,6 +121,14 @@ func request_storage(uid: String, revision: int, source: String, destination: St
 func request_storage_receipt(operation_id: String, command_id: String) -> void:
 	if not GameMode.is_world_server() or command_id.length() > 80 or operation_id.length() > 96: return
 	var peer_id := multiplayer.get_remote_sender_id()
+	if _postgres!=null:
+		if not has_inventory_peer(peer_id): return
+		if Time.get_ticks_msec()-_last_storage_receipt_ms.get(peer_id,-1000)<100:
+			receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":"too_fast"})
+			return
+		_last_storage_receipt_ms[peer_id]=Time.get_ticks_msec()
+		_postgres.storage_receipt(peer_id,command_id,operation_id)
+		return
 	if not _world.characters.has(peer_id) or _store() == null: return
 	var now := Time.get_ticks_msec()
 	var result: Dictionary = {"ok":false,"error":"too_fast"}

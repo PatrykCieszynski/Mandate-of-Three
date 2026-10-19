@@ -52,7 +52,7 @@ func _begin(peer: int, kind: String, id: String, body: Dictionary, lookup: bool)
 	if _active.has(context.account_id) or not _inventory.mutations_allowed(peer): return {"queued":false,"error":"recovery_required"}
 	var capture: Dictionary=_wallet.reserve_npc(peer,id)
 	if capture.is_empty(): return {"queued":false,"error":"recovery_required"}
-	if not _inventory.hold_npc(peer,id):
+	if not _inventory.hold_external(peer,id):
 		_wallet.finish_npc(context.account_id,id,{"ok":false})
 		return {"queued":false,"error":"recovery_required"}
 	var active: Dictionary={"account":context.account_id,"peer":peer,"context":context,"issuer":context.character,"id":id,"kind":kind,"body":body.duplicate(true),"income":capture.income,"token":capture.token,"stage":"receipt" if lookup else "execute","ticket":0,"result":{},"changed":false,"recoveries":0,"retry_at":0}
@@ -87,14 +87,14 @@ func _publish_failure(account: int, id: String, token: String, peer: int, reason
 
 func _settle(active: Dictionary, result: Dictionary) -> void:
 	_wallet.finish_npc(active.account,active.id,result)
-	_inventory.finish_npc(active.account,active.id,result.get("item_state",{}))
+	_inventory.finish_external(active.account,active.id,result.get("item_state",{}))
 	active.result=result.duplicate(true)
 	active.stage="reconcile"
 	active.recoveries=0
 	active.retry_at=0
 
 func _repair(active: Dictionary) -> void:
-	var repaired: bool=_inventory.repair_npc_projection(active.peer)
+	var repaired: bool=_inventory.repair_external_projection(active.peer)
 	repaired=_wallet.retry(active.peer) or repaired
 	if repaired:
 		active.recoveries+=1

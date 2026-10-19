@@ -16,6 +16,7 @@ Measured evidence must state **branch/commit**, platform, test command, runtime 
 - [PostgreSQL P3h pending recovery](postgres-p3h/README.md) — indexed unresolved-only recovery, data-preserving index migration and retained receipt lookup.
 - [PostgreSQL P3i wallet runtime](postgres-p3i/README.md) — RAM batching, stable checkpoint/spend receipts, native client Yang delivery and lifecycle recovery.
 - [PostgreSQL P3j NPC runtime](postgres-p3j/README.md) — atomic Shop/Upgrade, captured-income replay safety and actual client journal recovery.
+- [PostgreSQL P3k Storage runtime](postgres-p3k/README.md) � shared account custody, combined projection and actual client journal recovery.
 - [CI / platform checks](../development/ci.md)
 - [Historical native validation](../history/README.md) (dated results, not current acceptance)
 - [Terrain3D adoption and verification](../world/visuals/visual-upgrade-v4-terrain3d.md)

@@ -95,7 +95,8 @@ client process restart, while retaining prior Inventory/Yang contracts. SQLite
 items/Yang remain unchanged. Map geometry and Gateway entry are controlled;
 physical CEF input/rendering, Linux and production bootstrap are not claimed.
 
-See [evidence](../evidence/postgres-p3j/README.md). Account Storage is the next
-separate custody/recovery scope. Ground-item initialization/pickup, Player Shop,
+See [evidence](../evidence/postgres-p3j/README.md). The subsequent
+[P3k Storage integration](postgres-storage-runtime.md) covers its separate
+custody/recovery scope. Ground-item initialization/pickup, Player Shop,
 Exchange, Auction reads, cross-process publishers, deployment/handoff and P4
 cutover remain open in the [roadmap](../plans/postgresql-migration.md).

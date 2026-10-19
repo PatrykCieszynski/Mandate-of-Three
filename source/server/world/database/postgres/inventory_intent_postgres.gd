@@ -63,11 +63,15 @@ func _session_load(context: Dictionary, operation_id: String) -> Dictionary:
 	if found.rows.is_empty(): return _session_rollback("unknown_command")
 	return _session_commit({"ok":true,"row":found.rows[0]})
 
-func snapshot_session(context: Dictionary) -> Dictionary:
+func snapshot_session(context: Dictionary, include_storage: bool = false) -> Dictionary:
 	var begun:=Sessions.new(db).begin_context(context)
 	if not begun.ok: return begun
 	var snapshot:=Items.new(db).inventory(int(context.character))
 	if not snapshot.ok: return _session_rollback(str(snapshot.error))
+	if include_storage:
+		var storage: Dictionary=preload("res://source/server/world/database/postgres/account_storage_postgres.gd").new(db).snapshot(int(context.character))
+		if not storage.ok: return _session_rollback(str(storage.error))
+		snapshot.storage=storage
 	return _session_commit(snapshot)
 
 func discover_session(context: Dictionary, after: int = 0, limit: int = 50) -> Dictionary:

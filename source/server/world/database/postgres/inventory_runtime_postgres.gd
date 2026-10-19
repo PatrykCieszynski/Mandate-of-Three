@@ -20,6 +20,20 @@ var _bindings: Dictionary={}
 var _jobs: Dictionary={}
 var _generation: int=0
 var _external: Dictionary={}
+var _storage_enabled:=false
+
+## Configure before attaching peers, never silently omit an enabled domain.
+func enable_storage() -> void:
+	assert(_bindings.is_empty())
+	_storage_enabled=true
+
+func binding(account: int) -> Dictionary:
+	var current: Dictionary=_bindings.get(account,{})
+	return {} if current.is_empty() or not _current(current) else {"peer":current.peer,"context":current.context.duplicate(true)}
+
+func context_for_peer(peer: int) -> Dictionary:
+	var current:=_for_peer(peer)
+	return {} if current.is_empty() else current.context.duplicate(true)
 
 func _init(world: WorldServer, executor: RefCounted) -> void:
 	_world=world
@@ -64,7 +78,7 @@ func mutations_allowed(peer_id: int) -> bool:
 	var binding:=_for_peer(peer_id)
 	return not binding.is_empty() and binding.stage=="ready" and not _external.has(binding.context.account_id)
 
-func hold_npc(peer_id: int, operation_id: String) -> bool:
+func hold_external(peer_id: int, operation_id: String) -> bool:
 	if not mutations_allowed(peer_id): return false
 	var binding:=_for_peer(peer_id)
 	_external[binding.context.account_id]=operation_id
@@ -72,9 +86,9 @@ func hold_npc(peer_id: int, operation_id: String) -> bool:
 	ready_changed.emit(peer_id,false)
 	return true
 
-## Trusted NPC coordinator releases only its own hold. Always refresh/ACK even
+## Trusted economic coordinator releases only its own hold. Always refresh/ACK even
 ## for a rejection/replay, since admission deliberately invalidated combat RAM.
-func finish_npc(account: int, operation_id: String, marker: Dictionary = {}) -> void:
+func finish_external(account: int, operation_id: String, marker: Dictionary = {}) -> void:
 	if _external.get(account,"")!=operation_id: return
 	_external.erase(account)
 	var binding: Dictionary=_bindings.get(account,{})
@@ -84,7 +98,7 @@ func finish_npc(account: int, operation_id: String, marker: Dictionary = {}) -> 
 		_restart_recovery(binding)
 		ready_changed.emit(binding.peer,false)
 
-func repair_npc_projection(peer: int) -> bool:
+func repair_external_projection(peer: int) -> bool:
 	var binding:=_for_peer(peer)
 	if binding.is_empty() or binding.ticket!=0 or binding.stage!="paused": return false
 	binding.repairs=0
@@ -214,7 +228,7 @@ func _schedule(binding: Dictionary) -> void:
 	match binding.stage:
 		"discover": queued=_executor.submit_session_pending_discovery(context,binding.cursor,PAGE_SIZE)
 		"recover": queued=_executor.submit_session_resume(context,binding.pending[0])
-		"snapshot", "refresh": queued=_executor.submit_session_snapshot(context)
+		"snapshot", "refresh": queued=_executor.submit_session_snapshot(context,_storage_enabled)
 		"ack": queued=_executor.submit_inventory_recovery_ready(context,binding.snapshot.item_state)
 		"admit":
 			var command: Dictionary=binding.command
