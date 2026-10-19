@@ -2,10 +2,26 @@ extends "res://tests/postgres_inventory_session_bridge.gd"
 ## Actual client processes use the production endpoint, bridge, journal and item
 ## adapter. Master/World run on native isolated sockets in this server fixture;
 ## Gateway credentials and map/actor construction remain controlled.
+class PickupCombat extends CombatEndpoint3D:
+	# Exercise production pickup RPC/feedback/callbacks without starting mobs,
+	# navigation, HUD or combat simulation in this economic network fixture.
+	func _ready() -> void:
+		_world=get_parent()
+		_ground_runtime=services.ground_item_runtime()
+		if GameMode.is_world_server() and _ground_runtime!=null:
+			_ground_runtime.finished.connect(_ground_finished)
+			_ground_runtime.committed.connect(_ground_committed)
+	func _physics_process(_delta: float) -> void: pass
+	func _process(_delta: float) -> void: pass
+	func _send_snapshot() -> void: pass
+
 class CurrencyMap extends GameWorld3D:
 	func _ready() -> void:
-		combat_endpoint=CombatEndpoint3D.new()
-		combat_endpoint._world=self
+		combat_endpoint=PickupCombat.new()
+		combat_endpoint.name="Combat"
+		combat_endpoint.services=services
+		add_child(combat_endpoint)
+		ground_loot.setup(self,services)
 		currency_endpoint=CurrencyEndpoint3D.new()
 		currency_endpoint.name="Currency"
 		currency_endpoint.services=services
@@ -33,7 +49,7 @@ class CurrencyMap extends GameWorld3D:
 			assert(npc_endpoint.register_actor(blacksmith))
 	func _process(_delta: float) -> void: pass
 	func _physics_process(_delta: float) -> void: pass
-	func _exit_tree() -> void: combat_endpoint.free()
+	func _exit_tree() -> void: pass
 	func has_line_of_sight(_from: Vector3, _to: Vector3) -> bool: return true
 
 class FixtureMap extends Node3D:
@@ -80,6 +96,7 @@ var shop_adapter: ShopUiAdapter
 var upgrade_adapter: UpgradeUiAdapter
 var storage_adapter: RefCounted
 var storage_execution: RefCounted
+var ground_execution: RefCounted
 
 func _ready() -> void:
 	get_tree().create_timer(65).timeout.connect(func() -> void: get_tree().quit(1))
@@ -136,6 +153,7 @@ func run() -> void:
 		assert(owner>0 and Wallet.new(pg).initialize_account(id).ok and Items.new(pg).bind_character(owner,id))
 		var sword:=ItemInstance.create(ItemDefinitions.IRON_SWORD,owner,[])
 		assert(pg.begin() and Items.new(pg).receive_item_in_transaction(sword,0).ok and pg.commit())
+		assert(pg.execute("INSERT INTO economy.item_initializations(owner_character_id) VALUES(:owner);",{"owner":owner}).ok) # Pre-existing/imported fixture character.
 		var account:=AccountResource.new()
 		account.id=id
 		account.username=username
@@ -165,21 +183,25 @@ func run() -> void:
 	wallet_execution=Executor.new()
 	npc_execution=Executor.new()
 	storage_execution=Executor.new()
+	ground_execution=Executor.new()
+	assert(ground_execution.start(connection,1,2))
 	# Stay inside the disposable cluster's nine non-superuser slots.
 	assert(storage_execution.start(connection,1,2))
-	assert(control.start(connection,2,2) and execution.start(connection,2,2) and wallet_execution.start(connection,2,2) and npc_execution.start(connection,1,2))
-	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready() or not npc_execution.is_ready() or not storage_execution.is_ready():
+	assert(control.start(connection,2,2) and execution.start(connection,2,2) and wallet_execution.start(connection,1,2) and npc_execution.start(connection,1,2))
+	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready() or not npc_execution.is_ready() or not storage_execution.is_ready() or not ground_execution.is_ready():
 		control.poll()
 		execution.poll()
 		wallet_execution.poll()
 		npc_execution.poll()
 		storage_execution.poll()
+		ground_execution.poll()
 		await get_tree().process_frame
 	master.inventory_session_issuer=Issuer.new(master,control)
 	world.inventory_runtime=Runtime.new(world,execution)
 	world.wallet_runtime=load("res://source/server/world/database/postgres/wallet_runtime_postgres.gd").new(world,wallet_execution)
 	world.npc_runtime=load("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,npc_execution)
 	world.storage_runtime=load("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,storage_execution)
+	world.ground_item_runtime=load("res://source/server/world/database/postgres/ground_item_runtime_postgres.gd").new(world.inventory_runtime,ground_execution)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
@@ -302,6 +324,18 @@ func run() -> void:
 	assert(facts==17 and Items.new(pg).inventory(character).items.size()==2)
 	assert(preload("res://source/server/world/database/postgres/account_storage_postgres.gd").new(pg).snapshot(character).items.size()==1)
 	assert((await phase(observer,"storage-private")).ok)
+	var ground_uid: String=map.currency_map.ground_loot.spawn_resolved_item(Vector3.ZERO,character,"alpha",Time.get_ticks_msec(),&"upgrade_ore",4,[])
+	assert((await phase(observer,"ground-pickup",{"uid":ground_uid})).error=="reserved")
+	assert((await phase(actor,"ground-pickup",{"uid":ground_uid})).ok)
+	assert(not map.currency_map.ground_loot.drops.has(ground_uid) and facts==18)
+	assert((await phase(actor,"ground-pickup",{"uid":ground_uid})).ok and facts==18,"same UID receipt recovery adds no item/fact")
+	assert(Items.new(pg).inventory(character).items.any(func(row: Dictionary) -> bool: return row.uid==ground_uid and row.amount==4))
+	await phase(actor,"exit")
+	await wait_for(func() -> bool: return not world.connected_players.has(actor))
+	await start_client(206,"alpha","ground-restored")
+	await wait_for(func() -> bool: return map.reports.has("ground-restored-ready"))
+	actor=map.reports["ground-restored-ready"].peer
+	assert((await phase(actor,"ground-restored",{"uid":ground_uid})).ok and facts==18)
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	await phase(actor,"exit")
 	await phase(observer,"exit")
@@ -405,6 +439,18 @@ func run_client() -> void:
 func client_phase(label: String, payload: Dictionary) -> void:
 	var result: Dictionary={"ok":true}
 	match label:
+		"ground-restored":
+			assert(map.endpoint.state.items.size()==3 and map.endpoint.state.items.any(func(row: Dictionary) -> bool: return row.uid==str(payload.uid) and row.amount==4))
+			assert(map.endpoint.state.storage.items.size()==1)
+		"ground-pickup":
+			var feedback: Array=[]
+			var receive:=func(value: Dictionary) -> void: feedback.append(value)
+			map.currency_map.combat_endpoint.feedback_received.connect(receive)
+			map.currency_map.combat_endpoint.request_pickup.rpc_id(1,str(payload.uid))
+			await wait_for(func() -> bool: return not feedback.is_empty())
+			map.currency_map.combat_endpoint.feedback_received.disconnect(receive)
+			result=feedback.back()
+			await get_tree().create_timer(0.12).timeout
 		"storage-flow":
 			var target: Dictionary=map.endpoint.state.items.filter(func(row: Dictionary) -> bool: return row.location=="bag" and row.definition_id=="iron_sword")[0]
 			var move: Dictionary={"id":target.uid,"revision":target.revision,"from":"inventory","to":"storage","x":0,"y":0,"page":0,"quick":false}

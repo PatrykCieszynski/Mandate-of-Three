@@ -6,7 +6,8 @@ Master/World wiring, client RPC delivery, cache reconciliation and indexed pendi
 discovery; P3i adds optional RAM Yang batching, receipted async checkpoints and
 currency endpoint delivery. P3j adds optional NPC Shop/Upgrade execution and client
 receipt/journal recovery. P3k adds optional shared Storage execution and combined
-Inventory/Storage reconciliation. **Remaining runtime domains/bootstrap and P4 are not completed. Normal
+Inventory/Storage reconciliation. P3l adds optional starter initialization and
+ground-item pickup/receipt recovery. **Remaining runtime domains/bootstrap and P4 are not completed. Normal
 gameplay remains SQLite.** This roadmap implements the accepted
 [Economy C1–C5](../architecture/economy/README.md) and
 [World Process topology](../architecture/world-instance-architecture.md); every
@@ -15,14 +16,14 @@ package still requires its own review, tests and merge decision.
 ## Runtime adoption status
 
 **Audited 2026-10-19. This is not the final cleanup of SQLite.** P1/P2 provide
-PostgreSQL stores and backend acceptance; P3 has opt-in Inventory, wallet, NPC and Storage paths.
+PostgreSQL stores and backend acceptance; P3 has opt-in Inventory, wallet, NPC, Storage and ground-item paths.
 Normal server startup still creates the SQLite writer. A complete PostgreSQL
 realm has not yet been enabled or rehearsed.
 
 | Area | Current normal runtime | PostgreSQL adoption still needed |
 | --- | --- | --- |
 | Bootstrap / database ownership | `WorldDatabase.start_database/open_database` creates SQLite and its stores | Configure/provision the authoritative PG backend, pool lifecycle, graceful drain, health/readiness and fail-closed startup; never enable dual economic writers |
-| Inventory / ground-item pickup | `WorldEconomyService` calls SQLite item transactions; PG move/activate/equip/unequip recovery is opt-in | Provisioning/initialization and pickup integration, trusted committed publications, final item-dependent gameplay acceptance |
+| Inventory / ground-item pickup | `WorldEconomyService` calls SQLite item transactions; PG move/activate/equip/unequip recovery is opt-in | P3l optionally connects marker-based initialization and asynchronous pickup with original UID, claims and current Inventory publication. Production provisioning/bootstrap and full PG gameplay acceptance remain |
 | Yang wallet | Normal startup still loads/checkpoints `WalletStoreSqlite` | P3i optionally supplies RAM income, receipted async checkpoints, fixed test spend, currency RPC/HUD and local reconnect/drain. Production bootstrap, cross-domain freshness and multi-World handoff remain |
 | NPC Shop / Upgrade | Normal startup uses `WorldEconomyService` and SQLite | P3j optionally connects authenticated RPCs, bounded PG transactions, captured pending Yang and current Inventory/wallet publication. Production bootstrap remains |
 | Account Storage | `WorldEconomyService` still uses SQLite | P3k optionally connects shared custody, stable client journal recovery and combined account-revision projections; production bootstrap and distributed publication remain |
@@ -48,8 +49,9 @@ Remaining deliverables before an Economy cutover are substantial:
    SQLite economic runtime paths; parity fixtures/reference code and separately
    retained profile/progression storage are distinct cleanup decisions.
 
-After P3k, the next integration priority is ground-item initialization/pickup.
-Remaining Marketplace/Exchange/Auction runtime adoption is also open. No percentage or final PR count is asserted: unfinished runtime domains
+After P3l, the next integration priority is remaining Marketplace/claims runtime
+adoption, with multi-party settlement kept separate from seller-local operations.
+Exchange/Auction runtime adoption is also open. No percentage or final PR count is asserted: unfinished runtime domains
 and P4 are separate acceptance
 gates, not documentation-only leftovers.
 
@@ -361,6 +363,15 @@ recovery; actual client processes cover lost reply, UI reload and journal relog.
 No schema/protocol change, durable Storage admission, wallet mutation or bootstrap
 switch. Ground-item initialization/pickup, Marketplace/Exchange/Auction runtime,
 cross-process publication, operational lifecycle and P4 remain open.
+
+**P3l progress:** [Initialization and ground items](../development/postgres-ground-items.md)
+adds optional marker-based starter hydration and bounded native pickup execution
+through the existing UID-only RPC. Grant/rights/range/liveness, global claim marker,
+full bag/capacity and original rolled UID are preserved. Unknown COMMIT initiates
+only read-only discovery; drop reservations survive pending SQL and reconcile
+before terminal feedback. Native fault/race and six-client pickup/relog acceptance
+pass. Normal startup, remaining Marketplace/Exchange/Auction runtime, operational
+bootstrap/handoff, full PG combat acceptance and P4 remain open.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
