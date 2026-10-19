@@ -46,9 +46,11 @@ state without inventing a new commit. A failed ACK gets bounded projection repai
 The active binding is checked again after publication callbacks.
 
 There is currently one delegated active session per account. A replacement alt
-loads the same Storage but its own bag/equipment. An in-flight old operation keeps
-its original issuer for receipt discovery; it never withdraws into the alt's bag
-by replaying an old body. Old peers receive no private state/result. Account-wide
+loads the same Storage but its own bag/equipment. Receipt discovery is scoped to
+the authenticated account + command ID + Storage kind, even after retirement or
+recreation of the coordinator. The durable receipt owns original-character
+provenance; lookup never executes/retargets a withdrawal into the alt's bag.
+Old peers receive no private state/result. Account-wide
 revision floors and current binding reconciliation are reused; this is not a
 cross-process invalidation transport or simultaneous multi-session feature.
 
@@ -61,6 +63,9 @@ reads receipts after account admission. It never auto-executes a missing command
 The user can explicitly retry the original intent after `unknown_command`.
 Window/browser recreation and client-process relog use the same receipt path,
 without requiring that the original source/destination cell still be available.
+The local client journal remains character-scoped: changing character does not
+automatically import or resubmit another character's pending body. The backend
+nevertheless permits read-only same-account outcome discovery by operation ID.
 
 Successful receipts retain the original request fingerprint and cannot be changed
 by another alt/payload. Existing business rejection persistence policy is unchanged:
@@ -69,11 +74,27 @@ Transient recovery errors remain nonterminal. Storage's journal also honors an
 explicit terminal result during receipt recovery.
 
 World polls Storage during normal simulation, disconnect and graceful lifecycle
-barriers. Shutdown closes admissions, settles/reconciles active work and drains
-and joins the Storage executor. It refuses the graceful barrier if unresolved
-work cannot settle; active native SQL is never force-stopped. Client journals and
-committed receipts survive recreation; unsent volatile work has no durability
-promise. No whole-World crash/operational failover guarantee is added here.
+barriers. Three exhausted receipt attempts pause normal operation until explicit
+lookup or a current replacement session permits recovery; a disconnect does not
+turn that into a new mutation. Shutdown closes admissions and automatic recovery
+scheduling, finishes all accepted native jobs, then closes and joins the executor.
+It never declares completion while SQL/completions are outstanding or force-stops
+active SQL. It does not require a connected client or a successful receipt lookup
+to terminate **after all native sessions have ended**: Storage owns no dirty RAM
+Yang or unique item state. Atomic DB transactions and pre-send client journals
+remain the recovery authorities. Unfinished deliveries are recorded in a bounded
+`drain_status().recover_on_reconnect` report, with one summary warning, and their
+RAM holds are released only after the executor has stopped. Reconnect must read
+the receipt; no missing command is auto-executed.
+
+For operator diagnostics call `world.storage_runtime.drain_status()`: `in_flight`,
+`worker_stopped` and `safe_to_stop` distinguish native work from unresolved
+delivery; `pending`/`recover_on_reconnect` expose account/operation IDs, stage and
+last error without tokens, SQL credentials or item bodies. If native sessions
+have not stopped, the graceful World barrier still refuses shutdown. This rule
+is Storage-specific: wallet/NPC barriers retain their own dirty-value conditions.
+Unsent volatile work has no durability promise. No whole-World crash/operational
+failover guarantee is added here.
 
 ## Verification
 

@@ -22,11 +22,14 @@ func execute(context: Dictionary, id: String, body: Dictionary) -> Dictionary:
 	receipt_replay=store.receipt_replay
 	return result
 
-func receipt(context: Dictionary, issuer: int, id: String) -> Dictionary:
-	if issuer<=0 or not Commands.valid_id(id): return {"ok":false,"error":"request"}
+func receipt(context: Dictionary, id: String) -> Dictionary:
+	if not Commands.valid_id(id): return {"ok":false,"error":"request"}
 	var begun:=Sessions.new(db).begin_context(context)
 	if not begun.ok: return begun
-	var found: Dictionary=db.query("SELECT result_json FROM economy.market_commands WHERE account_id=:account AND character_id=:issuer AND command_id=:id AND kind='storage';",{"account":context.account_id,"issuer":issuer,"id":id})
+	# Command IDs are account-unique. The durable row, not a replacement peer or
+	# a retired RAM coordinator, owns original-character provenance. Read only:
+	# discovering an alt's receipt never re-executes/retargets the old transfer.
+	var found: Dictionary=db.query("SELECT result_json FROM economy.market_commands WHERE account_id=:account AND command_id=:id AND kind='storage';",{"account":context.account_id,"id":id})
 	if not found.ok:
 		if not db.rollback(): db.close()
 		return {"ok":false,"error":"storage"}

@@ -92,7 +92,7 @@ class SessionWorker extends RefCounted:
 				elif intent in ["session_install","session_inspect","session_revoke","session_ready"]: store=Sessions.new(database)
 				else: store=Intents.new(database)
 				if intent=="storage_execute": result=store.execute(job.session,job.operation_id,job.body)
-				elif intent=="storage_receipt": result=store.receipt(job.session,job.issuer,job.operation_id)
+				elif intent=="storage_receipt": result=store.receipt(job.session,job.operation_id)
 				elif intent=="npc_execute": result=store.execute(job.session,job.npc_kind,job.operation_id,job.body,job.income,job.income_token)
 				elif intent=="npc_receipt": result=store.receipt(job.session,job.issuer,job.npc_kind,job.operation_id)
 				elif intent=="wallet_snapshot": result=store.snapshot(job.session)
@@ -219,9 +219,8 @@ func submit_storage(context: Dictionary, operation_id: String, body: Dictionary)
 	if not StorageSession.valid_body(body): return {"queued":false,"error":"request"}
 	return _session_job(context,"storage_execute",operation_id,{"body":body.duplicate(true)})
 
-func submit_storage_receipt(context: Dictionary, issuer: int, operation_id: String) -> Dictionary:
-	if issuer<=0: return {"queued":false,"error":"request"}
-	return _session_job(context,"storage_receipt",operation_id,{"issuer":issuer})
+func submit_storage_receipt(context: Dictionary, operation_id: String) -> Dictionary:
+	return _session_job(context,"storage_receipt",operation_id,{})
 
 func submit_wallet_snapshot(context: Dictionary) -> Dictionary:
 	return _session_job(context,"wallet_snapshot","",{})

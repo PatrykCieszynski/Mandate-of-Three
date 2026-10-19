@@ -21,9 +21,10 @@ class FixtureWorld extends WorldServer:
 class LostCompletion extends RefCounted:
 	var inner: RefCounted
 	var lose_next:=false
+	var fail_receipts:=false
 	func _init(value: RefCounted) -> void: inner=value
 	func submit_storage(context: Dictionary, id: String, body: Dictionary) -> Dictionary: return inner.submit_storage(context,id,body)
-	func submit_storage_receipt(context: Dictionary, issuer: int, id: String) -> Dictionary: return inner.submit_storage_receipt(context,issuer,id)
+	func submit_storage_receipt(context: Dictionary, id: String) -> Dictionary: return inner.submit_storage_receipt(context,id)
 	func begin_drain() -> void: inner.begin_drain()
 	func is_stopped() -> bool: return inner.is_stopped()
 	func poll() -> Array:
@@ -33,6 +34,7 @@ class LostCompletion extends RefCounted:
 				lose_next=false
 				event.result={"ok":false,"error":"outcome_unknown","outcome_unknown":true}
 				event.committed=false
+			if fail_receipts and event.intent=="storage_receipt": event.result={"ok":false,"error":"storage"}
 		return events
 
 func _physics_process(_delta: float) -> void: ticks+=1
@@ -121,8 +123,8 @@ func _ready() -> void:
 	assert(world.inventory_runtime.snapshot_for_peer(100).storage.items[0].uid==sword)
 	# Saturation is a volatile refusal, not an invisible later mutation.
 	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=9800 FOR NO KEY UPDATE;").ok)
-	assert(pools[1].submit_storage_receipt(a,98000,"blocked").queued)
-	assert(pools[1].submit_storage_receipt(a,98000,"blocked").queued)
+	assert(pools[1].submit_storage_receipt(a,"blocked").queued)
+	assert(pools[1].submit_storage_receipt(a,"blocked").queued)
 	assert((await submit(200,"capacity",body(other,1,"storage","storage",3))).error=="busy")
 	assert(stored(98010)[0].bag_position==0 and ready(200))
 	assert(pg.commit())
@@ -166,12 +168,76 @@ func _ready() -> void:
 	assert(world.inventory_runtime.snapshot_for_peer(101).storage.items[0].uid==second)
 	world.inventory_runtime.detach(100)
 	assert(ready(101))
-	assert((await submit(101,"alt-withdraw",body(second,1,"storage","inventory",0))).ok)
+	# Disconnect after COMMIT/snapshot delivery but before readiness/result. The
+	# coordinator retires the settled lane, so recovery cannot consult that RAM.
+	var detached: Array[bool]=[false]
+	var disconnect_on_refresh:=func(peer: int, state: Dictionary) -> void:
+		if peer==101 and state.items.any(func(row: Dictionary) -> bool: return row.uid==second):
+			detached[0]=true
+			world.inventory_runtime.detach(101)
+	world.inventory_runtime.snapshot_applied.connect(disconnect_on_refresh)
+	assert(world.storage_runtime.transfer(101,"alt-withdraw",body(second,1,"storage","inventory",0)).queued)
+	await wait_for(func() -> bool: return detached[0] and world.storage_runtime.drained())
+	world.inventory_runtime.snapshot_applied.disconnect(disconnect_on_refresh)
+	assert(result("alt-withdraw").is_empty(),"disconnected issuer received no terminal result")
 	assert(items(98001)[0].uid==second and items(98001)[0].owner_character_id==98001 and stored(98001).is_empty())
+	# No retained operation: another character discovers the durable original
+	# issuer's result, without moving that UID into the replacement character.
+	assert(world.storage_runtime.drained())
+	world.inventory_runtime.detach(101)
+	var restored:=grant(9800,98000,"storage-return",2)
+	bind(102,98000,"storage-return")
+	assert(world.inventory_runtime.attach(102,restored))
+	await wait_for(func() -> bool: return ready(102))
+	prior=facts
+	assert(world.storage_runtime.receipt(102,"alt-withdraw").queued)
+	await wait_for(func() -> bool: return ready(102) and world.storage_runtime.drained())
+	assert(result("alt-withdraw").ok and facts==prior and items(98000).size()==1 and items(98001)[0].uid==second)
+	assert(world.storage_runtime.receipt(200,"alt-withdraw").queued)
+	await wait_for(func() -> bool: return ready(200) and world.storage_runtime.drained())
+	assert(result("alt-withdraw").error=="unknown_command","account-wide lookup never crosses accounts")
 	# Account B can rearrange and withdraw independently.
 	assert((await submit(200,"rearrange",body(other,1,"storage","storage",2))).ok)
 	assert((await submit(200,"take-back",body(other,2,"storage","inventory",0))).ok)
+	# Exhaust all automatic receipt attempts after a successful COMMIT whose
+	# completion is lost. Detached client must not make Storage shutdown permanent.
+	boundary.lose_next=true
+	boundary.fail_receipts=true
+	assert((await submit(102,"deferred-stop",body(sword,4,"inventory","storage",0))).error=="outcome_unknown")
+	await wait_for(func() -> bool:
+		var status: Dictionary=world.storage_runtime.drain_status()
+		return status.in_flight==0 and status.pending.size()==1 and status.pending[0].stage=="paused" and status.pending[0].attempts==3)
+	world.inventory_runtime.detach(102)
+	world.inventory_runtime.detach(200)
+	assert(not world.storage_runtime.drained() and not world.storage_runtime.drain_status().safe_to_stop)
 	assert(await world.flush_postgres_wallets(true))
+	var stopped: Dictionary=world.storage_runtime.drain_status()
+	assert(stopped.safe_to_stop and stopped.worker_stopped and stopped.in_flight==0 and stopped.recover_on_reconnect.size()==1)
+	assert(stored(98000)[0].uid==sword and int(pg.query("SELECT COUNT(*) AS n FROM economy.market_commands WHERE command_id='deferred-stop';").rows[0].n)==1)
+	# New owner and fresh native sessions, no operation record: same-account alt
+	# discovers the committed receipt after stop without retarget/re-execution.
+	var fresh:=Executor.new()
+	assert(fresh.start(connection,1,1))
+	pools.append(fresh)
+	await wait_for(func() -> bool: fresh.poll(); return fresh.is_ready())
+	world.storage_runtime=StorageRuntime.new(world.inventory_runtime,fresh)
+	world.storage_runtime.finished.connect(func(peer: int, id: String, outcome: Dictionary) -> void: answers.append({"peer":peer,"id":id,"result":outcome}))
+	alt=grant(9800,98001,"storage-after-stop",3)
+	bind(103,98001,"storage-after-stop")
+	assert(world.inventory_runtime.attach(103,alt))
+	await wait_for(func() -> bool: return ready(103))
+	answers.clear()
+	assert(world.storage_runtime.receipt(103,"deferred-stop").queued)
+	await wait_for(func() -> bool: return result("deferred-stop").get("ok",false))
+	assert(items(98001).size()==1 and items(98001)[0].uid==second and stored(98001)[0].uid==sword)
+	# A drain never claims safety while an accepted native transaction is blocked.
+	assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=9800 FOR NO KEY UPDATE;").ok)
+	assert(world.storage_runtime.transfer(103,"drain-blocked",body(sword,5,"storage","inventory",2)).queued)
+	world.storage_runtime.begin_drain()
+	assert(not world.storage_runtime.shutdown_complete() and not world.storage_runtime.drain_status().safe_to_stop)
+	assert(pg.commit())
+	await wait_for(func() -> bool: return world.storage_runtime.shutdown_complete())
+	assert(world.storage_runtime.drain_status().safe_to_stop and items(98001).size()==2 and stored(98001).is_empty())
 	pools[0].begin_drain()
 	await wait_for(func() -> bool: return pools.all(func(pool: RefCounted) -> bool: return pool.is_stopped()))
 	world.free()

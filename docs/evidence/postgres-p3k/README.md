@@ -71,3 +71,42 @@ delivery is not implemented.
 Gateway credentials/entry and map construction are controlled. Physical CEF
 input/rendering, Linux, whole-server crash/restart, multi-World hosting, production
 bootstrap and P4 load/soak/import/restore/cutover are NOT VERIFIED by this slice.
+
+## PR #93 review follow-up — retired issuer and exhausted recovery
+
+The initial implementation's in-memory issuer was insufficient after a settled
+lane retired. Storage receipts are now discovered by authenticated account,
+account-unique command ID and Storage kind; original-character provenance stays
+in the durable row. A lookup never re-executes a body or moves its item. Client
+journals remain character-scoped and do not automatically import another alt's
+pending intent.
+
+Shutdown now distinguishes pending delivery from active native work. Storage
+owns no uncheckpointed money/items. It closes admissions/recovery scheduling,
+finishes accepted SQL and joins the executor before releasing any remaining RAM
+holds and reporting unfinished delivery for receipt recovery on reconnect.
+`drain_status()` exposes in-flight count, worker stop/safety and bounded pending /
+recover-on-reconnect diagnostics without credentials or item bodies. A summary
+warning records deferral. Wallet/NPC dirty-value barriers are unchanged.
+
+Follow-up native Storage runtime **PASS — `run-3j9s_8_r`**:
+
+- Disconnect on post-COMMIT snapshot, before terminal delivery; retire the RAM
+  operation; log in as another character of the account and discover the original
+  receipt. Original UID/bag placement is preserved; no extra commit fact.
+- Other-account lookup of the same ID returns `unknown_command`.
+- Lose a real successful completion, fail all three automatic read-only receipt
+  attempts, detach the client, then drain. Native jobs/sessions stop and diagnostics
+  report safe Storage termination plus the deferred operation.
+- Recreate the coordinator and native sessions without that RAM record; a new alt
+  reads the same durable receipt and original custody, without another mutation.
+- Begin drain with a native transfer waiting on the account lock. Shutdown/safety
+  remain false until that accepted job completes and the worker stops.
+
+Follow-up **five-client endpoint PASS — `run-dg5_krhu`**, preserving all existing
+Inventory/Storage/NPC/Yang RPC, journal, reload/relog, privacy and fact contracts.
+Both owned clusters stopped. This is controlled coordinator/session recreation,
+not an additional whole-server crash or production failover claim.
+
+Follow-up smoke: architecture guards, 14 Godot contracts and 85 Web UI contracts
+PASS; `git diff --check` PASS.
