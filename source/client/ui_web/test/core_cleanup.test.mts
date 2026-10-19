@@ -1,6 +1,8 @@
 import { MAX_STATE_BYTES, MAX_BYTES } from '../web/protocol.js';
 import { transfer } from '../web/screens/storage/transfer.js';
 import { mountStorage } from '../web/screens/storage/storage-view.js';
+import { mountMarket } from '../web/screens/market/market-view.js';
+import { ItemDragRuntime } from '../web/game-ui/drag/item-drag-runtime.js';
 import { mountMarketBrowser } from '../web/screens/market/browser-view.js';
 import type { StorageSnapshot } from '../web/protocol/contracts.js';
 import test from 'node:test';
@@ -827,4 +829,67 @@ test('Trading Glass keeps one unresolved purchase ID across selection changes an
   view.dispose();
   manager.dispose();
   host.close();
+});
+
+test('restored seller intent retries from native journal without an old item or browser command body', async () => {
+  const { manager } = environment();
+  manager.register({ id: 'inventory', element: target() });
+  const root = target();
+  const drag = new ItemDragRuntime({
+    scale: () => 1,
+    onRegionsChanged: () => {},
+  });
+  let executions = 0,
+    retries = 0;
+  const view = mountMarket(root, {
+    manager,
+    drag,
+    resolveItemIcon: () => '',
+    command: async () => {
+      executions++;
+      return { ok: true };
+    },
+    retrySeller: async () => {
+      retries++;
+      return retries === 1
+        ? { ok: false, error: 'seller_pending' }
+        : { ok: true };
+    },
+    onClose: () => {},
+    onRegionsChanged: () => {},
+  });
+  const state = {
+    active: true as const,
+    shopId: 1,
+    name: 'Seller',
+    status: 'active' as const,
+    revision: 0,
+    columns: 5 as const,
+    rows: 8 as const,
+    offers: [],
+    claims: [],
+    sellerPending: true,
+    sellerBusy: false,
+  };
+  view.setState(state);
+  const retry = [...root.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Retry same command',
+  )!;
+  assert.equal(retry.hidden, false);
+  retry.click();
+  retry.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(retries, 1);
+  assert.equal(retry.disabled, false);
+  assert.equal(retry.hidden, false);
+  retry.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(retries, 2);
+  assert.equal(executions, 0);
+  assert.equal(retry.hidden, true);
+  view.setState({ ...state, sellerPending: false });
+  assert.equal(retry.hidden, true);
+  view.dispose();
+  drag.dispose();
+  manager.dispose();
 });

@@ -2,6 +2,9 @@ extends RefCounted
 ## Short-lived Shop projections. Public reads never expose revenue or claims.
 const Grid = preload("res://source/common/gameplay/items/domain/shop_grid.gd")
 var db: Object
+var _session: Dictionary={}
+
+func authorize_session(context: Dictionary) -> void: _session=context.duplicate(true)
 
 func _init(database: Object) -> void:
 	db=database
@@ -18,6 +21,8 @@ func _mine(character: int, full_account: bool) -> Dictionary:
 	var identity: Dictionary=db.query("SELECT c.account_id FROM economy.characters c JOIN economy.accounts a ON a.account_id=c.account_id WHERE c.character_id=:id FOR NO KEY UPDATE OF a;",{"id":character})
 	if not identity.ok or identity.rows.is_empty(): return _rollback("storage" if not identity.ok else "owner")
 	var account: int=int(identity.rows[0].account_id)
+	var reason: String=preload("res://source/server/world/database/postgres/inventory_session_postgres.gd").check_in_transaction(db,account,character,_session,false)
+	if not reason.is_empty(): return _rollback(reason)
 	if not db.execute("INSERT INTO economy.account_shops(account_id) VALUES(:account) ON CONFLICT DO NOTHING;",{"account":account}).ok: return _rollback("storage")
 	var shop: Dictionary=db.query("SELECT shop_id FROM economy.account_shops WHERE account_id=:account;",{"account":account})
 	if not shop.ok or shop.rows.is_empty(): return _rollback("storage")
@@ -34,6 +39,9 @@ func _mine(character: int, full_account: bool) -> Dictionary:
 			var view:=_item_view(row)
 			if view.is_empty(): return _rollback("unknown_definition")
 			snapshot.claims.append(view)
+	if not _session.is_empty():
+		snapshot.item_state=preload("res://source/server/world/database/postgres/economy_command_postgres.gd").read_state(db,character)
+		if snapshot.item_state.is_empty(): return _rollback("storage")
 	return _finish(snapshot)
 
 func visit(shop: int) -> Dictionary:

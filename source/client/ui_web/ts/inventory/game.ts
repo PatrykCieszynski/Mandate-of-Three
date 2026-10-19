@@ -255,6 +255,7 @@ const market = mountMarket(marketRoot, {
   drag,
   resolveItemIcon,
   command: (action, payload) => bridge.request(`market.${action}`, payload),
+  retrySeller: () => bridge.request('market.retry_seller', {}),
   collectRevenue: (retry) =>
     bridge.request(
       retry ? 'market.retry_revenue' : 'market.collect_revenue',

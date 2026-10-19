@@ -39,6 +39,7 @@ interface Options {
   drag: ItemDragRuntime;
   resolveItemIcon: ResolveItemIcon;
   command: (action: Action, payload: MarketCommand) => Promise<CommandResult>;
+  retrySeller?: () => Promise<CommandResult>;
   collectRevenue?: (retry: boolean) => Promise<CommandResult>;
   onClose: () => void;
   onRegionsChanged: () => void;
@@ -115,7 +116,30 @@ export function mountMarket(root: HTMLElement, options: Options) {
   status.className = 'market-status';
   status.setAttribute('role', 'status');
   const retry = button('Retry same command', () => {
-    if (lastIntent) void submit(lastIntent.action, lastIntent.payload);
+    if (state.active && state.sellerPending && options.retrySeller) {
+      if (pending || state.sellerBusy) return;
+      pending = true;
+      void options
+        .retrySeller()
+        .then((result) => {
+          if (!disposed) {
+            if (result.ok) {
+              lastIntent = null;
+              retry.hidden = true;
+            }
+            setStatus(
+              result.ok ? 'Saved.' : String(result.error ?? 'Rejected.'),
+            );
+          }
+        })
+        .catch(() => {
+          if (!disposed) setStatus('Outcome unknown. Retry the same command.');
+        })
+        .finally(() => {
+          pending = false;
+          retry.disabled = Boolean(state.active && state.sellerBusy);
+        });
+    } else if (lastIntent) void submit(lastIntent.action, lastIntent.payload);
   });
   retry.hidden = true;
   const wallet = document.createElement('p');
@@ -246,7 +270,11 @@ export function mountMarket(root: HTMLElement, options: Options) {
           root.contains(document.activeElement)
         )
           document.activeElement.blur();
-      } else if (result.error === 'timeout') retry.hidden = false;
+      } else if (
+        result.error === 'timeout' ||
+        result.error === 'seller_pending'
+      )
+        retry.hidden = false;
     } catch {
       if (!disposed) {
         setStatus('Outcome unknown. Retry the same command.');
@@ -254,6 +282,7 @@ export function mountMarket(root: HTMLElement, options: Options) {
       }
     } finally {
       pending = false;
+      retry.disabled = Boolean(state.active && state.sellerBusy);
     }
   }
   function validPrice() {
@@ -396,6 +425,9 @@ export function mountMarket(root: HTMLElement, options: Options) {
     else if (event.key === 'Escape') options.onClose();
   });
   function render() {
+    if (state.active && state.sellerPending) retry.hidden = false;
+    else if (!lastIntent) retry.hidden = true;
+    retry.disabled = pending || Boolean(state.active && state.sellerBusy);
     revenue.textContent =
       'Claimable: ' +
       (state.active
