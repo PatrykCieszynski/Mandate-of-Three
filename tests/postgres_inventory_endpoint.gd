@@ -22,6 +22,10 @@ class CurrencyMap extends GameWorld3D:
 		combat_endpoint.services=services
 		add_child(combat_endpoint)
 		ground_loot.setup(self,services)
+		market_endpoint=MarketEndpoint3D.new()
+		market_endpoint.name="Market"
+		market_endpoint.services=services
+		add_child(market_endpoint)
 		currency_endpoint=CurrencyEndpoint3D.new()
 		currency_endpoint.name="Currency"
 		currency_endpoint.services=services
@@ -97,9 +101,12 @@ var upgrade_adapter: UpgradeUiAdapter
 var storage_adapter: RefCounted
 var storage_execution: RefCounted
 var ground_execution: RefCounted
+var seller_execution: RefCounted
+var market_adapter: MarketUiAdapter
+var market_views: Array[Dictionary]=[]
 
 func _ready() -> void:
-	get_tree().create_timer(65).timeout.connect(func() -> void: get_tree().quit(1))
+	get_tree().create_timer(90).timeout.connect(func() -> void: get_tree().quit(1))
 	if GameMode.is_client(): run_client.call_deferred()
 	else: super._ready()
 
@@ -137,6 +144,7 @@ func run() -> void:
 	pg=ClassDB.instantiate("GodotSociDatabase")
 	assert(pg.open("postgresql",connection) and Schema.ensure_schema(pg))
 	assert(preload("res://source/server/world/database/postgres/storage_schema_postgres.gd").ensure_schema(pg))
+	assert(preload("res://source/server/world/database/postgres/account_claim_schema_postgres.gd").ensure_schema(pg))
 	sqlite.path=fixture_dir+"/identity.db"
 	assert(sqlite.open_db())
 	WorldSchema.ensure_schema(sqlite)
@@ -184,17 +192,20 @@ func run() -> void:
 	npc_execution=Executor.new()
 	storage_execution=Executor.new()
 	ground_execution=Executor.new()
+	seller_execution=Executor.new()
+	assert(seller_execution.start(connection,1,2))
 	assert(ground_execution.start(connection,1,2))
 	# Stay inside the disposable cluster's nine non-superuser slots.
 	assert(storage_execution.start(connection,1,2))
-	assert(control.start(connection,2,2) and execution.start(connection,2,2) and wallet_execution.start(connection,1,2) and npc_execution.start(connection,1,2))
-	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready() or not npc_execution.is_ready() or not storage_execution.is_ready() or not ground_execution.is_ready():
+	assert(control.start(connection,1,2) and execution.start(connection,2,2) and wallet_execution.start(connection,1,2) and npc_execution.start(connection,1,2))
+	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready() or not npc_execution.is_ready() or not storage_execution.is_ready() or not ground_execution.is_ready() or not seller_execution.is_ready():
 		control.poll()
 		execution.poll()
 		wallet_execution.poll()
 		npc_execution.poll()
 		storage_execution.poll()
 		ground_execution.poll()
+		seller_execution.poll()
 		await get_tree().process_frame
 	master.inventory_session_issuer=Issuer.new(master,control)
 	world.inventory_runtime=Runtime.new(world,execution)
@@ -202,6 +213,7 @@ func run() -> void:
 	world.npc_runtime=load("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,npc_execution)
 	world.storage_runtime=load("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,storage_execution)
 	world.ground_item_runtime=load("res://source/server/world/database/postgres/ground_item_runtime_postgres.gd").new(world.inventory_runtime,ground_execution)
+	world.seller_runtime=load("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,seller_execution)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
@@ -219,6 +231,7 @@ func run() -> void:
 		map.currency_map.shop_endpoint.remove_peer(peer)
 		map.currency_map.upgrade_endpoint.remove_peer(peer)
 		map.currency_map.npc_endpoint.remove_peer(peer)
+		map.currency_map.market_endpoint.remove_peer(peer)
 		map.endpoint.remove_peer(peer))
 	map.endpoint.inventory_changed.connect(func(_owner: int) -> void: facts+=1)
 	await start_client(201,"alpha","actor")
@@ -336,6 +349,19 @@ func run() -> void:
 	await wait_for(func() -> bool: return map.reports.has("ground-restored-ready"))
 	actor=map.reports["ground-restored-ready"].peer
 	assert((await phase(actor,"ground-restored",{"uid":ground_uid})).ok and facts==18)
+	var claim_item:=ItemInstance.create(ItemDefinitions.UPGRADE_ORE,character,[])
+	assert(pg.begin() and preload("res://source/server/world/database/postgres/account_claim_postgres.gd").new(pg).receive_in_transaction(claim_item).ok and pg.commit())
+	assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(character).item_state))
+	await wait_for(func() -> bool: return world.inventory_runtime.mutations_allowed(actor))
+	assert((await phase(actor,"seller-flow")).ok and facts==20)
+	assert((await phase(actor,"seller-lost-process",{"uid":claim_item.uid})).error=="seller_pending")
+	await phase(actor,"exit")
+	await wait_for(func() -> bool: return not world.connected_players.has(actor))
+	await start_client(207,"alpha","seller-restored")
+	await wait_for(func() -> bool: return map.reports.has("seller-restored-ready"))
+	actor=map.reports["seller-restored-ready"].peer
+	assert((await phase(actor,"seller-restored",{"uid":claim_item.uid})).ok and facts==21)
+	assert(int(Wallet.new(pg).load_wallet(21).balance)==1850)
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	await phase(actor,"exit")
 	await phase(observer,"exit")
@@ -369,6 +395,14 @@ func compose_ui() -> void:
 	adapter=ItemUiAdapter.new()
 	adapter.journal.directory=fixture_dir+"/journal"
 	adapter.attach(map.endpoint,dispatcher,session,get_tree())
+	market_adapter=MarketUiAdapter.new()
+	market_adapter.state_updated.connect(func(view: Dictionary)->void:market_views.append(view))
+	market_adapter.journal.directory=fixture_dir+"/revenue-journal"
+	market_adapter.seller_journal.directory=fixture_dir+"/seller-journal"
+	market_adapter.attach(map.currency_map.market_endpoint,dispatcher,session,get_tree())
+	map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+	map.endpoint.state_changed.connect(market_adapter.accept_context)
+	market_adapter.accept_context(map.endpoint.state)
 	storage_adapter=preload("res://source/client/ui_web/storage_ui_adapter.gd").new()
 	storage_adapter.journal.directory=fixture_dir+"/storage-journal"
 	storage_adapter.attach(map.endpoint,dispatcher,session,get_tree(),func() -> bool: return true)
@@ -391,6 +425,9 @@ func compose_ui() -> void:
 	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 
 func close_ui() -> void:
+	map.endpoint.state_changed.disconnect(market_adapter.accept_context)
+	map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+	market_adapter.dispose()
 	map.endpoint.state_changed.disconnect(shop_adapter.accept_context)
 	map.endpoint.state_changed.disconnect(upgrade_adapter.accept_context)
 	npc_adapter.dispose()
@@ -420,7 +457,7 @@ func lose_response(type: String, payload: Dictionary) -> Dictionary:
 	return result
 
 func run_client() -> void:
-	get_tree().create_timer(60).timeout.connect(func() -> void: get_tree().quit(1))
+	get_tree().create_timer(85).timeout.connect(func() -> void: get_tree().quit(1))
 	fixture_dir=str(CmdlineUtils.get_parsed_args()["fixture-dir"])
 	wire=WireClient.new()
 	wire.name="Client"
@@ -439,6 +476,51 @@ func run_client() -> void:
 func client_phase(label: String, payload: Dictionary) -> void:
 	var result: Dictionary={"ok":true}
 	match label:
+		"seller-flow":
+			assert((await market_adapter.open()).ok)
+			var target: Dictionary=map.endpoint.state.items.filter(func(row: Dictionary)->bool:return row.location=="bag" and row.definition_id=="iron_sword")[0]
+			map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+			assert((await command("market.list",{"command_id":"browser-list","uid":target.uid,"revision":target.revision,"position":0,"price":150})).error=="seller_pending")
+			map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+			assert(not map.endpoint.state.items.any(func(row: Dictionary)->bool:return row.uid==target.uid))
+			bridge.reset_transport()
+			bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+			assert(ui_snapshots.back().market.sellerPending)
+			assert((await command("market.retry_seller",{})).ok)
+			var offer: Dictionary=map.currency_map.market_endpoint.state.offers[0]
+			assert((await command("market.edit",{"command_id":"browser-edit","offer_id":offer.offer_id,"revision":offer.revision,"position":3,"price":175})).ok)
+			var snapshot: Dictionary=map.currency_map.market_endpoint.state
+			assert((await command("market.configure",{"command_id":"browser-config","revision":snapshot.revision,"name":"PG seller","status":"paused"})).ok)
+			offer=map.currency_map.market_endpoint.state.offers[0]
+			map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+			assert((await command("market.cancel",{"command_id":"browser-cancel","offer_id":offer.offer_id,"revision":offer.revision})).error=="seller_pending")
+			map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+			close_ui()
+			compose_ui()
+			await wait_for(func()->bool:return market_adapter.seller_journal.load_pending().entry.is_empty())
+			assert((await market_adapter.open()).ok and map.currency_map.market_endpoint.state.offers.is_empty())
+			# Persisted but never sent intent: reload/reopen performs discovery only,
+			# and explicit retry executes the saved body under its original native ID.
+			var operation: String="seller-"+Crypto.new().generate_random_bytes(16).hex_encode()
+			var saved: Dictionary={"action":"configure","payload":{"revision":map.currency_map.market_endpoint.state.revision,"name":"Explicit saved intent","status":"active"}}
+			assert(market_adapter.seller_journal.save_pending(operation,saved))
+			close_ui()
+			market_views.clear()
+			compose_ui()
+			assert((await market_adapter.open()).ok)
+			await wait_for(func()->bool:return not market_views.is_empty() and market_views.back().sellerPending and not market_views.back().sellerBusy)
+			assert(map.currency_map.market_endpoint.state.name!="Explicit saved intent" and market_adapter.seller_journal.load_pending().entry.id==operation)
+			assert((await command("market.retry_seller",{})).ok)
+			assert(map.currency_map.market_endpoint.state.name=="Explicit saved intent")
+		"seller-lost-process":
+			var claim: Dictionary=map.currency_map.market_endpoint.state.claims.filter(func(row: Dictionary)->bool:return row.uid==str(payload.uid))[0]
+			map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+			result=await command("market.claim",{"command_id":"browser-claim","uid":claim.uid,"revision":claim.revision})
+			map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+		"seller-restored":
+			await wait_for(func()->bool:return market_adapter.seller_journal.load_pending().entry.is_empty())
+			assert((await market_adapter.open()).ok and map.currency_map.market_endpoint.state.claims.is_empty())
+			assert(map.endpoint.state.items.any(func(row: Dictionary)->bool:return row.uid==str(payload.uid)))
 		"ground-restored":
 			assert(map.endpoint.state.items.size()==3 and map.endpoint.state.items.any(func(row: Dictionary) -> bool: return row.uid==str(payload.uid) and row.amount==4))
 			assert(map.endpoint.state.storage.items.size()==1)

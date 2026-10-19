@@ -1,5 +1,7 @@
 # Development and verification
 
+- [PostgreSQL seller runtime](postgres-seller-runtime.md) - P3m optional seller/claim execution, private projection fencing and client journal recovery; buyer settlement remains separate.
+
 - [Testing policy](testing.md) — supported suites, fixture expectations, runtime acceptance.
 - [PostgreSQL backend concurrency acceptance](postgres-concurrency-acceptance.md) — opt-in P2 matrix; production still uses SQLite.
 - [PostgreSQL Inventory execution](postgres-inventory-executor.md) — P3a local bounded transaction owners; runtime integration remains pending.

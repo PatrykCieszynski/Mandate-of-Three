@@ -613,3 +613,18 @@ saved drop after process relog; run sequentially with other 18098/18099 suites.
 The economic network map suppresses combat simulation/rendering; `run-combat.ps1`
 remains the existing server/two-client combat/pickup regression on SQLite.
 See [ground-item runtime](postgres-ground-items.md) for explicit scope limits.
+
+## PostgreSQL seller / item claims (P3m, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite seller-runtime`
+checks all five seller-local operations, session fences, capacity/independent
+progress, native mutation/ACK COMMIT failures, account-scoped receipt replay,
+alt recovery, cross-domain snapshot freshness and graceful drain. Existing
+`--suite shop-seller` and `--suite account-claims` preserve transaction acceptance.
+
+`--suite inventory-endpoint` now runs seven actual headless clients, adding seller
+lost-reply retry, UI recreation, claim process-relog and saved-but-unsent explicit
+retry through production RPC/bridge/adapters. Run sequentially with 18098/18099
+suites. `run-web-inventory.ps1 -Scene market_network` checks the existing SQLite
+path. No physical CEF, full Gateway/bootstrap or P4 cutover acceptance is implied.
+See [seller runtime](postgres-seller-runtime.md) and its evidence.

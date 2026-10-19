@@ -37,6 +37,9 @@ func storage_runtime() -> RefCounted:
 func ground_item_runtime() -> RefCounted:
 	return null if _server()==null else _server().ground_item_runtime
 
+func seller_runtime() -> RefCounted:
+	return null if _server()==null else _server().seller_runtime
+
 func npc_interactions_allowed(peer: int) -> bool:
 	if transfer_pending(peer): return false
 	return mutations_allowed(peer) if npc_runtime()==null else inventory_runtime()!=null and inventory_runtime().mutations_allowed(peer)
