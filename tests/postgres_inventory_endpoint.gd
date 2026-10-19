@@ -10,6 +10,27 @@ class CurrencyMap extends GameWorld3D:
 		currency_endpoint.name="Currency"
 		currency_endpoint.services=services
 		add_child(currency_endpoint)
+		inventory_endpoint=get_parent().endpoint
+		npc_endpoint=NpcInteraction3D.new()
+		npc_endpoint.name="Npc"
+		npc_endpoint.services=services
+		add_child(npc_endpoint)
+		shop_endpoint=Shop3D.new()
+		shop_endpoint.name="Shop"
+		shop_endpoint.services=services
+		add_child(shop_endpoint)
+		upgrade_endpoint=Upgrade3D.new()
+		upgrade_endpoint.name="Upgrade"
+		upgrade_endpoint.services=services
+		add_child(upgrade_endpoint)
+		get_parent().upgrade_endpoint=upgrade_endpoint
+		if GameMode.is_world_server():
+			var blacksmith:=NeutralNpc3D.new()
+			blacksmith.instance_id="fixture-blacksmith"
+			blacksmith.definition=NpcDefinitions.get_definition(&"blacksmith")
+			blacksmith.position=Vector3(0,0,1)
+			add_child(blacksmith)
+			assert(npc_endpoint.register_actor(blacksmith))
 	func _process(_delta: float) -> void: pass
 	func _physics_process(_delta: float) -> void: pass
 	func _exit_tree() -> void: combat_endpoint.free()
@@ -53,6 +74,10 @@ var client_processes: Array[int]=[]
 var fixture_dir: String
 var facts: int=0
 var wallet_execution: RefCounted
+var npc_execution: RefCounted
+var npc_adapter: NpcUiAdapter
+var shop_adapter: ShopUiAdapter
+var upgrade_adapter: UpgradeUiAdapter
 
 func _ready() -> void:
 	get_tree().create_timer(45).timeout.connect(func() -> void: get_tree().quit(1))
@@ -135,20 +160,23 @@ func run() -> void:
 	control=Executor.new()
 	execution=Executor.new()
 	wallet_execution=Executor.new()
-	assert(control.start(connection,2,2) and execution.start(connection,2,2) and wallet_execution.start(connection,2,2))
-	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready():
+	npc_execution=Executor.new()
+	assert(control.start(connection,2,2) and execution.start(connection,2,2) and wallet_execution.start(connection,2,2) and npc_execution.start(connection,2,2))
+	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready() or not npc_execution.is_ready():
 		control.poll()
 		execution.poll()
 		wallet_execution.poll()
+		npc_execution.poll()
 		await get_tree().process_frame
 	master.inventory_session_issuer=Issuer.new(master,control)
 	world.inventory_runtime=Runtime.new(world,execution)
 	world.wallet_runtime=load("res://source/server/world/database/postgres/wallet_runtime_postgres.gd").new(world,wallet_execution)
+	world.npc_runtime=load("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,npc_execution)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
 		var body:=PlayerActor3D.new()
-		map.add_child(body)
+		map.currency_map.add_child(body)
 		map.characters[peer]=body
 		map.currency_map.characters[peer]=body
 		map.endpoint.initialize_peer(peer)
@@ -158,6 +186,9 @@ func run() -> void:
 		map.characters.erase(peer)
 		map.currency_map.characters.erase(peer)
 		map.currency_map.currency_endpoint.remove_peer(peer)
+		map.currency_map.shop_endpoint.remove_peer(peer)
+		map.currency_map.upgrade_endpoint.remove_peer(peer)
+		map.currency_map.npc_endpoint.remove_peer(peer)
 		map.endpoint.remove_peer(peer))
 	map.endpoint.inventory_changed.connect(func(_owner: int) -> void: facts+=1)
 	await start_client(201,"alpha","actor")
@@ -232,6 +263,25 @@ func run() -> void:
 	assert(facts==9,"nine Inventory command mutations; invalidation/replay/no-op/rejection add no commit facts")
 	assert(sqlite.query("SELECT COUNT(*) AS n FROM item_instances;") and int(sqlite.query_result[0].n)==0)
 	assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.item_instances;").rows[0].n)==2)
+	assert((await phase(observer,"npc-foreign")).error=="no_interaction")
+	assert((await phase(actor,"npc-open")).ok)
+	map.characters[actor].position=Vector3(20,0,0)
+	assert((await phase(actor,"npc-range")).error in ["out_of_range","no_interaction"])
+	assert(int(Wallet.new(pg).load_wallet(21).balance)==1550 and Items.new(pg).inventory(character).items.size()==1)
+	map.characters[actor].position=Vector3.ZERO
+	await wait_for(func() -> bool: return world.wallet_runtime.ready(actor))
+	assert(world.wallet_runtime.add_income(actor,2500))
+	assert((await phase(actor,"npc-flow")).ok)
+	assert(int(Wallet.new(pg).load_wallet(21).balance)==1950)
+	assert(Items.new(pg).inventory(character).items.size()==2 and facts==12,"NPC purchase/material/upgrade each publish once; receipt replay does not")
+	assert((await phase(actor,"npc-lost-process")).error=="purchase_pending")
+	await phase(actor,"exit")
+	await wait_for(func() -> bool: return not world.connected_players.has(actor))
+	await start_client(204,"alpha","npc-restored")
+	await wait_for(func() -> bool: return map.reports.has("npc-restored-ready"))
+	actor=map.reports["npc-restored-ready"].peer
+	assert((await phase(actor,"npc-restored")).ok)
+	assert(int(Wallet.new(pg).load_wallet(21).balance)==1850 and Items.new(pg).inventory(character).items.size()==3 and facts==13)
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	await phase(actor,"exit")
 	await phase(observer,"exit")
@@ -265,6 +315,18 @@ func compose_ui() -> void:
 	adapter=ItemUiAdapter.new()
 	adapter.journal.directory=fixture_dir+"/journal"
 	adapter.attach(map.endpoint,dispatcher,session,get_tree())
+	npc_adapter=NpcUiAdapter.new()
+	npc_adapter.attach(map.currency_map.npc_endpoint,dispatcher,session,get_tree())
+	shop_adapter=ShopUiAdapter.new()
+	shop_adapter.journal.directory=fixture_dir+"/shop-journal"
+	shop_adapter.attach(map.currency_map.shop_endpoint,dispatcher,session,get_tree())
+	upgrade_adapter=UpgradeUiAdapter.new()
+	upgrade_adapter.journal.directory=fixture_dir+"/upgrade-journal"
+	upgrade_adapter.attach(map.currency_map.upgrade_endpoint,dispatcher,session,get_tree())
+	map.endpoint.state_changed.connect(shop_adapter.accept_context)
+	map.endpoint.state_changed.connect(upgrade_adapter.accept_context)
+	shop_adapter.accept_context(map.endpoint.state)
+	upgrade_adapter.accept_context(map.endpoint.state)
 	bridge.outgoing.connect(func(json: String) -> void:
 		var envelope: Dictionary=JSON.parse_string(json)
 		if envelope.type=="command.result": ui_results[envelope.id]=envelope.payload
@@ -272,6 +334,11 @@ func compose_ui() -> void:
 	bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
 
 func close_ui() -> void:
+	map.endpoint.state_changed.disconnect(shop_adapter.accept_context)
+	map.endpoint.state_changed.disconnect(upgrade_adapter.accept_context)
+	npc_adapter.dispose()
+	shop_adapter.dispose()
+	upgrade_adapter.dispose()
 	adapter.dispose()
 	session.close("teardown")
 	dispatcher.dispose()
@@ -314,6 +381,45 @@ func run_client() -> void:
 func client_phase(label: String, payload: Dictionary) -> void:
 	var result: Dictionary={"ok":true}
 	match label:
+		"npc-open":
+			assert((await command("npc.interact",{"npc_instance_id":"fixture-blacksmith"})).ok)
+			result=await command("npc.select_service",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop"})
+		"npc-range": result=await command("shop.buy",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop","offer_id":"iron_sword"})
+		"npc-lost-process":
+			assert((await command("npc.select_service",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop"})).ok)
+			map.currency_map.shop_endpoint.operation_finished.disconnect(session.finish)
+			result=await command("shop.buy",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop","offer_id":"upgrade_ore"})
+			map.currency_map.shop_endpoint.operation_finished.connect(session.finish)
+		"npc-restored":
+			await wait_for(func() -> bool: return shop_adapter.journal.load_pending().entry.is_empty())
+			await wait_for(func() -> bool: return map.currency_map.currency_endpoint.state.get("balance",-1)==1850)
+			assert(map.endpoint.state.items.size()==3)
+		"npc-foreign": result=await command("shop.buy",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop","offer_id":"iron_sword"})
+		"npc-flow":
+			assert((await command("npc.interact",{"npc_instance_id":"fixture-blacksmith"})).ok)
+			assert((await command("npc.select_service",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop"})).ok)
+			assert((await command("shop.open",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop"})).ok)
+			var old_uid: String=item().uid
+			map.currency_map.shop_endpoint.operation_finished.disconnect(session.finish)
+			var lost:=await command("shop.buy",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop","offer_id":"iron_sword"})
+			map.currency_map.shop_endpoint.operation_finished.connect(session.finish)
+			assert(lost.error=="purchase_pending")
+			assert((await command("shop.retry",{})).ok)
+			assert((await command("shop.buy",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop","offer_id":"upgrade_ore"})).ok)
+			var target: Dictionary=map.endpoint.state.items.filter(func(row: Dictionary) -> bool: return row.uid!=old_uid and row.definition_id=="iron_sword")[0]
+			assert((await command("npc.select_service",{"npc_instance_id":"fixture-blacksmith","service_id":"upgrade"})).ok)
+			var selected: Dictionary={"npc_instance_id":"fixture-blacksmith","service_id":"upgrade","id":target.uid,"revision":target.revision}
+			assert((await command("upgrade.select",selected)).ok)
+			assert(map.currency_map.upgrade_endpoint.state.candidate.id==target.uid)
+			map.currency_map.upgrade_endpoint.operation_finished.disconnect(session.finish)
+			lost=await command("upgrade.execute",selected)
+			map.currency_map.upgrade_endpoint.operation_finished.connect(session.finish)
+			assert(lost.error=="upgrade_pending")
+			close_ui()
+			compose_ui() # Restored journal performs read-only receipt recovery.
+			await wait_for(func() -> bool: return upgrade_adapter.journal.load_pending().entry.is_empty())
+			await wait_for(func() -> bool: return map.currency_map.currency_endpoint.state.get("balance",-1)==1950)
+			assert(map.endpoint.state.items.filter(func(row: Dictionary) -> bool: return row.uid==target.uid)[0].upgrade_level==1)
 		"wallet-pickup":
 			map.currency_map.currency_endpoint.request_pickup.rpc_id(1,int(payload.drop))
 			await wait_for(func() -> bool: return map.currency_map.currency_endpoint.state.get("balance",-1)==int(payload.balance))

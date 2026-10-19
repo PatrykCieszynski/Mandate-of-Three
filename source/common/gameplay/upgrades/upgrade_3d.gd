@@ -9,10 +9,22 @@ var _selected: Dictionary[int, String] = {}
 var _last_upgrade: Dictionary[int, int] = {}
 var _last_receipt: Dictionary[int, int] = {}
 var _published: Dictionary[int, Dictionary] = {}
+var _postgres: RefCounted
 
 func _ready() -> void:
 	_world = get_parent()
 	_world.npc_endpoint.context_changed.connect(func(peer_id: int) -> void: publish(peer_id))
+	if GameMode.is_world_server() and services.npc_runtime()!=null:
+		_postgres=preload("res://source/common/gameplay/world3d/endpoints/npc_postgres_adapter.gd").new(self,services.npc_runtime(),"upgrade")
+
+func _exit_tree() -> void:
+	if _postgres!=null: _postgres.dispose()
+
+func _inventory(peer: int) -> Dictionary:
+	if services.inventory_runtime()!=null:
+		return services.inventory_runtime().snapshot_for_peer(peer)
+	var player:=services.player_for_peer(peer)
+	return {} if player==null or services.item_store()==null else services.item_store().inventory(player.player_id)
 
 func authorization(peer_id: int, instance_id: String, service_id: StringName) -> Dictionary:
 	var body: Node3D = _world.characters.get(peer_id)
@@ -27,6 +39,17 @@ func authorization(peer_id: int, instance_id: String, service_id: StringName) ->
 func select_for_peer(peer_id: int, instance_id: String, service_id: StringName, uid: String, revision: int) -> Dictionary:
 	var auth: Dictionary = authorization(peer_id,instance_id,service_id)
 	if not auth.ok: return auth
+	if _postgres!=null:
+		if not services.inventory_runtime().mutations_allowed(peer_id): return {"ok":false,"error":"storage"}
+		var inventory:=_inventory(peer_id)
+		for item: Dictionary in inventory.get("items",[]):
+			if item.uid!=uid: continue
+			if item.revision!=revision: return {"ok":false,"error":"stale"}
+			if item.location!="bag": return {"ok":false,"error":"placement"}
+			if item.definition_id!=str(auth.recipe.item_definition_id) or item.amount!=1: return {"ok":false,"error":"unsupported_item"}
+			_selected[peer_id]=uid
+			return {"ok":true}
+		return {"ok":false,"error":"owner"}
 	if services.economy()==null: return {"ok":false,"error":"unsupported"}
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"ok":false,"error":"unknown_player"}
@@ -67,7 +90,7 @@ func receipt_for_peer(peer_id: int, operation_id: String, now: int) -> Dictionar
 	return operation.response()
 
 func snapshot_for_peer(peer_id: int) -> Dictionary:
-	if services.item_store()==null: return {"active":false}
+	if services.item_store()==null and services.inventory_runtime()==null: return {"active":false}
 	var context: NpcInteractionContext = _world.npc_endpoint.contexts.get(peer_id)
 	if context == null:
 		_selected.erase(peer_id)
@@ -79,8 +102,8 @@ func snapshot_for_peer(peer_id: int) -> Dictionary:
 	var recipe: UpgradeDefinition = auth.recipe
 	var player: PlayerResource = services.player_for_peer(peer_id)
 	if player == null: return {"active":false}
-	var inventory: Dictionary = services.item_store().inventory(player.player_id)
-	if not inventory.ok: return {"active":false}
+	var inventory: Dictionary = _inventory(peer_id)
+	if not inventory.get("ok",false): return {"active":false}
 	var owned: int = 0
 	var candidate: Dictionary = {}
 	for item: Dictionary in inventory.items:
@@ -104,6 +127,20 @@ func request_upgrade(action: String, instance_id: String, service_id: String, ui
 	if action != "receipt" and (not ItemInstance.valid_uid(uid) or revision < 0): return
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id): return
+	if _postgres!=null and action in ["upgrade","receipt"]:
+		var now: int=Time.get_ticks_msec()
+		if _postgres.busy(peer_id) or now-_last_upgrade.get(peer_id,-1000)<100:
+			receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":"storage"})
+			return
+		_last_upgrade[peer_id]=now
+		if action=="receipt": _postgres.receipt(peer_id,command_id,operation_id)
+		else:
+			var auth:=authorization(peer_id,instance_id,StringName(service_id))
+			if not auth.ok or services.transfer_pending(peer_id):
+				receive_operation.rpc_id(peer_id,command_id,{"ok":false,"error":auth.get("error","transfer_pending")})
+				return
+			_postgres.upgrade(peer_id,command_id,operation_id,auth.recipe,uid,revision)
+		return
 	var result: Dictionary
 	match action:
 		"receipt": result = receipt_for_peer(peer_id,operation_id,Time.get_ticks_msec())
@@ -120,6 +157,7 @@ func request_upgrade(action: String, instance_id: String, service_id: String, ui
 	receive_operation.rpc_id(peer_id,command_id,{"ok":true} if result.ok else {"ok":false,"error":result.error})
 
 func remove_peer(peer_id: int) -> void:
+	if _postgres!=null: _postgres.remove_peer(peer_id)
 	_selected.erase(peer_id)
 	_published.erase(peer_id)
 	_last_upgrade.erase(peer_id)

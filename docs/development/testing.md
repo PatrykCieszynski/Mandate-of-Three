@@ -572,3 +572,15 @@ suite additionally checks actual client currency RPCs/snapshots and process relo
 with unchanged SQLite wallet rows. These are optional suites, not added to smoke.
 See [wallet runtime](postgres-wallet-runtime.md) for the supplied fixture boundaries
 and remaining production/multi-World adoption work.
+
+## PostgreSQL NPC runtime (P3j, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite npc-runtime`
+uses owned disposable PG workers to check pending-income/item/material atomicity,
+receipt replay with later income, full native capacity, independent accounts,
+lost successful completion, native failed COMMIT, projection ACK repair, alt
+takeover and graceful drain. The extended `inventory-endpoint` suite additionally
+uses four actual client processes and the production Web UI bridge/adapters for
+NPC range checks, Shop retry, Upgrade reload and purchase process-relogin recovery.
+No default CI expansion or physical CEF validation is implied. See
+[NPC runtime](postgres-npc-runtime.md) and its evidence for the precise boundaries.

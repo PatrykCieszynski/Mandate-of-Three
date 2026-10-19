@@ -19,6 +19,7 @@ var _executor: RefCounted
 var _bindings: Dictionary={}
 var _jobs: Dictionary={}
 var _generation: int=0
+var _external: Dictionary={}
 
 func _init(world: WorldServer, executor: RefCounted) -> void:
 	_world=world
@@ -61,7 +62,35 @@ func _for_peer(peer_id: int) -> Dictionary:
 
 func mutations_allowed(peer_id: int) -> bool:
 	var binding:=_for_peer(peer_id)
-	return not binding.is_empty() and binding.stage=="ready"
+	return not binding.is_empty() and binding.stage=="ready" and not _external.has(binding.context.account_id)
+
+func hold_npc(peer_id: int, operation_id: String) -> bool:
+	if not mutations_allowed(peer_id): return false
+	var binding:=_for_peer(peer_id)
+	_external[binding.context.account_id]=operation_id
+	_world.invalidate_runtime_equipment(binding.context.character)
+	ready_changed.emit(peer_id,false)
+	return true
+
+## Trusted NPC coordinator releases only its own hold. Always refresh/ACK even
+## for a rejection/replay, since admission deliberately invalidated combat RAM.
+func finish_npc(account: int, operation_id: String, marker: Dictionary = {}) -> void:
+	if _external.get(account,"")!=operation_id: return
+	_external.erase(account)
+	var binding: Dictionary=_bindings.get(account,{})
+	if binding.is_empty(): return
+	if not marker.is_empty(): invalidate_item_state(marker)
+	if binding.stage=="ready":
+		_restart_recovery(binding)
+		ready_changed.emit(binding.peer,false)
+
+func repair_npc_projection(peer: int) -> bool:
+	var binding:=_for_peer(peer)
+	if binding.is_empty() or binding.ticket!=0 or binding.stage!="paused": return false
+	binding.repairs=0
+	_restart_recovery(binding)
+	ready_changed.emit(peer,false)
+	return true
 
 func status(peer_id: int) -> String:
 	var binding:=_for_peer(peer_id)
@@ -125,7 +154,7 @@ func request_outcome(peer_id: int, operation_id: String) -> Dictionary:
 func submit(peer_id: int, operation_id: String, action: String, uid: String, revision: int, position: int) -> Dictionary:
 	var binding:=_for_peer(peer_id)
 	if binding.is_empty(): return {"queued":false,"error":"stale_session"}
-	if binding.stage!="ready": return {"queued":false,"error":"recovery_required"}
+	if binding.stage!="ready" or _external.has(binding.context.account_id): return {"queued":false,"error":"recovery_required"}
 	if not Commands.valid_id(operation_id) or not Items.valid_inventory_request(action,uid,revision,position): return {"queued":false,"error":"request"}
 	binding.command={"id":operation_id,"action":action,"uid":uid,"revision":revision,"position":position}
 	binding.stage="admit"
@@ -271,7 +300,7 @@ func _finish_ready(binding: Dictionary) -> void:
 	binding.command={}
 	binding.terminal={}
 	binding.stage="ready"
-	ready_changed.emit(binding.peer,true)
+	ready_changed.emit(binding.peer,not _external.has(binding.context.account_id))
 	if _still_bound(binding) and binding.stage=="ready" and not command.is_empty(): operation_finished.emit(binding.peer,command.id,terminal.duplicate(true))
 
 func _next_page(binding: Dictionary) -> void:

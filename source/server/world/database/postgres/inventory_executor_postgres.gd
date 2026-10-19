@@ -7,6 +7,7 @@ const Commands = preload("res://source/server/world/database/postgres/economy_co
 const Intents = preload("res://source/server/world/database/postgres/inventory_intent_postgres.gd")
 const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
 const WalletSession = preload("res://source/server/world/database/postgres/wallet_session_postgres.gd")
+const NpcSession = preload("res://source/server/world/database/postgres/npc_session_postgres.gd")
 enum State { STOPPED = 0, STARTING = 1, RUNNING = 2, DRAINING = 3 }
 const MAX_WORKERS: int=4
 const MAX_CAPACITY_PER_WORKER: int=16
@@ -83,11 +84,14 @@ class SessionWorker extends RefCounted:
 			if database.is_open() or _open(database):
 				var intent: String=str(job.get("intent",""))
 				var store: RefCounted
-				if intent in ["wallet_snapshot","wallet_batch"]: store=WalletSession.new(database)
+				if intent in ["npc_execute","npc_receipt"]: store=NpcSession.new(database)
+				elif intent in ["wallet_snapshot","wallet_batch"]: store=WalletSession.new(database)
 				elif intent.is_empty(): store=Items.new(database)
 				elif intent in ["session_install","session_inspect","session_revoke","session_ready"]: store=Sessions.new(database)
 				else: store=Intents.new(database)
-				if intent=="wallet_snapshot": result=store.snapshot(job.session)
+				if intent=="npc_execute": result=store.execute(job.session,job.npc_kind,job.operation_id,job.body,job.income,job.income_token)
+				elif intent=="npc_receipt": result=store.receipt(job.session,job.issuer,job.npc_kind,job.operation_id)
+				elif intent=="wallet_snapshot": result=store.snapshot(job.session)
 				elif intent=="wallet_batch": result=store.batch(job.session,job.issuer,job.operation_id,job.income,job.cost)
 				elif intent=="session_install": result=store.install_verified_grant(job.identity,job.expected_epoch)
 				elif intent=="session_inspect": result=store.inspect_grant(job.identity)
@@ -213,6 +217,14 @@ func submit_wallet_snapshot(context: Dictionary) -> Dictionary:
 func submit_wallet_batch(context: Dictionary, issuer: int, operation_id: String, income: int, cost: int) -> Dictionary:
 	if issuer<=0 or income<0 or income>9000000000000000 or cost<0 or cost>9000000000000000 or (income==0 and cost==0): return {"queued":false,"error":"request"}
 	return _session_job(context,"wallet_batch",operation_id,{"issuer":issuer,"income":income,"cost":cost})
+
+func submit_npc(context: Dictionary, kind: String, operation_id: String, body: Dictionary, income: int, token: String) -> Dictionary:
+	if kind not in ["buy","upgrade"] or income<0 or income>9000000000000000 or token.length()!=32: return {"queued":false,"error":"request"}
+	return _session_job(context,"npc_execute",operation_id,{"npc_kind":kind,"body":body.duplicate(true),"income":income,"income_token":token})
+
+func submit_npc_receipt(context: Dictionary, issuer: int, kind: String, operation_id: String) -> Dictionary:
+	if issuer<=0 or kind not in ["buy","upgrade"]: return {"queued":false,"error":"request"}
+	return _session_job(context,"npc_receipt",operation_id,{"issuer":issuer,"npc_kind":kind})
 
 func _session_job(context: Dictionary, mode: String, operation_id: String, fields: Dictionary) -> Dictionary:
 	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return {"queued":false,"error":"request"}
