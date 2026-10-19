@@ -8,6 +8,7 @@ const Intents = preload("res://source/server/world/database/postgres/inventory_i
 const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
 const WalletSession = preload("res://source/server/world/database/postgres/wallet_session_postgres.gd")
 const NpcSession = preload("res://source/server/world/database/postgres/npc_session_postgres.gd")
+const StorageSession = preload("res://source/server/world/database/postgres/storage_session_postgres.gd")
 enum State { STOPPED = 0, STARTING = 1, RUNNING = 2, DRAINING = 3 }
 const MAX_WORKERS: int=4
 const MAX_CAPACITY_PER_WORKER: int=16
@@ -84,12 +85,15 @@ class SessionWorker extends RefCounted:
 			if database.is_open() or _open(database):
 				var intent: String=str(job.get("intent",""))
 				var store: RefCounted
-				if intent in ["npc_execute","npc_receipt"]: store=NpcSession.new(database)
+				if intent in ["storage_execute","storage_receipt"]: store=StorageSession.new(database)
+				elif intent in ["npc_execute","npc_receipt"]: store=NpcSession.new(database)
 				elif intent in ["wallet_snapshot","wallet_batch"]: store=WalletSession.new(database)
 				elif intent.is_empty(): store=Items.new(database)
 				elif intent in ["session_install","session_inspect","session_revoke","session_ready"]: store=Sessions.new(database)
 				else: store=Intents.new(database)
-				if intent=="npc_execute": result=store.execute(job.session,job.npc_kind,job.operation_id,job.body,job.income,job.income_token)
+				if intent=="storage_execute": result=store.execute(job.session,job.operation_id,job.body)
+				elif intent=="storage_receipt": result=store.receipt(job.session,job.issuer,job.operation_id)
+				elif intent=="npc_execute": result=store.execute(job.session,job.npc_kind,job.operation_id,job.body,job.income,job.income_token)
 				elif intent=="npc_receipt": result=store.receipt(job.session,job.issuer,job.npc_kind,job.operation_id)
 				elif intent=="wallet_snapshot": result=store.snapshot(job.session)
 				elif intent=="wallet_batch": result=store.batch(job.session,job.issuer,job.operation_id,job.income,job.cost)
@@ -102,7 +106,7 @@ class SessionWorker extends RefCounted:
 				elif intent=="session_outcome": result=store.outcome_session(job.session,job.operation_id)
 				elif intent=="session_discover": result=store.discover_session(job.session,job.after,job.limit)
 				elif intent=="session_pending": result=store.discover_pending_session(job.session,job.after,job.limit)
-				elif intent=="session_snapshot": result=store.snapshot_session(job.session)
+				elif intent=="session_snapshot": result=store.snapshot_session(job.session,job.get("include_storage",false))
 				elif intent=="admit": result=store.admit(job.character,job.operation_id,job.action,job.uid,job.revision,job.position)
 				elif intent=="resume": result=store.execute(job.character,job.operation_id)
 				elif intent=="outcome": result=store.outcome(job.character,job.operation_id)
@@ -208,8 +212,16 @@ func submit_session_pending_discovery(context: Dictionary, after: int = 0, limit
 	if after<0 or limit<1 or limit>Intents.MAX_PAGE: return {"queued":false,"error":"request"}
 	return _session_job(context,"session_pending","",{"after":after,"limit":limit})
 
-func submit_session_snapshot(context: Dictionary) -> Dictionary:
-	return _session_job(context,"session_snapshot","",{})
+func submit_session_snapshot(context: Dictionary, include_storage: bool = false) -> Dictionary:
+	return _session_job(context,"session_snapshot","",{"include_storage":include_storage})
+
+func submit_storage(context: Dictionary, operation_id: String, body: Dictionary) -> Dictionary:
+	if not StorageSession.valid_body(body): return {"queued":false,"error":"request"}
+	return _session_job(context,"storage_execute",operation_id,{"body":body.duplicate(true)})
+
+func submit_storage_receipt(context: Dictionary, issuer: int, operation_id: String) -> Dictionary:
+	if issuer<=0: return {"queued":false,"error":"request"}
+	return _session_job(context,"storage_receipt",operation_id,{"issuer":issuer})
 
 func submit_wallet_snapshot(context: Dictionary) -> Dictionary:
 	return _session_job(context,"wallet_snapshot","",{})
@@ -229,7 +241,7 @@ func submit_npc_receipt(context: Dictionary, issuer: int, kind: String, operatio
 func _session_job(context: Dictionary, mode: String, operation_id: String, fields: Dictionary) -> Dictionary:
 	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return {"queued":false,"error":"request"}
 	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
-	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume","wallet_batch"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_pending","session_snapshot","wallet_snapshot"]}
+	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume","wallet_batch","npc_execute","storage_execute"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_pending","session_snapshot","wallet_snapshot"]}
 	job.merge(fields)
 	return _submit(job)
 

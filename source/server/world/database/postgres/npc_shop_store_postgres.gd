@@ -13,7 +13,7 @@ var receipt_replay: bool:
 var income_token: String=""
 
 func authorize_session(context: Dictionary, token: String) -> void:
-	_transaction.npc_context=context.duplicate(true)
+	_transaction.economic_context=context.duplicate(true)
 	income_token=token
 
 func _init(database: Object) -> void:

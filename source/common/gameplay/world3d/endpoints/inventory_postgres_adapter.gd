@@ -4,6 +4,7 @@ extends RefCounted
 var _endpoint: InventoryEndpoint3D
 var _runtime: RefCounted
 var _pending: Dictionary={}
+var _storage: RefCounted
 
 func _init(endpoint: InventoryEndpoint3D, runtime: RefCounted) -> void:
 	_endpoint=endpoint
@@ -13,6 +14,10 @@ func _init(endpoint: InventoryEndpoint3D, runtime: RefCounted) -> void:
 	_runtime.recovery_failed.connect(_failed)
 	_runtime.inventory_committed.connect(_committed)
 	_runtime.ready_changed.connect(_ready_changed)
+	_storage=_endpoint.services.storage_runtime()
+	if _storage!=null:
+		_storage.finished.connect(_storage_finished)
+		_storage.committed.connect(_committed)
 
 func dispose() -> void:
 	_runtime.snapshot_applied.disconnect(_snapshot)
@@ -20,6 +25,9 @@ func dispose() -> void:
 	_runtime.recovery_failed.disconnect(_failed)
 	_runtime.inventory_committed.disconnect(_committed)
 	_runtime.ready_changed.disconnect(_ready_changed)
+	if _storage!=null:
+		_storage.finished.disconnect(_storage_finished)
+		_storage.committed.disconnect(_committed)
 	_pending.clear()
 
 func remove_peer(peer: int) -> void: _pending.erase(peer)
@@ -46,9 +54,30 @@ func receipt(peer: int, command: String, operation: String) -> void:
 		return
 	_capture(peer,command,operation,_runtime.request_outcome(peer,operation))
 
-func _capture(peer: int, command: String, operation: String, result: Dictionary) -> void:
+func storage_submit(peer: int, command: String, operation: String, body: Dictionary) -> void:
+	if _pending.has(peer):
+		_reply(peer,command,{"ok":false,"error":"operation_pending"})
+		return
+	if _storage==null:
+		_reply(peer,command,{"ok":false,"error":"unsupported"})
+		return
+	if _endpoint.services.transfer_pending(peer):
+		_reply(peer,command,{"ok":false,"error":"transfer_pending"})
+		return
+	_capture(peer,command,operation,_storage.transfer(peer,operation,body),"storage")
+
+func storage_receipt(peer: int, command: String, operation: String) -> void:
+	if _pending.has(peer):
+		_reply(peer,command,{"ok":false,"error":"operation_pending"})
+		return
+	if _storage==null:
+		_reply(peer,command,{"ok":false,"error":"unsupported"})
+		return
+	_capture(peer,command,operation,_storage.receipt(peer,operation),"storage")
+
+func _capture(peer: int, command: String, operation: String, result: Dictionary, kind: String = "inventory") -> void:
 	if result.queued:
-		_pending[peer]={"command":command,"operation":operation}
+		_pending[peer]={"command":command,"operation":operation,"kind":kind}
 	else: _reply(peer,command,{"ok":false,"error":result.error})
 
 func _owns(peer: int) -> bool:
@@ -59,8 +88,7 @@ func _snapshot(peer: int, state: Dictionary) -> void:
 	var snapshot:=state.duplicate(true)
 	var marker: Dictionary=snapshot.item_state
 	snapshot.economic_context={"authority_id":marker.authority_id,"account_id":marker.account_id,"character_id":marker.character_id}
-	# Account Storage is a separate migration. Do not read its SQLite projection.
-	snapshot.storage={"ok":false,"error":"unsupported","items":[]}
+	if _storage==null: snapshot.storage={"ok":false,"error":"unsupported","items":[]}
 	_endpoint.prepare_inventory_snapshot(peer,snapshot)
 
 func _ready_changed(peer: int, ready: bool) -> void:
@@ -73,17 +101,24 @@ func _committed(peer: int) -> void:
 	if _owns(peer): _endpoint.publish_inventory_change(peer)
 
 func _finished(peer: int, operation: String, result: Dictionary) -> void:
+	_finish(peer,operation,result,"inventory")
+
+func _storage_finished(peer: int, operation: String, result: Dictionary) -> void:
+	_finish(peer,operation,result,"storage")
+
+func _finish(peer: int, operation: String, result: Dictionary, kind: String) -> void:
 	var pending: Dictionary=_pending.get(peer,{})
-	if pending.is_empty() or pending.operation!=operation: return
+	if pending.is_empty() or pending.operation!=operation or pending.kind!=kind: return
 	_pending.erase(peer)
 	var response:=result.duplicate(true)
-	# A durable rejection is just as final as success; transport/recovery failures
-	# never receive this flag. Missing receipt remains unresolved/read-only.
-	if response.get("error","")!="unknown_command": response.terminal=true
+	# A known business outcome is final for this delivery (only Inventory also
+	# persists rejections). Transport/recovery/missing receipts remain unresolved.
+	if response.get("error","") not in ["unknown_command","storage","outcome_unknown","busy","unavailable","recovery_required","operation_pending","stale_session","session_required"]: response.terminal=true
 	_reply(peer,pending.command,response)
 
 func _failed(peer: int, reason: String) -> void:
 	var pending: Dictionary=_pending.get(peer,{})
+	if not pending.is_empty() and pending.kind=="storage": return # Storage owns its reconciliation/retry.
 	_pending.erase(peer)
 	if not pending.is_empty(): _reply(peer,pending.command,{"ok":false,"error":reason})
 

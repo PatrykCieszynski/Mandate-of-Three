@@ -20,7 +20,7 @@ var _kind: String
 var _request: String
 var _resuming_inventory:=false
 var _inventory_context: Dictionary={}
-var npc_context: Dictionary={}
+var economic_context: Dictionary={}
 
 func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -> void:
 	db=database
@@ -94,8 +94,8 @@ func admit_in_transaction(owner: int, command: String, kind: String, args: Array
 	_command=command
 	_kind=kind
 	_request=JSON.stringify(args)
-	if kind in ["npc_shop.buy","upgrade"] or (kind=="inventory" and not _resuming_inventory):
-		var session_error:=Sessions.check_in_transaction(db,account_id,owner,_inventory_context if kind=="inventory" else npc_context)
+	if kind in ["npc_shop.buy","upgrade","storage"] or (kind=="inventory" and not _resuming_inventory):
+		var session_error:=Sessions.check_in_transaction(db,account_id,owner,_inventory_context if kind=="inventory" else economic_context)
 		if not session_error.is_empty():
 			cached=rollback(session_error)
 			return false

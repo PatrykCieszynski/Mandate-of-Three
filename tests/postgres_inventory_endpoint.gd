@@ -78,9 +78,11 @@ var npc_execution: RefCounted
 var npc_adapter: NpcUiAdapter
 var shop_adapter: ShopUiAdapter
 var upgrade_adapter: UpgradeUiAdapter
+var storage_adapter: RefCounted
+var storage_execution: RefCounted
 
 func _ready() -> void:
-	get_tree().create_timer(45).timeout.connect(func() -> void: get_tree().quit(1))
+	get_tree().create_timer(65).timeout.connect(func() -> void: get_tree().quit(1))
 	if GameMode.is_client(): run_client.call_deferred()
 	else: super._ready()
 
@@ -117,6 +119,7 @@ func run() -> void:
 	fixture_dir=OS.get_environment("MANDATE_PG_FIXTURE_DIR")
 	pg=ClassDB.instantiate("GodotSociDatabase")
 	assert(pg.open("postgresql",connection) and Schema.ensure_schema(pg))
+	assert(preload("res://source/server/world/database/postgres/storage_schema_postgres.gd").ensure_schema(pg))
 	sqlite.path=fixture_dir+"/identity.db"
 	assert(sqlite.open_db())
 	WorldSchema.ensure_schema(sqlite)
@@ -161,17 +164,22 @@ func run() -> void:
 	execution=Executor.new()
 	wallet_execution=Executor.new()
 	npc_execution=Executor.new()
-	assert(control.start(connection,2,2) and execution.start(connection,2,2) and wallet_execution.start(connection,2,2) and npc_execution.start(connection,2,2))
-	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready() or not npc_execution.is_ready():
+	storage_execution=Executor.new()
+	# Stay inside the disposable cluster's nine non-superuser slots.
+	assert(storage_execution.start(connection,1,2))
+	assert(control.start(connection,2,2) and execution.start(connection,2,2) and wallet_execution.start(connection,2,2) and npc_execution.start(connection,1,2))
+	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready() or not npc_execution.is_ready() or not storage_execution.is_ready():
 		control.poll()
 		execution.poll()
 		wallet_execution.poll()
 		npc_execution.poll()
+		storage_execution.poll()
 		await get_tree().process_frame
 	master.inventory_session_issuer=Issuer.new(master,control)
 	world.inventory_runtime=Runtime.new(world,execution)
 	world.wallet_runtime=load("res://source/server/world/database/postgres/wallet_runtime_postgres.gd").new(world,wallet_execution)
 	world.npc_runtime=load("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,npc_execution)
+	world.storage_runtime=load("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,storage_execution)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
@@ -282,6 +290,18 @@ func run() -> void:
 	actor=map.reports["npc-restored-ready"].peer
 	assert((await phase(actor,"npc-restored")).ok)
 	assert(int(Wallet.new(pg).load_wallet(21).balance)==1850 and Items.new(pg).inventory(character).items.size()==3 and facts==13)
+	assert((await phase(actor,"storage-flow")).ok)
+	assert(facts==16,"Storage deposit/rearrange/withdraw each publish once, receipt recovery does not")
+	assert((await phase(actor,"storage-lost-process")).error=="storage_pending")
+	await phase(actor,"exit")
+	await wait_for(func() -> bool: return not world.connected_players.has(actor))
+	await start_client(205,"alpha","storage-restored")
+	await wait_for(func() -> bool: return map.reports.has("storage-restored-ready"))
+	actor=map.reports["storage-restored-ready"].peer
+	assert((await phase(actor,"storage-restored")).ok)
+	assert(facts==17 and Items.new(pg).inventory(character).items.size()==2)
+	assert(preload("res://source/server/world/database/postgres/account_storage_postgres.gd").new(pg).snapshot(character).items.size()==1)
+	assert((await phase(observer,"storage-private")).ok)
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	await phase(actor,"exit")
 	await phase(observer,"exit")
@@ -315,6 +335,9 @@ func compose_ui() -> void:
 	adapter=ItemUiAdapter.new()
 	adapter.journal.directory=fixture_dir+"/journal"
 	adapter.attach(map.endpoint,dispatcher,session,get_tree())
+	storage_adapter=preload("res://source/client/ui_web/storage_ui_adapter.gd").new()
+	storage_adapter.journal.directory=fixture_dir+"/storage-journal"
+	storage_adapter.attach(map.endpoint,dispatcher,session,get_tree(),func() -> bool: return true)
 	npc_adapter=NpcUiAdapter.new()
 	npc_adapter.attach(map.currency_map.npc_endpoint,dispatcher,session,get_tree())
 	shop_adapter=ShopUiAdapter.new()
@@ -339,6 +362,7 @@ func close_ui() -> void:
 	npc_adapter.dispose()
 	shop_adapter.dispose()
 	upgrade_adapter.dispose()
+	storage_adapter.dispose()
 	adapter.dispose()
 	session.close("teardown")
 	dispatcher.dispose()
@@ -362,7 +386,7 @@ func lose_response(type: String, payload: Dictionary) -> Dictionary:
 	return result
 
 func run_client() -> void:
-	get_tree().create_timer(40).timeout.connect(func() -> void: get_tree().quit(1))
+	get_tree().create_timer(60).timeout.connect(func() -> void: get_tree().quit(1))
 	fixture_dir=str(CmdlineUtils.get_parsed_args()["fixture-dir"])
 	wire=WireClient.new()
 	wire.name="Client"
@@ -381,6 +405,34 @@ func run_client() -> void:
 func client_phase(label: String, payload: Dictionary) -> void:
 	var result: Dictionary={"ok":true}
 	match label:
+		"storage-flow":
+			var target: Dictionary=map.endpoint.state.items.filter(func(row: Dictionary) -> bool: return row.location=="bag" and row.definition_id=="iron_sword")[0]
+			var move: Dictionary={"id":target.uid,"revision":target.revision,"from":"inventory","to":"storage","x":0,"y":0,"page":0,"quick":false}
+			map.endpoint.operation_finished.disconnect(session.finish)
+			assert((await command("storage.transfer",move)).error=="storage_pending")
+			map.endpoint.operation_finished.connect(session.finish)
+			assert(map.endpoint.state.storage.items.size()==1)
+			bridge.reset_transport()
+			bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+			assert(ui_snapshots.back().storage.recoveryPending)
+			assert((await command("storage.retry",{})).ok,"retry does not depend on original item still being in bag")
+			target=map.endpoint.state.storage.items[0]
+			move.merge({"revision":target.revision,"from":"storage","x":3},true)
+			assert((await command("storage.transfer",move)).ok)
+			target=map.endpoint.state.storage.items[0]
+			move.merge({"revision":target.revision,"to":"inventory","quick":true},true)
+			assert((await command("storage.transfer",move)).ok)
+			assert(map.endpoint.state.storage.items.is_empty())
+		"storage-lost-process":
+			var target: Dictionary=map.endpoint.state.items.filter(func(row: Dictionary) -> bool: return row.location=="bag" and row.definition_id=="iron_sword")[0]
+			map.endpoint.operation_finished.disconnect(session.finish)
+			result=await command("storage.transfer",{"id":target.uid,"revision":target.revision,"from":"inventory","to":"storage","x":0,"y":0,"page":0,"quick":false})
+			map.endpoint.operation_finished.connect(session.finish)
+			assert(not storage_adapter.journal.load_pending().entry.is_empty())
+		"storage-restored":
+			await wait_for(func() -> bool: return storage_adapter.journal.load_pending().entry.is_empty())
+			assert(map.endpoint.state.storage.items.size()==1 and map.endpoint.state.items.size()==2)
+		"storage-private": assert(map.endpoint.state.storage.items.is_empty())
 		"npc-open":
 			assert((await command("npc.interact",{"npc_instance_id":"fixture-blacksmith"})).ok)
 			result=await command("npc.select_service",{"npc_instance_id":"fixture-blacksmith","service_id":"weapon_shop"})

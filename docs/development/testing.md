@@ -584,3 +584,18 @@ uses four actual client processes and the production Web UI bridge/adapters for
 NPC range checks, Shop retry, Upgrade reload and purchase process-relogin recovery.
 No default CI expansion or physical CEF validation is implied. See
 [NPC runtime](postgres-npc-runtime.md) and its evidence for the precise boundaries.
+
+## PostgreSQL account Storage runtime (P3k, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite storage-runtime`
+checks session-qualified account Storage, full footprints, independent progress,
+queue refusal, native COMMIT/ACK failures, replay and original-issuer/alt recovery.
+It uses real native workers/World and fixture session maps. `--suite storage`
+retains the existing independent-session transaction/custody concurrency checks.
+
+`--suite inventory-endpoint` now includes Storage RPC/bridge/journal lost reply,
+`ui.ready`, client-process relog and private account snapshots, alongside prior
+Inventory, wallet and NPC contracts (five real headless client processes). Run
+sequentially with other suites using ports 18098/18099. `run-web-inventory.ps1
+-Scene storage_recovery` preserves the existing SQLite client recovery contract.
+See [Storage runtime](postgres-storage-runtime.md) for verified/deferred boundaries.
