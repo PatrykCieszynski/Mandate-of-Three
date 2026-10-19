@@ -5,10 +5,9 @@ extends Area2D
 ## click-detection boilerplate that every station used to copy.
 ##
 ## Two ways to use it:
-##  • SIMPLE station — just this node, configured in the inspector (menu_name +
-##    menu_arg). No script needed (DungeonExit, a quest board, …).
-##  • STATEFUL station — a node with its own server-side data (DungeonMaster,
-##    super._ready(), and keeps its fields. The click is inherited.
+##  • SIMPLE station — configure menu_name and menu_arg in the inspector.
+##  • STATEFUL station — a subclass overrides menu behavior while retaining
+##    inherited click handling.
 ##
 ## The server never clicks, so it just disables input; the client wires the handler.
 

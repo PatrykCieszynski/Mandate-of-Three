@@ -59,7 +59,7 @@ static func is_hard_run(instance: Node) -> bool:
 	return _run_hard.get(_instance_to_group.get(str(instance.name), 0), false)
 
 
-# --- lobby (matchmaking at a DungeonMaster station) -------------------------
+# --- lobby (matchmaking at a dungeon-keeper station) ------------------------
 
 ## Join / leave / start / solo a dungeon lobby (dungeon.queue handler). Mirrors
 ## the spar queue, minus teams: one shared queue per station, Start launches the
@@ -135,10 +135,8 @@ static func lobby_status(instance: Node, peer_id: int, station: String) -> Dicti
 	}
 
 
-## Resolve a station by its node NAME → {node, dungeon}. Works for a legacy
-## DungeonMaster (its .dungeon) or a dungeon-keeper NPC (its DungeonInteraction) —
-## both are direct map children, so get_node(name) finds them. Empty if the node is
-## gone or isn't a dungeon station. This is what replaces the manual master_id.
+## Resolve a dungeon-keeper NPC by node name to {node, dungeon}. Its
+## DungeonInteraction owns the destination. Unknown stations are rejected.
 static func _resolve_station(instance: Node, station: String) -> Dictionary:
 	if instance == null or instance.instance_map == null or station.is_empty():
 		return {}
@@ -152,8 +150,6 @@ static func _resolve_station(instance: Node, station: String) -> Dictionary:
 
 
 static func _station_dungeon(node: Node) -> DungeonResource:
-	if node is DungeonMaster:
-		return (node as DungeonMaster).dungeon
 	if node is NPC and (node as NPC).npc_resource != null:
 		for inter: NPCInteraction in (node as NPC).npc_resource.interactions:
 			if inter is DungeonInteraction:
