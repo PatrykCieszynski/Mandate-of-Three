@@ -13,6 +13,7 @@
 - [PostgreSQL wallet runtime](postgres-wallet-runtime.md) — P3i RAM income batches, receipted async checkpoints, currency RPCs and forced save/relog recovery.
 - [PostgreSQL NPC runtime](postgres-npc-runtime.md) — P3j optional Shop/Upgrade execution, captured income tokens and existing client journal recovery.
 - [PostgreSQL Storage runtime](postgres-storage-runtime.md) � P3k shared custody, combined Inventory/Storage ACK and stable client recovery.
+- [PostgreSQL ground items](postgres-ground-items.md) � P3l marker-based initialization, bounded UID claims and native client pickup/relog.
 - [World RPC admission](world-rpc-admission.md) — A2 authorization contract and network checks.
 - [World session admission](world-session-admission.md) — single-use handoff tickets and account replacement.
 - [Economy command boundary](economy-command-boundary.md) — Stage 2 validation, operation results and commit/replay effects.

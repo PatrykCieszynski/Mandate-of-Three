@@ -599,3 +599,17 @@ Inventory, wallet and NPC contracts (five real headless client processes). Run
 sequentially with other suites using ports 18098/18099. `run-web-inventory.ps1
 -Scene storage_recovery` preserves the existing SQLite client recovery contract.
 See [Storage runtime](postgres-storage-runtime.md) for verified/deferred boundaries.
+
+## PostgreSQL starter / ground items (P3l, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite ground-runtime`
+uses real native workers, current World cache and controlled actor maps to verify
+starter marker recovery, pickup rights/reach/liveness, bounded queue/refusal,
+full bag, competing UID, native failed COMMIT and original-issuer recovery.
+`--suite inventory` and `--suite inventory-concurrency` retain existing backend
+parity and independent-session initialization/claim races. `--suite inventory-endpoint`
+now includes the UID-only pickup RPC and a sixth actual client restoring the
+saved drop after process relog; run sequentially with other 18098/18099 suites.
+The economic network map suppresses combat simulation/rendering; `run-combat.ps1`
+remains the existing server/two-client combat/pickup regression on SQLite.
+See [ground-item runtime](postgres-ground-items.md) for explicit scope limits.

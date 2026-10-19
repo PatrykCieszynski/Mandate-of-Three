@@ -21,6 +21,11 @@ var _jobs: Dictionary={}
 var _generation: int=0
 var _external: Dictionary={}
 var _storage_enabled:=false
+var _initialization_enabled:=false
+
+func enable_initialization() -> void:
+	assert(_bindings.is_empty())
+	_initialization_enabled=true
 
 ## Configure before attaching peers, never silently omit an enabled domain.
 func enable_storage() -> void:
@@ -52,7 +57,7 @@ func attach(peer_id: int, context: Dictionary) -> bool:
 	if not previous.is_empty() and previous.peer==peer_id and Sessions.same_context(previous.context,context): return true
 	_generation+=1
 	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
-	var binding: Dictionary={"peer":peer_id,"context":safe,"generation":_generation,"stage":"discover","ticket":0,"cursor":0,"pending":[],"more":false,"repairs":0,"command":{},"retry":false,"snapshot":{},"terminal":{},"changed":false,"required":{}}
+	var binding: Dictionary={"peer":peer_id,"context":safe,"generation":_generation,"initialized":not _initialization_enabled,"stage":"initialize" if _initialization_enabled else "discover","ticket":0,"cursor":0,"pending":[],"more":false,"repairs":0,"command":{},"retry":false,"snapshot":{},"terminal":{},"changed":false,"required":{}}
 	_bindings[safe.account_id]=binding
 	if not previous.is_empty(): ready_changed.emit(previous.peer,false)
 	if _still_bound(binding): ready_changed.emit(peer_id,false)
@@ -188,7 +193,7 @@ func retry(peer_id: int) -> bool:
 	return true
 
 func _restart_recovery(binding: Dictionary) -> void:
-	binding.stage="discover"
+	binding.stage="discover" if binding.initialized else "initialize"
 	binding.cursor=0
 	binding.pending=[]
 	binding.more=false
@@ -226,6 +231,7 @@ func _schedule(binding: Dictionary) -> void:
 	var context: Dictionary=binding.context
 	var queued: Dictionary
 	match binding.stage:
+		"initialize": queued=_executor.submit_item_initialization(context)
 		"discover": queued=_executor.submit_session_pending_discovery(context,binding.cursor,PAGE_SIZE)
 		"recover": queued=_executor.submit_session_resume(context,binding.pending[0])
 		"snapshot", "refresh": queued=_executor.submit_session_snapshot(context,_storage_enabled)
@@ -256,6 +262,9 @@ func _complete(binding: Dictionary, stage: String, result: Dictionary) -> void:
 		else: _pause(binding,reason)
 		return
 	match stage:
+		"initialize":
+			binding.initialized=true
+			binding.stage="discover"
 		"discover":
 			binding.cursor=result.cursor
 			binding.more=result.more

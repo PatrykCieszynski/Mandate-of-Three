@@ -34,6 +34,9 @@ func npc_runtime() -> RefCounted:
 func storage_runtime() -> RefCounted:
 	return null if _server()==null else _server().storage_runtime
 
+func ground_item_runtime() -> RefCounted:
+	return null if _server()==null else _server().ground_item_runtime
+
 func npc_interactions_allowed(peer: int) -> bool:
 	if transfer_pending(peer): return false
 	return mutations_allowed(peer) if npc_runtime()==null else inventory_runtime()!=null and inventory_runtime().mutations_allowed(peer)
@@ -43,7 +46,7 @@ func currency_allowed(peer_id: int) -> bool:
 	return mutations_allowed(peer_id) if wallet_runtime()==null else wallet_runtime().ready(peer_id)
 
 func item_domain_ready() -> bool:
-	return item_store() != null
+	return item_store() != null or ground_item_runtime()!=null
 
 func player_for_peer(peer_id: int) -> PlayerResource:
 	return null if _server() == null else _server().connected_players.get(peer_id)
