@@ -341,7 +341,7 @@ func _apply_ally_bar_tint() -> void:
 
 
 ## Server-set: while this timestamp is in the future the body holds position — a
-## BossController commits it to a telegraphed cast instead of strolling out of its
+## an external controller commits it to a telegraphed cast instead of leaving its
 ## own danger ring. Generic, like the lunge windup's root but driven from outside
 ## the state machine.
 var action_root_until_ms: int = 0
@@ -781,7 +781,7 @@ func rp_spawn_effect() -> void:
 
 
 ## Replay one of this npc's rp_ visual methods on every client. Lets an external
-## orchestrator (a BossController) drive the body's telegraphs without reaching
+## controller drive the body's telegraphs without reaching
 ## into its private prop id. Server-side; no-op if not yet baked into a container.
 func replicate_visual(method: StringName, args: Array) -> void:
 	if container != null:

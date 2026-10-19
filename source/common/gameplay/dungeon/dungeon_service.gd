@@ -51,8 +51,8 @@ const HARD_HEALTH_MULT: float = 2.0
 const HARD_DAMAGE_MULT: float = 1.5
 
 
-## Is the run living in [param instance] a Hard one? Read by RoomNode when it spawns
-## mobs (to scale them) and picks the reward.
+## Is the run living in [param instance] a Hard one? Kept for the dungeon
+## encounter system when the 3D room lifecycle is implemented.
 static func is_hard_run(instance: Node) -> bool:
 	if instance == null:
 		return false
@@ -408,8 +408,8 @@ static func start_run(peers: Array, dungeon: DungeonResource, hard: bool = false
 
 
 ## Once the private instance is loaded, switch every group member in (from
-## whatever instance they're standing in). Mob spawning is NOT done here anymore —
-## the map's authored RoomNodes drive the encounters as the party walks in.
+## whatever instance they're standing in). Mob encounters are handled separately;
+## this function only orchestrates player admission to the run.
 static func _enter_run(group_id: int, members: Array) -> void:
 	var instance: Node = _runs.get(group_id, null)
 	if instance == null or WorldServer.curr == null:
@@ -472,7 +472,7 @@ static func on_player_left(peer_id: int, left_instance: Node) -> void:
 ## The final room cleared — the run is COMPLETE. Grant each member their reward
 ## (honoring the soft daily lockout), push a per-member recap (dungeon name,
 ## completion time, what they got), then after EJECT_DELAY_S send everyone home and
-## let the group dissolve. Called from RoomNode (final_room). Server-only.
+## let the group dissolve. The future 3D encounter controller calls this. Server-only.
 static func on_dungeon_cleared(instance: Node) -> void:
 	if instance == null or WorldServer.curr == null:
 		return
