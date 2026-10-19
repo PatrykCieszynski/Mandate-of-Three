@@ -3,8 +3,7 @@ extends Resource
 ## The completion payout for a dungeon run: a gold amount (rolled in a range) plus
 ## a roll on a loot table. EVERY clearing player gets their OWN roll (the same
 ## participation-reward model as mob kills — co-op, no split). Attach it to the
-## dungeon's final RoomNode (the boss room); RoomNode hands it to DungeonService on
-## clear.
+## DungeonResource. DungeonService grants the payout when a run clears.
 ##
 ## Soft daily lockout: a player who already collected this reward less than
 ## lockout_hours ago gets nothing this run (but may still run it to help a group).

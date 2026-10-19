@@ -506,7 +506,6 @@ static func on_dungeon_cleared(instance: Node) -> void:
 			"eject_in": int(EJECT_DELAY_S),
 			"reward": _grant_reward(player, lockout_key, reward),
 		})
-	# (The victory sting is fired by the dungeon boss's own BossController on death.)
 	# Linger on the recap, then send the party home; on_player_left dissolves the
 	# group as each one leaves.
 	WorldServer.curr.get_tree().create_timer(EJECT_DELAY_S).timeout.connect(

@@ -107,11 +107,6 @@ func _ready() -> void:
 			str(payload.get("dungeon", "The dungeon")),
 			"Clear each room. Defeat the boss to escape.",
 			{"delay": 0.6}))
-	# Boss enrage (dungeon phase 2): a red center banner + camera shake so the
-	# escalation reads — see BossController._announce_enrage.
-	Client.subscribe(&"boss.enrage", func(payload: Dictionary) -> void:
-		Announcer.announce("%s enrages!" % str(payload.get("name", "The boss")), "", {"color": PVP_TOAST_COLOR})
-		shake_camera(0.6))
 
 
 ## The local player's own over-head HP bar reads as "self" (green), never

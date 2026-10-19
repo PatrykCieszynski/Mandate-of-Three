@@ -1,5 +1,5 @@
 extends DataRequestHandler
-## Snapshot of a DungeonMaster lobby (roster + whether the caller is queued).
+## Snapshot of a dungeon-keeper lobby (roster + whether the caller is queued).
 ## Args: {master_id}. Opened by the dungeon lobby menu.
 
 
