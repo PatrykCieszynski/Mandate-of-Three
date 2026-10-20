@@ -1,5 +1,7 @@
 # Evidence and validation
 
+- [PostgreSQL P3r bootstrap](postgres-p3r/README.md) - failed-start cleanup, offline provisioning and shared-owner native-client acceptance (topic branch until reviewed/merged).
+
 - [PostgreSQL P3q Auction reads](postgres-p3q/README.md) - 10k native World observations and public browser/RPC acceptance (topic branch until reviewed/merged).
 
 - [PostgreSQL P3p Exchange matching](postgres-p3p/README.md) - native multi-party settlement and ten-client recovery acceptance (topic branch until reviewed/merged).

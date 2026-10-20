@@ -4,6 +4,7 @@ extends RefCounted
 
 const STARTING_YANG: int = 1500
 
+var economic_initialization: bool=true # Profile-only PG bootstrap disables legacy starter currency.
 var db: SQLite
 
 
@@ -185,8 +186,9 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 	# hammer, 6-8g), which seeds build identity and teaches the economy. 25g
 	# covers a weapon + a potion or a cheap armor piece.
 	player.inventory = {}
-	Inventory.add_item(player.inventory, 1, 1) # health_potion
-	Inventory.add_item(player.inventory, Economy.gold_id(), 25)
+	if economic_initialization:
+		Inventory.add_item(player.inventory, 1, 1) # health_potion
+		Inventory.add_item(player.inventory, Economy.gold_id(), 25)
 	# Starting attribute points so a new character has something to spend.
 	player.available_attributes_points = PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL
 	# Everyone who plays the alpha carries the badge for it.
@@ -195,7 +197,7 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 	# Leave defaults to PlayerResource where possible.
 	if not db.query("BEGIN IMMEDIATE;"): return -1
 	save_player(player)
-	if not db.query_with_bindings("INSERT OR IGNORE INTO account_wallets(account_id,yang) SELECT master_account_id,? FROM accounts WHERE account_name=? AND master_account_id IS NOT NULL;", [STARTING_YANG, account_name]):
+	if economic_initialization and not db.query_with_bindings("INSERT OR IGNORE INTO account_wallets(account_id,yang) SELECT master_account_id,? FROM accounts WHERE account_name=? AND master_account_id IS NOT NULL;", [STARTING_YANG, account_name]):
 		db.query("ROLLBACK;")
 		return -1
 	if not db.query_with_bindings("SELECT master_account_id FROM accounts WHERE account_name=? AND master_account_id IS NOT NULL;",[account_name]) or db.query_result.is_empty():

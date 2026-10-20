@@ -13,7 +13,9 @@ purchase/proceeds settlement and authenticated shop visits. P3o connects optiona
 Exchange item/Storage deposits and withdrawals with journal recovery. P3p adds
 optional order/cancel/matching, captured participant wallets and World-local
 ledger projection freshness. P3q connects optional public Auction catalog/search
-through bounded, session-qualified native reads. **Operational bootstrap and P4 are not completed. Normal
+through bounded, session-qualified native reads. P3r adds shared Master/World
+bootstrap ownership, realm/schema preflight and no-fallback/drain gates. **Normal
+process bootstrap integration and P4 are not completed. Normal
 gameplay remains SQLite.** This roadmap implements the accepted
 [Economy C1–C5](../architecture/economy/README.md) and
 [World Process topology](../architecture/world-instance-architecture.md); every
@@ -29,7 +31,7 @@ realm has not yet been enabled or rehearsed.
 
 | Area | Current normal runtime | PostgreSQL adoption still needed |
 | --- | --- | --- |
-| Bootstrap / database ownership | `WorldDatabase.start_database/open_database` creates SQLite and its stores | Configure/provision the authoritative PG backend, pool lifecycle, graceful drain, health/readiness and fail-closed startup; never enable dual economic writers |
+| Bootstrap / database ownership | `WorldDatabase.start_database/open_database` creates SQLite and its stores | P3r supplies offline provisioning and an all-or-nothing native composition/preflight/drain API used by acceptance fixtures. Normal process configuration, identity/creation-manifest integration and readiness publication remain; never enable dual economic writers |
 | Inventory / ground-item pickup | `WorldEconomyService` calls SQLite item transactions; PG move/activate/equip/unequip recovery is opt-in | P3l optionally connects marker-based initialization and asynchronous pickup with original UID, claims and current Inventory publication. Production provisioning/bootstrap and full PG gameplay acceptance remain |
 | Yang wallet | Normal startup still loads/checkpoints `WalletStoreSqlite` | P3i optionally supplies RAM income, receipted async checkpoints, fixed test spend, currency RPC/HUD and local reconnect/drain. Production bootstrap, cross-domain freshness and multi-World handoff remain |
 | NPC Shop / Upgrade | Normal startup uses `WorldEconomyService` and SQLite | P3j optionally connects authenticated RPCs, bounded PG transactions, captured pending Yang and current Inventory/wallet publication. Production bootstrap remains |
@@ -56,8 +58,9 @@ Remaining deliverables before an Economy cutover are substantial:
    SQLite economic runtime paths; parity fixtures/reference code and separately
    retained profile/progression storage are distinct cleanup decisions.
 
-After P3q, the next integration priority is operational PostgreSQL bootstrap and
-backend ownership/lifecycle, followed by full PG gameplay acceptance and P4.
+After P3r, the next integration priority is wiring normal process startup and
+trusted identity/creation manifests to the shared bootstrap owner, including
+readiness publication. Full PG gameplay acceptance and P4 follow.
 The listed economic domains now have optional execution/read paths; that alone
 does not create a playable PostgreSQL realm or authorize removing SQLite. No percentage or final PR count is asserted: unfinished runtime domains
 and P4 are separate acceptance
@@ -426,6 +429,15 @@ sessions suppress delivery and drain joins no active SQL. The native 10k fixture
 records worker latency/World physics gaps; actual client/browser coverage retains
 prior economic guarantees. No schema/backend switch; operational bootstrap,
 full PG gameplay, distributed publication and P4 remain open.
+
+**P3r progress:** [Bootstrap ownership](../development/postgres-bootstrap.md)
+adds explicit shared Master/World pool composition after read-only schema/realm
+preflight, offline provisioning, sticky no-SQLite-fallback gates and orderly
+recovery-before-detach drain. The ten-client acceptance now uses this composition
+rather than manually wiring seven pools. Failed/partial starts close every opened
+pool; captured unknown money must settle before shutdown. Profile/progression
+SQLite remains. Normal Main/config/identity-manifest integration, operational
+health/backup/handoff, full PG gameplay and P4 remain open; no default switch.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

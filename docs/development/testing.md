@@ -694,3 +694,20 @@ IDs before an actual purchase. Run shared 18098/18099 network suites sequentiall
 `run-web-inventory.ps1 -Scene market_network` retains SQLite RPC behavior. See
 [runtime](postgres-auction-runtime.md) and [evidence](../evidence/postgres-p3q/README.md).
 No physical CEF, combat soak, production PG bootstrap or cutover is implied.
+
+
+## PostgreSQL bootstrap ownership (P3r, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite bootstrap`
+checks missing/invalid configuration, read-only refusal of missing/incompatible
+schemas, expected authority, missing profile store, partial connection exhaustion,
+offline provisioning CLI, complete Master/World composition, profile/XP persistence
+without SQLite currency initialization, and lost-settlement shutdown recovery.
+
+`inventory-endpoint` uses the same bootstrap and explicit native shutdown for all
+ten real headless clients. Its owned cluster has 14 connections to accommodate
+World 8 + Master 1 + fixture control 1 and reserved PostgreSQL slots; other suites
+retain 12, including the deliberate exhaustion case. `inventory-session-bridge`
+and normal SQLite `market_network` retain admission/default-path regressions.
+Run shared 18098/18099 suites sequentially. See [bootstrap](postgres-bootstrap.md)
+and its evidence for normal process/identity/production gates that remain open.

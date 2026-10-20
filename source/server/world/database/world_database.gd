@@ -10,6 +10,7 @@ func award_experience(player: PlayerResource, amount: int) -> void:
 	mark_progression_dirty(player)
 	experience_awarded.emit(player.player_id,amount,int(result.levels_gained),int(result.level))
 
+var economy_backend: String="sqlite" # Explicit bootstrap selection; never auto-fallback.
 var database_path: String
 var db: SQLite
 var store: WorldStoreSqlite
@@ -33,6 +34,7 @@ func auction_binding_current() -> bool:
 	return auction_queries!=null and auction_queries.writer==db and auction_queries.path==wanted
 
 func start_auction_queries() -> bool:
+	if economy_backend!="sqlite": return false
 	if not wallet_ready or db==null: return false
 	if auction_queries==null:
 		auction_queries=AuctionQueryService.new();add_child(auction_queries)
@@ -65,6 +67,7 @@ func shutdown_database() -> bool:
 	return db!=null and db.close_db()
 
 func economic_context(character_id: int) -> Dictionary:
+	if economy_backend!="sqlite": return {}
 	if db == null or character_id <= 0: return {}
 	if _economy_identity.is_empty():
 		if not db.query("SELECT value FROM meta WHERE key='economy_authority_id';") or db.query_result.is_empty(): return {}
@@ -82,6 +85,7 @@ func wallet_account_id(character_id: int) -> int:
 	return _wallet_accounts.get(character_id,0)
 
 func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
+	if economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	if _wallet_reconciliation_failed: return {"ok":false,"error":"wallet_reconciliation"}
 	var result := WorldSchema.migrate_account_wallets(db,master_ids)
 	if result.ok and not MarketStoreSqlite.ensure_schema(db): result = {"ok":false,"error":"market_custody_migration"}
@@ -95,6 +99,7 @@ func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
 
 ## Server-only durable credit; online pending income shares the same commit.
 func credit_account(account_id: int, amount: int) -> Dictionary:
+	if economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	if not wallet_ready or wallet_store == null: return {"ok":false,"error":"storage"}
 	var pending := int(runtime_wallets.get(account_id,{}).get("pending_currency_delta",0))
 	var result := wallet_store.credit(account_id,pending,amount)
@@ -124,6 +129,7 @@ func flush_progression(owner_id: int = -1) -> bool:
 	return true
 
 func load_wallet(character_id: int) -> bool:
+	if economy_backend!="sqlite": return false
 	var owner_id := wallet_account_id(character_id)
 	if not wallet_ready or owner_id <= 0: return false
 	if runtime_wallets.has(owner_id): return true
@@ -136,6 +142,7 @@ func load_wallet(character_id: int) -> bool:
 	return true
 
 func wallet_balance(character_id: int) -> int:
+	if economy_backend!="sqlite": return -1
 	var owner_id := wallet_account_id(character_id)
 	return int(runtime_wallets.get(owner_id, {}).get("wallet_balance", -1))
 
@@ -144,6 +151,7 @@ func wallet_available(character_id: int) -> int:
 	return wallet_balance(character_id)-int(runtime_wallets.get(account,{}).get("reserved_yang",0))
 
 func add_yang(character_id: int, amount: int) -> bool:
+	if economy_backend!="sqlite": return false
 	var owner_id := wallet_account_id(character_id)
 	if not wallet_ready or not runtime_wallets.has(owner_id) or amount <= 0: return false
 	var wallet: Dictionary = runtime_wallets[owner_id]
@@ -160,6 +168,7 @@ func flush_wallet(character_id: int = -1) -> bool:
 			runtime.checkpoint_all()
 			return runtime.drained()
 		return runtime.checkpoint(WorldServer.curr.player_id_to_peer_id.get(character_id,0))
+	if economy_backend!="sqlite": return dirty_wallet.is_empty()
 	if not wallet_ready: return dirty_wallet.is_empty()
 	var owner_id := wallet_account_id(character_id) if character_id >= 0 else -1
 	if character_id >= 0 and owner_id <= 0: return false
@@ -176,6 +185,7 @@ func flush_wallet(character_id: int = -1) -> bool:
 	return wallet_ready
 
 func spend_yang(character_id: int, cost: int) -> Dictionary:
+	if economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	var owner_id := wallet_account_id(character_id)
 	# Affordability is checked against authoritative RAM, including pending income.
 	if not wallet_ready or cost <= 0 or not runtime_wallets.has(owner_id): return {"ok": false, "error": "request"}
@@ -224,6 +234,7 @@ func reconcile_committed_wallet(state: Dictionary) -> void:
 	push_error("Committed wallet state could not be reconciled; monetary writes disabled until restart.")
 
 func wallet_snapshot(character_id: int) -> Dictionary:
+	if economy_backend!="sqlite": return {}
 	var account := wallet_account_id(character_id)
 	if not runtime_wallets.has(account): return {"balance":-1,"wallet_state":{}}
 	var wallet: Dictionary = runtime_wallets[account]
@@ -249,6 +260,7 @@ func upgrade_candidate(owner_id: int, uid: String, revision: int, recipe: Upgrad
 	return _economy().upgrade_candidate(owner_id, uid, revision, recipe)
 
 func storage_snapshot(owner_id: int) -> Dictionary:
+	if economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	if db == null: return {"ok":false,"error":"storage"}
 	return AccountStorageSqlite.new(db).snapshot(owner_id)
 

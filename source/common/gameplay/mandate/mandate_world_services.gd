@@ -7,10 +7,10 @@ func _server() -> WorldServer:
 	return WorldServer.curr
 
 func available() -> bool:
-	return _server() != null
+	return _server() != null and (_server().economy_bootstrap==null or _server().economy_bootstrap.ready())
 
 func economy() -> WorldDatabase:
-	return null if _server() == null or _server().inventory_runtime != null or _server().wallet_runtime != null else _server().database
+	return null if not available() or _server().inventory_runtime != null or _server().wallet_runtime != null else _server().database
 
 func progression() -> WorldDatabase:
 	return null if _server() == null else _server().database
@@ -20,7 +20,7 @@ func world_time() -> WorldTime:
 
 func item_store() -> ItemStoreSqlite:
 	var server := _server()
-	return null if server == null or server.inventory_runtime != null or server.wallet_runtime != null or server.database == null else server.database.item_store
+	return null if not available() or server.inventory_runtime != null or server.wallet_runtime != null or server.database == null else server.database.item_store
 
 func inventory_runtime() -> RefCounted:
 	return null if _server()==null else _server().inventory_runtime
@@ -89,8 +89,9 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 	return -1.0 if _server() == null else _server().runtime_attack_speed_ratio(owner_id)
 
 func mutations_allowed(peer_id: int) -> bool:
-	# Other economics are not ported to the asynchronous runtime yet. Never let
-	# an opt-in Inventory fixture fall back to synchronous SQLite mutations.
+	# Legacy synchronous writes must stay disabled even during failed PG startup.
+	var server:=_server()
+	if server!=null and server.economy_bootstrap!=null and not server.economy_bootstrap.ready(): return false
 	return inventory_runtime()==null and wallet_runtime()==null and not transfer_pending(peer_id)
 
 func transfer_pending(peer_id: int) -> bool:

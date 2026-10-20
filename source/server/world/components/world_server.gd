@@ -23,6 +23,7 @@ var token_list: Dictionary[String, Dictionary] = {}
 var _pending_admissions: Dictionary[int, Dictionary] = {}
 var _session_tokens: Dictionary[int, String] = {}
 ## Explicit opt-in owner only; normal gameplay has no PostgreSQL backend switch.
+var economy_bootstrap: RefCounted
 var inventory_runtime: RefCounted
 var wallet_runtime: RefCounted
 var npc_runtime: RefCounted
@@ -31,6 +32,7 @@ var ground_item_runtime: RefCounted
 var seller_runtime: RefCounted
 
 func _process(_delta: float) -> void:
+	if economy_bootstrap!=null: economy_bootstrap.check_health()
 	if inventory_runtime!=null: inventory_runtime.poll()
 	if wallet_runtime!=null: wallet_runtime.poll(_delta)
 	if npc_runtime!=null: npc_runtime.poll()
@@ -112,6 +114,7 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 	return speed/100.0
 
 func _inventory_combat_ready(owner_id: int) -> bool:
+	if economy_bootstrap!=null and not economy_bootstrap.ready(): return false
 	return inventory_runtime==null or inventory_runtime.mutations_allowed(player_id_to_peer_id.get(owner_id,0))
 
 func invalidate_runtime_equipment(owner_id: int) -> void:
@@ -124,6 +127,7 @@ static var curr: WorldServer
 ## PG admission depends on the live trusted control connection, not just a
 ## cached ticket or durable grant. SQLite keeps its existing lifecycle policy.
 func inventory_master_available() -> bool:
+	if economy_bootstrap!=null and not economy_bootstrap.sessions_valid(): return false
 	return (inventory_runtime==null and wallet_runtime==null) or (world_manager!=null and world_manager.multiplayer_api!=null and world_manager.multiplayer_api.has_multiplayer_peer() and world_manager.multiplayer_api.multiplayer_peer.get_connection_status()==MultiplayerPeer.CONNECTION_CONNECTED)
 
 func invalidate_inventory_admissions() -> void:
@@ -146,6 +150,7 @@ func invalidate_inventory_admissions() -> void:
 
 ## Internal Master connection only; public clients submit a token, never an ID.
 func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> bool:
+	if economy_bootstrap!=null and not economy_bootstrap.ready(): return false
 	if not inventory_master_available(): return false
 	if inventory_runtime!=null or wallet_runtime!=null:
 		if not inventory_context.get("epoch") is int or inventory_context.epoch<=0 or inventory_context.get("account_id")!=account_id or inventory_context.get("character")!=character_id or inventory_context.get("session_fingerprint")!=auth_token.sha256_text(): return false
@@ -419,7 +424,7 @@ func _on_peer_authentication_failed(peer_id: int) -> void:
 
 
 func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
-	if not inventory_master_available():
+	if (economy_bootstrap!=null and not economy_bootstrap.ready()) or not inventory_master_available():
 		_pending_admissions.erase(peer_id)
 		peer.disconnect_peer(peer_id)
 		return
