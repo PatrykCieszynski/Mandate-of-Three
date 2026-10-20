@@ -17,6 +17,8 @@
 7. **Rollback:** Keep old behavior callable behind a **temporary server-side** controller selector/feature gate until parity and load gates pass. No global rollout and no removal of fallback before acceptance. Feature flags are for controlled comparison, not a permanent second physics engine.
 8. **Evidence:** Each PR states invariant, changed files, failure/rollback cases, executed commands, before/after measurements (median of >=3 repeats), CI status, and *not-tested* cases. No performance numbers hardcoded as flaky CI assertions. No generated logs, runtime DBs, local addons or synthetic results committed as executable truth.
 
+**Runtime capacity/configuration supplement:** [World runtime configuration and capacity budgets](world-runtime-configuration.md) adds a W0 audit of hardcoded limits, server-only validated settings, a commented example and W6 binding/real-client capacity gates. It does not change the W0–W7 sequence or authorize higher runtime defaults.
+
 ## 1. Evidence already collected (diagnostic, not capacity claims)
 
 The experiment simulated **250 players + 500 mobs** in one World without 250 connected network clients, durable Economy, real combat damage, or complete RPC transport. Physics instrumentation and actor subclassing add overhead.
