@@ -68,6 +68,7 @@ func setup(game_world: GameWorld3D) -> void:
 	world.inventory_endpoint.state_changed.connect(market.accept_context)
 	market.accept_context(world.inventory_endpoint.state)
 	market_browser.attach(world.market_endpoint,dispatcher,session,get_tree())
+	market.purchase_recovery.connect(market_browser.accept_purchase_recovery)
 	exchange.attach(world.market_endpoint,dispatcher,session,get_tree())
 	exchange.state_updated.connect(func(_snapshot: Dictionary)->void:
 		opened=true;_layout())

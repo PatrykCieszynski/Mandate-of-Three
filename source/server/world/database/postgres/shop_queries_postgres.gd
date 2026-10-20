@@ -44,6 +44,14 @@ func _mine(character: int, full_account: bool) -> Dictionary:
 		if snapshot.item_state.is_empty(): return _rollback("storage")
 	return _finish(snapshot)
 
+func visit_authorized(context: Dictionary, shop: int) -> Dictionary:
+	var begun: Dictionary=preload("res://source/server/world/database/postgres/inventory_session_postgres.gd").new(db).begin_context(context)
+	if not begun.ok: return begun
+	var snapshot:=_shop(shop)
+	if not snapshot.ok: return _rollback(str(snapshot.error))
+	snapshot.claims=[]
+	return _finish(snapshot)
+
 func visit(shop: int) -> Dictionary:
 	if db.in_transaction() or not db.begin(): return _error("storage")
 	# Metadata and offers come from one snapshot even when a sale/edit commits

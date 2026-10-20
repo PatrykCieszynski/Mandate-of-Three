@@ -6,6 +6,14 @@ const Wallet = preload("res://source/server/world/database/postgres/wallet_store
 const Seller = preload("res://source/server/world/database/postgres/shop_seller_postgres.gd")
 const MAX_REVENUE: int=9223372036854775807
 var db: Object
+var income_token: String=""
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+
+func authorize_session(context: Dictionary, token: String) -> void:
+	_transaction.economic_context=context.duplicate(true)
+	income_token=token
+
 var rejected: MarketRejectedCommands
 var _transaction: RefCounted
 var committed: bool:
@@ -60,7 +68,7 @@ func _purchase_once(character: int, command: String, shop: int, offer: String, r
 	if not db.execute("UPDATE economy.item_instances SET owner_character_id=:owner,revision=revision+1 WHERE uid=:uid;",{"owner":character,"uid":row.item_uid}).ok: return _transaction.rollback("storage")
 	if not db.execute("UPDATE economy.item_custody SET location='bag',owner_id=:owner,position=:position,escrow_account_id=NULL,shop_id=NULL,offer_id=NULL WHERE uid=:uid;",{"owner":character,"position":receiving.position,"uid":row.item_uid}).ok: return _transaction.rollback("storage")
 	if not db.execute("DELETE FROM economy.shop_offers WHERE offer_id=:offer;",{"offer":offer}).ok: return _transaction.rollback("storage")
-	return _transaction.commit({"ok":true,"uid":str(row.item_uid),"buyer_account":_transaction.account_id,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_claimable_yang":str(credited.rows[0].yang),"wallet_states":[spent.wallet_state],"shop_id":shop})
+	return _commit({"ok":true,"uid":str(row.item_uid),"buyer_account":_transaction.account_id,"seller_account":seller,"buyer_balance":int(spent.balance),"seller_claimable_yang":str(credited.rows[0].yang),"wallet_states":[spent.wallet_state],"shop_id":shop})
 
 func claim_revenue(character: int, command: String, pending_income: int) -> Dictionary:
 	return _transaction.run_with_retry(_claim_revenue_once.bind(character,command,pending_income))
@@ -82,10 +90,14 @@ func _claim_revenue_once(character: int, command: String, pending_income: int) -
 	var credited:=Wallet.new(db).credit_in_transaction(account,pending_income,amount)
 	if not credited.ok: return _transaction.rollback(str(credited.error))
 	if not db.execute("UPDATE economy.account_shop_revenue SET yang=yang-:amount WHERE account_id=:account;",{"amount":amount,"account":account}).ok: return _transaction.rollback("storage")
-	return _transaction.commit({"ok":true,"claimed":amount,"claimable_yang":str(int(funds.amount)-amount),"wallet_states":[credited.wallet_state]})
+	return _commit({"ok":true,"claimed":amount,"claimable_yang":str(int(funds.amount)-amount),"wallet_states":[credited.wallet_state]})
 
 func _reject(reason: String) -> Dictionary:
 	return _transaction.commit(_error(reason))
 
 func _error(reason: String) -> Dictionary:
 	return {"ok":false,"error":reason}
+
+func _commit(result: Dictionary) -> Dictionary:
+	if not income_token.is_empty(): result.income_token=income_token
+	return _transaction.commit(result)

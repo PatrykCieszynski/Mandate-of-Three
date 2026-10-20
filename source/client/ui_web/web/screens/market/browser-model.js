@@ -11,6 +11,8 @@ export function isBrowserSnapshot(v) {
         return Object.keys(v).length === 1;
     return ((!('catalogQuery' in v) ||
         (typeof v.catalogQuery === 'string' && v.catalogQuery.length <= 80)) &&
+        (!('purchasePending' in v) || typeof v.purchasePending === 'boolean') &&
+        (!('purchaseBusy' in v) || typeof v.purchaseBusy === 'boolean') &&
         (!('criteria' in v) || isSearchCriteria(v.criteria)) &&
         Array.isArray(v.catalog) &&
         v.catalog.length <= 100 &&

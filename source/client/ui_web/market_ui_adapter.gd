@@ -1,6 +1,7 @@
 class_name MarketUiAdapter
 extends RefCounted
 signal state_updated(snapshot: Dictionary)
+signal purchase_recovery(pending: bool, busy: bool)
 var _endpoint: MarketEndpoint3D
 var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
@@ -13,7 +14,7 @@ var _journal_ready := false
 var _revenue_intent := ""
 var _revenue_busy := false
 var _revenue_uncertain := false
-const SellerActions: Array[String]=["list","edit","cancel","configure","claim"]
+const SellerActions: Array[String]=["list","edit","cancel","configure","claim","buy"]
 var seller_journal = preload("res://source/client/ui_web/local_economy_journal.gd").new("seller-","user://pending_seller_commands")
 var _seller_intent: Dictionary={}
 var _seller_ready:=false
@@ -62,7 +63,7 @@ func accept_context(snapshot: Dictionary) -> void:
 func _finish_revenue(result: Dictionary) -> Dictionary:
 	if _disposed: return result
 	_revenue_busy=false
-	if result.ok or result.get("error","") in ["wallet_full","nothing_to_claim"]:
+	if result.ok or result.get("terminal",false) or result.get("error","") in ["wallet_full","nothing_to_claim"]:
 		if not journal.clear_pending(_revenue_intent):
 			_revenue_uncertain=true
 			publish(_endpoint.state)
@@ -127,6 +128,11 @@ static func _valid(payload: Dictionary, action: String) -> bool:
 	return MarketEndpoint3D.valid(action,payload)
 
 func _submit(payload: Dictionary, action: String) -> Dictionary:
+	# A public shop can be visited before opening our own shop. Discover the realm
+	# capability before the first purchase, never send an unjournaled PG buy.
+	if action=="buy" and not _seller_enabled:
+		var opened:=await _send({},"open")
+		if not opened.get("ok",false): return opened
 	if _seller_enabled and action in SellerActions: return await _submit_seller(payload,action)
 	return await _send(payload,action)
 
@@ -137,6 +143,7 @@ func _send(payload: Dictionary, action: String) -> Dictionary:
 	return await _session.wait(id,_tree)
 func publish(snapshot: Dictionary) -> void:
 	if _disposed: return
+	purchase_recovery.emit(not _seller_intent.is_empty() and _seller_intent.payload.action=="buy",_seller_busy)
 	if snapshot.get("seller_runtime",false): _seller_enabled=true
 	if not active or not snapshot.get("ok",false):
 		_dispatcher.set_domain("market",{"active":false})

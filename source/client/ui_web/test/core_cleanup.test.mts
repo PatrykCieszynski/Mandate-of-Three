@@ -893,3 +893,65 @@ test('restored seller intent retries from native journal without an old item or 
   drag.dispose();
   manager.dispose();
 });
+
+test('restored purchase retries via native journal after the offer disappeared', async () => {
+  const { manager, host } = environment();
+  Object.assign(globalThis, { Option: host.Option });
+  const root = target(),
+    shopRoot = target();
+  let calls = 0,
+    sends = 0;
+  const view = mountMarketBrowser(root, shopRoot, {
+    manager,
+    resolveItemIcon: () => '',
+    catalog: async () => ({ ok: true }),
+    search: async () => ({ ok: true }),
+    visit: async () => ({ ok: true }),
+    buy: async () => {
+      sends++;
+      return { ok: true };
+    },
+    retryPurchase: async () => {
+      calls++;
+      return { ok: true };
+    },
+    close: () => {},
+    regions: () => {},
+  });
+  view.setState({
+    active: true,
+    catalog: [],
+    stats: {},
+    results: [],
+    cursor: '',
+    shop: {},
+    highlight: '',
+    error: '',
+    purchasePending: true,
+    purchaseBusy: false,
+  });
+  const retry = [...root.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Retry same purchase',
+  )!;
+  assert.equal(retry.hidden, false);
+  retry.click();
+  retry.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+  assert.equal(sends, 0);
+  view.setState({
+    active: true,
+    catalog: [],
+    stats: {},
+    results: [],
+    cursor: '',
+    shop: {},
+    highlight: '',
+    error: '',
+    purchasePending: false,
+  });
+  assert.equal(retry.hidden, true);
+  view.dispose();
+  manager.dispose();
+  host.close();
+});

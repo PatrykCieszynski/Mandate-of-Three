@@ -94,7 +94,7 @@ func admit_in_transaction(owner: int, command: String, kind: String, args: Array
 	_command=command
 	_kind=kind
 	_request=JSON.stringify(args)
-	if kind in ["npc_shop.buy","upgrade","storage","list","edit","cancel","configure","claim"] or (kind=="inventory" and not _resuming_inventory):
+	if kind in ["npc_shop.buy","upgrade","storage","list","edit","cancel","configure","claim","buy","claim_revenue"] or (kind=="inventory" and not _resuming_inventory):
 		var session_error:=Sessions.check_in_transaction(db,account_id,owner,_inventory_context if kind=="inventory" else economic_context)
 		if not session_error.is_empty():
 			cached=rollback(session_error)

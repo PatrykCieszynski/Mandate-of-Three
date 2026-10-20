@@ -212,6 +212,7 @@ const marketBrowser = mountMarketBrowser(marketBrowserRoot, marketVisitorRoot, {
     search: (p) => bridge.request('market.browser.search', p),
     visit: (shop_id, offer_id) => bridge.request('market.browser.visit', { shop_id, offer_id }),
     buy: (p) => bridge.request('market.buy', p),
+    retryPurchase: () => bridge.request('market.retry_seller', {}),
     close: () => {
         void bridge.request('market.browser.close', {});
     },

@@ -628,3 +628,19 @@ retry through production RPC/bridge/adapters. Run sequentially with 18098/18099
 suites. `run-web-inventory.ps1 -Scene market_network` checks the existing SQLite
 path. No physical CEF, full Gateway/bootstrap or P4 cutover acceptance is implied.
 See [seller runtime](postgres-seller-runtime.md) and its evidence.
+
+
+## PostgreSQL Marketplace settlement (P3n, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite settlement-runtime`
+checks pending-funded purchases, session fencing, current wallet reconciliation,
+old receipt/new income, alt recovery, partial/full proceeds, native COMMIT failure,
+independent account/physics progress and monetary uncertainty during drain.
+`--suite shop-settlement` and `--suite wallet-concurrency` retain backend acceptance.
+
+`--suite inventory-endpoint` now runs eight actual headless clients, adding public
+visit, purchase lost reply/process relog, seller proceeds refresh and collection
+lost reply/UI recreation through production bridge/journals. Run sequentially
+with other 18098/18099 suites. Web contracts check restored purchase retry after
+an offer disappears; `run-web-inventory.ps1 -Scene market_network` retains SQLite.
+See [settlement runtime](postgres-market-settlement-runtime.md) for scope limits.
