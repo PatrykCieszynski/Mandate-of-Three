@@ -745,3 +745,7 @@ must still run sequentially. See [maintenance](postgres-maintenance.md).
 ## PostgreSQL realm backup/restore (P3u)
 
 Opt-in disposable fixture only: `python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite backup`. Runs normal processes, acknowledged maintenance/exit, capture, restore into a second DB/profile/account set and normal login again. Includes committed WAL, identity/checksum/refusal and nonempty reservation/revenue/fill checks. No real player data or installed service. See [operator procedure](postgres-backup-restore.md).
+
+## PostgreSQL controlled World replacement (P3v)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite world-replacement` starts only disposable normal processes/private stores. Exercises real dashboard shutdown with held wallet SQL, immediate routing closure, dirty profile/Yang persistence, old-worker exit/grant retirement and fresh login under the same live Master/Gateway. Includes old consumed-ticket refusal. Pair with isolated `run-account-identity.ps1` (delayed grant/handoff tests) and smoke. The unrelated opt-in SQLite `-WithSession` still requires separately configured normal local roles; do not point it at player data. See [procedure](postgres-world-replacement.md).

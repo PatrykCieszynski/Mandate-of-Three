@@ -129,6 +129,8 @@ profile-file binding and absence of SQLite economic rows. Child logs are checked
 for script failures, and native pools drain before owned processes exit.
 
 This is Windows/Godot 4.7.2/SOCI 0.4.3/PostgreSQL 18.6 acceptance. Linux, physical
-CEF input, extended combat/load/soak, consistent PG/profile/account backup/restore,
-controlled handoff, SQLite import rehearsal and P4 cutover approval remain open.
+CEF input, extended combat/load/soak, SQLite import rehearsal and P4 cutover
+approval remain open. Subsequent packages add [coherent backup/restore](postgres-backup-restore.md)
+and [sequential World replacement](postgres-world-replacement.md); these are not
+cross-host live handoff or production cutover.
 See [evidence](../evidence/postgres-p3s/README.md).

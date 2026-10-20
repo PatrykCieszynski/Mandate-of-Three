@@ -49,6 +49,14 @@ class World extends WorldManagerClient:
 		else:
 			result_login.rpc_id(1, result, entry.gateway, request, entry.username, entry.character, entry.attempt)
 
+class DelayedGrant extends RefCounted:
+	var requested:=false
+	var request: Dictionary={"queued":true,"done":false,"result":{}}
+	func request_grant(_world: int,_username: String,_token: String) -> Dictionary:
+		requested=true;return request
+	func poll() -> void: pass
+	func retire(_username: String,_token: String) -> void: pass
+
 var master := Master.new()
 var world := World.new()
 var gateway := GatewayManagerServer.new()
@@ -154,6 +162,24 @@ func run() -> void:
 	world.reply(111)
 	await wait_for(func() -> bool: return master.responses.has(111))
 	assert(master.responses[111].has("auth-token") and world.tickets.size() == 6)
+	# A World may start draining while its native grant is in flight. Its late
+	# success must not issue a ticket, even while Master itself remains ready.
+	await enter(112)
+	var delayed:=DelayedGrant.new();master.inventory_session_issuer=delayed
+	world.reply(112)
+	await wait_for(func()->bool:return delayed.requested)
+	master.connected_worlds[world_id]["draining"]=true
+	delayed.request.result={"ok":true,"context":{}};delayed.request.done=true
+	await wait_for(func()->bool:return master.responses.has(112))
+	assert(master.responses[112].has("error") and world.tickets.size()==6)
+	master.inventory_session_issuer=null
+	master.connected_worlds[world_id]["draining"]=false
+	# Likewise fence the existing post-ticket 0.5s handoff continuation.
+	await enter(113);world.reply(113)
+	await wait_for(func()->bool:return world.tickets.size()==7)
+	master.connected_worlds[world_id]["draining"]=true
+	await wait_for(func()->bool:return master.responses.has(113))
+	assert(master.responses[113].has("error") and not master.world_ready(world_id))
 	world.peer.close()
 	master.peer.close()
 	get_tree().set_multiplayer(null, world.get_path())

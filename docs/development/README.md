@@ -42,3 +42,5 @@ Use the repository's pinned Godot/runtime versions; don't treat a historical one
 - [PostgreSQL operator maintenance barrier (P3t)](postgres-maintenance.md)
 
 - [PostgreSQL stopped-writer backup and restore](postgres-backup-restore.md)
+
+- [Controlled PostgreSQL World replacement](postgres-world-replacement.md)
