@@ -33,7 +33,9 @@ in the Economy backend port.
 1. **P4 load/fault/soak:** the [P4a baseline](../development/postgres-mixed-load.md)
    now mixes World economy operations and indexed reads in three fresh clusters.
    Offered 100/s is not achieved successful throughput; queues remain bounded.
-   Continue with sustained load/fault/soak and broader network/combat/domain traffic;
+   [P4b receipt recovery](../evidence/postgres-p4b/README.md) now verifies deferred
+   COMMIT rollback and lost successful application delivery under mixed traffic.
+   Continue with sustained soak/process faults and broader network/combat/domain traffic;
    record admission, transaction/pool/lock behavior and World tick tails. Use
    repeated comparable runs and the planned sustained soak. A short correctness
    fixture is not a capacity result.

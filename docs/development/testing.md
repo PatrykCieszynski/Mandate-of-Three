@@ -753,3 +753,8 @@ Opt-in disposable fixture only: `python tools/postgres/run_readiness.py --pg-bin
 ## PostgreSQL mixed World load baseline (P4a)
 
 `python tools/postgres/run_mixed_load.py --pg-bin Y:/Software/PostgreSQL/bin --seconds 8 --runs 3` runs fresh disposable clusters sequentially, with real World movement/AI and native economic runtimes but synthetic sessions/no connected clients. Reports no-traffic baseline and offered 10/30/100 write attempts/s plus independent reads; assert accounting, UID/footprints, custody, money/reservation and receipt conservation. Keep other performance tests stopped during measurement. Not default CI, not MMO capacity or completed soak/cutover. See [method](postgres-mixed-load.md) and [evidence](../evidence/postgres-p4a/README.md).
+
+P4b opt-in recovery under the same mixed traffic: append `--load-faults` to the
+`run_readiness.py --suite mixed-load` invocation (15 seconds/cohort recommended).
+Requires actual deferred COMMIT failure and original-ID recovery of a dropped
+successful purchase reply in each write cohort; no process/socket-crash claim.

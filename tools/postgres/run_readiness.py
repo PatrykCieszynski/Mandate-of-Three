@@ -51,7 +51,10 @@ def main():
     parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
     parser.add_argument("--load-seconds", type=int, default=8, choices=range(2,1801))
     parser.add_argument("--load-repeats", type=int, default=3, choices=(1,2,3))
+    parser.add_argument("--load-faults", action="store_true", help="Inject fixture-only COMMIT failure and lost application reply under mixed load")
     args = parser.parse_args()
+    if args.load_faults and args.suite != "mixed-load":
+        parser.error("--load-faults requires --suite mixed-load")
     extension = ".exe" if os.name == "nt" else ""
     binaries = {name: args.pg_bin.resolve() / (name + extension)
                 for name in (("initdb", "pg_ctl", "psql", "pg_dump", "pg_restore") if args.suite == "backup" else ("initdb", "pg_ctl", "psql"))}
@@ -103,6 +106,7 @@ def main():
         run(psql + ["-c", "CREATE DATABASE mandate_readiness OWNER mandate_fixture;"], env=env, log=control_log)
         env["MANDATE_PG_FIXTURE"] = "owned-local-cluster"
         if args.suite == "mixed-load":
+            env["MANDATE_PG_LOAD_FAULTS"] = "1" if args.load_faults else "0"
             env["MANDATE_PG_LOAD_SECONDS"] = str(args.load_seconds)
             env["MANDATE_PG_LOAD_REPEATS"] = str(args.load_repeats)
         env["MANDATE_PG_FIXTURE_DIR"] = "res://" + directory.relative_to(ROOT).as_posix()
