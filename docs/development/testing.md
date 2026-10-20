@@ -661,3 +661,19 @@ Inventory/wallet/NPC/Storage/ground/Marketplace contracts. Run sequentially with
 other suites on 18098/18099. A Web contract checks Retry without a source stack
 and the ledger-only trading gate. See [runtime](postgres-exchange-ledger-runtime.md)
 for the deferred matching, platform and production boundaries.
+
+
+## PostgreSQL Exchange matching runtime (P3p, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite matching-runtime`
+checks participant capture/revalidation, price-time partial/multiple fills, cancel
+refunds, pending Yang tokens/replay, native COMMIT failure, independent physics,
+offline settlement/late login fencing, conservation and uncertain-outcome drain.
+Existing `exchange-orders`, `wallet-runtime` and `settlement-runtime` cover shared
+transaction and wallet regression boundaries.
+
+`inventory-endpoint` now runs ten actual headless clients, retaining prior phases
+and adding matched order lost reply/process relog, online maker refresh, cancel
+lost reply/UI reload and reserve/refund. Run sequentially with other 18098/18099
+suites. `run-web-inventory.ps1 -Scene market_network` retains the normal SQLite
+path. See [runtime](postgres-exchange-matching-runtime.md) for explicit limits.

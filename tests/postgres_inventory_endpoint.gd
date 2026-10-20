@@ -109,7 +109,7 @@ var browser_adapter: MarketBrowserUiAdapter
 var market_views: Array[Dictionary]=[]
 
 func _ready() -> void:
-	get_tree().create_timer(150).timeout.connect(func() -> void: get_tree().quit(1))
+	get_tree().create_timer(210).timeout.connect(func() -> void: get_tree().quit(1))
 	if GameMode.is_client(): run_client.call_deferred()
 	else: super._ready()
 
@@ -217,7 +217,7 @@ func run() -> void:
 	world.npc_runtime=load("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,npc_execution)
 	world.storage_runtime=load("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,storage_execution)
 	world.ground_item_runtime=load("res://source/server/world/database/postgres/ground_item_runtime_postgres.gd").new(world.inventory_runtime,ground_execution)
-	world.seller_runtime=load("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,seller_execution,world.wallet_runtime,true)
+	world.seller_runtime=load("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,seller_execution,world.wallet_runtime,true,true)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
@@ -392,7 +392,21 @@ func run() -> void:
 	await wait_for(func()->bool:return map.reports.has("exchange-restored-ready"))
 	actor=map.reports["exchange-restored-ready"].peer
 	assert((await phase(actor,"exchange-restored",lost_withdrawal)).ok and facts==27)
-	assert(int(Wallet.new(pg).load_wallet(21).balance)==3880)
+	assert(world.wallet_runtime.add_income(actor,17) and world.wallet_runtime.add_income(observer,800))
+	assert(pg.execute("UPDATE economy.exchange_assets SET free=10 WHERE account_id=21 AND asset_id='upgrade_ore';").ok)
+	var sell_order: Dictionary=await phase(actor,"matching-sell")
+	assert(sell_order.ok)
+	assert((await phase(observer,"matching-buy")).error=="exchange_pending" and facts==27)
+	assert((await phase(actor,"matching-maker",sell_order)).ok)
+	await phase(observer,"exit")
+	await wait_for(func()->bool:return not world.connected_players.has(observer))
+	await start_client(210,"beta","matching-restored")
+	await wait_for(func()->bool:return map.reports.has("matching-restored-ready"))
+	observer=map.reports["matching-restored-ready"].peer
+	assert((await phase(observer,"matching-restored")).ok and facts==27)
+	assert((await phase(actor,"matching-cancel",sell_order)).ok and facts==27)
+	assert((await phase(observer,"matching-reserve-cancel")).ok)
+	assert(int(Wallet.new(pg).load_wallet(21).balance)==4297 and int(Wallet.new(pg).load_wallet(22).balance)==700)
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	await phase(actor,"exit")
 	await phase(observer,"exit")
@@ -502,7 +516,7 @@ func lose_response(type: String, payload: Dictionary) -> Dictionary:
 	return result
 
 func run_client() -> void:
-	get_tree().create_timer(145).timeout.connect(func() -> void: get_tree().quit(1))
+	get_tree().create_timer(205).timeout.connect(func() -> void: get_tree().quit(1))
 	fixture_dir=str(CmdlineUtils.get_parsed_args()["fixture-dir"])
 	wire=WireClient.new()
 	wire.name="Client"
@@ -521,9 +535,40 @@ func run_client() -> void:
 func client_phase(label: String, payload: Dictionary) -> void:
 	var result: Dictionary={"ok":true}
 	match label:
+		"matching-sell":
+			await exchange_adapter.open()
+			assert((await command("exchange.order",{"command_id":"sell","have_asset":"upgrade_ore","want_asset":"yang","quantity":6,"price_num":100,"price_den":1})).ok)
+			var order: Dictionary=exchange_views.back().orders.filter(func(row: Dictionary)->bool:return row.status=="active")[0]
+			result={"ok":true,"order_id":order.id}
+		"matching-buy":
+			await exchange_adapter.open()
+			map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+			result=await command("exchange.order",{"command_id":"buy","have_asset":"yang","want_asset":"upgrade_ore","quantity":4,"price_num":120,"price_den":1})
+			map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+		"matching-maker":
+			await wait_for(func()->bool:return exchange_views.back().orders.any(func(row: Dictionary)->bool:return row.id==payload.order_id and row.remaining==2))
+			assert(exchange_views.back().yang==4297 and exchange_views.back().assets.filter(func(row: Dictionary)->bool:return row.asset_id=="upgrade_ore")[0].reserved==2)
+		"matching-restored":
+			await wait_for(func()->bool:return exchange_adapter.journal.load_pending().entry.is_empty())
+			await exchange_adapter.open()
+			assert(exchange_views.back().yang==700 and exchange_views.back().assets.filter(func(row: Dictionary)->bool:return row.asset_id=="upgrade_ore")[0].free==4)
+		"matching-cancel":
+			map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+			assert((await command("exchange.cancel_order",{"command_id":"cancel","order_id":payload.order_id,"revision":1})).error=="exchange_pending")
+			map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+			close_ui();compose_ui()
+			await wait_for(func()->bool:return exchange_adapter.journal.load_pending().entry.is_empty())
+			await exchange_adapter.open()
+			assert(exchange_views.back().assets.filter(func(row: Dictionary)->bool:return row.asset_id=="upgrade_ore")[0].free==6)
+		"matching-reserve-cancel":
+			assert((await command("exchange.order",{"command_id":"reserve","have_asset":"yang","want_asset":"upgrade_ore","quantity":3,"price_num":50,"price_den":1})).ok)
+			assert(exchange_views.back().reservedYang==150)
+			var order: Dictionary=exchange_views.back().orders.filter(func(row: Dictionary)->bool:return row.status=="active")[0]
+			assert((await command("exchange.cancel_order",{"command_id":"refund","order_id":order.id,"revision":order.revision})).ok)
+			assert(exchange_views.back().reservedYang==0 and exchange_views.back().yang==700)
 		"exchange-deposit":
 			await exchange_adapter.open()
-			assert(not exchange_views.is_empty() and exchange_views.back().ledgerOnly)
+			assert(not exchange_views.is_empty() and not exchange_views.back().ledgerOnly)
 			var ore: Dictionary=map.endpoint.state.items.filter(func(row: Dictionary)->bool:return row.uid==payload.uid)[0]
 			assert((await command("storage.transfer",{"id":ore.uid,"revision":ore.revision,"from":"inventory","to":"storage","x":0,"y":0,"page":0,"quick":true})).ok)
 			ore=map.endpoint.state.storage.items.filter(func(row: Dictionary)->bool:return row.uid==payload.uid)[0]
