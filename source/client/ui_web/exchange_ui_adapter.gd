@@ -15,10 +15,10 @@ var _context: Dictionary={}
 var _journal_ready:=false
 var _native:=false
 var _capability_known:=false
-const LEDGER_ACTIONS: Array[String]=["deposit","withdraw"]
+const NATIVE_ACTIONS: Array[String]=["deposit","withdraw","order","cancel_order"]
 
 static func valid_intent(body: Dictionary) -> bool:
-	if body.size()!=2 or body.get("action") not in LEDGER_ACTIONS or not body.get("payload") is Dictionary: return false
+	if body.size()!=2 or body.get("action") not in NATIVE_ACTIONS or not body.get("payload") is Dictionary: return false
 	var p: Dictionary=body.payload.duplicate(true)
 	p.command_id="exchange-"+"0".repeat(32)
 	return MarketRequestRules.valid_command(body.action,p)
@@ -114,7 +114,7 @@ func _send(action: String, payload: Dictionary) -> Dictionary:
 	return await _session.wait(id,_tree)
 
 func _submit_native(payload: Dictionary, action: String) -> Dictionary:
-	if action not in LEDGER_ACTIONS: return {"ok":false,"error":"unsupported"}
+	if action not in NATIVE_ACTIONS or (action in ["order","cancel_order"] and _state.get("ledger_only",true)): return {"ok":false,"error":"unsupported"}
 	if not _journal_ready: return {"ok":false,"error":"journal_unavailable"}
 	if _busy or not _retry.is_empty(): return {"ok":false,"error":"resolve_unknown_command"}
 	var body:=payload.duplicate(true)

@@ -12,6 +12,7 @@ signal spend_finished(peer_id: int, operation_id: String, result: Dictionary)
 var _world: WorldServer
 var _executor: RefCounted
 var _accounts: Dictionary={}
+var _exchange_holds: Dictionary={}
 var _jobs: Dictionary={}
 var _elapsed: float=0.0
 var _draining:=false
@@ -45,15 +46,15 @@ func _for_peer(peer: int) -> Dictionary:
 
 func ready(peer: int) -> bool:
 	var account:=_for_peer(peer)
-	return not _draining and not account.is_empty() and account.external.is_empty() and not account.force and not account.state.is_empty() and account.stage in ["ready","apply"] and (account.work.is_empty() or account.work.cost==0)
+	return not _draining and not account.is_empty() and not _exchange_holds.has(account.context.account_id) and account.external.is_empty() and not account.force and not account.state.is_empty() and account.stage in ["ready","apply"] and (account.work.is_empty() or account.work.cost==0)
 
 func settled(peer: int) -> bool:
 	var account:=_for_peer(peer)
-	return not account.is_empty() and account.stage=="ready" and not account.state.is_empty() and account.external.is_empty() and account.work.is_empty() and not account.force
+	return not account.is_empty() and not _exchange_holds.has(account.context.account_id) and account.stage=="ready" and not account.state.is_empty() and account.external.is_empty() and account.work.is_empty() and not account.force
 
 func snapshot(peer: int) -> Dictionary:
 	var account:=_for_peer(peer)
-	if account.is_empty() or not account.external.is_empty() or account.force or account.state.is_empty() or account.stage not in ["ready","apply"] or (not account.work.is_empty() and account.work.cost>0): return {}
+	if account.is_empty() or _exchange_holds.has(account.context.account_id) or not account.external.is_empty() or account.force or account.state.is_empty() or account.stage not in ["ready","apply"] or (not account.work.is_empty() and account.work.cost>0): return {}
 	return {"balance":int(account.state.balance)+int(account.pending),"wallet_state":{"authority_id":account.state.authority_id,"account_id":account.context.account_id,"revision":account.state.revision}}
 
 func add_income(peer: int, amount: int) -> bool:
@@ -94,6 +95,32 @@ func reserve_npc(peer: int, operation_id: String) -> Dictionary:
 	if not account.work.is_empty() or account.ticket!=0: return {}
 	account.external={"id":operation_id,"income":int(account.pending),"token":Crypto.new().generate_random_bytes(16).hex_encode()}
 	return {"context":account.context.duplicate(true),"income":account.external.income,"token":account.external.token}
+
+## Pair settlement fences account admission even if no wallet is currently loaded.
+## A login while native SQL runs may hydrate, but cannot expose/spend stale state.
+func reserve_exchange(account_id: int, operation_id: String) -> Dictionary:
+	if _draining or account_id<=0 or _exchange_holds.has(account_id): return {}
+	var capture: Dictionary={"income":0,"token":"","context":{}}
+	var account: Dictionary=_accounts.get(account_id,{})
+	if not account.is_empty():
+		if account.peer<=0:
+			if account.pending!=0 or not account.work.is_empty() or not account.external.is_empty() or account.ticket!=0: return {}
+		else:
+			capture=reserve_npc(account.peer,operation_id)
+			if capture.is_empty(): return {}
+	_exchange_holds[account_id]=operation_id
+	return capture
+
+func finish_exchange(account_id: int, operation_id: String, result: Dictionary) -> void:
+	if _exchange_holds.get(account_id,"")!=operation_id: return
+	_exchange_holds.erase(account_id)
+	var tokens: Dictionary=result.get("income_tokens",{})
+	finish_npc(account_id,operation_id,{"ok":result.get("ok",false),"income_token":tokens.get(str(account_id),"")})
+	var account: Dictionary=_accounts.get(account_id,{})
+	if not account.is_empty() and account.external.is_empty() and account.work.is_empty():
+		account.stage="ready" if account.peer==0 and account.pending==0 else "load" # Includes login during settlement.
+
+func exchange_held(account_id: int) -> bool: return _exchange_holds.has(account_id)
 
 func finish_npc(account_id: int, operation_id: String, result: Dictionary) -> void:
 	var account: Dictionary=_accounts.get(account_id,{})
@@ -141,7 +168,7 @@ func checkpoint_all() -> void:
 		account.force=true
 
 func drained() -> bool:
-	return _jobs.is_empty() and _accounts.values().all(func(account: Dictionary) -> bool: return account.stage=="ready" and account.pending==0 and account.work.is_empty() and account.external.is_empty())
+	return _exchange_holds.is_empty() and _jobs.is_empty() and _accounts.values().all(func(account: Dictionary) -> bool: return account.stage=="ready" and account.pending==0 and account.work.is_empty() and account.external.is_empty())
 
 func shutdown_complete() -> bool:
 	if not _draining or not drained(): return false
@@ -202,7 +229,7 @@ func poll(delta: float = 0.0) -> void:
 			if not notice.is_empty() and notice.peer==account.peer and Sessions.same_context(notice.context,account.context) and not _for_peer(account.peer).is_empty(): spend_finished.emit(account.peer,notice.id,notice.result)
 	for key: int in _accounts.keys():
 		var account: Dictionary=_accounts[key]
-		if not account.external.is_empty(): continue
+		if _exchange_holds.has(key) or not account.external.is_empty(): continue
 		if periodic:
 			account.flush=true
 			if account.stage=="paused" and account.error in ["storage","outcome_unknown"]:

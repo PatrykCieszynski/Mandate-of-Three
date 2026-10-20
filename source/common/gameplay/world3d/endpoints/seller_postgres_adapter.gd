@@ -57,7 +57,7 @@ func _finished(peer: int, operation: String, result: Dictionary) -> void:
 	if pending.is_empty() or (not pending.operation.is_empty() and pending.operation!=operation): return
 	_pending.erase(peer)
 	var response:=result.duplicate(true)
-	if response.get("error","") not in ["storage","outcome_unknown","unknown_command","busy","unavailable","operation_pending","recovery_required","session_required","stale_session"]: response.terminal=true
+	if response.get("error","") not in ["storage","outcome_unknown","unknown_command","busy","unavailable","operation_pending","recovery_required","session_required","stale_session","participants_changed","participant_busy"]: response.terminal=true
 	if pending.get("query",false):
 		if _owns(peer): _endpoint.receive_query.rpc_id(peer,pending.id,response)
 	else: _reply(peer,pending.id,response)

@@ -10,6 +10,9 @@ const MAX_ACTIVE: int=64 # Includes detached accounts with unknown outcomes.
 signal finished(peer: int, operation_id: String, result: Dictionary)
 signal committed(peer: int, action: String)
 signal snapshot_applied(peer: int, snapshot: Dictionary)
+var _matching_enabled:=false
+var _exchange_generations: Dictionary={}
+var _published_exchange: Dictionary={}
 var _exchange_enabled:=false
 var _wallet: RefCounted
 var _refresh_accounts: Dictionary={}
@@ -22,11 +25,13 @@ var _workers_draining:=false
 var _serial: int=0
 var _deferred_recovery: Array[Dictionary]=[]
 
-func _init(inventory: RefCounted, executor: RefCounted, wallet: RefCounted = null, exchange_ledger: bool = false) -> void:
+func _init(inventory: RefCounted, executor: RefCounted, wallet: RefCounted = null, exchange_ledger: bool = false, exchange_matching: bool = false) -> void:
 	_inventory=inventory
 	_executor=executor
 	_wallet=wallet
 	_exchange_enabled=exchange_ledger
+	_matching_enabled=exchange_matching
+	assert(not _matching_enabled or (_exchange_enabled and _wallet!=null))
 	if _exchange_enabled: _inventory.enable_storage()
 
 func open_exchange(peer: int) -> Dictionary:
@@ -50,6 +55,7 @@ func submit(peer: int, action: String, body: Dictionary) -> Dictionary:
 	if action not in Content.ACTIONS or not MarketRequestRules.valid_command(action,body): return {"queued":false,"error":"unsupported"}
 	if action in ["buy","claim_revenue"] and _wallet==null: return {"queued":false,"error":"unsupported"}
 	if action in ["deposit","withdraw"] and not _exchange_enabled: return {"queued":false,"error":"unsupported"}
+	if action in ["order","cancel_order"] and not _matching_enabled: return {"queued":false,"error":"unsupported"}
 	return _begin(peer,body.command_id,action,body,false)
 
 func visit(peer: int, shop: int) -> Dictionary:
@@ -90,16 +96,19 @@ func _begin(peer: int, id: String, action: String, body: Dictionary, lookup: boo
 			_inventory.finish_external(context.account_id,"seller:"+id)
 			return {"queued":false,"error":"recovery_required"}
 	_serial+=1
-	var active: Dictionary={"serial":_serial,"account":context.account_id,"peer":peer,"context":context,"id":id,"action":action,"snapshot":{},"published":false,"body":body.duplicate(true),"stage":"snapshot" if action=="open" else ("visit" if action=="visit" else ("receipt" if lookup else "execute")),"ticket":0,"result":{},"changed":false,"repairs":0,"retry_at":0,"capture":capture}
+	var active: Dictionary={"serial":_serial,"account":context.account_id,"peer":peer,"context":context,"id":id,"action":action,"snapshot":{},"published":false,"body":body.duplicate(true),"stage":"snapshot" if action=="open" else ("visit" if action=="visit" else ("receipt" if lookup else ("prepare" if action in ["order","cancel_order"] else "execute"))),"ticket":0,"result":{},"changed":false,"repairs":0,"retry_at":0,"capture":capture,"participants":[],"captures":{},"view_generation":0}
 	_active[context.account_id]=active
 	_schedule(active)
 	return {"queued":true} # Volatile scheduling only, client keeps its journal.
 
 func _schedule(active: Dictionary) -> void:
 	var queued: Dictionary
-	if active.stage=="execute": queued=_executor.submit_seller(active.context,active.action,active.body,active.capture.get("income",0),active.capture.get("token",""))
+	if active.stage=="execute": queued=_executor.submit_seller(active.context,active.action,active.body,active.capture.get("income",0),active.capture.get("token",""),active.captures,active.participants)
+	elif active.stage=="prepare": queued=_executor.submit_seller_prepare(active.context,active.action,active.body)
 	elif active.stage=="visit": queued=_executor.submit_seller_visit(active.context,int(active.body.shop))
-	elif active.stage=="snapshot": queued=_executor.submit_seller_snapshot(active.context,_exchange_enabled)
+	elif active.stage=="snapshot":
+		active.view_generation=int(_exchange_generations.get(active.account,0))
+		queued=_executor.submit_seller_snapshot(active.context,_exchange_enabled)
 	else: queued=_executor.submit_seller_receipt(active.context,active.id)
 	if not queued.queued:
 		if active.stage=="execute": _settle(active,{"ok":false,"error":queued.error})
@@ -120,6 +129,13 @@ func _failure(account: int, serial: int, peer: int, reason: String) -> void:
 	if not active.is_empty() and active.serial==serial and active.peer==peer and active.stage=="paused": finished.emit(peer,active.id,{"ok":false,"error":reason})
 
 func _settle(active: Dictionary, result: Dictionary) -> void:
+	for participant: int in active.captures:
+		_wallet.finish_exchange(participant,"seller:"+active.id,result)
+	if result.get("ok",false) and result.has("affected_accounts"):
+		for participant: int in result.affected_accounts:
+			if not _inventory.binding(participant).is_empty():
+				_exchange_generations[participant]=int(_exchange_generations.get(participant,0))+1
+				if participant!=active.account: _refresh_accounts[participant]=true
 	if not active.capture.is_empty(): _wallet.finish_npc(active.account,"seller:"+active.id,result)
 	if result.get("ok",false) and result.has("seller_account"):
 		var seller: int=int(result.seller_account)
@@ -133,12 +149,21 @@ func _settle(active: Dictionary, result: Dictionary) -> void:
 
 func _repair(active: Dictionary) -> void:
 	var repaired: bool=_inventory.repair_external_projection(active.peer)
-	if _wallet!=null: repaired=_wallet.retry(active.peer) or repaired
+	if _wallet!=null:
+		repaired=_wallet.retry(active.peer) or repaired
+		for participant: int in active.participants:
+			var binding: Dictionary=_wallet.binding(participant)
+			if not binding.is_empty() and binding.peer>0: repaired=_wallet.retry(binding.peer) or repaired
 	if repaired:
 		active.repairs+=1
 		active.retry_at=Time.get_ticks_msec()+1000
 
 func _projection_ready(active: Dictionary) -> bool:
+	if _wallet!=null:
+		if _wallet.exchange_held(active.account): return false
+		for participant: int in active.participants:
+			var binding: Dictionary=_wallet.binding(participant)
+			if not binding.is_empty() and binding.peer>0 and not _wallet.settled(binding.peer): return false
 	return _inventory.mutations_allowed(active.peer) and (_wallet==null or active.capture.is_empty() or _wallet.settled(active.peer))
 
 func poll() -> void:
@@ -151,6 +176,19 @@ func poll() -> void:
 		active.changed=active.changed or (event.get("committed",false) and not event.get("receipt_replay",false))
 		var result: Dictionary=event.result
 		if not result.get("ok",false) and (event.intent=="seller_snapshot" or result.get("error","") in ["storage","outcome_unknown","stale_session","session_required","recovery_required"]): _pause(active,str(result.error))
+		elif event.intent=="seller_prepare" and result.get("ok",false):
+			active.participants=result.participants.duplicate()
+			var captured:=true
+			for participant: int in active.participants:
+				var capture: Dictionary=_wallet.reserve_exchange(participant,"seller:"+active.id)
+				if capture.is_empty():
+					captured=false
+					break
+				active.captures[participant]=capture
+			if captured:
+				active.stage="execute"
+				_schedule(active)
+			else: _settle(active,{"ok":false,"error":"participant_busy"})
 		elif event.intent=="seller_snapshot":
 			active.published=false
 			active.snapshot=result.duplicate(true)
@@ -184,28 +222,48 @@ func poll() -> void:
 							active.stage="snapshot"
 							_schedule(active)
 					continue
+				if active.view_generation!=int(_exchange_generations.get(account,0)):
+					if active.repairs>=3: _pause(active,"storage")
+					else:
+						active.repairs+=1
+						active.stage="snapshot"
+						_schedule(active)
+					continue
 				if not active.published:
 					active.snapshot.settlement_runtime=_wallet!=null
+					if active.snapshot.has("exchange"): active.snapshot.exchange.ledger_only=not _matching_enabled
 					if active.snapshot.has("exchange") and _wallet!=null:
 						var wallet_view: Dictionary=_wallet.snapshot(active.peer)
 						if not wallet_view.is_empty(): active.snapshot.exchange.yang=wallet_view.balance
 					active.published=true
 					snapshot_applied.emit(active.peer,active.snapshot.duplicate(true))
+					_published_exchange[account]=active.view_generation
+					_refresh_accounts.erase(account)
 					var current_projection: Dictionary=_inventory.binding(account)
-					if current_projection.is_empty() or current_projection.peer!=active.peer or not Sessions.same_context(current_projection.context,active.context) or not _projection_ready(active): continue
+					if current_projection.is_empty() or current_projection.peer!=active.peer or not Sessions.same_context(current_projection.context,active.context) or not _projection_ready(active) or active.view_generation!=int(_exchange_generations.get(account,0)): continue
+				var participant_views_ready:=true
+				for participant: int in active.participants:
+					if participant!=account and not _inventory.binding(participant).is_empty() and int(_published_exchange.get(participant,-1))<int(_exchange_generations.get(participant,0)):
+						participant_views_ready=false
+						_refresh_accounts[participant]=true
+				if not participant_views_ready: continue
 				if active.changed:
 					active.changed=false
 					committed.emit(active.peer,active.action)
 				var current: Dictionary=_inventory.binding(account)
-				if not current.is_empty() and current.peer==active.peer and Sessions.same_context(current.context,active.context) and _projection_ready(active):
+				if not current.is_empty() and current.peer==active.peer and Sessions.same_context(current.context,active.context) and _projection_ready(active) and active.view_generation==int(_exchange_generations.get(account,0)):
 					_active.erase(account)
 					finished.emit(active.peer,active.id,active.result)
-			elif (not _draining or not active.capture.is_empty()) and active.repairs<3 and Time.get_ticks_msec()>=active.retry_at: _repair(active)
-		elif (not _draining or not active.capture.is_empty()) and active.stage=="paused" and not binding.is_empty() and active.repairs<3 and Time.get_ticks_msec()>=active.retry_at:
+			elif (not _draining or (not active.capture.is_empty() or not active.captures.is_empty())) and active.repairs<3 and Time.get_ticks_msec()>=active.retry_at: _repair(active)
+		elif (not _draining or (not active.capture.is_empty() or not active.captures.is_empty())) and active.stage=="paused" and not binding.is_empty() and active.repairs<3 and Time.get_ticks_msec()>=active.retry_at:
 			active.repairs+=1
 			active.stage=active.get("failed_stage") if active.get("failed_stage","") in ["snapshot","visit"] else "receipt"
 			_schedule(active)
 
+	for account: int in _exchange_generations.keys()+_published_exchange.keys():
+		if not _active.has(account) and _inventory.binding(account).is_empty():
+			_exchange_generations.erase(account)
+			_published_exchange.erase(account)
 	if not _draining:
 		for account: int in _refresh_accounts.keys():
 			var binding: Dictionary=_inventory.binding(account)
@@ -231,7 +289,7 @@ func drain_status() -> Dictionary:
 func _stop_workers_if_safe() -> void:
 	if not _draining or _workers_draining: return
 	for active: Dictionary in _active.values():
-		if not active.capture.is_empty() and active.result.is_empty(): return
+		if (not active.capture.is_empty() or not active.captures.is_empty()) and active.result.is_empty(): return
 	_workers_draining=true
 	_executor.begin_drain()
 
@@ -240,7 +298,7 @@ func shutdown_complete() -> bool:
 	_stop_workers_if_safe()
 	if not _draining or not _jobs.is_empty(): return false
 	for active: Dictionary in _active.values():
-		if not active.capture.is_empty() and active.result.is_empty(): return false
+		if (not active.capture.is_empty() or not active.captures.is_empty()) and active.result.is_empty(): return false
 	if not _executor.is_stopped(): return false
 	for active: Dictionary in _active.values():
 		_deferred_recovery.append({"account_id":active.account,"operation_id":active.id,"stage":active.stage,"reason":active.get("reason","")})

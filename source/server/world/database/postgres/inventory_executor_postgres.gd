@@ -87,7 +87,7 @@ class SessionWorker extends RefCounted:
 			if database.is_open() or _open(database):
 				var intent: String=str(job.get("intent",""))
 				var store: RefCounted
-				if intent in ["seller_execute","seller_receipt","seller_snapshot","seller_visit"]: store=SellerSession.new(database)
+				if intent in ["seller_execute","seller_receipt","seller_snapshot","seller_visit","seller_prepare"]: store=SellerSession.new(database)
 				elif intent in ["item_initialize","ground_claim","ground_receipt"]: store=GroundSession.new(database)
 				elif intent in ["storage_execute","storage_receipt"]: store=StorageSession.new(database)
 				elif intent in ["npc_execute","npc_receipt"]: store=NpcSession.new(database)
@@ -95,7 +95,8 @@ class SessionWorker extends RefCounted:
 				elif intent.is_empty(): store=Items.new(database)
 				elif intent in ["session_install","session_inspect","session_revoke","session_ready"]: store=Sessions.new(database)
 				else: store=Intents.new(database)
-				if intent=="seller_execute": result=store.execute(job.session,job.action,job.body,job.get("income",0),job.get("token",""))
+				if intent=="seller_execute": result=store.execute(job.session,job.action,job.body,job.get("income",0),job.get("token",""),job.get("captures",{}),job.get("participants",[]))
+				elif intent=="seller_prepare": result=store.prepare(job.session,job.action,job.body)
 				elif intent=="seller_receipt": result=store.receipt(job.session,job.operation_id)
 				elif intent=="seller_visit": result=store.visit(job.session,job.shop)
 				elif intent=="seller_snapshot": result=store.snapshot(job.session,job.get("include_exchange",false))
@@ -226,9 +227,12 @@ func submit_session_pending_discovery(context: Dictionary, after: int = 0, limit
 func submit_session_snapshot(context: Dictionary, include_storage: bool = false) -> Dictionary:
 	return _session_job(context,"session_snapshot","",{"include_storage":include_storage})
 
-func submit_seller(context: Dictionary, action: String, body: Dictionary, income: int = 0, token: String = "") -> Dictionary:
+func submit_seller(context: Dictionary, action: String, body: Dictionary, income: int = 0, token: String = "", captures: Dictionary = {}, participants: Array = []) -> Dictionary:
 	if action not in SellerSession.ACTIONS or not MarketRequestRules.valid_command(action,body): return {"queued":false,"error":"request"}
-	return _session_job(context,"seller_execute",body.command_id,{"action":action,"body":body.duplicate(true),"income":income,"token":token})
+	return _session_job(context,"seller_execute",body.command_id,{"action":action,"body":body.duplicate(true),"income":income,"token":token,"captures":captures.duplicate(true),"participants":participants.duplicate()})
+
+func submit_seller_prepare(context: Dictionary, action: String, body: Dictionary) -> Dictionary:
+	return _session_job(context,"seller_prepare",body.command_id,{"action":action,"body":body.duplicate(true)})
 
 func submit_seller_visit(context: Dictionary, shop: int) -> Dictionary:
 	return _session_job(context,"seller_visit","",{"shop":shop})

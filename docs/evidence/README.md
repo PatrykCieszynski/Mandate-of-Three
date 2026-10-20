@@ -1,5 +1,7 @@
 # Evidence and validation
 
+- [PostgreSQL P3p Exchange matching](postgres-p3p/README.md) - native multi-party settlement and ten-client recovery acceptance (topic branch until reviewed/merged).
+
 - [PostgreSQL P3o Exchange ledger](postgres-p3o/README.md) - native custody/recovery and nine-client acceptance (topic branch until reviewed/merged).
 
 - [PostgreSQL P3n settlement runtime](postgres-p3n/README.md) - purchases/proceeds, native uncertainty and eight-client recovery (topic branch until reviewed/merged).

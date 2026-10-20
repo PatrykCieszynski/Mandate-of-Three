@@ -1,5 +1,7 @@
 # Development and verification
 
+- [PostgreSQL Exchange matching runtime](postgres-exchange-matching-runtime.md) - P3p captured participant wallets, order/cancel/matching, private-view freshness and native recovery.
+
 - [PostgreSQL Exchange ledger runtime](postgres-exchange-ledger-runtime.md) - P3o item/Storage conversions, coherent projections and native client journals; matching remains separate.
 
 - [PostgreSQL Marketplace settlement runtime](postgres-market-settlement-runtime.md) - P3n optional purchases/proceeds, pending-income tokens, seller refresh and purchase journals.

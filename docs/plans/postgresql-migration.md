@@ -10,7 +10,9 @@ Inventory/Storage reconciliation. P3l adds optional starter initialization and
 ground-item pickup/receipt recovery. P3m adds optional seller-local Marketplace
 and item-claim execution with client journal recovery. P3n connects optional
 purchase/proceeds settlement and authenticated shop visits. P3o connects optional
-Exchange item/Storage deposits and withdrawals with journal recovery. **Remaining runtime domains/bootstrap and P4 are not completed. Normal
+Exchange item/Storage deposits and withdrawals with journal recovery. P3p adds
+optional order/cancel/matching, captured participant wallets and World-local
+ledger projection freshness. **Remaining runtime domains/bootstrap and P4 are not completed. Normal
 gameplay remains SQLite.** This roadmap implements the accepted
 [Economy C1–C5](../architecture/economy/README.md) and
 [World Process topology](../architecture/world-instance-architecture.md); every
@@ -18,7 +20,7 @@ package still requires its own review, tests and merge decision.
 
 ## Runtime adoption status
 
-**Audited 2026-10-19. This is not the final cleanup of SQLite.** P1/P2 provide
+**Audited 2026-10-20. This is not the final cleanup of SQLite.** P1/P2 provide
 PostgreSQL stores and backend acceptance; P3 has opt-in Inventory, wallet, NPC,
 Storage, ground-item and seller/item-claim paths.
 Normal server startup still creates the SQLite writer. A complete PostgreSQL
@@ -31,7 +33,7 @@ realm has not yet been enabled or rehearsed.
 | Yang wallet | Normal startup still loads/checkpoints `WalletStoreSqlite` | P3i optionally supplies RAM income, receipted async checkpoints, fixed test spend, currency RPC/HUD and local reconnect/drain. Production bootstrap, cross-domain freshness and multi-World handoff remain |
 | NPC Shop / Upgrade | Normal startup uses `WorldEconomyService` and SQLite | P3j optionally connects authenticated RPCs, bounded PG transactions, captured pending Yang and current Inventory/wallet publication. Production bootstrap remains |
 | Account Storage | `WorldEconomyService` still uses SQLite | P3k optionally connects shared custody, stable client journal recovery and combined account-revision projections; production bootstrap and distributed publication remain |
-| Player Shop / claims / Exchange | `MarketplaceService` constructs `MarketStoreSqlite` / `ExchangeStoreSqlite` | P3m optionally connects seller/item claims; P3n adds purchases/proceeds with captured income, buyer Inventory/wallet reconciliation, seller private refresh and journals. P3o connects Exchange ledger conversions; order/cancel/matching runtime and cross-process publication remain |
+| Player Shop / claims / Exchange | `MarketplaceService` constructs `MarketStoreSqlite` / `ExchangeStoreSqlite` | P3m optionally connects seller/item claims; P3n adds purchases/proceeds with captured income, buyer Inventory/wallet reconciliation, seller private refresh and journals. P3o connects Exchange ledger conversions; P3p adds order/cancel/matching with participant wallet captures and local projection generations. Cross-process publication and production bootstrap remain |
 | Auction reads | `AuctionQueryService` / `AuctionSociReader` uses SOCI's **sqlite3** read-only WAL reader | Integrate PG read scheduling/search with the selected realm backend; SOCI usage alone does not mean PG adoption |
 | Character/profile and other World data | `WorldStoreSqlite` still saves character/quest/guild data; `MailStore` uses SQLite; progression checkpoints stay here | These are not automatically covered by the realm Economy migration. Decide/retain their explicit boundary and identity mappings, or scope a separate port before claiming SQLite can be removed entirely |
 
@@ -53,9 +55,8 @@ Remaining deliverables before an Economy cutover are substantial:
    SQLite economic runtime paths; parity fixtures/reference code and separately
    retained profile/progression storage are distinct cleanup decisions.
 
-After P3o, the next integration priority is Exchange order/cancel/matching
-runtime with pending Yang, reservations and participant wallet/ledger freshness. PostgreSQL Auction catalog/search adoption
-also remains open. No percentage or final PR count is asserted: unfinished runtime domains
+After P3p, the next integration priority is PostgreSQL Auction catalog/search
+adoption, followed by operational bootstrap/lifecycle and full PG gameplay acceptance. No percentage or final PR count is asserted: unfinished runtime domains
 and P4 are separate acceptance
 gates, not documentation-only leftovers.
 
@@ -403,6 +404,15 @@ and explicit receipt-first retry. Native conversion faults/alt recovery and nine
 actual clients cover lost reply, reload/relog and saved-but-unsent intents.
 Order/matching writes, multi-party reservation/freshness, public Auction, bootstrap
 and P4 remain separate; normal gameplay stays SQLite.
+
+**P3p progress:** [Exchange matching runtime](../development/postgres-exchange-matching-runtime.md)
+connects optional order/cancel/matching through prepare/capture/revalidate, existing
+atomic price-time transactions and per-account income tokens. Account wallet fences
+cover late login, World-local generations refresh participant ledger projections,
+and native journals recover lost reply/relog without automatic mutation replay.
+Ten actual clients retain prior contracts and add fill/reserve/cancel recovery.
+Public Auction, bootstrap, distributed publication and P4 remain open; normal
+startup stays SQLite. No schema or public RPC signature changes.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
