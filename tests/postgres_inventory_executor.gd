@@ -9,11 +9,13 @@ var connection: String
 var executor: RefCounted
 var answers: Dictionary={}
 var physics_ticks: int=0
+var observations: Array=[]
 
 func _physics_process(_delta: float) -> void: physics_ticks+=1
 
 func collect() -> void:
 	for answer: Dictionary in executor.poll():
+		assert(not answer.has("metrics"),"diagnostic timestamps never enter runtime result envelopes")
 		assert(not answers.has(answer.ticket),"one local completion per ticket")
 		answers[answer.ticket]=answer
 
@@ -62,6 +64,9 @@ func _ready() -> void:
 	var a:=seed_item(9100)
 	var b:=seed_item(9101)
 	executor=Executor.new()
+	executor.observation.connect(func(sample: Dictionary)->void:
+		assert(sample.keys().size()==8 and sample.queue_us>=0 and sample.worker_us>=0 and sample.delivery_us>=0)
+		observations.append(sample))
 	assert(not executor.start(connection,0,1) and not executor.start(connection,5,1) and not executor.start(connection,1,17))
 	assert(executor.start(connection,2,1))
 	assert(executor.submit_receipt(91000,"before-ready").error=="unavailable")
@@ -89,6 +94,8 @@ func _ready() -> void:
 	assert(position(a).revision==1 and position(b).revision==1)
 	await wait_until(func() -> bool: return worker_sessions()==0)
 	print("POSTGRES_EXECUTOR_PROGRESS_OK two native owners, main-thread physics during blocked SQL, bounded unconsumed results and nonblocking drain")
+	assert(observations.is_empty(),"disabled profiling emits nothing")
+	executor.profiling_enabled=true
 	# Recreate sessions and recover the same operation without a second mutation.
 	assert(executor.start(connection,1,2))
 	await wait_until(func() -> bool: return executor.is_ready())
@@ -98,6 +105,7 @@ func _ready() -> void:
 	await wait_until(func() -> bool: return answers.has(replay) and answers.has(lookup.ticket))
 	assert(answers[replay].result==answers[first].result and answers[replay].receipt_replay and not answers[replay].committed)
 	assert(answers[lookup.ticket].result==answers[first].result and not answers[lookup.ticket].committed and not answers[lookup.ticket].receipt_replay)
+	assert(observations.size()==2,"one sanitized sample for each profiled native completion")
 	# Consumer-owned copies cannot rewrite a durable receipt or worker state.
 	answers[replay].result.item_state.revision=-1
 	lookup=executor.submit_receipt(91000,"initial-a")

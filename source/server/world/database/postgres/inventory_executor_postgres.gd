@@ -24,6 +24,10 @@ var _pending: Dictionary={}
 var _capacity: int
 var _next_ticket: int=0
 var _ready_count: int=0
+## Opt-in local diagnostics, never part of RPC/results or persistent receipts.
+## Disabled by default: no per-job clock reads or sample allocation.
+var profiling_enabled:=false
+signal observation(sample: Dictionary)
 
 class SessionWorker extends RefCounted:
 	var _connection: String
@@ -84,6 +88,7 @@ class SessionWorker extends RefCounted:
 			_mutex.unlock()
 			if stop: break
 			if job.is_empty(): continue
+			var started: int=Time.get_ticks_usec() if job.has("queued_us") else 0
 			var result: Dictionary={"ok":false,"error":"storage"}
 			var committed:=false
 			var replay:=false
@@ -145,7 +150,9 @@ class SessionWorker extends RefCounted:
 					result={"ok":false,"error":"storage"} if job.lookup else {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
 					committed=false
 					replay=false
-			_publish({"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"session":job.get("session",{}),"result":result,"committed":committed,"receipt_replay":replay})
+			var event: Dictionary={"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"session":job.get("session",{}),"result":result,"committed":committed,"receipt_replay":replay}
+			if started>0: event.metrics={"queued_us":job.queued_us,"started_us":started,"finished_us":Time.get_ticks_usec()}
+			_publish(event)
 		database.close()
 		_connection=""
 
@@ -316,6 +323,7 @@ func _submit(job: Dictionary) -> Dictionary:
 	if selected<0: return {"queued":false,"error":"busy"}
 	_next_ticket+=1
 	job.ticket=_next_ticket
+	if profiling_enabled: job.queued_us=Time.get_ticks_usec()
 	_pending[_next_ticket]={"slot":selected,"ticket":_next_ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"session":job.get("session",{})}
 	_slots[selected].load+=1
 	_slots[selected].owner.enqueue(job)
@@ -365,6 +373,10 @@ func _consume(slot: Dictionary, completed: Array) -> void:
 		else:
 			_pending.erase(event.ticket)
 			slot.load-=1
+			if event.has("metrics"):
+				var timing: Dictionary=event.metrics
+				observation.emit({"intent":event.intent,"queue_us":int(timing.started_us)-int(timing.queued_us),"worker_us":int(timing.finished_us)-int(timing.started_us),"delivery_us":Time.get_ticks_usec()-int(timing.finished_us),"pending":_pending.size(),"ok":event.result.get("ok",false),"committed":event.committed,"replay":event.receipt_replay})
+				event.erase("metrics")
 			event.erase("kind")
 			completed.append(event)
 

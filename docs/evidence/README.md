@@ -49,3 +49,5 @@ This directory retains reproducible raw evidence. The documentation cleanup remo
 - [PostgreSQL P3u backup/restore rehearsal](postgres-p3u/README.md)
 
 - [PostgreSQL P3v World replacement](postgres-p3v/README.md)
+
+- [PostgreSQL P4a mixed-load baseline](postgres-p4a/README.md)
