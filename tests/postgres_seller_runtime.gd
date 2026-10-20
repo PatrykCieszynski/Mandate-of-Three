@@ -25,7 +25,8 @@ class LostCompletion extends RefCounted:
 	var fail_receipts:=false
 	var after_snapshot: Callable
 	func _init(value: RefCounted) -> void: inner=value
-	func submit_seller(context: Dictionary, action: String, body: Dictionary) -> Dictionary: return inner.submit_seller(context,action,body)
+	func submit_seller(context: Dictionary, action: String, body: Dictionary, income: int = 0, token: String = "") -> Dictionary: return inner.submit_seller(context,action,body,income,token)
+	func submit_seller_visit(context: Dictionary, shop: int) -> Dictionary: return inner.submit_seller_visit(context,shop)
 	func submit_seller_receipt(context: Dictionary, id: String) -> Dictionary: return inner.submit_seller_receipt(context,id)
 	func submit_seller_snapshot(context: Dictionary) -> Dictionary: return inner.submit_seller_snapshot(context)
 	func begin_drain() -> void: inner.begin_drain()

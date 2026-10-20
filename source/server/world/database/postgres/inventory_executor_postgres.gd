@@ -87,7 +87,7 @@ class SessionWorker extends RefCounted:
 			if database.is_open() or _open(database):
 				var intent: String=str(job.get("intent",""))
 				var store: RefCounted
-				if intent in ["seller_execute","seller_receipt","seller_snapshot"]: store=SellerSession.new(database)
+				if intent in ["seller_execute","seller_receipt","seller_snapshot","seller_visit"]: store=SellerSession.new(database)
 				elif intent in ["item_initialize","ground_claim","ground_receipt"]: store=GroundSession.new(database)
 				elif intent in ["storage_execute","storage_receipt"]: store=StorageSession.new(database)
 				elif intent in ["npc_execute","npc_receipt"]: store=NpcSession.new(database)
@@ -95,8 +95,9 @@ class SessionWorker extends RefCounted:
 				elif intent.is_empty(): store=Items.new(database)
 				elif intent in ["session_install","session_inspect","session_revoke","session_ready"]: store=Sessions.new(database)
 				else: store=Intents.new(database)
-				if intent=="seller_execute": result=store.execute(job.session,job.action,job.body)
+				if intent=="seller_execute": result=store.execute(job.session,job.action,job.body,job.get("income",0),job.get("token",""))
 				elif intent=="seller_receipt": result=store.receipt(job.session,job.operation_id)
+				elif intent=="seller_visit": result=store.visit(job.session,job.shop)
 				elif intent=="seller_snapshot": result=store.snapshot(job.session)
 				elif intent=="item_initialize": result=store.initialize(job.session)
 				elif intent=="ground_claim": result=store.claim(job.session,job.operation_id,job.drop)
@@ -225,9 +226,12 @@ func submit_session_pending_discovery(context: Dictionary, after: int = 0, limit
 func submit_session_snapshot(context: Dictionary, include_storage: bool = false) -> Dictionary:
 	return _session_job(context,"session_snapshot","",{"include_storage":include_storage})
 
-func submit_seller(context: Dictionary, action: String, body: Dictionary) -> Dictionary:
+func submit_seller(context: Dictionary, action: String, body: Dictionary, income: int = 0, token: String = "") -> Dictionary:
 	if action not in SellerSession.ACTIONS or not MarketRequestRules.valid_command(action,body): return {"queued":false,"error":"request"}
-	return _session_job(context,"seller_execute",body.command_id,{"action":action,"body":body.duplicate(true)})
+	return _session_job(context,"seller_execute",body.command_id,{"action":action,"body":body.duplicate(true),"income":income,"token":token})
+
+func submit_seller_visit(context: Dictionary, shop: int) -> Dictionary:
+	return _session_job(context,"seller_visit","",{"shop":shop})
 
 func submit_seller_receipt(context: Dictionary, id: String) -> Dictionary:
 	return _session_job(context,"seller_receipt",id,{})
@@ -271,7 +275,7 @@ func submit_npc_receipt(context: Dictionary, issuer: int, kind: String, operatio
 func _session_job(context: Dictionary, mode: String, operation_id: String, fields: Dictionary) -> Dictionary:
 	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return {"queued":false,"error":"request"}
 	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
-	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume","wallet_batch","npc_execute","storage_execute","item_initialize","ground_claim","seller_execute"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_pending","session_snapshot","wallet_snapshot","item_initialize","seller_snapshot"]}
+	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume","wallet_batch","npc_execute","storage_execute","item_initialize","ground_claim","seller_execute"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_pending","session_snapshot","wallet_snapshot","item_initialize","seller_snapshot","seller_visit"]}
 	job.merge(fields)
 	return _submit(job)
 

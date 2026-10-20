@@ -28,6 +28,8 @@ export type MarketBrowserSnapshot =
   | { active: false }
   | {
       active: true;
+      purchasePending?: boolean;
+      purchaseBusy?: boolean;
       catalogQuery?: string;
       criteria?: MarketSearch;
       catalog: { definition_id: string; name: string; icon_id: string }[];
@@ -52,6 +54,8 @@ export function isBrowserSnapshot(v: unknown): v is MarketBrowserSnapshot {
   return (
     (!('catalogQuery' in v) ||
       (typeof v.catalogQuery === 'string' && v.catalogQuery.length <= 80)) &&
+    (!('purchasePending' in v) || typeof v.purchasePending === 'boolean') &&
+    (!('purchaseBusy' in v) || typeof v.purchaseBusy === 'boolean') &&
     (!('criteria' in v) || isSearchCriteria(v.criteria)) &&
     Array.isArray(v.catalog) &&
     v.catalog.length <= 100 &&

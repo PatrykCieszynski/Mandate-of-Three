@@ -103,10 +103,11 @@ var storage_execution: RefCounted
 var ground_execution: RefCounted
 var seller_execution: RefCounted
 var market_adapter: MarketUiAdapter
+var browser_adapter: MarketBrowserUiAdapter
 var market_views: Array[Dictionary]=[]
 
 func _ready() -> void:
-	get_tree().create_timer(90).timeout.connect(func() -> void: get_tree().quit(1))
+	get_tree().create_timer(120).timeout.connect(func() -> void: get_tree().quit(1))
 	if GameMode.is_client(): run_client.call_deferred()
 	else: super._ready()
 
@@ -213,7 +214,7 @@ func run() -> void:
 	world.npc_runtime=load("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,npc_execution)
 	world.storage_runtime=load("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,storage_execution)
 	world.ground_item_runtime=load("res://source/server/world/database/postgres/ground_item_runtime_postgres.gd").new(world.inventory_runtime,ground_execution)
-	world.seller_runtime=load("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,seller_execution)
+	world.seller_runtime=load("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,seller_execution,world.wallet_runtime)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
@@ -361,7 +362,23 @@ func run() -> void:
 	await wait_for(func() -> bool: return map.reports.has("seller-restored-ready"))
 	actor=map.reports["seller-restored-ready"].peer
 	assert((await phase(actor,"seller-restored",{"uid":claim_item.uid})).ok and facts==21)
-	assert(int(Wallet.new(pg).load_wallet(21).balance)==1850)
+	var listed: Dictionary=await phase(actor,"settlement-list")
+	assert(listed.ok and facts==22)
+	assert(world.wallet_runtime.add_income(observer,800))
+	assert((await phase(observer,"settlement-buy",listed)).error=="seller_pending")
+	assert(facts==23 and int(Wallet.new(pg).load_wallet(22).balance)==300)
+	await wait_for(func()->bool:return world.seller_runtime.drained())
+	assert((await phase(actor,"settlement-proceeds-view",{"amount":"2000"})).ok)
+	await phase(observer,"exit")
+	await wait_for(func()->bool:return not world.connected_players.has(observer))
+	await start_client(208,"beta","buyer-restored")
+	await wait_for(func()->bool:return map.reports.has("buyer-restored-ready"))
+	observer=map.reports["buyer-restored-ready"].peer
+	assert((await phase(observer,"settlement-restored",listed)).ok and facts==23)
+	assert(world.wallet_runtime.add_income(actor,30))
+	assert((await phase(actor,"settlement-collect")).ok)
+	assert(int(Wallet.new(pg).load_wallet(21).balance)==3880 and facts==23)
+	assert(int(preload("res://source/server/world/database/postgres/shop_settlement_postgres.gd").new(pg).revenue(21).amount)==0)
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	await phase(actor,"exit")
 	await phase(observer,"exit")
@@ -401,6 +418,10 @@ func compose_ui() -> void:
 	market_adapter.seller_journal.directory=fixture_dir+"/seller-journal"
 	market_adapter.attach(map.currency_map.market_endpoint,dispatcher,session,get_tree())
 	map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+	map.currency_map.market_endpoint.query_finished.connect(session.finish)
+	browser_adapter=MarketBrowserUiAdapter.new()
+	browser_adapter.attach(map.currency_map.market_endpoint,dispatcher,session,get_tree())
+	market_adapter.purchase_recovery.connect(browser_adapter.accept_purchase_recovery)
 	map.endpoint.state_changed.connect(market_adapter.accept_context)
 	market_adapter.accept_context(map.endpoint.state)
 	storage_adapter=preload("res://source/client/ui_web/storage_ui_adapter.gd").new()
@@ -427,6 +448,8 @@ func compose_ui() -> void:
 func close_ui() -> void:
 	map.endpoint.state_changed.disconnect(market_adapter.accept_context)
 	map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+	map.currency_map.market_endpoint.query_finished.disconnect(session.finish)
+	browser_adapter.dispose()
 	market_adapter.dispose()
 	map.endpoint.state_changed.disconnect(shop_adapter.accept_context)
 	map.endpoint.state_changed.disconnect(upgrade_adapter.accept_context)
@@ -457,7 +480,7 @@ func lose_response(type: String, payload: Dictionary) -> Dictionary:
 	return result
 
 func run_client() -> void:
-	get_tree().create_timer(85).timeout.connect(func() -> void: get_tree().quit(1))
+	get_tree().create_timer(115).timeout.connect(func() -> void: get_tree().quit(1))
 	fixture_dir=str(CmdlineUtils.get_parsed_args()["fixture-dir"])
 	wire=WireClient.new()
 	wire.name="Client"
@@ -476,6 +499,41 @@ func run_client() -> void:
 func client_phase(label: String, payload: Dictionary) -> void:
 	var result: Dictionary={"ok":true}
 	match label:
+		"settlement-list":
+			assert((await market_adapter.open()).ok)
+			var snapshot: Dictionary=map.currency_map.market_endpoint.state
+			assert((await command("market.configure",{"command_id":"settlement-config","revision":snapshot.revision,"name":"Settlement network","status":"active"})).ok)
+			var target: Dictionary=map.endpoint.state.items.filter(func(row: Dictionary)->bool:return row.location=="bag" and row.definition_id=="iron_sword")[0]
+			assert((await command("market.list",{"command_id":"settlement-list","uid":target.uid,"revision":target.revision,"position":0,"price":2000})).ok)
+			snapshot=map.currency_map.market_endpoint.state
+			var offer: Dictionary=snapshot.offers[0]
+			result={"ok":true,"shop_id":int(snapshot.shop_id),"offer_id":offer.offer_id,"revision":int(offer.revision),"price":int(offer.price),"uid":target.uid}
+		"settlement-buy":
+			browser_adapter.active=true
+			assert((await command("market.browser.visit",{"shop_id":payload.shop_id,"offer_id":payload.offer_id})).ok)
+			# The buyer has not opened their own shop: capability discovery must
+			# precede journaling and sending the first purchase.
+			map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+			result=await command("market.buy",{"command_id":"browser-buy","shop_id":payload.shop_id,"offer_id":payload.offer_id,"revision":payload.revision,"price":payload.price})
+			map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+			assert(not market_adapter.seller_journal.load_pending().entry.is_empty())
+			bridge.reset_transport()
+			bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+			assert(ui_snapshots.back().market_browser.purchasePending)
+		"settlement-restored":
+			await wait_for(func()->bool:return market_adapter.seller_journal.load_pending().entry.is_empty())
+			assert(map.endpoint.state.items.any(func(row: Dictionary)->bool:return row.uid==payload.uid))
+			assert((await command("market.retry_seller",{})).error=="no_pending_seller")
+		"settlement-proceeds-view":
+			assert(map.currency_map.market_endpoint.state.claimable_yang==payload.amount and map.currency_map.market_endpoint.state.offers.is_empty())
+		"settlement-collect":
+			map.currency_map.market_endpoint.operation_finished.disconnect(session.finish)
+			assert((await command("market.collect_revenue",{})).error=="revenue_pending")
+			map.currency_map.market_endpoint.operation_finished.connect(session.finish)
+			close_ui()
+			compose_ui()
+			await wait_for(func()->bool:return market_adapter.journal.load_pending().entry.is_empty())
+			assert((await market_adapter.open()).ok and map.currency_map.market_endpoint.state.claimable_yang=="0")
 		"seller-flow":
 			assert((await market_adapter.open()).ok)
 			var target: Dictionary=map.endpoint.state.items.filter(func(row: Dictionary)->bool:return row.location=="bag" and row.definition_id=="iron_sword")[0]

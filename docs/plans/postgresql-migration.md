@@ -8,7 +8,8 @@ currency endpoint delivery. P3j adds optional NPC Shop/Upgrade execution and cli
 receipt/journal recovery. P3k adds optional shared Storage execution and combined
 Inventory/Storage reconciliation. P3l adds optional starter initialization and
 ground-item pickup/receipt recovery. P3m adds optional seller-local Marketplace
-and item-claim execution with client journal recovery. **Remaining runtime domains/bootstrap and P4 are not completed. Normal
+and item-claim execution with client journal recovery. P3n connects optional
+purchase/proceeds settlement and authenticated shop visits. **Remaining runtime domains/bootstrap and P4 are not completed. Normal
 gameplay remains SQLite.** This roadmap implements the accepted
 [Economy C1–C5](../architecture/economy/README.md) and
 [World Process topology](../architecture/world-instance-architecture.md); every
@@ -29,7 +30,7 @@ realm has not yet been enabled or rehearsed.
 | Yang wallet | Normal startup still loads/checkpoints `WalletStoreSqlite` | P3i optionally supplies RAM income, receipted async checkpoints, fixed test spend, currency RPC/HUD and local reconnect/drain. Production bootstrap, cross-domain freshness and multi-World handoff remain |
 | NPC Shop / Upgrade | Normal startup uses `WorldEconomyService` and SQLite | P3j optionally connects authenticated RPCs, bounded PG transactions, captured pending Yang and current Inventory/wallet publication. Production bootstrap remains |
 | Account Storage | `WorldEconomyService` still uses SQLite | P3k optionally connects shared custody, stable client journal recovery and combined account-revision projections; production bootstrap and distributed publication remain |
-| Player Shop / claims / Exchange | `MarketplaceService` constructs `MarketStoreSqlite` / `ExchangeStoreSqlite` | P3m optionally connects seller-local list/edit/cancel/configure and item claims with native journal recovery and private projection fencing. Buyer/proceeds settlement, multi-party wallet/item reconciliation and Exchange runtime remain |
+| Player Shop / claims / Exchange | `MarketplaceService` constructs `MarketStoreSqlite` / `ExchangeStoreSqlite` | P3m optionally connects seller/item claims; P3n adds purchases/proceeds with captured income, buyer Inventory/wallet reconciliation, seller private refresh and journals. Exchange runtime and cross-process publication remain |
 | Auction reads | `AuctionQueryService` / `AuctionSociReader` uses SOCI's **sqlite3** read-only WAL reader | Integrate PG read scheduling/search with the selected realm backend; SOCI usage alone does not mean PG adoption |
 | Character/profile and other World data | `WorldStoreSqlite` still saves character/quest/guild data; `MailStore` uses SQLite; progression checkpoints stay here | These are not automatically covered by the realm Economy migration. Decide/retain their explicit boundary and identity mappings, or scope a separate port before claiming SQLite can be removed entirely |
 
@@ -51,10 +52,9 @@ Remaining deliverables before an Economy cutover are substantial:
    SQLite economic runtime paths; parity fixtures/reference code and separately
    retained profile/progression storage are distinct cleanup decisions.
 
-After P3m, the next integration priority is Marketplace buyer/proceeds settlement
-with pending-income and multi-party wallet/item reconciliation, separate from the
-completed optional seller-local operations.
-Exchange/Auction runtime adoption is also open. No percentage or final PR count is asserted: unfinished runtime domains
+After P3n, the next integration priority is Exchange runtime delivery, custody,
+reservation and matching recovery. PostgreSQL Auction catalog/search adoption
+also remains open. No percentage or final PR count is asserted: unfinished runtime domains
 and P4 are separate acceptance
 gates, not documentation-only leftovers.
 
@@ -384,6 +384,16 @@ publication. Native faults/capacity/alt recovery and seven actual client process
 cover lost replies, reload/relog and saved-but-unsent explicit retry. Existing
 claims pagination limits remain R6; buyer/proceeds settlement, Exchange/public
 Auction, distributed publication, bootstrap/handoff and P4 remain open.
+
+**P3n progress:** [Marketplace settlement runtime](../development/postgres-market-settlement-runtime.md)
+connects optional buy/partial proceeds collection with current session fences,
+captured-income receipt tokens, buyer Inventory/wallet reconciliation and
+online seller private refresh. Public shop visits use bounded native execution;
+Auction catalog/search remain unsupported on this optional path. Client journals
+cover lost replies, reload/relog and retry after an offer disappears. Monetary
+uncertainty prevents safe shutdown until read-only discovery resolves the prefix.
+Normal startup, Exchange, cross-process publication, bootstrap/handoff and P4
+remain open.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player

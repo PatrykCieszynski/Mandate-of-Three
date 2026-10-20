@@ -1,5 +1,7 @@
 # Evidence and validation
 
+- [PostgreSQL P3n settlement runtime](postgres-p3n/README.md) - purchases/proceeds, native uncertainty and eight-client recovery (topic branch until reviewed/merged).
+
 - [PostgreSQL P3m seller runtime](postgres-p3m/README.md) - optional seller/item claims, native failures and seven-client journal recovery (topic branch until reviewed/merged).
 
 Measured evidence must state **branch/commit**, platform, test command, runtime versions and limitations. A CI green check proves only the suites it actually ran.
