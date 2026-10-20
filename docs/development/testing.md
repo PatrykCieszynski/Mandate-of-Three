@@ -764,3 +764,8 @@ backend termination. Use `--load-rates 100` for a targeted pressure run; omitted
 rates retain the baseline/10/30/100 schedule. Settlement runtime now covers a
 committed collection whose follow-up projection cannot acquire a queue slot.
 See [P4c evidence and outstanding soak gate](../evidence/postgres-p4c/README.md).
+
+
+## Representative MMO Integration & Load
+
+`python tools/postgres/run_realm_workload.py --pg-bin Y:/Software/PostgreSQL/bin` runs the opt-in 24-account/180-second seeded player-story case, separate from adversarial P4a-P4c. Shared bootstrap/profiling/audits do not share scenario policy. Performance is observational, integrity and accepted-operation recovery remain required. Report requested/admitted/economically active players honestly; current production runtime has 64 bindings. Large/long profiles are manual, not implied verified by options. Add performance-relevant mechanics to the corresponding story and bump the scenario version when behavior changes. See [coverage, commands and comparison policy](realm-workload.md).

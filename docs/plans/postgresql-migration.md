@@ -38,6 +38,13 @@ in the Economy backend port.
    [P4c investigation](../evidence/postgres-p4c/README.md) adds real backend-process
    loss and a paused-projection recovery correction. The sustained attempt failed
    receipt cardinality; clean soak after the correction remains mandatory.
+   Acceptance now has two separate cases sharing test infrastructure:
+   Database/Economy Stress & Soak and [MMO Integration & Load](../development/realm-workload.md).
+   The latter has a [24-account/180-second story baseline](../evidence/realm-workload-foundation/README.md),
+   not a large-network or complete-combat capacity result. Current production
+   binding limits are reported as admission refusals, not bypassed by the test.
+   The prior stress-soak repeat was stopped on user request and is not silently
+   resumed inside the new player-story case.
    Continue with sustained soak/cluster or World faults and broader network/combat/domain traffic;
    record admission, transaction/pool/lock behavior and World tick tails. Use
    repeated comparable runs and the planned sustained soak. A short correctness
