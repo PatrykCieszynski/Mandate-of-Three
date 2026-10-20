@@ -146,6 +146,7 @@ func run() -> void:
 	fixture_dir=OS.get_environment("MANDATE_PG_FIXTURE_DIR")
 	pg=ClassDB.instantiate("GodotSociDatabase")
 	assert(pg.open("postgresql",connection) and Schema.ensure_schema(pg))
+	assert(preload("res://source/server/world/database/postgres/auction_search_schema_postgres.gd").ensure_schema(pg))
 	assert(preload("res://source/server/world/database/postgres/storage_schema_postgres.gd").ensure_schema(pg))
 	assert(preload("res://source/server/world/database/postgres/account_claim_schema_postgres.gd").ensure_schema(pg))
 	assert(preload("res://source/server/world/database/postgres/exchange_orders_schema_postgres.gd").ensure_schema(pg))
@@ -217,7 +218,7 @@ func run() -> void:
 	world.npc_runtime=load("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,npc_execution)
 	world.storage_runtime=load("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,storage_execution)
 	world.ground_item_runtime=load("res://source/server/world/database/postgres/ground_item_runtime_postgres.gd").new(world.inventory_runtime,ground_execution)
-	world.seller_runtime=load("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,seller_execution,world.wallet_runtime,true,true)
+	world.seller_runtime=load("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,seller_execution,world.wallet_runtime,true,true,true)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
@@ -367,6 +368,7 @@ func run() -> void:
 	assert((await phase(actor,"seller-restored",{"uid":claim_item.uid})).ok and facts==21)
 	var listed: Dictionary=await phase(actor,"settlement-list")
 	assert(listed.ok and facts==22)
+	assert((await phase(observer,"auction-browser",listed)).ok)
 	assert(world.wallet_runtime.add_income(observer,800))
 	assert((await phase(observer,"settlement-buy",listed)).error=="seller_pending")
 	assert(facts==23 and int(Wallet.new(pg).load_wallet(22).balance)==300)
@@ -612,6 +614,37 @@ func client_phase(label: String, payload: Dictionary) -> void:
 			snapshot=map.currency_map.market_endpoint.state
 			var offer: Dictionary=snapshot.offers[0]
 			result={"ok":true,"shop_id":int(snapshot.shop_id),"offer_id":offer.offer_id,"revision":int(offer.revision),"price":int(offer.price),"uid":target.uid}
+		"auction-browser":
+			browser_adapter.active=true
+			assert((await command("market.browser.catalog",{"query":"iron"})).ok)
+			var criteria: Dictionary={"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[],"sort":"price_asc","cursor":"","limit":5}
+			assert((await command("market.browser.search",criteria)).ok)
+			bridge.reset_transport();bridge.receive('{"v":1,"type":"ui.ready","payload":{}}')
+			assert(ui_snapshots.back().market_browser.results.size()==1 and ui_snapshots.back().market_browser.results[0].offerId==payload.offer_id)
+			var replies: Array=[]
+			var collect: Callable=func(id: String,answer: Dictionary)->void:
+				if id.begins_with("auction-dedupe"): replies.append({"id":id,"result":answer})
+			map.currency_map.market_endpoint.query_finished.connect(collect)
+			await get_tree().create_timer(1.1).timeout
+			map.currency_map.market_endpoint.request_query.rpc_id(1,"search",criteria,"auction-dedupe")
+			for duplicate: int in 12: map.currency_map.market_endpoint.request_query.rpc_id(1,"search",{},"auction-dedupe")
+			await wait_for(func()->bool:return not replies.is_empty())
+			await get_tree().create_timer(0.15).timeout
+			assert(replies.size()==1 and replies[0].result.ok)
+			# Terminal IDs also deduplicate malformed payloads and limiter responses.
+			for duplicate: int in 10: map.currency_map.market_endpoint.request_query.rpc_id(1,"catalog",{},"auction-dedupe")
+			await get_tree().create_timer(0.15).timeout
+			assert(replies.size()==1)
+			for request: int in 9: map.currency_map.market_endpoint.request_query.rpc_id(1,"search",{},"auction-dedupe-invalid-"+str(request))
+			await wait_for(func()->bool:return replies.size()==10)
+			var rejected: Array=replies.filter(func(row: Dictionary)->bool:return row.id=="auction-dedupe-invalid-8")
+			assert(rejected.size()==1 and rejected[0].result.error=="rate_limited")
+			map.currency_map.market_endpoint.request_query.rpc_id(1,"search",criteria,"auction-dedupe-invalid-8")
+			await get_tree().create_timer(0.1).timeout
+			assert(replies.size()==10)
+			map.currency_map.market_endpoint.query_finished.disconnect(collect)
+			await get_tree().create_timer(1.05).timeout
+			result={"ok":true}
 		"settlement-buy":
 			browser_adapter.active=true
 			assert((await command("market.browser.visit",{"shop_id":payload.shop_id,"offer_id":payload.offer_id})).ok)

@@ -677,3 +677,20 @@ and adding matched order lost reply/process relog, online maker refresh, cancel
 lost reply/UI reload and reserve/refund. Run sequentially with other 18098/18099
 suites. `run-web-inventory.ps1 -Scene market_network` retains the normal SQLite
 path. See [runtime](postgres-exchange-matching-runtime.md) for explicit limits.
+
+
+## PostgreSQL public Auction reads (P3q, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite auction-runtime`
+checks the global/single-active queue, account limits, timeout slot retention,
+backend error recovery, current-session authorization, independent native seller
+mutation and World physics with 10,000 legal offers. Its synthetic 65-source bound
+is not a connected-client capacity claim. `auction-search` retains full SQLite
+filter/cursor parity; `matching-runtime` retains the shared executor regression.
+
+`inventory-endpoint` retains ten real headless clients and adds public catalog,
+search, `ui.ready` snapshot recovery and duplicate/malformed/rate-limited request
+IDs before an actual purchase. Run shared 18098/18099 network suites sequentially.
+`run-web-inventory.ps1 -Scene market_network` retains SQLite RPC behavior. See
+[runtime](postgres-auction-runtime.md) and [evidence](../evidence/postgres-p3q/README.md).
+No physical CEF, combat soak, production PG bootstrap or cutover is implied.

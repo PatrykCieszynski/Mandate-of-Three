@@ -144,7 +144,7 @@ func request_query(action: String,payload: Dictionary,request_id: String) -> voi
 	if not GameMode.is_world_server() or request_id.is_empty() or request_id.length()>80 or not _world.characters.has(multiplayer.get_remote_sender_id()): return
 	var peer_id:=multiplayer.get_remote_sender_id()
 	if _seller_postgres!=null:
-		if _seller_postgres.pending(peer_id,request_id): return
+		if not _seller_postgres.admit_query(peer_id,request_id): return
 		var now: int=Time.get_ticks_msec()
 		var key: String="query_"+str(peer_id)
 		var rate: Dictionary=_rate.get(key,{"started":now,"count":0})
@@ -152,7 +152,7 @@ func request_query(action: String,payload: Dictionary,request_id: String) -> voi
 		rate.count+=1
 		_rate[key]=rate
 		if int(rate.count)>8:
-			receive_query.rpc_id(peer_id,request_id,{"ok":false,"error":"rate_limited"})
+			_seller_postgres.query_reply(peer_id,request_id,{"ok":false,"error":"rate_limited"})
 			return
 		_seller_postgres.query(peer_id,action,payload,request_id)
 		return

@@ -10,6 +10,7 @@ const MAX_ACTIVE: int=64 # Includes detached accounts with unknown outcomes.
 signal finished(peer: int, operation_id: String, result: Dictionary)
 signal committed(peer: int, action: String)
 signal snapshot_applied(peer: int, snapshot: Dictionary)
+var auction: RefCounted
 var _matching_enabled:=false
 var _exchange_generations: Dictionary={}
 var _published_exchange: Dictionary={}
@@ -25,7 +26,8 @@ var _workers_draining:=false
 var _serial: int=0
 var _deferred_recovery: Array[Dictionary]=[]
 
-func _init(inventory: RefCounted, executor: RefCounted, wallet: RefCounted = null, exchange_ledger: bool = false, exchange_matching: bool = false) -> void:
+func _init(inventory: RefCounted, executor: RefCounted, wallet: RefCounted = null, exchange_ledger: bool = false, exchange_matching: bool = false, auction_search: bool = false) -> void:
+	if auction_search: auction=preload("res://source/server/world/database/postgres/auction_runtime_postgres.gd").new(inventory,executor)
 	_inventory=inventory
 	_executor=executor
 	_wallet=wallet
@@ -168,6 +170,9 @@ func _projection_ready(active: Dictionary) -> bool:
 
 func poll() -> void:
 	for event: Dictionary in _executor.poll():
+		if event.intent=="auction_search":
+			if auction!=null: auction.consume(event)
+			continue
 		if not _jobs.has(event.ticket): continue
 		var active: Dictionary=_active.get(_jobs[event.ticket],{})
 		_jobs.erase(event.ticket)
@@ -260,6 +265,7 @@ func poll() -> void:
 			active.stage=active.get("failed_stage") if active.get("failed_stage","") in ["snapshot","visit"] else "receipt"
 			_schedule(active)
 
+	if auction!=null: auction.tick()
 	for account: int in _exchange_generations.keys()+_published_exchange.keys():
 		if not _active.has(account) and _inventory.binding(account).is_empty():
 			_exchange_generations.erase(account)
@@ -273,6 +279,7 @@ func poll() -> void:
 
 func begin_drain() -> void:
 	_draining=true
+	if auction!=null: auction.begin_drain()
 	# Finish every already-enqueued whole transaction, then close its session.
 	# No forced SQL cancellation. Monetary uncertainty keeps receipt recovery open.
 	_stop_workers_if_safe()
@@ -284,7 +291,7 @@ func drain_status() -> Dictionary:
 	var pending: Array=[]
 	for active: Dictionary in _active.values():
 		pending.append({"account_id":active.account,"operation_id":active.id,"stage":active.stage,"reason":active.get("reason",""),"attempts":active.repairs})
-	return {"draining":_draining,"in_flight":_jobs.size(),"worker_stopped":_executor.is_stopped(),"safe_to_stop":_draining and _jobs.is_empty() and _executor.is_stopped(),"pending":pending,"recover_on_reconnect":_deferred_recovery.duplicate(true)}
+	return {"draining":_draining,"in_flight":_jobs.size(),"worker_stopped":_executor.is_stopped(),"public_reads_pending":auction!=null and not auction.drained(),"safe_to_stop":_draining and _jobs.is_empty() and _executor.is_stopped() and (auction==null or auction.drained()),"pending":pending,"recover_on_reconnect":_deferred_recovery.duplicate(true)}
 
 func _stop_workers_if_safe() -> void:
 	if not _draining or _workers_draining: return
@@ -293,13 +300,13 @@ func _stop_workers_if_safe() -> void:
 	_workers_draining=true
 	_executor.begin_drain()
 
-func drained() -> bool: return _active.is_empty() and _jobs.is_empty()
+func drained() -> bool: return _active.is_empty() and _jobs.is_empty() and (auction==null or auction.drained())
 func shutdown_complete() -> bool:
 	_stop_workers_if_safe()
 	if not _draining or not _jobs.is_empty(): return false
 	for active: Dictionary in _active.values():
 		if (not active.capture.is_empty() or not active.captures.is_empty()) and active.result.is_empty(): return false
-	if not _executor.is_stopped(): return false
+	if not _executor.is_stopped() or (auction!=null and not auction.drained()): return false
 	for active: Dictionary in _active.values():
 		_deferred_recovery.append({"account_id":active.account,"operation_id":active.id,"stage":active.stage,"reason":active.get("reason","")})
 		_inventory.finish_external(active.account,"seller:"+active.id,active.result.get("item_state",{}))
