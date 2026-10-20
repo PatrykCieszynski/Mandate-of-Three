@@ -22,6 +22,7 @@ class FixtureWorld extends WorldServer:
 class LostCompletion extends RefCounted:
 	var inner: RefCounted
 	var lose_next:=false
+	var block_snapshots:=false
 	var fail_receipts:=false
 	var after_snapshot: Callable
 	func _init(value: RefCounted) -> void: inner=value
@@ -29,7 +30,10 @@ class LostCompletion extends RefCounted:
 	func submit_seller_prepare(context: Dictionary, action: String, body: Dictionary) -> Dictionary: return inner.submit_seller_prepare(context,action,body)
 	func submit_seller_visit(context: Dictionary, shop: int) -> Dictionary: return inner.submit_seller_visit(context,shop)
 	func submit_seller_receipt(context: Dictionary, id: String) -> Dictionary: return inner.submit_seller_receipt(context,id)
-	func submit_seller_snapshot(context: Dictionary, include_exchange: bool = false) -> Dictionary: return inner.submit_seller_snapshot(context,include_exchange)
+	func submit_seller_snapshot(context: Dictionary, include_exchange: bool = false) -> Dictionary:
+		if block_snapshots:
+			return {"queued":false,"error":"busy"}
+		return inner.submit_seller_snapshot(context,include_exchange)
 	func begin_drain() -> void: inner.begin_drain()
 	func is_stopped() -> bool: return inner.is_stopped()
 	func poll() -> Array:
@@ -174,7 +178,15 @@ func _ready() -> void:
 	world.wallet_runtime.finish_npc(9800,"fixture-reload",{"ok":false})
 	await wait_for(func()->bool:return wallet_ready(100))
 	assert(world.wallet_runtime.add_income(100,30))
-	assert((await submit(100,"claim_revenue","collect",{})).claimed==70)
+	# A committed collection must not become a definitive busy rejection merely
+	# because the follow-up projection cannot acquire a native queue slot.
+	boundary.block_snapshots=true
+	assert((await submit(100,"claim_revenue","collect",{})).get("error","")=="recovery_required")
+	assert(pg.query("SELECT count(*) AS n FROM economy.market_commands WHERE command_id='collect' AND result_json::jsonb->>'ok'='true';").rows[0].n==1)
+	boundary.block_snapshots=false
+	assert(world.seller_runtime.receipt(100,"collect").queued)
+	await wait_for(func()->bool:return world.seller_runtime.drained() and wallet_ready(100))
+	assert(result("collect").claimed==70)
 	assert(world.wallet_runtime.snapshot(100).balance==WalletStore.MAX_YANG and Settlement.new(pg).revenue(9800).amount==1930)
 	assert((await submit(100,"claim_revenue","collect-replay-full",{})).error=="wallet_full")
 	prior=facts

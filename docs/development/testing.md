@@ -758,3 +758,9 @@ P4b opt-in recovery under the same mixed traffic: append `--load-faults` to the
 `run_readiness.py --suite mixed-load` invocation (15 seconds/cohort recommended).
 Requires actual deferred COMMIT failure and original-ID recovery of a dropped
 successful purchase reply in each write cohort; no process/socket-crash claim.
+
+P4c: add `--load-backend-loss` to the mixed fault invocation for actual owned PG
+backend termination. Use `--load-rates 100` for a targeted pressure run; omitted
+rates retain the baseline/10/30/100 schedule. Settlement runtime now covers a
+committed collection whose follow-up projection cannot acquire a queue slot.
+See [P4c evidence and outstanding soak gate](../evidence/postgres-p4c/README.md).

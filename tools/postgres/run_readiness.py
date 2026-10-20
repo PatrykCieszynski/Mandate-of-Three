@@ -52,7 +52,11 @@ def main():
     parser.add_argument("--load-seconds", type=int, default=8, choices=range(2,1801))
     parser.add_argument("--load-repeats", type=int, default=3, choices=(1,2,3))
     parser.add_argument("--load-faults", action="store_true", help="Inject fixture-only COMMIT failure and lost application reply under mixed load")
+    parser.add_argument("--load-backend-loss", action="store_true", help="Terminate the selected fixture PostgreSQL backend during deferred COMMIT")
+    parser.add_argument("--load-rates", nargs="+", type=int, choices=(0,10,30,100), default=[0,10,30,100])
     args = parser.parse_args()
+    if args.load_backend_loss and not args.load_faults:
+        parser.error("--load-backend-loss requires --load-faults")
     if args.load_faults and args.suite != "mixed-load":
         parser.error("--load-faults requires --suite mixed-load")
     extension = ".exe" if os.name == "nt" else ""
@@ -106,6 +110,8 @@ def main():
         run(psql + ["-c", "CREATE DATABASE mandate_readiness OWNER mandate_fixture;"], env=env, log=control_log)
         env["MANDATE_PG_FIXTURE"] = "owned-local-cluster"
         if args.suite == "mixed-load":
+            env["MANDATE_PG_LOAD_RATES"] = ",".join(map(str,args.load_rates))
+            env["MANDATE_PG_LOAD_BACKEND_LOSS"] = "1" if args.load_backend_loss else "0"
             env["MANDATE_PG_LOAD_FAULTS"] = "1" if args.load_faults else "0"
             env["MANDATE_PG_LOAD_SECONDS"] = str(args.load_seconds)
             env["MANDATE_PG_LOAD_REPEATS"] = str(args.load_repeats)

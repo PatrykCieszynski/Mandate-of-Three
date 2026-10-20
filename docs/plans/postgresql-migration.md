@@ -35,7 +35,10 @@ in the Economy backend port.
    Offered 100/s is not achieved successful throughput; queues remain bounded.
    [P4b receipt recovery](../evidence/postgres-p4b/README.md) now verifies deferred
    COMMIT rollback and lost successful application delivery under mixed traffic.
-   Continue with sustained soak/process faults and broader network/combat/domain traffic;
+   [P4c investigation](../evidence/postgres-p4c/README.md) adds real backend-process
+   loss and a paused-projection recovery correction. The sustained attempt failed
+   receipt cardinality; clean soak after the correction remains mandatory.
+   Continue with sustained soak/cluster or World faults and broader network/combat/domain traffic;
    record admission, transaction/pool/lock behavior and World tick tails. Use
    repeated comparable runs and the planned sustained soak. A short correctness
    fixture is not a capacity result.

@@ -9,6 +9,8 @@ const Wallet = preload("res://source/server/world/database/postgres/wallet_store
 const Identity = preload("res://source/server/world/database/postgres/identity_bootstrap_postgres.gd")
 const SearchFixture = preload("res://tests/postgres_auction_search.gd")
 const ShopCells = preload("res://source/common/gameplay/items/domain/shop_grid.gd")
+const SEED_MATERIAL_PER_SELLER:=1000000 # Keep all supported soak durations funded.
+const SEED_YANG:=1000000000
 const SOURCE_COUNT:=20 # 16 mutation accounts + four independent read sources.
 const QUERY: Dictionary={"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[],"sort":"price_asc","cursor":"","limit":50}
 const WRITE_RATES: Array[int]=[0,10,30,100]
@@ -62,6 +64,8 @@ var simulation:=SimMap.new()
 var bootstrap:=Bootstrap.new()
 var actors: Array[Dictionary]=[]
 var jobs: Dictionary={}
+var successful_ids: Dictionary={}
+var write_rates: Array[int]=[0,10,30,100]
 var views: Dictionary={}
 var reports: Array=[]
 var current: Dictionary={}
@@ -74,6 +78,9 @@ var source_cursor:=0
 var search_cursor:=0
 var injected_income:=0
 var faults:=false
+var backend_loss:=false
+var backend_armed:=false
+var backend_ids: Array[String]=[]
 var commit_armed:=false
 var loss_armed:=false
 var fault_ids: Array[String]=[]
@@ -123,16 +130,23 @@ func finished(_peer: int, id: String, result: Dictionary) -> void:
 		loss_armed=false;lost_ids.append(id);current.lost_replies+=1
 		job.recover=true;job.retry_at=Time.get_ticks_msec()+100
 		return # Drop application delivery only, after runtime committed reconciliation.
-	if id in lost_ids: assert(result.get("ok",false),"lost success recovered by original ID")
+	# Known pre-COMMIT rejection is not a process/COMMIT injection. Rearm it;
+	# uncertain operations below still recover only by the original ID.
+	if not result.get("ok",false) and result.get("error","") not in ["outcome_unknown","storage","recovery_required","unknown_command"]:
+		if id in backend_ids: backend_ids.erase(id);backend_armed=true
+		if id in fault_ids: fault_ids.erase(id);commit_armed=true
+	if id in backend_ids and result.get("error","")=="unknown_command": current.backend_losses_recovered+=1
 	if id in fault_ids and result.get("error","")=="unknown_command": current.failed_commits_recovered+=1
 	if not result.get("ok",false) and result.get("error","") in ["outcome_unknown","storage","recovery_required"]:
 		job.recover=true;job.retry_at=Time.get_ticks_msec()+100
 		count_error("uncertain",str(result.error));return
+	if id in lost_ids: assert(result.get("ok",false),"lost success recovered by original ID")
 	jobs.erase(id);job.actor.busy=false
 	sample("operation_e2e",Time.get_ticks_usec()-int(job.scheduled_us))
 	sample("operation:"+job.action,Time.get_ticks_usec()-int(job.admitted_us))
 	if result.get("ok",false):
 		sample("successful_e2e",Time.get_ticks_usec()-int(job.scheduled_us))
+		successful_ids[id]=job.action
 		current.completed+=1
 		current.by_action[job.action]=int(current.by_action.get(job.action,0))+1
 		var actor: Dictionary=job.actor
@@ -171,6 +185,8 @@ func submit_actor(actor: Dictionary, scheduled: int) -> void:
 	var id:=next_id()
 	if faults and commit_armed and action=="list":
 		commit_armed=false;id="mixed-fault-"+id;fault_ids.append(id)
+	elif backend_loss and backend_armed and action=="list":
+		backend_armed=false;id="mixed-backend-"+id;backend_ids.append(id)
 	body.command_id=id
 	var job: Dictionary={"actor":actor,"peer":peer,"action":action,"body":body,"scheduled_us":scheduled,"admitted_us":Time.get_ticks_usec(),"recover":false}
 	jobs[id]=job;actor.busy=true
@@ -178,6 +194,8 @@ func submit_actor(actor: Dictionary, scheduled: int) -> void:
 	if not admitted.queued:
 		if id in fault_ids:
 			fault_ids.erase(id);commit_armed=true # Admission rejection did not reach COMMIT.
+		if id in backend_ids:
+			backend_ids.erase(id);backend_armed=true
 		jobs.erase(id);actor.busy=false;current.admission_rejected+=1;count_error("admission",str(admitted.error))
 	else: current.admitted+=1
 func ask(scheduled: int) -> void:
@@ -206,7 +224,7 @@ func audit() -> void:
 	assert(pg.query("SELECT coalesce(sum(yang),0)::bigint AS n FROM (SELECT yang FROM economy.account_wallets UNION ALL SELECT yang FROM economy.account_shop_revenue) t;").rows[0].n==initial_money+injected_income)
 	assert(pg.query("SELECT count(*) AS n FROM economy.account_wallets w WHERE reserved_yang<>coalesce((SELECT sum(reserved_amount) FROM economy.exchange_orders o WHERE o.account_id=w.account_id AND o.side='buy' AND o.status='active'),0);").rows[0].n==0)
 	assert(pg.query("SELECT count(*) AS n FROM economy.exchange_assets a WHERE reserved<>coalesce((SELECT sum(reserved_amount) FROM economy.exchange_orders o WHERE o.account_id=a.account_id AND o.base_asset=a.asset_id AND o.side='sell' AND o.status='active'),0);").rows[0].n==0)
-	assert(pg.query("SELECT coalesce(sum(free+reserved),0)::bigint AS n FROM economy.exchange_assets;").rows[0].n==2000)
+	assert(pg.query("SELECT coalesce(sum(free+reserved),0)::bigint AS n FROM economy.exchange_assets;").rows[0].n==2*SEED_MATERIAL_PER_SELLER)
 	assert(pg.query("SELECT count(*) AS n FROM economy.shop_cells c LEFT JOIN economy.shop_offers o ON c.item_uid=o.item_uid WHERE o.offer_id IS NULL;").rows[0].n==0)
 	var occupied: Dictionary={}
 	var rows: Dictionary=pg.query("SELECT c.*,i.definition_id FROM economy.item_custody c JOIN economy.item_instances i USING(uid);",{},20000)
@@ -222,10 +240,23 @@ func audit() -> void:
 			occupied[key]=true
 	var successful:=int(current.get("completed",0))
 	for report: Dictionary in reports: successful+=int(report.completed)
-	assert(pg.query("SELECT count(*) AS n FROM economy.market_commands WHERE command_id LIKE 'mixed-%' AND result_json::jsonb->>'ok'='true';").rows[0].n==successful,"successful stable IDs correspond to durable receipts exactly once")
+	var durable: Dictionary=pg.query("SELECT coalesce(json_agg(command_id),'[]'::json)::text AS ids FROM economy.market_commands WHERE command_id LIKE 'mixed-%' AND result_json::jsonb->>'ok'='true';")
+	assert(durable.ok and not durable.truncated)
+	var ids: Array=JSON.parse_string(durable.rows[0].ids)
+	var durable_set: Dictionary={}
+	for id: String in ids: durable_set[id]=true
+	var missing: Array=[];var extra: Array=[]
+	for id: String in successful_ids:
+		if not durable_set.has(id): missing.append({"id":id,"action":successful_ids[id]})
+	for id: String in durable_set:
+		if not successful_ids.has(id): extra.append(id)
+	var receipt_audit: Dictionary={"expected":successful,"observed_ids":successful_ids.size(),"durable":ids.size(),"missing":missing.slice(0,20),"extra":extra.slice(0,20)}
+	FileAccess.open(directory+"/receipt-audit.json",FileAccess.WRITE).store_string(JSON.stringify(receipt_audit,"  "))
+	assert(ids.size()==successful and missing.is_empty() and extra.is_empty(),"successful stable IDs correspond to durable receipts exactly once: "+str(receipt_audit))
 func cohort(rate: int, repeat_index: int) -> void:
 	await wait_for(empty)
 	current={"target_writes_per_second":rate,"repeat":repeat_index,"offered":0,"admitted":0,"completed":0,"source_busy":0,"admission_rejected":0,"terminal_rejected":0,"search_offered":0,"search_completed":0,"native_jobs":0,"physics_ticks":0,"max_native_pending":0,"max_active_accounts":0,"errors":{},"by_action":{}}
+	current.backend_losses_recovered=0;backend_armed=backend_loss and rate>0
 	current.lost_replies=0;current.failed_commits_recovered=0
 	commit_armed=faults and rate>0;loss_armed=faults and rate>0
 	histograms.clear();previous_tick=0;measuring=true
@@ -268,6 +299,10 @@ func cohort(rate: int, repeat_index: int) -> void:
 	assert(current.search_offered==current.search_completed+int(current.search_errors),"every independent search source gets a terminal result")
 	if faults and rate>0:
 		assert(not commit_armed and not loss_armed and current.failed_commits_recovered==1 and current.lost_replies==1,"both fault paths must execute and recover during every write cohort")
+	if backend_loss and rate>0:
+		assert(not backend_armed and current.backend_losses_recovered==1,"terminated backend recovered during each write cohort: "+str(current.errors)+" recovered="+str(current.backend_losses_recovered))
+		var killed: int=pg.query("SELECT last_value AS pid FROM economy.fixture_mixed_backend_pid;").rows[0].pid
+		assert(killed>1 and pg.query("SELECT count(*) AS n FROM pg_stat_activity WHERE pid=:pid;",{"pid":killed}).rows[0].n==0,"selected PostgreSQL backend actually exited")
 	current.last_operation_serial=serial;current.first_operation_serial=first_action
 	for key: String in histograms: current[key]=histograms[key].summary()
 	measuring=false
@@ -279,15 +314,26 @@ func cohort(rate: int, repeat_index: int) -> void:
 func _ready() -> void:
 	Engine.max_fps=60;Engine.physics_ticks_per_second=60
 	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster")
+	backend_loss=OS.get_environment("MANDATE_PG_LOAD_BACKEND_LOSS")=="1"
 	faults=OS.get_environment("MANDATE_PG_LOAD_FAULTS")=="1"
 	directory=OS.get_environment("MANDATE_PG_FIXTURE_DIR")
 	duration=int(OS.get_environment("MANDATE_PG_LOAD_SECONDS")) if OS.has_environment("MANDATE_PG_LOAD_SECONDS") else 8
 	repeats=int(OS.get_environment("MANDATE_PG_LOAD_REPEATS")) if OS.has_environment("MANDATE_PG_LOAD_REPEATS") else 3
+	if OS.has_environment("MANDATE_PG_LOAD_RATES"):
+		write_rates.clear()
+		for value: String in OS.get_environment("MANDATE_PG_LOAD_RATES").split(","):
+			assert(value.is_valid_int() and int(value) in WRITE_RATES)
+			write_rates.append(int(value))
+	assert(not write_rates.is_empty())
 	assert(duration>=2 and duration<=1800 and repeats>=1 and repeats<=3)
-	get_tree().create_timer(duration*repeats*WRITE_RATES.size()+180).timeout.connect(func()->void:get_tree().quit(1))
+	get_tree().create_timer(duration*repeats*write_rates.size()+180).timeout.connect(func()->void:get_tree().quit(1))
 	call_deferred("run")
 func run() -> void:
 	pg=ClassDB.instantiate("GodotSociDatabase");assert(pg.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) and Schema.ensure_schema(pg))
+	if backend_loss:
+		assert(faults and pg.execute("CREATE SEQUENCE economy.fixture_mixed_backend_pid;").ok)
+		assert(pg.execute("CREATE FUNCTION economy.fixture_mixed_backend() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.command_id LIKE 'mixed-backend-%' THEN PERFORM setval('economy.fixture_mixed_backend_pid',pg_backend_pid()); PERFORM pg_terminate_backend(pg_backend_pid()); RAISE EXCEPTION 'backend did not exit'; END IF; RETURN NEW; END; $$;").ok)
+		assert(pg.execute("CREATE CONSTRAINT TRIGGER fixture_mixed_backend AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.fixture_mixed_backend();").ok)
 	if faults:
 		assert(pg.execute("CREATE FUNCTION economy.fixture_mixed_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.command_id LIKE 'mixed-fault-%' THEN RAISE EXCEPTION 'mixed load commit fixture' USING ERRCODE='40001'; END IF; RETURN NEW; END; $$;").ok)
 		assert(pg.execute("CREATE CONSTRAINT TRIGGER fixture_mixed_commit AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.fixture_mixed_commit();").ok)
@@ -306,8 +352,8 @@ func run() -> void:
 	for i: int in SOURCE_COUNT:
 		var account:=900+i;var character:=30000+i;var peer:=100+i;var token: String="mixed-token-"+str(i)
 		assert(Identity.new(pg).bind(account,character).ok)
-		assert(pg.execute("UPDATE economy.account_wallets SET yang=1000000 WHERE account_id=:account;",{"account":account}).ok)
-		if i>=12 and i<16: assert(pg.execute("INSERT INTO economy.exchange_assets VALUES(:account,'upgrade_ore',:amount,0);",{"account":account,"amount":1000 if i%2==0 else 0}).ok)
+		assert(pg.execute("UPDATE economy.account_wallets SET yang=:amount WHERE account_id=:account;",{"account":account,"amount":SEED_YANG}).ok)
+		if i>=12 and i<16: assert(pg.execute("INSERT INTO economy.exchange_assets VALUES(:account,'upgrade_ore',:amount,0);",{"account":account,"amount":SEED_MATERIAL_PER_SELLER if i%2==0 else 0}).ok)
 		var context: Dictionary=Sessions.new(pg).install_verified_grant(Sessions.identity_from_verified_ticket(account,character,token),0).context
 		var player:=PlayerResource.new();player.player_id=character;player.current_peer_id=peer
 		world.connected_players[peer]=player;world.player_id_to_peer_id[character]=peer;world._session_tokens[peer]=token
@@ -327,17 +373,17 @@ func run() -> void:
 	var probe:=Tail.new();probe.process_physics_priority=10000;probe.record=tail;add_child(probe)
 	await get_tree().create_timer(1).timeout
 	for repeat_index: int in repeats:
-		for rate: int in WRITE_RATES: await cohort(rate,repeat_index+1)
+		for rate: int in write_rates: await cohort(rate,repeat_index+1)
 	simulation.set_physics_process(false);simulation.combat_endpoint.set_physics_process(false)
 	assert(await world.shutdown_economy())
 	current={};audit();assert(bootstrap.status().stopped)
 	world.connected_players.clear();assert(await world.database.shutdown_database())
-	var report: Dictionary={"fixture":"same-host synthetic sessions, real World runtime and native PG","connected_clients":0,"mutation_accounts":16,"read_accounts":4,"moving_players":4,"mobs":simulation.mob_system.mobs.size(),"workers":Bootstrap.WORLD_POOLS,"queue_capacity_per_worker":2,"offers":10000,"cohorts":reports,"invariants":"PASS","native_workers_stopped":true,"injected_income":injected_income,"postgres_deadlocks":int(pg.query("SELECT deadlocks FROM pg_stat_database WHERE datname=current_database();").rows[0].deadlocks),"combat":false}
+	var report: Dictionary={"fixture":"same-host synthetic sessions, real World runtime and native PG","connected_clients":0,"mutation_accounts":16,"read_accounts":4,"moving_players":4,"mobs":simulation.mob_system.mobs.size(),"workers":Bootstrap.WORLD_POOLS,"queue_capacity_per_worker":2,"seed_yang_per_account":SEED_YANG,"seed_material_per_seller":SEED_MATERIAL_PER_SELLER,"offers":10000,"cohorts":reports,"invariants":"PASS","native_workers_stopped":true,"injected_income":injected_income,"postgres_deadlocks":int(pg.query("SELECT deadlocks FROM pg_stat_database WHERE datname=current_database();").rows[0].deadlocks),"combat":false}
 	if faults:
-		for id: String in fault_ids:
+		for id: String in fault_ids+backend_ids:
 			assert(pg.query("SELECT count(*) AS n FROM economy.market_commands WHERE command_id=:id;",{"id":id}).rows[0].n==0,"failed commit left no durable receipt")
 		for id: String in lost_ids:
 			assert(pg.query("SELECT count(*) AS n FROM economy.market_commands WHERE command_id=:id;",{"id":id}).rows[0].n==1,"lost reply recovered one committed receipt")
-		report.faults={"failed_commit_ids":fault_ids,"lost_reply_ids":lost_ids,"recovery":"PASS"}
+		report.faults={"failed_commit_ids":fault_ids,"lost_reply_ids":lost_ids,"terminated_backend_ids":backend_ids,"recovery":"PASS"}
 	FileAccess.open(directory+"/mixed-load.json",FileAccess.WRITE).store_string(JSON.stringify(report,"  "))
 	pg.close();print("POSTGRES_MIXED_LOAD_OK");get_tree().quit()

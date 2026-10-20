@@ -53,3 +53,5 @@ This directory retains reproducible raw evidence. The documentation cleanup remo
 - [PostgreSQL P4a mixed-load baseline](postgres-p4a/README.md)
 
 - [P4b mixed-load receipt recovery](postgres-p4b/README.md)
+
+- [P4c backend-process recovery and sustained-run investigation](postgres-p4c/README.md)
