@@ -11,10 +11,55 @@ var _world_sessions: Dictionary[String, Dictionary] = {}
 ## Injected only by an opt-in PostgreSQL realm bootstrap/fixture. Default is SQLite.
 var economy_bootstrap: RefCounted
 var inventory_session_issuer: RefCounted
+var maintenance: RefCounted
+var _startup_pending:=false
+
+func admissions_open() -> bool:
+	return not _startup_pending and maintenance==null and (economy_bootstrap==null or economy_bootstrap.ready())
+
+func begin_maintenance(id: String) -> Dictionary:
+	if not ItemInstance.valid_uid(id): return {"ok":false,"error":"operation_id"}
+	if maintenance!=null:
+		return {"ok":true,"maintenance":maintenance.status()} if maintenance.operation_id==id else {"ok":false,"error":"maintenance_active"}
+	if economy_bootstrap==null: return {"ok":false,"error":"postgresql_required"}
+	if not admissions_open() or connected_worlds.size()!=1: return {"ok":false,"error":"not_ready"}
+	var target: int=connected_worlds.keys()[0]
+	if not world_ready(target): return {"ok":false,"error":"not_ready"}
+	maintenance=preload("res://source/server/master/operations/realm_maintenance.gd").new(self,id,target)
+	_entry_attempts.clear() # Fence delayed World results before sending the drain.
+	gateway_manager.update_worlds_info.rpc(get_public_worlds())
+	economy_quiesce.rpc_id(target,id)
+	return {"ok":true,"maintenance":maintenance.status()}
+
+func operational_status() -> Dictionary:
+	var worlds: Array=[]
+	for id: int in connected_worlds:
+		var entry: Dictionary=connected_worlds[id]
+		var raw: Variant=entry.get("heartbeat",{}).get("economy",{})
+		var health: Dictionary=raw if raw is Dictionary else {}
+		# Whitelist copied counters only; never publish raw heartbeat/config/jobs.
+		var state: String=str(health.get("state","UNKNOWN"))
+		if state not in ["NEW","STARTING","READY","DRAINING","STOPPED","FAILED","BLOCKED"]: state="UNKNOWN"
+		var unsettled: Array[String]=[]
+		var reported: Variant=health.get("unsettled_domains",[])
+		if reported is Array:
+			for domain: String in ["wallet","npc","storage","ground","market"]:
+				if reported.has(domain): unsettled.append(domain)
+		worlds.append({"unsettled_domains":unsettled,"world_id":id,"ready":world_ready(id),"state":state,"pending":clampi(int(health.get("pending",0)),0,1024),"workers_ready":clampi(int(health.get("workers_ready",0)),0,8),"heartbeat_age_seconds":maxi(0,int(Time.get_unix_time_from_system())-int(entry.get("last_heartbeat_at",0)))})
+	return {"ok":true,"backend":"postgresql" if economy_bootstrap!=null else "sqlite","admissions_open":admissions_open(),"master":economy_bootstrap.status() if economy_bootstrap!=null else {},"worlds":worlds,"maintenance":maintenance.status() if maintenance!=null else {}}
+
+@rpc("authority","call_remote","reliable")
+func economy_quiesce(_id: String) -> void: pass
+
+@rpc("any_peer","call_remote","reliable")
+func economy_quiesced(id: String, result: Dictionary) -> void:
+	if maintenance!=null: maintenance.acknowledge(multiplayer_api.get_remote_sender_id(),id,result)
+
 
 func _process(_delta: float) -> void:
 	if economy_bootstrap!=null: economy_bootstrap.check_health()
 	if inventory_session_issuer!=null: inventory_session_issuer.poll()
+	if maintenance!=null: maintenance.poll()
 ## One current, bounded-lifetime request per account, recorded BEFORE World work.
 var _entry_attempts: Dictionary[String, Dictionary] = {}
 const ENTRY_ATTEMPT_TTL_MS: int = 30_000
@@ -22,6 +67,7 @@ const MAX_ENTRY_ATTEMPTS: int = 1024
 
 
 func _ready() -> void:
+	_startup_pending=true
 	var configuration: Dictionary = ConfigFileUtils.load_section(
 		"world-manager-server",
 		CmdlineUtils.get_parsed_args().get("config", "res://data/config/master_config.cfg")
@@ -33,7 +79,7 @@ func _ready() -> void:
 		var owner:=preload("res://source/server/world/database/postgres/economy_bootstrap_postgres.gd").new()
 		if not await owner.start_master(self,settings):
 			push_error("Master economy startup refused: "+owner.error);return
-	create(Role.SERVER, configuration.bind_address, configuration.port)
+	_startup_pending=create(Role.SERVER, configuration.bind_address, configuration.port)!=OK
 
 
 func _connect_multiplayer_api_signals(api: SceneMultiplayer) -> void:
@@ -66,6 +112,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 @rpc("any_peer")
 func fetch_server_info(info: Dictionary) -> void:
+	if not admissions_open(): return
 	var game_server_id: int = multiplayer_api.get_remote_sender_id()
 	var expected: String="postgresql" if economy_bootstrap!=null else "sqlite"
 	if str(info.get("economy_backend","sqlite"))!=expected: return
@@ -97,7 +144,7 @@ func economy_identity_ready(authority: String) -> void:
 	gateway_manager.update_worlds_info.rpc(get_public_worlds())
 
 func world_ready(world_id: int) -> bool:
-	return connected_worlds.has(world_id) and (economy_bootstrap==null or (economy_bootstrap.ready() and connected_worlds[world_id].get("economy_ready",false)))
+	return admissions_open() and connected_worlds.has(world_id) and (economy_bootstrap==null or (economy_bootstrap.ready() and connected_worlds[world_id].get("economy_ready",false)))
 
 func get_public_worlds() -> Dictionary:
 	var out: Dictionary = {}
@@ -134,6 +181,11 @@ func heartbeat(snapshot: Dictionary) -> void:
 	var world_peer_id: int = multiplayer_api.get_remote_sender_id()
 	if not connected_worlds.has(world_peer_id):
 		return
+	var raw: Variant=snapshot.get("economy",{})
+	var economy: Dictionary=raw if raw is Dictionary else {}
+	if economy_bootstrap!=null and economy.get("state","") in ["DRAINING","STOPPED","FAILED","BLOCKED"] and connected_worlds[world_peer_id].get("economy_ready",false):
+		connected_worlds[world_peer_id]["economy_ready"]=false
+		gateway_manager.update_worlds_info.rpc(get_public_worlds())
 	connected_worlds[world_peer_id]["heartbeat"] = snapshot
 	connected_worlds[world_peer_id]["last_heartbeat_at"] = int(Time.get_unix_time_from_system())
 
@@ -314,6 +366,7 @@ func _prepare_world_ticket(world_id: int, username: String, token: String, chara
 	var deadline: int=Time.get_ticks_msec()+ENTRY_ATTEMPT_TTL_MS
 	while request.queued and not request.done and Time.get_ticks_msec()<deadline:
 		await get_tree().process_frame
+	if not admissions_open(): return {"ok":false,"error":ERR_UNAVAILABLE}
 	var current:=not verified_inventory_ticket(world_id,username,token).is_empty()
 	if not request.done or not current or not request.result.get("ok",false):
 		if current: revoke_world_session(username)

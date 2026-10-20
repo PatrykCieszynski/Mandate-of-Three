@@ -47,6 +47,8 @@ func wait_marker(path: String) -> void:
 	var deadline:=Time.get_ticks_msec()+15000
 	while not FileAccess.file_exists(directory+"/"+path) and Time.get_ticks_msec()<deadline: await get_tree().process_frame
 	assert(FileAccess.file_exists(directory+"/"+path),"fixture marker "+path)
+func close_roles(world: int, gateway: int, master: int) -> void:
+	await stop("world",world);await stop("gateway",gateway);await stop("master",master)
 func run() -> void:
 	pg=ClassDB.instantiate("GodotSociDatabase")
 	assert(pg.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")))
@@ -98,9 +100,7 @@ func run() -> void:
 	var report: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(directory+"/client-report.json"))
 	var durable: Dictionary=pg.query("SELECT account_id FROM economy.characters WHERE character_id=:character;",{"character":int(report.character)})
 	assert(durable.ok and int(durable.rows[0].account_id)==int(report.account))
-	await stop("world",world)
-	await stop("gateway",gateway)
-	await stop("master",master)
+	await close_roles(world,gateway,master)
 	var profiles:=SQLite.new();profiles.path=directory+"/profiles.db";assert(profiles.open_db())
 	assert(profiles.query("SELECT name FROM sqlite_master WHERE type='table' AND name='account_wallets';") and profiles.query_result.is_empty())
 	assert(profiles.query("SELECT COUNT(*) AS n FROM item_instances;") and profiles.query_result[0].n==0)
@@ -113,7 +113,7 @@ func run() -> void:
 	await wait_world()
 	client=start("client",true);await wait_exit(client)
 	assert("POSTGRES_PROCESS_CLIENT_OK restart" in FileAccess.get_file_as_string(directory+"/client-restart.log"))
-	await stop("world",world);await stop("gateway",gateway);await stop("master",master)
+	await close_roles(world,gateway,master)
 	pg.close()
 	print("POSTGRES_PROCESS_STARTUP_OK: real Gateway/Master/World creation, grant, equip, relog, restart and clean drain")
 	get_tree().quit()

@@ -728,3 +728,16 @@ startup, grant or economic behavior. See [startup](postgres-process-startup.md).
 composition/session/default-path regressions. Shared 18098/18099 suites remain
 sequential. This is not PG production cutover, combat soak, Linux or physical CEF
 acceptance.
+
+
+## PostgreSQL operator maintenance (P3t, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite maintenance`
+extends the ordinary three-process/client startup scenario with authenticated
+operator status/quiesce, active-session dirty Yang/XP, frozen account checkpoint,
+operator retry, full restart and closed native workers. A real PG lock forces
+BLOCKED without premature Master drain or discarded RAM income; only this failed
+disposable simulation is forcibly cleaned up. Injected control faults cover
+missing/late/foreign/malformed ACK, timeout, World loss and account save failure.
+The suite uses private random ports and owned stores. Shared 18098/18099 suites
+must still run sequentially. See [maintenance](postgres-maintenance.md).

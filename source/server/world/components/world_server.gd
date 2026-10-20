@@ -257,6 +257,7 @@ func start_world_server() -> void:
 
 
 func _on_periodic_save() -> void:
+	if economy_bootstrap!=null and not economy_bootstrap.ready(): return
 	if not await flush_postgres_wallets():
 		push_error("Periodic save refused: PostgreSQL wallet checkpoint unresolved.")
 		return

@@ -31,6 +31,8 @@ func _on_peer_disconnected(peer_id: int) -> void:
 @rpc("any_peer", "call_remote")
 func gateway_request(request_id: int, request: Dictionary) -> void:
 	var gateway_id: int = multiplayer.get_remote_sender_id()
+	if not world_manager.admissions_open():
+		gateway_response.rpc_id(gateway_id,request_id,{"error":ERR_UNAVAILABLE});return
 	if not request.has("action"):
 		return
 	var action: String = request.get("action", "")
@@ -92,6 +94,7 @@ func update_worlds_info(_worlds_info: Dictionary) -> void:
 
 
 func login_request(username: String, password: String) -> Dictionary:
+	if not world_manager.admissions_open(): return {"error":ERR_UNAVAILABLE}
 	var account: AccountResource = authentication_manager.validate_credentials(
 		username, password
 	)
@@ -134,6 +137,7 @@ func login_request(username: String, password: String) -> Dictionary:
 
 
 func create_account_request(username: String, password: String, is_guest: bool) -> Dictionary:
+	if not world_manager.admissions_open(): return {"error":ERR_UNAVAILABLE}
 	var result_code: int
 	var return_data: Dictionary
 	var result: AccountResource = authentication_manager.create_account(username, password, is_guest)

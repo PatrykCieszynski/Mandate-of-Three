@@ -62,5 +62,12 @@ func restored(identity: Dictionary) -> void:
 	Client.connect_to_server(handoff.address,handoff.port,handoff["auth-token"])
 	await wait_inventory()
 	assert(world.inventory_endpoint.state.items.size()==2 and world.inventory_endpoint.state.equipment.weapon==report.uid)
+	if CmdlineUtils.get_parsed_args().has("maintenance"):
+		process_mode=Node.PROCESS_MODE_ALWAYS
+		FileAccess.open(OS.get_environment("MANDATE_PG_FIXTURE_DIR")+"/maintenance-client-ready",FileAccess.WRITE).store_string("ready")
+		while Client.is_connected_to_server: await get_tree().process_frame
+		get_tree().paused=false
+		print("POSTGRES_PROCESS_CLIENT_OK maintenance disconnect")
+		get_tree().quit();return
 	print("POSTGRES_PROCESS_CLIENT_OK restart")
 	Client.close_connection();get_tree().quit()

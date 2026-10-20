@@ -450,6 +450,16 @@ and orderly pool closure. SQLite remains default and retains profiles/progressio
 Operator recovery/consistent backup-restore, controlled handoff, broader gameplay
 acceptance and P4 load/soak/import/cutover remain open; this is single-World only.
 
+**P3t progress:** [Operator maintenance](../development/postgres-maintenance.md)
+adds token-required RAM-only health and a correlated, acknowledged World-first
+quiescence barrier. New admissions close before World drains dirty money and
+closes profiles; only a valid World ACK permits Master grant drain and verified,
+frozen account checkpoint. Timeout/loss/unresolved SQL/save failure remain BLOCKED
+with admissions closed. Actual three-process clients cover dirty Yang/XP, replay,
+restart and native SQL blocking. This is a process-local preparation gate, not a
+backup certificate or distributed lease. Coherent stopped-writer backup/restore,
+controlled handoff and P4 load/soak/import/cutover remain open.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must
