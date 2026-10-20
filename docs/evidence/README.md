@@ -1,5 +1,7 @@
 # Evidence and validation
 
+- [PostgreSQL P3o Exchange ledger](postgres-p3o/README.md) - native custody/recovery and nine-client acceptance (topic branch until reviewed/merged).
+
 - [PostgreSQL P3n settlement runtime](postgres-p3n/README.md) - purchases/proceeds, native uncertainty and eight-client recovery (topic branch until reviewed/merged).
 
 - [PostgreSQL P3m seller runtime](postgres-p3m/README.md) - optional seller/item claims, native failures and seven-client journal recovery (topic branch until reviewed/merged).

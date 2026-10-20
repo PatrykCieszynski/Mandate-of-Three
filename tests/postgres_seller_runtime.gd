@@ -28,7 +28,7 @@ class LostCompletion extends RefCounted:
 	func submit_seller(context: Dictionary, action: String, body: Dictionary, income: int = 0, token: String = "") -> Dictionary: return inner.submit_seller(context,action,body,income,token)
 	func submit_seller_visit(context: Dictionary, shop: int) -> Dictionary: return inner.submit_seller_visit(context,shop)
 	func submit_seller_receipt(context: Dictionary, id: String) -> Dictionary: return inner.submit_seller_receipt(context,id)
-	func submit_seller_snapshot(context: Dictionary) -> Dictionary: return inner.submit_seller_snapshot(context)
+	func submit_seller_snapshot(context: Dictionary, include_exchange: bool = false) -> Dictionary: return inner.submit_seller_snapshot(context,include_exchange)
 	func begin_drain() -> void: inner.begin_drain()
 	func is_stopped() -> bool: return inner.is_stopped()
 	func poll() -> Array:
@@ -197,6 +197,7 @@ func _ready() -> void:
 	await wait_for(func() -> bool: return world.seller_runtime.drained() and ready(200))
 	assert(projections[200].name!="Must not run later" and int(pg.query("SELECT COUNT(*) AS n FROM economy.market_commands WHERE command_id='full-pool';").rows[0].n)==0)
 	assert(world.seller_runtime.submit(101,"buy",{}).error=="unsupported")
+	assert(world.seller_runtime.open_exchange(101).error=="unsupported")
 	assert(int(WalletStore.new(pg).load_wallet(9800).balance)==1500)
 	assert(await world.flush_postgres_wallets(true))
 	pools[0].begin_drain()

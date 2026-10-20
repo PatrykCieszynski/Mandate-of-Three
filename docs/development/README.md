@@ -1,5 +1,7 @@
 # Development and verification
 
+- [PostgreSQL Exchange ledger runtime](postgres-exchange-ledger-runtime.md) - P3o item/Storage conversions, coherent projections and native client journals; matching remains separate.
+
 - [PostgreSQL Marketplace settlement runtime](postgres-market-settlement-runtime.md) - P3n optional purchases/proceeds, pending-income tokens, seller refresh and purchase journals.
 
 - [PostgreSQL seller runtime](postgres-seller-runtime.md) - P3m optional seller/claim execution, private projection fencing and client journal recovery; buyer settlement remains separate.

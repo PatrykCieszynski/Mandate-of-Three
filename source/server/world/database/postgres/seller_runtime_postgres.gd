@@ -10,6 +10,7 @@ const MAX_ACTIVE: int=64 # Includes detached accounts with unknown outcomes.
 signal finished(peer: int, operation_id: String, result: Dictionary)
 signal committed(peer: int, action: String)
 signal snapshot_applied(peer: int, snapshot: Dictionary)
+var _exchange_enabled:=false
 var _wallet: RefCounted
 var _refresh_accounts: Dictionary={}
 var _inventory: RefCounted
@@ -21,10 +22,16 @@ var _workers_draining:=false
 var _serial: int=0
 var _deferred_recovery: Array[Dictionary]=[]
 
-func _init(inventory: RefCounted, executor: RefCounted, wallet: RefCounted = null) -> void:
+func _init(inventory: RefCounted, executor: RefCounted, wallet: RefCounted = null, exchange_ledger: bool = false) -> void:
 	_inventory=inventory
 	_executor=executor
 	_wallet=wallet
+	_exchange_enabled=exchange_ledger
+	if _exchange_enabled: _inventory.enable_storage()
+
+func open_exchange(peer: int) -> Dictionary:
+	if not _exchange_enabled: return {"queued":false,"error":"unsupported"}
+	return open(peer)
 
 func open(peer: int) -> Dictionary:
 	if _draining: return {"queued":false,"error":"unavailable"}
@@ -42,6 +49,7 @@ func open(peer: int) -> Dictionary:
 func submit(peer: int, action: String, body: Dictionary) -> Dictionary:
 	if action not in Content.ACTIONS or not MarketRequestRules.valid_command(action,body): return {"queued":false,"error":"unsupported"}
 	if action in ["buy","claim_revenue"] and _wallet==null: return {"queued":false,"error":"unsupported"}
+	if action in ["deposit","withdraw"] and not _exchange_enabled: return {"queued":false,"error":"unsupported"}
 	return _begin(peer,body.command_id,action,body,false)
 
 func visit(peer: int, shop: int) -> Dictionary:
@@ -91,7 +99,7 @@ func _schedule(active: Dictionary) -> void:
 	var queued: Dictionary
 	if active.stage=="execute": queued=_executor.submit_seller(active.context,active.action,active.body,active.capture.get("income",0),active.capture.get("token",""))
 	elif active.stage=="visit": queued=_executor.submit_seller_visit(active.context,int(active.body.shop))
-	elif active.stage=="snapshot": queued=_executor.submit_seller_snapshot(active.context)
+	elif active.stage=="snapshot": queued=_executor.submit_seller_snapshot(active.context,_exchange_enabled)
 	else: queued=_executor.submit_seller_receipt(active.context,active.id)
 	if not queued.queued:
 		if active.stage=="execute": _settle(active,{"ok":false,"error":queued.error})
@@ -178,6 +186,9 @@ func poll() -> void:
 					continue
 				if not active.published:
 					active.snapshot.settlement_runtime=_wallet!=null
+					if active.snapshot.has("exchange") and _wallet!=null:
+						var wallet_view: Dictionary=_wallet.snapshot(active.peer)
+						if not wallet_view.is_empty(): active.snapshot.exchange.yang=wallet_view.balance
 					active.published=true
 					snapshot_applied.emit(active.peer,active.snapshot.duplicate(true))
 					var current_projection: Dictionary=_inventory.binding(account)

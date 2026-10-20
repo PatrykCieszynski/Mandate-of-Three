@@ -11,6 +11,7 @@ export function isExchangeSnapshot(v) {
         Number(v.reservedYang) <= Number(v.yang) &&
         typeof v.busy === 'boolean' &&
         typeof v.retryAvailable === 'boolean' &&
+        (!('ledgerOnly' in v) || typeof v.ledgerOnly === 'boolean') &&
         Array.isArray(v.assets) &&
         v.assets.length <= 32 &&
         v.assets.every((a) => isObject(a) &&

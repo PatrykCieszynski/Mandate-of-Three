@@ -45,10 +45,12 @@ func _owns(peer: int) -> bool:
 	return _endpoint.get_parent().characters.has(peer) and _endpoint.services.inventory_runtime().status(peer)!="detached"
 
 func _snapshot(peer: int, snapshot: Dictionary) -> void:
-	if _owns(peer): _endpoint.receive_state.rpc_id(peer,snapshot)
+	if _owns(peer):
+		_endpoint.receive_state.rpc_id(peer,snapshot)
+		if snapshot.has("exchange"): _endpoint.receive_exchange_state.rpc_id(peer,snapshot.exchange)
 
 func _committed(peer: int, action: String) -> void:
-	if action in ["list","cancel","claim","buy"] and _owns(peer): _endpoint.get_parent().inventory_endpoint.publish_inventory_change(peer)
+	if action in ["list","cancel","claim","buy","deposit","withdraw"] and _owns(peer): _endpoint.get_parent().inventory_endpoint.publish_inventory_change(peer)
 
 func _finished(peer: int, operation: String, result: Dictionary) -> void:
 	var pending: Dictionary=_pending.get(peer,{})
@@ -69,6 +71,7 @@ func query(peer: int, action: String, body: Dictionary, id: String) -> void:
 		if _pending[peer].id!=id: _endpoint.receive_query.rpc_id(peer,id,{"ok":false,"error":"operation_pending"})
 		return
 	var queued: Dictionary={"queued":false,"error":"unsupported"}
-	if action=="visit" and MarketEndpoint3D.valid_query(action,body): queued=_runtime.visit(peer,int(body.shop_id))
+	if action=="exchange" and body.is_empty(): queued=_runtime.open_exchange(peer)
+	elif action=="visit" and MarketEndpoint3D.valid_query(action,body): queued=_runtime.visit(peer,int(body.shop_id))
 	if queued.queued: _pending[peer]={"id":id,"operation":"","query":true}
 	else: _endpoint.receive_query.rpc_id(peer,id,{"ok":false,"error":queued.error})
