@@ -46,3 +46,5 @@ Use the repository's pinned Godot/runtime versions; don't treat a historical one
 - [Controlled PostgreSQL World replacement](postgres-world-replacement.md)
 
 - [PostgreSQL mixed World/Economy load baseline](postgres-mixed-load.md)
+
+- [MMO Integration & Load and separate Economy stress case](realm-workload.md)

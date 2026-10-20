@@ -48,13 +48,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
     parser.add_argument("--load-seconds", type=int, default=8, choices=range(2,1801))
     parser.add_argument("--load-repeats", type=int, default=3, choices=(1,2,3))
     parser.add_argument("--load-faults", action="store_true", help="Inject fixture-only COMMIT failure and lost application reply under mixed load")
     parser.add_argument("--load-backend-loss", action="store_true", help="Terminate the selected fixture PostgreSQL backend during deferred COMMIT")
     parser.add_argument("--load-rates", nargs="+", type=int, choices=(0,10,30,100), default=[0,10,30,100])
+    parser.add_argument("--realm-players", type=int, default=24)
+    parser.add_argument("--realm-seconds", type=int, default=180)
+    parser.add_argument("--realm-seed", type=int, default=1729)
     args = parser.parse_args()
+    if args.realm_players < 1 or args.realm_seconds < 1:
+        parser.error("realm players and seconds must be positive")
     if args.load_backend_loss and not args.load_faults:
         parser.error("--load-backend-loss requires --load-faults")
     if args.load_faults and args.suite != "mixed-load":
@@ -109,6 +114,10 @@ def main():
         run(psql, env=env, log=control_log, sql=f"CREATE ROLE mandate_fixture LOGIN PASSWORD '{password}';")
         run(psql + ["-c", "CREATE DATABASE mandate_readiness OWNER mandate_fixture;"], env=env, log=control_log)
         env["MANDATE_PG_FIXTURE"] = "owned-local-cluster"
+        if args.suite == "realm-workload":
+            env["MANDATE_REALM_PLAYERS"] = str(args.realm_players)
+            env["MANDATE_REALM_SECONDS"] = str(args.realm_seconds)
+            env["MANDATE_REALM_SEED"] = str(args.realm_seed)
         if args.suite == "mixed-load":
             env["MANDATE_PG_LOAD_RATES"] = ",".join(map(str,args.load_rates))
             env["MANDATE_PG_LOAD_BACKEND_LOSS"] = "1" if args.load_backend_loss else "0"
@@ -168,13 +177,14 @@ def main():
             "maintenance": ("postgres_maintenance", "POSTGRES_MAINTENANCE_OK"),
             "backup": ("postgres_backup", "POSTGRES_BACKUP_OK"),
             "world-replacement": ("postgres_world_replacement", "POSTGRES_WORLD_REPLACEMENT_OK"),
+            "realm-workload": ("postgres_realm_workload", "POSTGRES_REALM_WORKLOAD_OK"),
             "mixed-load": ("postgres_mixed_load", "POSTGRES_MIXED_LOAD_OK"),
             "inventory-session-bridge": ("postgres_inventory_session_bridge", "POSTGRES_INVENTORY_SESSION_BRIDGE_OK"),
             "inventory-endpoint": ("postgres_inventory_endpoint", "POSTGRES_INVENTORY_ENDPOINT_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
-             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load") else ["--quit-after", "1200"]),
-            env=env, log=directory / "godot.log", timeout=(args.load_seconds*args.load_repeats*4+240) if args.suite=="mixed-load" else 225 if args.suite in ("inventory-endpoint", "process-startup", "maintenance", "backup", "world-replacement") else 60)
+             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload") else ["--quit-after", "1200"]),
+            env=env, log=directory / "godot.log", timeout=(args.realm_seconds+args.realm_players*3+300) if args.suite=="realm-workload" else (args.load_seconds*args.load_repeats*4+240) if args.suite=="mixed-load" else 225 if args.suite in ("inventory-endpoint", "process-startup", "maintenance", "backup", "world-replacement") else 60)
         output = (directory / "godot.log").read_text(encoding="utf-8", errors="replace")
         if marker not in output or any(word in output for word in ("SCRIPT ERROR", "Parse Error", "POSTGRES_READINESS_FAILED")):
             raise RuntimeError("Godot readiness contract failed; see " + str(directory.relative_to(ROOT) / "godot.log"))

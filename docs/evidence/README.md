@@ -55,3 +55,5 @@ This directory retains reproducible raw evidence. The documentation cleanup remo
 - [P4b mixed-load receipt recovery](postgres-p4b/README.md)
 
 - [P4c backend-process recovery and sustained-run investigation](postgres-p4c/README.md)
+
+- [MMO Integration & Load: first seeded runtime story baseline](realm-workload-foundation/README.md)
