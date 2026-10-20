@@ -1,70 +1,56 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status:** P1 PostgreSQL domain ports and P2 backend concurrency acceptance are
-delivered. P3 has opt-in Inventory execution, durable recovery, delegated sessions,
-Master/World wiring, client RPC delivery, cache reconciliation and indexed pending
-discovery; P3i adds optional RAM Yang batching, receipted async checkpoints and
-currency endpoint delivery. P3j adds optional NPC Shop/Upgrade execution and client
-receipt/journal recovery. P3k adds optional shared Storage execution and combined
-Inventory/Storage reconciliation. P3l adds optional starter initialization and
-ground-item pickup/receipt recovery. P3m adds optional seller-local Marketplace
-and item-claim execution with client journal recovery. P3n connects optional
-purchase/proceeds settlement and authenticated shop visits. P3o connects optional
-Exchange item/Storage deposits and withdrawals with journal recovery. P3p adds
-optional order/cancel/matching, captured participant wallets and World-local
-ledger projection freshness. P3q connects optional public Auction catalog/search
-through bounded, session-qualified native reads. P3r adds shared Master/World
-bootstrap ownership, realm/schema preflight and no-fallback/drain gates. **Normal
-process bootstrap integration and P4 are not completed. Normal
-gameplay remains SQLite.** This roadmap implements the accepted
-[Economy C1–C5](../architecture/economy/README.md) and
-[World Process topology](../architecture/world-instance-architecture.md); every
-package still requires its own review, tests and merge decision.
+**Status (2026-10-20):** P1 domain ports and P2 concurrency acceptance are
+delivered. P3 now includes all existing economic domains, bounded asynchronous
+execution/recovery, normal opt-in Master/World startup, identity manifests,
+operator maintenance, coherent stopped-writer backup/restore and sequential
+World replacement. **SQLite remains the default; no production cutover or
+SQLite economy import has happened.** The progress entries below are delivery
+history, not the current list of missing runtime ports.
 
 ## Runtime adoption status
 
-**Audited 2026-10-20. This is not the final cleanup of SQLite.** P1/P2 provide
-PostgreSQL stores and backend acceptance; P3 has opt-in Inventory, wallet, NPC,
-Storage, ground-item and seller/item-claim paths.
-Normal server startup still creates the SQLite writer. A complete PostgreSQL
-realm has not yet been enabled or rehearsed.
+Normal startup selects one realm Economy backend from private configuration.
+PostgreSQL selection is sticky and fails closed; it never falls back to SQLite
+for economic writes. World profiles/progression remain an explicitly separate
+SQLite database, bound to the PG realm by persistent profile identity. Master
+credentials remain its account collection resource. Neither is silently included
+in the Economy backend port.
 
-| Area | Current normal runtime | PostgreSQL adoption still needed |
+| Boundary | Implemented in opt-in PG runtime | Remaining acceptance |
 | --- | --- | --- |
-| Bootstrap / database ownership | `WorldDatabase.start_database/open_database` creates SQLite and its stores | P3r supplies offline provisioning and an all-or-nothing native composition/preflight/drain API used by acceptance fixtures. Normal process configuration, identity/creation-manifest integration and readiness publication remain; never enable dual economic writers |
-| Inventory / ground-item pickup | `WorldEconomyService` calls SQLite item transactions; PG move/activate/equip/unequip recovery is opt-in | P3l optionally connects marker-based initialization and asynchronous pickup with original UID, claims and current Inventory publication. Production provisioning/bootstrap and full PG gameplay acceptance remain |
-| Yang wallet | Normal startup still loads/checkpoints `WalletStoreSqlite` | P3i optionally supplies RAM income, receipted async checkpoints, fixed test spend, currency RPC/HUD and local reconnect/drain. Production bootstrap, cross-domain freshness and multi-World handoff remain |
-| NPC Shop / Upgrade | Normal startup uses `WorldEconomyService` and SQLite | P3j optionally connects authenticated RPCs, bounded PG transactions, captured pending Yang and current Inventory/wallet publication. Production bootstrap remains |
-| Account Storage | `WorldEconomyService` still uses SQLite | P3k optionally connects shared custody, stable client journal recovery and combined account-revision projections; production bootstrap and distributed publication remain |
-| Player Shop / claims / Exchange | `MarketplaceService` constructs `MarketStoreSqlite` / `ExchangeStoreSqlite` | P3m optionally connects seller/item claims; P3n adds purchases/proceeds with captured income, buyer Inventory/wallet reconciliation, seller private refresh and journals. P3o connects Exchange ledger conversions; P3p adds order/cancel/matching with participant wallet captures and local projection generations. Cross-process publication and production bootstrap remain |
-| Auction reads | `AuctionQueryService` / `AuctionSociReader` uses SOCI's **sqlite3** read-only WAL reader | P3q optionally connects the catalog and indexed public search through a World-scoped bounded scheduler, session-qualified native worker reads and existing browser RPCs. Normal startup/operational PG ownership remain |
-| Character/profile and other World data | `WorldStoreSqlite` still saves character/quest/guild data; `MailStore` uses SQLite; progression checkpoints stay here | These are not automatically covered by the realm Economy migration. Decide/retain their explicit boundary and identity mappings, or scope a separate port before claiming SQLite can be removed entirely |
+| Inventory / equipment / ground pickup | Native transactions, receipts, initialization, client journals, current authoritative projections | Broader mixed workload and soak; no duplicate port needed |
+| Yang / NPC Shop / Upgrade | RAM income checkpoints, critical transactions, captured pending prefixes and recovery | Mixed workload/fault acceptance |
+| Account Storage | Account-locked custody, original issuer recovery, combined Inventory/Storage snapshots | Shared-state workload/soak; never bypass its full-footprint lock contract |
+| Player Shop / claims / proceeds | Seller lifecycle, purchase settlement, partial collection and receipt recovery | Mixed trading/concurrency workload |
+| Exchange / Auction | Ledger conversions, reservations/orders/matching, indexed bounded async public search | Mixed read/write load, saturation/tick-tail measurements |
+| Bootstrap / sessions | Normal Gateway/Master/World startup, provisioning/preflight, immutable identity binding, no fallback and readiness gates | Deployment/cutover approval; no second live World owner |
+| Operations | Token-required maintenance/status, stopped-writer bundle/restore and controlled sequential World replacement | Production-scale backup timing/memory, retention, failure runbooks and P4 acceptance |
+| Profiles / Master accounts / other legacy World data | Retained stores with explicit identity/backup boundaries | Separate port/removal decision; not justification to delete all SQLite |
 
-Master credentials are a separate existing `AccountResourceCollection` persisted
-as a Godot `.tres` resource by `AuthenticationManager`, not a migrated PostgreSQL
-or SQLite auth store. The roadmap does not silently include moving that authority.
+## Remaining gates
 
-Remaining deliverables before an Economy cutover are substantial:
+1. **P4 load/fault/soak:** mix actual World economy operations and indexed reads;
+   record admission, transaction/pool/lock behavior and World tick tails. Use
+   repeated comparable runs and the planned sustained soak. A short correctness
+   fixture is not a capacity result.
+2. **Quiesced SQLite-to-PG import rehearsal:** on disposable verified backups,
+   conserve account/character IDs, UIDs/custody, money/revenue/reservations,
+   revisions and original receipts. Existing PG-to-PG restore does not prove import.
+3. **Operator-approved cutover and cleanup:** verify the deployment/restore set,
+   choose the authoritative backend explicitly, then retire unused SQLite
+   *economic* runtime paths. Profile/progression persistence, reference/parity
+   fixtures and Master credentials remain separate decisions.
 
-1. Finish P3 runtime adoption for the remaining economic
-   domains, preserving session-qualified recovery and committed-state publication.
-2. Complete provisioning/bootstrap/shutdown and handoff behavior, plus actual
-   end-to-end PG gameplay/network acceptance. Existing optional fixtures are not a
-   playable realm selector.
-3. Run P4 mixed runtime load/fault/soak, then rehearse a quiesced SQLite-to-PG import
-   with account/character mapping, UIDs/custody, Yang/reservations/revenue,
-   revisions and original receipts conserved. Test restore/operational procedures.
-4. Obtain explicit maintainer approval for cutover. Only afterward retire unused
-   SQLite economic runtime paths; parity fixtures/reference code and separately
-   retained profile/progression storage are distinct cleanup decisions.
+Controlled World replacement is now sequential on the same host: Master/Gateway
+stay up, the old World closes routing and drains, supervision verifies its exit,
+then a fresh World opens the same stores. This does **not** implement overlapping
+owners, cross-host live migration, distributed publication or automatic failover.
+Those need their own acceptance before a second World serves live accounts.
 
-After P3r, the next integration priority is wiring normal process startup and
-trusted identity/creation manifests to the shared bootstrap owner, including
-readiness publication. Full PG gameplay acceptance and P4 follow.
-The listed economic domains now have optional execution/read paths; that alone
-does not create a playable PostgreSQL realm or authorize removing SQLite. No percentage or final PR count is asserted: unfinished runtime domains
-and P4 are separate acceptance
-gates, not documentation-only leftovers.
+The implementation follows accepted [Economy C1–C5](../architecture/economy/README.md)
+and [World topology](../architecture/world-instance-architecture.md). No fixed
+remaining PR count or cutover date is inferred from completed backend ports.
 
 ## Delivery history
 
@@ -521,3 +507,13 @@ success. Restore requires a new empty DB/output, verifies every economy table an
 sequence, and is rehearsed with normal processes/login against the restored set.
 This is not a live/distributed backup, import or cutover; SQLite stays default.
 Controlled handoff, production-scale operational/load/soak acceptance and P4 remain.
+
+
+**P3v progress:** [Controlled World replacement](../development/postgres-world-replacement.md)
+uses the existing profile-retaining closure owner for ordinary PG shutdown and
+closes routing synchronously in Master. Delayed grant/handoff continuations and
+late readiness/manifest messages cannot reopen a draining World. A native
+process fixture drains dirty Yang/XP through temporarily locked SQL, verifies old
+worker exit/grant retirement, starts a replacement under the live Master/Gateway,
+rejects an old ticket and logs in with the same UID/equipment. No distributed
+lease, concurrent World owner, schema change or default backend switch.

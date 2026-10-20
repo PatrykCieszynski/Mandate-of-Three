@@ -11,6 +11,10 @@ var world_info: Dictionary
 var _maintenance: Dictionary={}
 var _shutdown_in_progress:=false
 var _maintenance_task: RefCounted
+var _shutdown_task: RefCounted
+
+func _stores_closing() -> bool:
+	return not _maintenance.is_empty() or _shutdown_task!=null or _shutdown_in_progress
 
 @rpc("authority","call_remote","reliable")
 func economy_quiesce(id: String) -> void:
@@ -158,20 +162,20 @@ func heartbeat(_snapshot: Dictionary) -> void:
 ## Master tells this world to flush all connected players + snapshot the DB.
 @rpc("authority")
 func master_save() -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	if world_server == null or database == null:
 		return
 	if not await world_server.flush_postgres_wallets():
 		push_error("Save refused: PostgreSQL wallet checkpoint unresolved.")
 		return
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	var saved: int = database.save_all_connected(world_server.connected_players)
 	var ok: bool = await database.coordinated_backup()
 	ServerLog.info("Dashboard 'save' triggered: %d player(s), backup %s." % [saved, "ok" if ok else "FAILED"])
 
 
 ## Master tells this world to shut down gracefully. Final save runs first.
-@rpc("authority")
+@rpc("authority","call_remote","reliable")
 func master_shutdown() -> void:
 	if not _maintenance.is_empty(): return
 	if world_server == null or database == null:
@@ -179,6 +183,19 @@ func master_shutdown() -> void:
 	if _shutdown_in_progress: return
 	_shutdown_in_progress=true
 	ServerLog.info("Dashboard 'shutdown' triggered — saving + quitting.")
+	if world_server.economy_bootstrap!=null:
+		# Retain the concrete owner/resources across a failed profile checkpoint.
+		# The economy drain disconnects players before returning; a later scan of
+		# connected_players alone cannot certify that their latest profiles saved.
+		if _shutdown_task==null:
+			_shutdown_task=preload("res://source/server/world/operations/world_maintenance.gd").new(world_server)
+		var result: Dictionary=await _shutdown_task.run()
+		_shutdown_in_progress=false
+		if not result.ok or not result.profiles_closed or not result.workers_stopped:
+			push_error("Graceful shutdown refused: economy/profile closure unresolved; retain process and retry.")
+			return
+		get_tree().quit.call_deferred()
+		return
 	if not await world_server.shutdown_economy():
 		_shutdown_in_progress=false
 		push_error("Graceful shutdown cancelled: PostgreSQL wallet checkpoint unresolved.")
@@ -201,7 +218,7 @@ func master_shutdown() -> void:
 ## same [param seconds] before stopping, so the countdown and the stop line up.
 @rpc("authority")
 func master_restart(seconds: int, message: String) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	if world_server == null or world_server.chat_service == null:
 		return
 	var note: String = message if not message.is_empty() else "Server restarting for an update."
@@ -216,13 +233,13 @@ func master_restart(seconds: int, message: String) -> void:
 		_broadcast_restart_notice(remaining, note)
 	if remaining > 0:
 		await get_tree().create_timer(remaining).timeout
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	# Insurance save in case the deploy's stop is delayed or never lands.
 	if database != null:
 		if not await world_server.flush_postgres_wallets(true):
 			push_error("Restart save refused: PostgreSQL wallet checkpoint unresolved.")
 			return
-		if not _maintenance.is_empty(): return
+		if _stores_closing(): return
 		var saved: int = database.save_all_connected(world_server.connected_players)
 		var ok: bool=await database.coordinated_backup(10,false,true)
 		ServerLog.info("Restart countdown elapsed — final save (%d player(s)), reader drain/backup %s; awaiting stop." % [saved,"ok" if ok else "FAILED"])
@@ -247,7 +264,7 @@ func _broadcast_restart_notice(remaining: int, note: String) -> void:
 ## Master pushes a system message to every connected player in this world.
 @rpc("authority")
 func master_broadcast(message: String) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	if world_server == null or world_server.chat_service == null:
 		return
 	for peer_id: int in world_server.connected_players:
@@ -267,7 +284,7 @@ func master_broadcast(message: String) -> void:
 
 @rpc("authority")
 func master_mute(player_id: int, reason: String, duration_ms: int) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	var account: String = _account_for_id(player_id)
 	if account.is_empty():
 		ServerLog.warn("Dashboard mute: no account for player #%d" % player_id)
@@ -281,7 +298,7 @@ func master_mute(player_id: int, reason: String, duration_ms: int) -> void:
 
 @rpc("authority")
 func master_unmute(player_id: int) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	var account: String = _account_for_id(player_id)
 	if not account.is_empty() and MuteList.unmute(account):
 		ServerLog.info("Dashboard unmute: @%s (#%d)" % [account, player_id])
@@ -290,7 +307,7 @@ func master_unmute(player_id: int) -> void:
 
 @rpc("authority")
 func master_jail(player_id: int, reason: String, duration_ms: int) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	var account: String = _account_for_id(player_id)
 	if account.is_empty():
 		ServerLog.warn("Dashboard jail: no account for player #%d" % player_id)
@@ -308,7 +325,7 @@ func master_jail(player_id: int, reason: String, duration_ms: int) -> void:
 
 @rpc("authority")
 func master_unjail(player_id: int) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	var account: String = _account_for_id(player_id)
 	if not account.is_empty() and JailList.release(account):
 		ServerLog.info("Dashboard unjail: @%s (#%d)" % [account, player_id])
@@ -330,7 +347,7 @@ func _account_for_id(player_id: int) -> String:
 
 @rpc("authority")
 func master_kick(player_id: int) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	var peer_id: int = world_server.player_id_to_peer_id.get(player_id, 0)
 	if peer_id == 0:
 		return
@@ -350,7 +367,7 @@ func master_kick(player_id: int) -> void:
 
 @rpc("authority")
 func master_grant_role(player_id: int, role: String) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	var peer_id: int = world_server.player_id_to_peer_id.get(player_id, 0)
 	if peer_id == 0:
 		return
@@ -365,7 +382,7 @@ func master_grant_role(player_id: int, role: String) -> void:
 
 @rpc("authority")
 func master_revoke_role(player_id: int, role: String) -> void:
-	if not _maintenance.is_empty(): return
+	if _stores_closing(): return
 	var peer_id: int = world_server.player_id_to_peer_id.get(player_id, 0)
 	if peer_id == 0:
 		return

@@ -45,7 +45,7 @@ func operational_status() -> Dictionary:
 		if reported is Array:
 			for domain: String in ["wallet","npc","storage","ground","market"]:
 				if reported.has(domain): unsettled.append(domain)
-		worlds.append({"unsettled_domains":unsettled,"world_id":id,"ready":world_ready(id),"state":state,"pending":clampi(int(health.get("pending",0)),0,1024),"workers_ready":clampi(int(health.get("workers_ready",0)),0,8),"heartbeat_age_seconds":maxi(0,int(Time.get_unix_time_from_system())-int(entry.get("last_heartbeat_at",0)))})
+		worlds.append({"draining":bool(entry.get("draining",false)),"unsettled_domains":unsettled,"world_id":id,"ready":world_ready(id),"state":state,"pending":clampi(int(health.get("pending",0)),0,1024),"workers_ready":clampi(int(health.get("workers_ready",0)),0,8),"heartbeat_age_seconds":maxi(0,int(Time.get_unix_time_from_system())-int(entry.get("last_heartbeat_at",0)))})
 	return {"ok":true,"backend":"postgresql" if economy_bootstrap!=null else "sqlite","admissions_open":admissions_open(),"master":economy_bootstrap.status() if economy_bootstrap!=null else {},"worlds":worlds,"maintenance":maintenance.status() if maintenance!=null else {}}
 
 @rpc("authority","call_remote","reliable")
@@ -114,6 +114,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 func fetch_server_info(info: Dictionary) -> void:
 	if not admissions_open(): return
 	var game_server_id: int = multiplayer_api.get_remote_sender_id()
+	if connected_worlds.get(game_server_id,{}).get("draining",false): return
 	var expected: String="postgresql" if economy_bootstrap!=null else "sqlite"
 	if str(info.get("economy_backend","sqlite"))!=expected: return
 	if economy_bootstrap!=null and not connected_worlds.is_empty() and not connected_worlds.has(game_server_id): return # One profile/character-ID owner in P3.
@@ -139,12 +140,12 @@ func fetch_server_info(info: Dictionary) -> void:
 @rpc("any_peer")
 func economy_identity_ready(authority: String) -> void:
 	var peer: int=multiplayer_api.get_remote_sender_id()
-	if economy_bootstrap==null or not economy_bootstrap.ready() or authority!=economy_bootstrap.authority_id() or not connected_worlds.has(peer): return
+	if economy_bootstrap==null or not economy_bootstrap.ready() or authority!=economy_bootstrap.authority_id() or not connected_worlds.has(peer) or connected_worlds[peer].get("draining",false): return
 	connected_worlds[peer]["economy_ready"]=true
 	gateway_manager.update_worlds_info.rpc(get_public_worlds())
 
 func world_ready(world_id: int) -> bool:
-	return admissions_open() and connected_worlds.has(world_id) and (economy_bootstrap==null or (economy_bootstrap.ready() and connected_worlds[world_id].get("economy_ready",false)))
+	return admissions_open() and connected_worlds.has(world_id) and not connected_worlds[world_id].get("draining",false) and (economy_bootstrap==null or (economy_bootstrap.ready() and connected_worlds[world_id].get("economy_ready",false)))
 
 func get_public_worlds() -> Dictionary:
 	var out: Dictionary = {}
@@ -204,6 +205,14 @@ func tell_world_to_save(world_peer_id: int) -> bool:
 func tell_world_to_shutdown(world_peer_id: int) -> bool:
 	if not connected_worlds.has(world_peer_id):
 		return false
+	if economy_bootstrap!=null:
+		# Close routing synchronously, before World begins asynchronous drain.
+		# Keep existing grants valid until their captured work has reconciled.
+		connected_worlds[world_peer_id]["draining"]=true
+		connected_worlds[world_peer_id]["economy_ready"]=false
+		for username: String in _entry_attempts.keys():
+			if _entry_attempts[username].world_id==world_peer_id: _entry_attempts.erase(username)
+		gateway_manager.update_worlds_info.rpc(get_public_worlds())
 	master_shutdown.rpc_id(world_peer_id)
 	return true
 
@@ -253,7 +262,7 @@ func tell_all_worlds_to_save() -> int:
 # implements the actual behavior in WorldManagerClient.
 @rpc("authority") func master_save() -> void: pass
 @rpc("authority") func account_identity_manifest(_identities: Dictionary) -> void: pass
-@rpc("authority") func master_shutdown() -> void: pass
+@rpc("authority","call_remote","reliable") func master_shutdown() -> void: pass
 @rpc("authority") func master_broadcast(_message: String) -> void: pass
 @rpc("authority") func master_restart(_seconds: int, _message: String) -> void: pass
 @rpc("authority") func master_mute(_player_id: int, _reason: String, _duration_ms: int) -> void: pass
@@ -366,7 +375,7 @@ func _prepare_world_ticket(world_id: int, username: String, token: String, chara
 	var deadline: int=Time.get_ticks_msec()+ENTRY_ATTEMPT_TTL_MS
 	while request.queued and not request.done and Time.get_ticks_msec()<deadline:
 		await get_tree().process_frame
-	if not admissions_open(): return {"ok":false,"error":ERR_UNAVAILABLE}
+	if not world_ready(world_id): return {"ok":false,"error":ERR_UNAVAILABLE}
 	var current:=not verified_inventory_ticket(world_id,username,token).is_empty()
 	if not request.done or not current or not request.result.get("ok",false):
 		if current: revoke_world_session(username)
@@ -479,7 +488,7 @@ func result_login(result_code: int, gateway_id: int, peer_id: int, username: Str
 		fetch_token.rpc_id(world_id,auth_token,username,character_id,account.id,ticket.context)
 		await get_tree().create_timer(0.5).timeout
 		# A newer login or world disconnect may have retired this attempt.
-		if _world_sessions.get(username, {}).get("token", "") != auth_token or not connected_worlds.has(world_id):
+		if _world_sessions.get(username, {}).get("token", "") != auth_token or not world_ready(world_id):
 			_entry_response(gateway_id, peer_id, {"error": ERR_UNAUTHORIZED})
 			return
 		_entry_response(

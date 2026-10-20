@@ -63,6 +63,7 @@ func restored(identity: Dictionary) -> void:
 	await wait_inventory()
 	assert(world.inventory_endpoint.state.items.size()==2 and world.inventory_endpoint.state.equipment.weapon==report.uid)
 	if CmdlineUtils.get_parsed_args().has("maintenance"):
+		FileAccess.open(OS.get_environment("MANDATE_PG_FIXTURE_DIR")+"/maintenance-ticket.json",FileAccess.WRITE).store_string(JSON.stringify(handoff))
 		process_mode=Node.PROCESS_MODE_ALWAYS
 		FileAccess.open(OS.get_environment("MANDATE_PG_FIXTURE_DIR")+"/maintenance-client-ready",FileAccess.WRITE).store_string("ready")
 		while Client.is_connected_to_server: await get_tree().process_frame

@@ -297,6 +297,9 @@ func _notification(what: int) -> void:
 	if database == null:
 		return
 	get_tree().auto_accept_quit=false
+	if economy_bootstrap!=null and world_manager!=null:
+		await world_manager.master_shutdown()
+		return
 	if not await shutdown_economy():
 		push_error("Window shutdown refused: PostgreSQL wallet checkpoint unresolved.")
 		return
