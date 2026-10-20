@@ -97,3 +97,29 @@ connected-client/combat load, import and cutover remain open. Increasing
 `--seconds` enables longer cohorts, but does not make an unrun soak verified.
 The opt-in fixture is not added to default CI smoke. Windows is verified; Linux
 and physical CEF are not. See [evidence](../evidence/postgres-p4a/README.md).
+
+## P4b — recovery while mixed traffic continues
+
+```powershell
+python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite mixed-load --load-seconds 15 --load-repeats 1 --load-faults
+```
+
+This opt-in mode uses the same disposable fixture and existing pools. In every
+nonzero-rate cohort it injects one deferred PostgreSQL COMMIT error (`40001`)
+on a listing receipt and drops one successful purchase's application delivery.
+The COMMIT trigger is scoped to selected fixture command IDs, installed only in
+the owned database. The lost delivery occurs after normal runtime reconciliation;
+it is not a disconnected socket or a worker/process crash.
+
+Uncertainty resolves by the existing original-ID receipt lookup, never a new
+mutation ID or blind mutation retry. The rolled-back listing must resolve as
+`unknown_command`, with no durable receipt. The successful purchase must recover
+success with exactly one receipt, although its item already occupies Inventory.
+Both paths must actually execute in every write cohort; admission rejection does
+not count as an injected COMMIT failure. Existing conservation/custody/footprint,
+reservation, queue-bound and complete-drain audits remain enabled.
+
+Fault runs are recovery evidence, not comparable performance baselines. This does
+not cover PostgreSQL termination, World replacement during load, socket loss,
+connected CEF or the planned 30-minute soak. The runner remains opt-in and does
+not change normal CI/runtime/default backend.

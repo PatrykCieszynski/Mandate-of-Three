@@ -73,6 +73,11 @@ var serial:=0
 var source_cursor:=0
 var search_cursor:=0
 var injected_income:=0
+var faults:=false
+var commit_armed:=false
+var loss_armed:=false
+var fault_ids: Array[String]=[]
+var lost_ids: Array[String]=[]
 var duration:=8
 var repeats:=3
 var directory: String
@@ -114,6 +119,12 @@ func ready(peer: int) -> bool:
 func finished(_peer: int, id: String, result: Dictionary) -> void:
 	if not jobs.has(id): return
 	var job: Dictionary=jobs[id]
+	if faults and job.action=="buy" and result.get("ok",false) and loss_armed:
+		loss_armed=false;lost_ids.append(id);current.lost_replies+=1
+		job.recover=true;job.retry_at=Time.get_ticks_msec()+100
+		return # Drop application delivery only, after runtime committed reconciliation.
+	if id in lost_ids: assert(result.get("ok",false),"lost success recovered by original ID")
+	if id in fault_ids and result.get("error","")=="unknown_command": current.failed_commits_recovered+=1
 	if not result.get("ok",false) and result.get("error","") in ["outcome_unknown","storage","recovery_required"]:
 		job.recover=true;job.retry_at=Time.get_ticks_msec()+100
 		count_error("uncertain",str(result.error));return
@@ -157,11 +168,16 @@ func submit_actor(actor: Dictionary, scheduled: int) -> void:
 			"buy": peer=actor.buyer;body={"shop_id":actor.shop,"offer_id":actor.offer,"revision":actor.offer_revision,"price":101}
 			"claim_revenue": pass
 	if not ready(peer): current.source_busy+=1;return
-	var id:=next_id();body.command_id=id
+	var id:=next_id()
+	if faults and commit_armed and action=="list":
+		commit_armed=false;id="mixed-fault-"+id;fault_ids.append(id)
+	body.command_id=id
 	var job: Dictionary={"actor":actor,"peer":peer,"action":action,"body":body,"scheduled_us":scheduled,"admitted_us":Time.get_ticks_usec(),"recover":false}
 	jobs[id]=job;actor.busy=true
 	var admitted: Dictionary=world.seller_runtime.submit(peer,action,body)
 	if not admitted.queued:
+		if id in fault_ids:
+			fault_ids.erase(id);commit_armed=true # Admission rejection did not reach COMMIT.
 		jobs.erase(id);actor.busy=false;current.admission_rejected+=1;count_error("admission",str(admitted.error))
 	else: current.admitted+=1
 func ask(scheduled: int) -> void:
@@ -210,6 +226,8 @@ func audit() -> void:
 func cohort(rate: int, repeat_index: int) -> void:
 	await wait_for(empty)
 	current={"target_writes_per_second":rate,"repeat":repeat_index,"offered":0,"admitted":0,"completed":0,"source_busy":0,"admission_rejected":0,"terminal_rejected":0,"search_offered":0,"search_completed":0,"native_jobs":0,"physics_ticks":0,"max_native_pending":0,"max_active_accounts":0,"errors":{},"by_action":{}}
+	current.lost_replies=0;current.failed_commits_recovered=0
+	commit_armed=faults and rate>0;loss_armed=faults and rate>0
 	histograms.clear();previous_tick=0;measuring=true
 	var started:=Time.get_ticks_usec();var next_write:=started;var next_search:=started
 	var stop:=started+duration*1000000
@@ -248,6 +266,8 @@ func cohort(rate: int, repeat_index: int) -> void:
 	assert(current.admitted==current.completed+current.terminal_rejected)
 	current.search_errors=current.errors.keys().filter(func(key: String)->bool:return key.begins_with("search:")).reduce(func(sum: int,key: String)->int:return sum+int(current.errors[key]),0)
 	assert(current.search_offered==current.search_completed+int(current.search_errors),"every independent search source gets a terminal result")
+	if faults and rate>0:
+		assert(not commit_armed and not loss_armed and current.failed_commits_recovered==1 and current.lost_replies==1,"both fault paths must execute and recover during every write cohort")
 	current.last_operation_serial=serial;current.first_operation_serial=first_action
 	for key: String in histograms: current[key]=histograms[key].summary()
 	measuring=false
@@ -259,6 +279,7 @@ func cohort(rate: int, repeat_index: int) -> void:
 func _ready() -> void:
 	Engine.max_fps=60;Engine.physics_ticks_per_second=60
 	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster")
+	faults=OS.get_environment("MANDATE_PG_LOAD_FAULTS")=="1"
 	directory=OS.get_environment("MANDATE_PG_FIXTURE_DIR")
 	duration=int(OS.get_environment("MANDATE_PG_LOAD_SECONDS")) if OS.has_environment("MANDATE_PG_LOAD_SECONDS") else 8
 	repeats=int(OS.get_environment("MANDATE_PG_LOAD_REPEATS")) if OS.has_environment("MANDATE_PG_LOAD_REPEATS") else 3
@@ -267,6 +288,9 @@ func _ready() -> void:
 	call_deferred("run")
 func run() -> void:
 	pg=ClassDB.instantiate("GodotSociDatabase");assert(pg.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) and Schema.ensure_schema(pg))
+	if faults:
+		assert(pg.execute("CREATE FUNCTION economy.fixture_mixed_commit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.command_id LIKE 'mixed-fault-%' THEN RAISE EXCEPTION 'mixed load commit fixture' USING ERRCODE='40001'; END IF; RETURN NEW; END; $$;").ok)
+		assert(pg.execute("CREATE CONSTRAINT TRIGGER fixture_mixed_commit AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.fixture_mixed_commit();").ok)
 	var seed:=SearchFixture.new();seed.pg=pg;seed.benchmark();seed.free()
 	world.database=WorldDatabase.new();add_child(world);world.add_child(world.database)
 	assert(world.database.start_profile_database(directory+"/profiles.db"))
@@ -309,5 +333,11 @@ func run() -> void:
 	current={};audit();assert(bootstrap.status().stopped)
 	world.connected_players.clear();assert(await world.database.shutdown_database())
 	var report: Dictionary={"fixture":"same-host synthetic sessions, real World runtime and native PG","connected_clients":0,"mutation_accounts":16,"read_accounts":4,"moving_players":4,"mobs":simulation.mob_system.mobs.size(),"workers":Bootstrap.WORLD_POOLS,"queue_capacity_per_worker":2,"offers":10000,"cohorts":reports,"invariants":"PASS","native_workers_stopped":true,"injected_income":injected_income,"postgres_deadlocks":int(pg.query("SELECT deadlocks FROM pg_stat_database WHERE datname=current_database();").rows[0].deadlocks),"combat":false}
+	if faults:
+		for id: String in fault_ids:
+			assert(pg.query("SELECT count(*) AS n FROM economy.market_commands WHERE command_id=:id;",{"id":id}).rows[0].n==0,"failed commit left no durable receipt")
+		for id: String in lost_ids:
+			assert(pg.query("SELECT count(*) AS n FROM economy.market_commands WHERE command_id=:id;",{"id":id}).rows[0].n==1,"lost reply recovered one committed receipt")
+		report.faults={"failed_commit_ids":fault_ids,"lost_reply_ids":lost_ids,"recovery":"PASS"}
 	FileAccess.open(directory+"/mixed-load.json",FileAccess.WRITE).store_string(JSON.stringify(report,"  "))
 	pg.close();print("POSTGRES_MIXED_LOAD_OK");get_tree().quit()
