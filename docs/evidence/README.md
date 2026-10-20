@@ -45,3 +45,5 @@ This directory retains reproducible raw evidence. The documentation cleanup remo
 - [PostgreSQL normal process startup (P3s)](postgres-p3s/README.md)
 
 - [PostgreSQL operator maintenance barrier (P3t)](postgres-p3t/README.md)
+
+- [PostgreSQL P3u backup/restore rehearsal](postgres-p3u/README.md)

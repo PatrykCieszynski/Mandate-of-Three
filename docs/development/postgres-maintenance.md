@@ -66,8 +66,9 @@ a new process is a separate lifecycle, not a continuation of the old operation I
 This endpoint does not stop arbitrary processes or verify all possible external
 writers. Do not use its JSON as an enduring backup certificate. A coherent backup
 still requires stopping the supervised writers and capturing PG, its profile
-file/ID and the Master account collection together. That bundle/restore tooling
-and acceptance are the next operational package.
+file/ID and the Master account collection together. The stopped-writer [bundle/restore tool](postgres-backup-restore.md) implements
+that subsequent capture and disposable restore rehearsal; it still requires
+verified process exit and supervisors disabled.
 
 ## Failure behavior
 
@@ -120,5 +121,5 @@ running. Only this deliberately failed **disposable fixture** is forcibly cleane
 up afterward; that is not a runtime recovery path or successful graceful stop.
 Focused injected cases cover missing/late/foreign/malformed ACK, timeout, World
 loss, empty-token auth and account checkpoint failure. See
-[evidence](../evidence/postgres-p3t/README.md). Linux, physical CEF, backup/restore,
+[evidence](../evidence/postgres-p3t/README.md). Linux, physical CEF,
 controlled process handoff, sustained load/soak/import and cutover remain open.
