@@ -123,3 +123,45 @@ Fault runs are recovery evidence, not comparable performance baselines. This doe
 not cover PostgreSQL termination, World replacement during load, socket loss,
 connected CEF or the planned 30-minute soak. The runner remains opt-in and does
 not change normal CI/runtime/default backend.
+
+## Sustained run and PostgreSQL backend termination
+
+```powershell
+# 30 minutes total arrivals: 7.5 minutes baseline + 22.5 minutes writes/reads.
+python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite mixed-load --load-seconds 450 --load-repeats 1
+# Separate fault run, never concurrent with the sustained measurement.
+python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite mixed-load --load-seconds 15 --load-repeats 1 --load-faults --load-backend-loss
+```
+
+`--load-backend-loss` additionally terminates the selected PostgreSQL server-side
+connection process inside a deferred receipt trigger, once per write cohort.
+Only fixture-prefixed command IDs in the owned disposable database can trigger
+this path. No operating-system process enumeration/kill, installed service or
+external connection is targeted. The trigger records its own backend PID in a
+nontransactional sequence before self-termination. The audit requires that PID
+to be absent from `pg_stat_activity`, original-ID recovery to report no committed
+receipt, and every invariant/queue/drain check to pass. Other accounts continue
+using independent sessions, and the existing worker reconnects for recovery.
+
+This is PostgreSQL **backend process** loss during an uncommitted transaction.
+It is not PostgreSQL postmaster/cluster loss, an OS crash, or World process loss;
+it does not certify overlapping World ownership or automatic failover. Those
+scenarios retain separate acceptance requirements. Fault timings are not a
+performance baseline, including the fixture-only synchronous PID audit.
+
+Long runs retain the same synthetic-session and no-connected-client/combat limits
+as P4a. Report active-traffic time separately from baseline/tail/setup, and report
+successful throughput separately from offered attempts. An unrun command is not
+acceptance evidence; consult the corresponding checked-in evidence record.
+
+Soak fixture accounts now start with 1,000,000,000 Yang each and the two material
+sellers with 1,000,000 units each. This prevents finite short-probe stock from
+turning sustained Exchange traffic into `funds` rejections. The conservation
+audit uses that exact initial total; no replenishment occurs during measurement.
+These are fixture resources only, not gameplay balance or a production grant.
+
+Use `--load-rates 100` for targeted high-pressure diagnosis (the default remains
+`0 10 30 100`). On receipt mismatch, `receipt-audit.json` preserves counts and
+bounded exact missing/extra ID samples. A paused follow-up projection reports
+`recovery_required` when queue admission is busy, even if the transaction already
+committed. Never interpret that notification as a failed economic mutation.

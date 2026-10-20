@@ -128,7 +128,10 @@ func _pause(active: Dictionary, reason: String) -> void:
 
 func _failure(account: int, serial: int, peer: int, reason: String) -> void:
 	var active: Dictionary=_active.get(account,{})
-	if not active.is_empty() and active.serial==serial and active.peer==peer and active.stage=="paused": finished.emit(peer,active.id,{"ok":false,"error":reason})
+	if not active.is_empty() and active.serial==serial and active.peer==peer and active.stage=="paused":
+		# A paused follow-up projection can be busy AFTER the mutation committed.
+		# Keep the original intent recoverable; busy must never look definitive.
+		finished.emit(peer,active.id,{"ok":false,"error":"recovery_required" if reason=="busy" else reason})
 
 func _settle(active: Dictionary, result: Dictionary) -> void:
 	for participant: int in active.captures:
