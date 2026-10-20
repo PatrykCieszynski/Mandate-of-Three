@@ -1,5 +1,7 @@
 # Development and verification
 
+- [PostgreSQL bootstrap ownership](postgres-bootstrap.md) - P3r authority/schema preflight, shared Master/World composition, no fallback and orderly pool drain.
+
 - [PostgreSQL Auction runtime](postgres-auction-runtime.md) - P3q bounded public catalog/search, session-qualified native reads and RPC correlation.
 
 - [PostgreSQL Exchange matching runtime](postgres-exchange-matching-runtime.md) - P3p captured participant wallets, order/cancel/matching, private-view freshness and native recovery.

@@ -22,6 +22,9 @@ var _generation: int=0
 var _external: Dictionary={}
 var _storage_enabled:=false
 var _initialization_enabled:=false
+var _draining:=false
+
+func begin_drain() -> void: _draining=true
 
 func enable_initialization() -> void:
 	assert(_bindings.is_empty())
@@ -48,6 +51,7 @@ func _init(world: WorldServer, executor: RefCounted) -> void:
 ## Native World authentication proves the peer/ticket; PostgreSQL proves the
 ## account/character/epoch grant on every recovery/admission transaction.
 func attach(peer_id: int, context: Dictionary) -> bool:
+	if _draining: return false
 	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return false
 	if _world.session_ticket_fingerprint(peer_id,int(context.character))!=context.session_fingerprint: return false
 	if not _bindings.has(context.account_id) and _bindings.size()>=MAX_BINDINGS: return false
@@ -171,6 +175,7 @@ func request_outcome(peer_id: int, operation_id: String) -> Dictionary:
 	return {"queued":true}
 
 func submit(peer_id: int, operation_id: String, action: String, uid: String, revision: int, position: int) -> Dictionary:
+	if _draining: return {"queued":false,"error":"unavailable"}
 	var binding:=_for_peer(peer_id)
 	if binding.is_empty(): return {"queued":false,"error":"stale_session"}
 	if binding.stage!="ready" or _external.has(binding.context.account_id): return {"queued":false,"error":"recovery_required"}

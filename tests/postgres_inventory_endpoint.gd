@@ -93,15 +93,12 @@ var ui_snapshots: Array[Dictionary]=[]
 var client_processes: Array[int]=[]
 var fixture_dir: String
 var facts: int=0
-var wallet_execution: RefCounted
-var npc_execution: RefCounted
 var npc_adapter: NpcUiAdapter
 var shop_adapter: ShopUiAdapter
 var upgrade_adapter: UpgradeUiAdapter
 var storage_adapter: RefCounted
-var storage_execution: RefCounted
-var ground_execution: RefCounted
-var seller_execution: RefCounted
+var world_bootstrap: RefCounted
+var master_bootstrap: RefCounted
 var exchange_adapter: ExchangeUiAdapter
 var exchange_views: Array[Dictionary]=[]
 var market_adapter: MarketUiAdapter
@@ -177,10 +174,18 @@ func run() -> void:
 	master.name="Master"
 	add_child(master)
 	assert(master.create(BaseMultiplayerEndpoint.Role.SERVER,"127.0.0.1",18099)==OK)
+	var bootstrap_settings: Dictionary={"backend":"postgresql","connection_env":"MANDATE_PG_FIXTURE_CONNECTION","authority_id":str(pg.query("SELECT value FROM economy.meta WHERE key='economy_authority_id';").rows[0].value)}
+	master_bootstrap=load("res://source/server/world/database/postgres/economy_bootstrap_postgres.gd").new()
+	assert(await master_bootstrap.start_master(master,bootstrap_settings))
 	world.name="World"
 	world.database=database
 	world.world_manager=link
 	add_child(world)
+	world_bootstrap=load("res://source/server/world/database/postgres/economy_bootstrap_postgres.gd").new()
+	assert(await world_bootstrap.start_world(world,bootstrap_settings))
+	assert(database.economy_backend=="postgresql" and world_bootstrap.status().workers==8)
+	assert(not database.load_wallet(character) and not database.credit_account(21,100).ok)
+
 	assert(world.create(BaseMultiplayerEndpoint.Role.SERVER,"127.0.0.1",18098)==OK)
 	WorldServer.curr=world
 	link.name="ControlLink"
@@ -191,34 +196,6 @@ func run() -> void:
 	assert(link.create(BaseMultiplayerEndpoint.Role.CLIENT,"127.0.0.1",18099)==OK)
 	await wait_for(func() -> bool: return master.connected_worlds.size()==1)
 	world_id=link.multiplayer_api.get_unique_id()
-	control=Executor.new()
-	execution=Executor.new()
-	wallet_execution=Executor.new()
-	npc_execution=Executor.new()
-	storage_execution=Executor.new()
-	ground_execution=Executor.new()
-	seller_execution=Executor.new()
-	assert(seller_execution.start(connection,1,2))
-	assert(ground_execution.start(connection,1,2))
-	# Stay inside the disposable cluster's nine non-superuser slots.
-	assert(storage_execution.start(connection,1,2))
-	assert(control.start(connection,1,2) and execution.start(connection,2,2) and wallet_execution.start(connection,1,2) and npc_execution.start(connection,1,2))
-	while not control.is_ready() or not execution.is_ready() or not wallet_execution.is_ready() or not npc_execution.is_ready() or not storage_execution.is_ready() or not ground_execution.is_ready() or not seller_execution.is_ready():
-		control.poll()
-		execution.poll()
-		wallet_execution.poll()
-		npc_execution.poll()
-		storage_execution.poll()
-		ground_execution.poll()
-		seller_execution.poll()
-		await get_tree().process_frame
-	master.inventory_session_issuer=Issuer.new(master,control)
-	world.inventory_runtime=Runtime.new(world,execution)
-	world.wallet_runtime=load("res://source/server/world/database/postgres/wallet_runtime_postgres.gd").new(world,wallet_execution)
-	world.npc_runtime=load("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,npc_execution)
-	world.storage_runtime=load("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,storage_execution)
-	world.ground_item_runtime=load("res://source/server/world/database/postgres/ground_item_runtime_postgres.gd").new(world.inventory_runtime,ground_execution)
-	world.seller_runtime=load("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,seller_execution,world.wallet_runtime,true,true,true)
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
@@ -413,10 +390,9 @@ func run() -> void:
 	await phase(actor,"exit")
 	await phase(observer,"exit")
 	await wait_for(func() -> bool: return client_processes.all(func(pid: int) -> bool: return not OS.is_process_running(pid)))
-	assert(await world.flush_postgres_wallets(true))
-	control.begin_drain()
-	execution.begin_drain()
-	while not control.is_stopped() or not execution.is_stopped(): await get_tree().process_frame
+	assert(await world_bootstrap.shutdown_world())
+	assert(await master_bootstrap.shutdown_master())
+	assert(world_bootstrap.status().stopped and master_bootstrap.status().stopped)
 	for endpoint: BaseMultiplayerEndpoint in [link,world,master]:
 		endpoint.peer.close()
 		endpoint.multiplayer_api.auth_callback=Callable()

@@ -12,19 +12,22 @@ func _init(runtime: WorldDatabase) -> void:
 	_marketplace.account_changed.connect(market_account_changed.emit)
 
 func market_snapshot(character_id: int) -> Dictionary:
+	if _runtime.economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	return _marketplace.snapshot(character_id)
 
 func market_operation(character_id: int, action: String, payload: Dictionary) -> EconomyOperationResult:
+	if _runtime.economy_backend!="sqlite": return EconomyOperationResult.capture(character_id,0,action,"",{"ok":false,"error":"backend"},false)
 	return _marketplace.execute(character_id, action, payload)
 
 func market_query(character_id: int, action: String, payload: Dictionary) -> Dictionary:
+	if _runtime.economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	return _marketplace.query(character_id, action, payload)
 
 func claim_ground_item_operation(character_id: int, drop_uid: String, item: ItemInstance) -> EconomyOperationResult:
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary = {"ok":false, "error":"storage"}
 	var committed := false
-	if _runtime.db != null:
+	if _runtime.economy_backend=="sqlite" and _runtime.db != null:
 		var items := ItemStoreSqlite.new(_runtime.db)
 		response = items.claim_ground_item(character_id, drop_uid, item)
 		committed = items.committed
@@ -38,7 +41,7 @@ func storage_operation(character_id: int, uid: String, revision: int, source: St
 	var response: Dictionary = {"ok":false,"error":"storage"}
 	var committed := false
 	var replay := false
-	if _runtime.db != null:
+	if _runtime.economy_backend=="sqlite" and _runtime.db != null:
 		var storage := AccountStorageSqlite.new(_runtime.db)
 		response = storage.transfer_command(character_id,uid,revision,source,destination,position,operation_id)
 		committed = storage.committed
@@ -48,7 +51,7 @@ func storage_operation(character_id: int, uid: String, revision: int, source: St
 
 func storage_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
 	var response: Dictionary = {"ok":false,"error":"storage"}
-	if _runtime.db != null: response = AccountStorageSqlite.new(_runtime.db).transfer_receipt(character_id,operation_id)
+	if _runtime.economy_backend=="sqlite" and _runtime.db != null: response = AccountStorageSqlite.new(_runtime.db).transfer_receipt(character_id,operation_id)
 	return EconomyOperationResult.capture(character_id,_runtime.wallet_account_id(character_id),"storage.receipt",operation_id,response,false)
 
 func inventory_operation(character_id: int, action: String, uid: String, revision: int, position: int = -1, operation_id: String = "") -> EconomyOperationResult:
@@ -56,7 +59,7 @@ func inventory_operation(character_id: int, action: String, uid: String, revisio
 	var response: Dictionary = {"ok":false,"error":"storage"}
 	var committed := false
 	var replay := false
-	if _runtime.db != null:
+	if _runtime.economy_backend=="sqlite" and _runtime.db != null:
 		var items := ItemStoreSqlite.new(_runtime.db)
 		response = items.inventory_command(character_id,action,uid,revision,position,operation_id)
 		committed = items.committed
@@ -66,12 +69,12 @@ func inventory_operation(character_id: int, action: String, uid: String, revisio
 
 func inventory_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
 	var response: Dictionary = {"ok":false,"error":"storage"}
-	if _runtime.db != null: response = ItemStoreSqlite.new(_runtime.db).inventory_receipt(character_id,operation_id)
+	if _runtime.economy_backend=="sqlite" and _runtime.db != null: response = ItemStoreSqlite.new(_runtime.db).inventory_receipt(character_id,operation_id)
 	return EconomyOperationResult.capture(character_id,_runtime.wallet_account_id(character_id),"inventory.receipt",operation_id,response,false)
 
 func shop_purchase_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
 	var response := {"ok":false,"error":"storage"}
-	if _runtime.db != null:
+	if _runtime.economy_backend=="sqlite" and _runtime.db != null:
 		response = ShopStoreSqlite.new(_runtime.db).purchase_receipt(character_id, operation_id)
 	# Lookup is read-only, not another mutation or mutation receipt replay.
 	return EconomyOperationResult.capture(character_id, _runtime.wallet_account_id(character_id),
@@ -81,7 +84,7 @@ func purchase_shop_operation(character_id: int, shop: ShopDefinition, offer_id: 
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary
 	var committed := false
-	if _runtime.db == null or not _runtime.wallet_ready or not _runtime.runtime_wallets.has(account):
+	if _runtime.economy_backend!="sqlite" or _runtime.db == null or not _runtime.wallet_ready or not _runtime.runtime_wallets.has(account):
 		response = {"ok":false, "error":"storage"}
 	else:
 		# Store resolves the authoritative offer and capacity before wallet writes.
@@ -97,7 +100,7 @@ func purchase_shop_operation(character_id: int, shop: ShopDefinition, offer_id: 
 		response, committed, [account] if committed else [], bool(response.get("ok", false)) and not committed)
 
 func upgrade_candidate(character_id: int, uid: String, revision: int, recipe: UpgradeDefinition) -> Dictionary:
-	if _runtime.db == null: return {"ok":false,"error":"storage"}
+	if _runtime.economy_backend!="sqlite" or _runtime.db == null: return {"ok":false,"error":"storage"}
 	if recipe == null or not recipe.validation_errors().is_empty(): return {"ok":false,"error":"invalid_definition"}
 	return UpgradeStoreSqlite.new(_runtime.db).candidate(character_id, uid, revision, recipe)
 
@@ -105,7 +108,7 @@ func upgrade_operation(character_id: int, recipe: UpgradeDefinition, uid: String
 	var account := _runtime.wallet_account_id(character_id)
 	var response: Dictionary
 	var committed := false
-	if _runtime.db == null or not _runtime.wallet_ready or not _runtime.runtime_wallets.has(account):
+	if _runtime.economy_backend!="sqlite" or _runtime.db == null or not _runtime.wallet_ready or not _runtime.runtime_wallets.has(account):
 		response = {"ok":false, "error":"storage"}
 	elif recipe == null or not recipe.validation_errors().is_empty():
 		response = {"ok":false, "error":"invalid_definition"}
@@ -123,7 +126,7 @@ func upgrade_operation(character_id: int, recipe: UpgradeDefinition, uid: String
 
 func upgrade_receipt(character_id: int, operation_id: String) -> EconomyOperationResult:
 	var response: Dictionary = {"ok":false,"error":"storage"}
-	if _runtime.db != null:
+	if _runtime.economy_backend=="sqlite" and _runtime.db != null:
 		response = UpgradeStoreSqlite.new(_runtime.db).upgrade_receipt(character_id,operation_id)
 	return EconomyOperationResult.capture(character_id,_runtime.wallet_account_id(character_id),
 		"upgrade.receipt",operation_id,response,false)

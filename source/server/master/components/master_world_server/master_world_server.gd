@@ -9,9 +9,11 @@ var connected_worlds: Dictionary[int, Dictionary]
 ## Latest issued World ticket also fences delayed disconnect notifications.
 var _world_sessions: Dictionary[String, Dictionary] = {}
 ## Injected only by an opt-in PostgreSQL realm bootstrap/fixture. Default is SQLite.
+var economy_bootstrap: RefCounted
 var inventory_session_issuer: RefCounted
 
 func _process(_delta: float) -> void:
+	if economy_bootstrap!=null: economy_bootstrap.check_health()
 	if inventory_session_issuer!=null: inventory_session_issuer.poll()
 ## One current, bounded-lifetime request per account, recorded BEFORE World work.
 var _entry_attempts: Dictionary[String, Dictionary] = {}
@@ -282,6 +284,7 @@ func verified_inventory_ticket(world_id: int, username: String, token: String) -
 	return {"account_id":account.id,"character":int(session.character_id),"session_fingerprint":token.sha256_text()}
 
 func _prepare_world_ticket(world_id: int, username: String, token: String, character_id: int, account_id: int) -> Dictionary:
+	if economy_bootstrap!=null and not economy_bootstrap.ready(): return {"ok":false,"error":ERR_UNAVAILABLE}
 	register_world_session(world_id,username,token,character_id,account_id)
 	if inventory_session_issuer==null: return {"ok":true,"context":{}}
 	var request: Dictionary=inventory_session_issuer.request_grant(world_id,username,token)

@@ -9,12 +9,14 @@ var _executor: RefCounted # Exclusive control pool; not the World runtime pool.
 var _accounts: Dictionary={}
 var _jobs: Dictionary={}
 var _generation: int=0
+var _draining:=false
 
 func _init(master: WorldManagerServer, executor: RefCounted) -> void:
 	_master=master
 	_executor=executor
 
 func request_grant(world_id: int, username: String, token: String) -> Dictionary:
+	if _draining: return {"queued":false,"done":true,"result":{"ok":false,"error":"unavailable"}}
 	var identity: Dictionary=_master.verified_inventory_ticket(world_id,username,token)
 	if identity.is_empty(): return {"queued":false,"done":true,"result":{"ok":false,"error":"stale_session"}}
 	if not _executor.is_ready(): return {"queued":false,"done":true,"result":{"ok":false,"error":"unavailable"}}
@@ -100,3 +102,8 @@ func _finish_revoke(entry: Dictionary) -> void:
 	entry.request.result={"ok":true}
 	entry.request.done=true
 	_accounts.erase(entry.username) # Idle logouts must not exhaust active capacity.
+
+func begin_drain() -> void:
+	_draining=true
+	for username: String in _accounts.keys(): retire(username,_accounts[username].token)
+func drained() -> bool: return _accounts.is_empty() and _jobs.is_empty()
