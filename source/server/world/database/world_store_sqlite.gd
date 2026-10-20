@@ -90,7 +90,7 @@ func save_progression(players: Array[PlayerResource]) -> bool:
 	return true
 
 
-func save_player(player: PlayerResource) -> void:
+func save_player(player: PlayerResource) -> bool:
 	var attributes_json: String = JSON.stringify(player.attributes)
 	var inventory_json: String = JSON.stringify(player.inventory)
 	var equipment_json: String = JSON.stringify(player.equipment)
@@ -121,7 +121,7 @@ func save_player(player: PlayerResource) -> void:
 
 	var joined_guild_ids_json: String = JSON.stringify(player.joined_guild_ids)
 
-	db.query_with_bindings(
+	return db.query_with_bindings(
 		"INSERT OR REPLACE INTO players("
 		+ "player_id, account_name, display_name, skin_id, level, experience, available_attributes_points, "
 		+ "profile_status, profile_animation, "
@@ -196,7 +196,8 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 	player.display_title = "Alpha tester"
 	# Leave defaults to PlayerResource where possible.
 	if not db.query("BEGIN IMMEDIATE;"): return -1
-	save_player(player)
+	if not save_player(player):
+		db.query("ROLLBACK;");return -1
 	if economic_initialization and not db.query_with_bindings("INSERT OR IGNORE INTO account_wallets(account_id,yang) SELECT master_account_id,? FROM accounts WHERE account_name=? AND master_account_id IS NOT NULL;", [STARTING_YANG, account_name]):
 		db.query("ROLLBACK;")
 		return -1

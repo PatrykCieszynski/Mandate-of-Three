@@ -38,3 +38,5 @@
 Use the repository's pinned Godot/runtime versions; don't treat a historical one-off test as a production acceptance gate.
 
 - [PostgreSQL normal process startup (P3s)](postgres-process-startup.md)
+
+- [PostgreSQL operator maintenance barrier (P3t)](postgres-maintenance.md)

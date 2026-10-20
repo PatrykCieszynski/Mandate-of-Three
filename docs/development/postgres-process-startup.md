@@ -103,7 +103,9 @@ Master's graceful window-close path drains grant revocations before exiting.
 A blocked economic outcome still refuses completion. Headless signals are not a
 guarantee of Godot notification delivery; use the existing authenticated World
 shutdown RPC/dashboard path, and supervise Master separately after World stops.
-This stage does not add a PostgreSQL backup or operator shutdown API for Master.
+P3s did not add an operator barrier. [P3t maintenance](postgres-maintenance.md)
+now supplies authenticated, acknowledged realm quiescence; it still does not
+implement PostgreSQL backup/restore or process supervision.
 
 ## Verification
 

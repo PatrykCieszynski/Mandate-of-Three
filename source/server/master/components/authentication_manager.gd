@@ -15,6 +15,7 @@ var account_collection_path: String:
 			return "res://source/server/master/account_collection.tres"
 		return "user://master/account_collection.tres"
 var _configured_collection_path: String=""
+var _frozen_checkpoint:=false
 var active_accounts: Dictionary[StringName, AccountResource]
 
 
@@ -62,10 +63,17 @@ func load_account_collection() -> void:
 
 
 func save_account_collection() -> void:
+	if _frozen_checkpoint: return
 	# Ensure user://master/ exists before the first save in an export build.
 	if not OS.has_feature("editor"):
 		DirAccess.make_dir_recursive_absolute("user://master")
-	ResourceSaver.save(account_collection, account_collection_path)
+	checkpoint_accounts()
+
+func checkpoint_accounts(freeze: bool = false) -> bool:
+	if _frozen_checkpoint: return true
+	var saved: bool=account_collection!=null and ResourceSaver.save(account_collection,account_collection_path)==OK
+	if saved and freeze: _frozen_checkpoint=true
+	return saved
 
 
 func username_exists(username: String) -> bool:

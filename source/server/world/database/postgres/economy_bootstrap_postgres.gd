@@ -17,7 +17,18 @@ func authority_id() -> String: return str(_settings.get("authority_id",""))
 func ready() -> bool: return state==State.READY
 func sessions_valid() -> bool: return state in [State.READY,State.DRAINING,State.BLOCKED]
 func status() -> Dictionary:
-	return {"state":State.keys()[state],"error":error,"pools":_pools.size(),"workers":(8 if _world!=null else 1) if ready() else 0,"stopped":_pools.values().all(func(pool: RefCounted)->bool:return pool.is_stopped())}
+	var pending: int=0
+	var ready_workers: int=0
+	for key: String in _pools:
+		var pool: RefCounted=_pools[key]
+		pending+=pool.pending_count()
+		if pool.is_ready(): ready_workers+=WORLD_POOLS.get(key,1)
+	var unsettled: Array[String]=[]
+	if _world!=null:
+		var domains: Dictionary={"wallet":_world.wallet_runtime,"npc":_world.npc_runtime,"storage":_world.storage_runtime,"ground":_world.ground_item_runtime,"market":_world.seller_runtime}
+		for key: String in domains:
+			if domains[key]!=null and not domains[key].drained(): unsettled.append(key)
+	return {"unsettled_domains":unsettled,"database_probe":false,"state":State.keys()[state],"error":error,"pools":_pools.size(),"workers":(8 if _world!=null else 1) if ready() else 0,"workers_ready":ready_workers,"pending":pending,"ready":ready(),"stopped":_pools.values().all(func(pool: RefCounted)->bool:return pool.is_stopped())}
 
 func start_world(world: WorldServer, settings: Dictionary) -> bool:
 	if state!=State.NEW or world==null or not world.is_inside_tree() or world.database==null or world.economy_bootstrap!=null or world.inventory_runtime!=null or world.wallet_runtime!=null or world.npc_runtime!=null or world.storage_runtime!=null or world.ground_item_runtime!=null or world.seller_runtime!=null or not world.connected_players.is_empty(): return false
@@ -146,6 +157,7 @@ func shutdown_world() -> bool:
 	return true
 
 func shutdown_master() -> bool:
+	if _master!=null and stopped(): return true
 	if _master!=null and state==State.FAILED and status().stopped: return true
 	if _master==null or state not in [State.READY,State.BLOCKED,State.DRAINING]: return false
 	state=State.DRAINING

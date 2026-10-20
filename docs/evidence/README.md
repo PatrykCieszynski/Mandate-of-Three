@@ -43,3 +43,5 @@ Recorded D2 limitations: Linux runtime not verified, actual native-only SQL timi
 This directory retains reproducible raw evidence. The documentation cleanup removes obsolete *plans*, not Auction D2 performance data on `shop`. Large diagnostic P0 data needs separate review after integration.
 
 - [PostgreSQL normal process startup (P3s)](postgres-p3s/README.md)
+
+- [PostgreSQL operator maintenance barrier (P3t)](postgres-p3t/README.md)
