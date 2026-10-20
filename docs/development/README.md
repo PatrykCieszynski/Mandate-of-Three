@@ -1,5 +1,7 @@
 # Development and verification
 
+- [PostgreSQL Auction runtime](postgres-auction-runtime.md) - P3q bounded public catalog/search, session-qualified native reads and RPC correlation.
+
 - [PostgreSQL Exchange matching runtime](postgres-exchange-matching-runtime.md) - P3p captured participant wallets, order/cancel/matching, private-view freshness and native recovery.
 
 - [PostgreSQL Exchange ledger runtime](postgres-exchange-ledger-runtime.md) - P3o item/Storage conversions, coherent projections and native client journals; matching remains separate.

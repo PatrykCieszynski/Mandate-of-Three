@@ -12,7 +12,8 @@ and item-claim execution with client journal recovery. P3n connects optional
 purchase/proceeds settlement and authenticated shop visits. P3o connects optional
 Exchange item/Storage deposits and withdrawals with journal recovery. P3p adds
 optional order/cancel/matching, captured participant wallets and World-local
-ledger projection freshness. **Remaining runtime domains/bootstrap and P4 are not completed. Normal
+ledger projection freshness. P3q connects optional public Auction catalog/search
+through bounded, session-qualified native reads. **Operational bootstrap and P4 are not completed. Normal
 gameplay remains SQLite.** This roadmap implements the accepted
 [Economy C1–C5](../architecture/economy/README.md) and
 [World Process topology](../architecture/world-instance-architecture.md); every
@@ -34,7 +35,7 @@ realm has not yet been enabled or rehearsed.
 | NPC Shop / Upgrade | Normal startup uses `WorldEconomyService` and SQLite | P3j optionally connects authenticated RPCs, bounded PG transactions, captured pending Yang and current Inventory/wallet publication. Production bootstrap remains |
 | Account Storage | `WorldEconomyService` still uses SQLite | P3k optionally connects shared custody, stable client journal recovery and combined account-revision projections; production bootstrap and distributed publication remain |
 | Player Shop / claims / Exchange | `MarketplaceService` constructs `MarketStoreSqlite` / `ExchangeStoreSqlite` | P3m optionally connects seller/item claims; P3n adds purchases/proceeds with captured income, buyer Inventory/wallet reconciliation, seller private refresh and journals. P3o connects Exchange ledger conversions; P3p adds order/cancel/matching with participant wallet captures and local projection generations. Cross-process publication and production bootstrap remain |
-| Auction reads | `AuctionQueryService` / `AuctionSociReader` uses SOCI's **sqlite3** read-only WAL reader | Integrate PG read scheduling/search with the selected realm backend; SOCI usage alone does not mean PG adoption |
+| Auction reads | `AuctionQueryService` / `AuctionSociReader` uses SOCI's **sqlite3** read-only WAL reader | P3q optionally connects the catalog and indexed public search through a World-scoped bounded scheduler, session-qualified native worker reads and existing browser RPCs. Normal startup/operational PG ownership remain |
 | Character/profile and other World data | `WorldStoreSqlite` still saves character/quest/guild data; `MailStore` uses SQLite; progression checkpoints stay here | These are not automatically covered by the realm Economy migration. Decide/retain their explicit boundary and identity mappings, or scope a separate port before claiming SQLite can be removed entirely |
 
 Master credentials are a separate existing `AccountResourceCollection` persisted
@@ -55,8 +56,10 @@ Remaining deliverables before an Economy cutover are substantial:
    SQLite economic runtime paths; parity fixtures/reference code and separately
    retained profile/progression storage are distinct cleanup decisions.
 
-After P3p, the next integration priority is PostgreSQL Auction catalog/search
-adoption, followed by operational bootstrap/lifecycle and full PG gameplay acceptance. No percentage or final PR count is asserted: unfinished runtime domains
+After P3q, the next integration priority is operational PostgreSQL bootstrap and
+backend ownership/lifecycle, followed by full PG gameplay acceptance and P4.
+The listed economic domains now have optional execution/read paths; that alone
+does not create a playable PostgreSQL realm or authorize removing SQLite. No percentage or final PR count is asserted: unfinished runtime domains
 and P4 are separate acceptance
 gates, not documentation-only leftovers.
 
@@ -413,6 +416,16 @@ and native journals recover lost reply/relog without automatic mutation replay.
 Ten actual clients retain prior contracts and add fill/reserve/cancel recovery.
 Public Auction, bootstrap, distributed publication and P4 remain open; normal
 startup stays SQLite. No schema or public RPC signature changes.
+
+**P3q progress:** [Auction runtime](../development/postgres-auction-runtime.md)
+adds optional catalog/search RPC delivery through the existing bounded native
+pool. One active search and bounded per-account queue/rates apply across maps.
+Current delegated session authorizes the read, rows project on World, and RPC IDs
+deduplicate before validation/limiting. Timeout retains its native slot, stale
+sessions suppress delivery and drain joins no active SQL. The native 10k fixture
+records worker latency/World physics gaps; actual client/browser coverage retains
+prior economic guarantees. No schema/backend switch; operational bootstrap,
+full PG gameplay, distributed publication and P4 remain open.
 
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
