@@ -49,6 +49,7 @@ func refused(settings: Dictionary, reason: String) -> void:
 	assert(not world.database.load_wallet(1) and not world.database.credit_account(1,1).ok)
 	assert(not world.database.market_command(1,"open",{}).ok)
 	assert(not world.database.prepare_account_wallets({}).ok)
+	assert(await owner.shutdown_world(),"failed/closed startup permits ordinary process exit")
 func _ready() -> void:
 	Engine.max_fps=120
 	get_tree().create_timer(55).timeout.connect(func()->void:get_tree().quit(1))
@@ -79,6 +80,9 @@ func _ready() -> void:
 	await refused(config,"schema")
 	assert(pg.execute("UPDATE economy.schema_versions SET version=1 WHERE feature='inventory';").ok)
 	await refused(config,"profiles")
+	var profile_config:=config.duplicate();profile_config.profile_id="e".repeat(32)
+	await refused(profile_config,"profiles")
+	assert(pg.query("SELECT value FROM economy.meta WHERE key='world_profile_id';").rows.is_empty(),"missing profiles cannot claim the PG realm")
 	# Real connection exhaustion after a successful preflight closes every pool.
 	var pressure: Array=[]
 	for index: int in 2:

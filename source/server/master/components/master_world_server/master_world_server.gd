@@ -26,6 +26,13 @@ func _ready() -> void:
 		"world-manager-server",
 		CmdlineUtils.get_parsed_args().get("config", "res://data/config/master_config.cfg")
 	)
+	var settings: Dictionary=preload("res://source/server/world/database/postgres/economy_bootstrap_settings.gd").load_config(CmdlineUtils.get_parsed_args().get("config","res://data/config/master_config.cfg"))
+	if not settings.ok:
+		push_error("Master economy startup refused: "+str(settings.error));return
+	if settings.backend=="postgresql":
+		var owner:=preload("res://source/server/world/database/postgres/economy_bootstrap_postgres.gd").new()
+		if not await owner.start_master(self,settings):
+			push_error("Master economy startup refused: "+owner.error);return
 	create(Role.SERVER, configuration.bind_address, configuration.port)
 
 
@@ -60,7 +67,12 @@ func _on_peer_disconnected(peer_id: int) -> void:
 @rpc("any_peer")
 func fetch_server_info(info: Dictionary) -> void:
 	var game_server_id: int = multiplayer_api.get_remote_sender_id()
+	var expected: String="postgresql" if economy_bootstrap!=null else "sqlite"
+	if str(info.get("economy_backend","sqlite"))!=expected: return
+	if economy_bootstrap!=null and not connected_worlds.is_empty() and not connected_worlds.has(game_server_id): return # One profile/character-ID owner in P3.
+	if economy_bootstrap!=null and (not economy_bootstrap.ready() or info.get("economy_authority_id","")!=economy_bootstrap.authority_id()): return
 	connected_worlds[game_server_id] = info
+	connected_worlds[game_server_id]["economy_ready"]=expected=="sqlite"
 	# Stamp connect time so the dashboard can show "connected for X minutes".
 	connected_worlds[game_server_id]["connected_at"] = int(Time.get_unix_time_from_system())
 	var identities := {}
@@ -77,9 +89,20 @@ func fetch_server_info(info: Dictionary) -> void:
 ## (player rosters, chat tail, server logs) — that must never reach a game client,
 ## so every world-list payload (login/list responses + gateway broadcasts) is
 ## projected through here. The raw roster stays server-side for handoff/dashboard.
+@rpc("any_peer")
+func economy_identity_ready(authority: String) -> void:
+	var peer: int=multiplayer_api.get_remote_sender_id()
+	if economy_bootstrap==null or not economy_bootstrap.ready() or authority!=economy_bootstrap.authority_id() or not connected_worlds.has(peer): return
+	connected_worlds[peer]["economy_ready"]=true
+	gateway_manager.update_worlds_info.rpc(get_public_worlds())
+
+func world_ready(world_id: int) -> bool:
+	return connected_worlds.has(world_id) and (economy_bootstrap==null or (economy_bootstrap.ready() and connected_worlds[world_id].get("economy_ready",false)))
+
 func get_public_worlds() -> Dictionary:
 	var out: Dictionary = {}
 	for world_id: int in connected_worlds:
+		if not world_ready(world_id): continue
 		var info: Dictionary = connected_worlds[world_id].get("info", {})
 		out[world_id] = {
 			"info": {
@@ -284,7 +307,7 @@ func verified_inventory_ticket(world_id: int, username: String, token: String) -
 	return {"account_id":account.id,"character":int(session.character_id),"session_fingerprint":token.sha256_text()}
 
 func _prepare_world_ticket(world_id: int, username: String, token: String, character_id: int, account_id: int) -> Dictionary:
-	if economy_bootstrap!=null and not economy_bootstrap.ready(): return {"ok":false,"error":ERR_UNAVAILABLE}
+	if not world_ready(world_id): return {"ok":false,"error":ERR_UNAVAILABLE}
 	register_world_session(world_id,username,token,character_id,account_id)
 	if inventory_session_issuer==null: return {"ok":true,"context":{}}
 	var request: Dictionary=inventory_session_issuer.request_grant(world_id,username,token)

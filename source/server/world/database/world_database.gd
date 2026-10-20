@@ -2,6 +2,8 @@ class_name WorldDatabase
 extends Node
 
 
+var economy_profile_id: String=""
+
 signal experience_awarded(owner_id: int, amount: int, levels_gained: int, level: int)
 
 func award_experience(player: PlayerResource, amount: int) -> void:
@@ -162,6 +164,7 @@ func add_yang(character_id: int, amount: int) -> bool:
 	return true
 
 func flush_wallet(character_id: int = -1) -> bool:
+	if economy_backend=="postgresql" and WorldServer.curr!=null and WorldServer.curr.economy_bootstrap!=null and WorldServer.curr.economy_bootstrap.stopped(): return true
 	var runtime:=_postgres_wallet_runtime()
 	if runtime!=null:
 		if character_id<0:
@@ -332,6 +335,32 @@ func _postgres_wallet_runtime() -> RefCounted:
 	var world:=WorldServer.curr
 	return null if world==null or world.database!=self else world.wallet_runtime
 
+
+## Explicit opt-in profile file. Refuse legacy economy data; never import it.
+func start_profile_database(path: String) -> bool:
+	economy_backend="postgresql"
+	wallet_ready=false
+	if path.is_empty() or not path.ends_with(".db"): return false
+	database_path=path
+	if DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))!=OK: return false
+	open_database()
+	if not db.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('account_wallets','item_instances');"): return false
+	var tables: Array=db.query_result.duplicate(true)
+	for row: Dictionary in tables:
+		if not db.query("SELECT 1 FROM "+str(row.name)+" LIMIT 1;") or not db.query_result.is_empty(): return false
+	WorldSchema.ensure_schema(db)
+	if not db.query("SELECT 1 FROM players LIMIT 1;"): return false
+	if not db.query("SELECT value FROM meta WHERE key='pg_profile_id';"): return false
+	if db.query_result.is_empty():
+		var identity:=Crypto.new().generate_random_bytes(16).hex_encode()
+		if not db.query_with_bindings("INSERT INTO meta(key,value) VALUES('pg_profile_id',?);",[identity]): return false
+		if not db.query("SELECT value FROM meta WHERE key='pg_profile_id';"): return false
+	economy_profile_id=str(db.query_result[0].value)
+	if not ItemInstance.valid_uid(economy_profile_id): return false
+	store=WorldStoreSqlite.new(db)
+	store.economic_initialization=false
+	mail_store=MailStore.new(db)
+	return true
 
 func start_database(world_info: Dictionary) -> void:
 	if auction_queries!=null and auction_queries.reader.dispatcher!=null:

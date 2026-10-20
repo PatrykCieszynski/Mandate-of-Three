@@ -43,6 +43,18 @@ func _ready() -> void:
 	if world_info.has("error"):
 		printerr("World server loading configuration failed.")
 	else:
-		$Database.start_database(world_info)
+		var settings: Dictionary=preload("res://source/server/world/database/postgres/economy_bootstrap_settings.gd").load_config(CmdlineUtils.get_parsed_args().get("config","res://data/config/world_config.cfg"))
+		if not settings.ok:
+			push_error("World economy startup refused: "+str(settings.error));return
+		if settings.backend=="postgresql":
+			if not $Database.start_profile_database(str(settings.profile_path)):
+				push_error("World economy startup refused: profiles");return
+			settings["profile_id"]=$Database.economy_profile_id
+			var owner:=preload("res://source/server/world/database/postgres/economy_bootstrap_postgres.gd").new()
+			if not await owner.start_world($WorldServer,settings):
+				push_error("World economy startup refused: "+owner.error);return
+			$Database.wallet_ready=false # Trusted Master manifest is still required.
+		else:
+			$Database.start_database(world_info)
 		$WorldManagerClient.start_client_to_master_server(world_info)
 		$WorldServer.start_world_server()

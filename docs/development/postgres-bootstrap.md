@@ -2,9 +2,10 @@
 
 P3r supplies one explicit bootstrap API for the optional Master and World Economy
 owners. The ten-client acceptance fixture now uses it instead of manually creating
-seven pools and wiring individual domains. Normal `WorldMain`/Master startup still
-uses SQLite: this package does not install a process backend selector, import
-identities or approve a cutover.
+seven pools and wiring individual domains. P3r itself did not select a process
+backend. [P3s process startup](postgres-process-startup.md) now supplies that opt-in
+configuration and trusted identity integration. SQLite remains the default;
+neither milestone approves a production cutover.
 
 ## Complete startup guarantee
 
@@ -123,9 +124,10 @@ offline provisioning, profile/XP writes with no SQLite starter wallet, uncertain
 settlement during shutdown and the ten actual-client economic flows. Run shared
 18098/18099 network suites sequentially. See [evidence](../evidence/postgres-p3r/README.md).
 
-Next is normal process startup/configuration plus trusted identity/creation-manifest
-integration and readiness publication, using this owner rather than duplicating
-fixture wiring. Full Gateway → Master → World → PG gameplay, operator health/backup,
-handoff, P4 load/soak/import/restore and explicit cutover approval remain open.
+The subsequent [P3s integration](postgres-process-startup.md) supplies normal
+startup/configuration, trusted identity/creation-manifest integration and readiness
+publication using this owner, including Gateway → Master → World → PG entry/equip/
+relog/restart acceptance. Operator health/backup, handoff, broader gameplay/load/
+soak/import/restore and explicit cutover approval remain open.
 This does not enable multi-World hosting, remove profile SQLite, verify physical
 CEF input or claim Linux acceptance.

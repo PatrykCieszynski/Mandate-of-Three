@@ -41,3 +41,5 @@ The `shop` branch contains the Auction D0–D2 reports and evidence under `docs/
 Recorded D2 limitations: Linux runtime not verified, actual native-only SQL timing unavailable from the public addon API, and economy writes still cause measurable simulation tick tails. A benchmark passing on the developer's Windows host is not a production SLA.
 
 This directory retains reproducible raw evidence. The documentation cleanup removes obsolete *plans*, not Auction D2 performance data on `shop`. Large diagnostic P0 data needs separate review after integration.
+
+- [PostgreSQL normal process startup (P3s)](postgres-p3s/README.md)

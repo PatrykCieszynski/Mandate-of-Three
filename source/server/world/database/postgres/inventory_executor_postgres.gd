@@ -10,6 +10,7 @@ const WalletSession = preload("res://source/server/world/database/postgres/walle
 const NpcSession = preload("res://source/server/world/database/postgres/npc_session_postgres.gd")
 const StorageSession = preload("res://source/server/world/database/postgres/storage_session_postgres.gd")
 const GroundSession = preload("res://source/server/world/database/postgres/ground_item_session_postgres.gd")
+const Identity = preload("res://source/server/world/database/postgres/identity_bootstrap_postgres.gd")
 const Preflight = preload("res://source/server/world/database/postgres/economy_preflight_postgres.gd")
 const AuctionSession = preload("res://source/server/world/database/postgres/auction_session_postgres.gd")
 const SellerSession = preload("res://source/server/world/database/postgres/seller_session_postgres.gd")
@@ -89,7 +90,8 @@ class SessionWorker extends RefCounted:
 			if database.is_open() or _open(database):
 				var intent: String=str(job.get("intent",""))
 				var store: RefCounted
-				if intent=="economy_preflight": store=Preflight.new(database)
+				if intent in ["identity_bind","profile_bind"]: store=Identity.new(database)
+				elif intent=="economy_preflight": store=Preflight.new(database)
 				elif intent=="auction_search": store=AuctionSession.new(database)
 				elif intent in ["seller_execute","seller_receipt","seller_snapshot","seller_visit","seller_prepare"]: store=SellerSession.new(database)
 				elif intent in ["item_initialize","ground_claim","ground_receipt"]: store=GroundSession.new(database)
@@ -99,7 +101,9 @@ class SessionWorker extends RefCounted:
 				elif intent.is_empty(): store=Items.new(database)
 				elif intent in ["session_install","session_inspect","session_revoke","session_ready"]: store=Sessions.new(database)
 				else: store=Intents.new(database)
-				if intent=="economy_preflight": result=store.verify(job.authority_id)
+				if intent=="profile_bind": result=store.bind_profile(job.profile_id)
+				elif intent=="identity_bind": result=store.bind(job.account_id,job.character)
+				elif intent=="economy_preflight": result=store.verify(job.authority_id)
 				elif intent=="auction_search": result=store.search(job.session,job.body)
 				elif intent=="seller_execute": result=store.execute(job.session,job.action,job.body,job.get("income",0),job.get("token",""),job.get("captures",{}),job.get("participants",[]))
 				elif intent=="seller_prepare": result=store.prepare(job.session,job.action,job.body)
@@ -236,6 +240,13 @@ func submit_session_snapshot(context: Dictionary, include_storage: bool = false)
 func submit_seller(context: Dictionary, action: String, body: Dictionary, income: int = 0, token: String = "", captures: Dictionary = {}, participants: Array = []) -> Dictionary:
 	if action not in SellerSession.ACTIONS or not MarketRequestRules.valid_command(action,body): return {"queued":false,"error":"request"}
 	return _session_job(context,"seller_execute",body.command_id,{"action":action,"body":body.duplicate(true),"income":income,"token":token,"captures":captures.duplicate(true),"participants":participants.duplicate()})
+
+func submit_profile_binding(profile: String) -> Dictionary:
+	return _submit({"character":1,"operation_id":"profile","lookup":false,"intent":"profile_bind","profile_id":profile,"control":true})
+
+func submit_identity_binding(account: int, character: int) -> Dictionary:
+	if account<=0 or character<=0: return {"queued":false,"error":"owner"}
+	return _submit({"character":character,"operation_id":"identity","lookup":false,"intent":"identity_bind","account_id":account,"control":true})
 
 func submit_economy_preflight(authority: String) -> Dictionary:
 	if not ItemInstance.valid_uid(authority): return {"queued":false,"error":"request"}

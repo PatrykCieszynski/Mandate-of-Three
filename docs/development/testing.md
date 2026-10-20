@@ -711,3 +711,20 @@ retain 12, including the deliberate exhaustion case. `inventory-session-bridge`
 and normal SQLite `market_network` retain admission/default-path regressions.
 Run shared 18098/18099 suites sequentially. See [bootstrap](postgres-bootstrap.md)
 and its evidence for normal process/identity/production gates that remain open.
+
+
+## PostgreSQL normal process startup (P3s, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite process-startup`
+starts ordinary Gateway/Master/World role scenes on private random ports and
+owned account/profile paths. A real client covers identity conflict refusal,
+same-profile recovery, session grants, equip, relog and full server restart.
+Wallet initialization is idempotent; foreign ownership and another profile ID
+are refused. All native pools stop before process exit; SQLite wallet rows are
+absent and its legacy item table remains empty. Child logs must be script-error
+free. The temporary wrapper only controls shutdown/diagnostics, not application
+startup, grant or economic behavior. See [startup](postgres-process-startup.md).
+`bootstrap`, `inventory-session-bridge` and SQLite `market_network` retain focused
+composition/session/default-path regressions. Shared 18098/18099 suites remain
+sequential. This is not PG production cutover, combat soak, Linux or physical CEF
+acceptance.

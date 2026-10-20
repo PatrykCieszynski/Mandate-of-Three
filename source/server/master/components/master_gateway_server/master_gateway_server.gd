@@ -160,7 +160,7 @@ func create_player_character_request(
 	if not account:
 		gateway_response.rpc_id(gateway_id, request_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS, "msg": "account not found."})
 		return
-	if not world_manager.connected_worlds.has(world_id):
+	if not world_manager.world_ready(world_id):
 		gateway_response.rpc_id(gateway_id, request_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS, "msg": "world not found."})
 		return
 	var attempt_id := world_manager.begin_entry_attempt(account.username, world_id, gateway_id, request_id, &"create")
@@ -174,7 +174,7 @@ func create_player_character_request(
 
 func request_player_characters(gateway_id: int, request_id: int, username: String, world_id: int) -> void:
 	if (
-		world_manager.connected_worlds.has(world_id)
+		world_manager.world_ready(world_id)
 		and authentication_manager.account_collection.collection.has(username)
 	):
 		var account: AccountResource = authentication_manager.account_collection.collection[username]
@@ -194,7 +194,7 @@ func request_enter_world(gateway_id: int, request_id: int, username: String, wor
 		gateway_response.rpc_id(gateway_id,request_id,{"error":GatewayAPI.ERR_BAD_CREDENTIALS})
 		return
 
-	if not world_manager.connected_worlds.has(world_id):
+	if not world_manager.world_ready(world_id):
 		return
 
 	var attempt_id := world_manager.begin_entry_attempt(account.username, world_id, gateway_id, request_id, &"login", character_id)

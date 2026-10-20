@@ -10,13 +10,19 @@ var account_collection: AccountResourceCollection
 ## dev/debug accounts never leak into the live environment.
 var account_collection_path: String:
 	get:
+		if not _configured_collection_path.is_empty(): return _configured_collection_path
 		if OS.has_feature("editor"):
 			return "res://source/server/master/account_collection.tres"
 		return "user://master/account_collection.tres"
+var _configured_collection_path: String=""
 var active_accounts: Dictionary[StringName, AccountResource]
 
 
 func _ready() -> void:
+	var config:=ConfigFile.new()
+	if config.load(CmdlineUtils.get_parsed_args().get("config","res://data/config/master_config.cfg"))==OK:
+		_configured_collection_path=str(config.get_value("authentication","account_collection_path",""))
+	if not _configured_collection_path.is_empty(): DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_configured_collection_path.get_base_dir()))
 	tree_exiting.connect(save_account_collection)
 	load_account_collection()
 

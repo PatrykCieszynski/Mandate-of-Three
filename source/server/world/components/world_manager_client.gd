@@ -41,7 +41,9 @@ func _on_connection_succeeded() -> void:
 			"port": world_info.port,
 			"address": reported_address,
 			"info": world_info,
-			"population": world_server.connected_players.size()
+			"population": world_server.connected_players.size(),
+			"economy_backend":database.economy_backend,
+			"economy_authority_id":world_server.economy_bootstrap.authority_id() if world_server.economy_bootstrap!=null else ""
 		}
 	)
 	# Start the heartbeat once we're attached. Master uses it to drive the
@@ -147,7 +149,7 @@ func master_shutdown() -> void:
 	if world_server == null or database == null:
 		return
 	ServerLog.info("Dashboard 'shutdown' triggered — saving + quitting.")
-	if not await world_server.flush_postgres_wallets(true):
+	if not await world_server.shutdown_economy():
 		push_error("Graceful shutdown cancelled: PostgreSQL wallet checkpoint unresolved.")
 		return
 	if database.save_all_connected(world_server.connected_players) < 0:
@@ -347,6 +349,7 @@ func _on_connection_failed() -> void:
 
 
 func _on_server_disconnected() -> void:
+	if database.economy_backend=="postgresql": database.wallet_ready=false
 	if world_server!=null and (world_server.inventory_runtime!=null or world_server.wallet_runtime!=null):
 		# An isolated PG World must not retain gameplay ownership after losing its
 		# issuer. Default SQLite reconnect behavior remains unchanged.
@@ -378,6 +381,18 @@ func player_disconnected(_username: String, _session_token: String) -> void:
 
 @rpc("authority")
 func account_identity_manifest(identities: Dictionary) -> void:
+	if database.economy_backend=="postgresql":
+		database.wallet_ready=false
+		var audit: Dictionary=database.store.audit_account_identities(identities)
+		if not audit.ok or not audit.orphaned.is_empty() or not audit.mismatched.is_empty():
+			push_error("PG identity manifest refused: profile identity mismatch");return
+		for username: String in audit.unbound:
+			if not identities[username] is int or identities[username]<=0 or not database.store.bind_account_identity(username,identities[username]): return
+		if not world_server.economy_bootstrap.ready(): return
+		database.wallet_ready=true
+		economy_identity_ready.rpc_id(1,world_server.economy_bootstrap.authority_id())
+		ServerLog.info("PostgreSQL identity manifest ready.")
+		return
 	var result := database.prepare_account_wallets(identities)
 	if not result.ok:
 		ServerLog.error("Account wallet migration refused: %s" % str(result))
@@ -385,11 +400,19 @@ func account_identity_manifest(identities: Dictionary) -> void:
 	ServerLog.info("Account wallet identity/migration ready.")
 	if not await database.start_auction_queries(): ServerLog.error("Auction reader unavailable; economy remains operational.")
 
+@rpc("any_peer")
+func economy_identity_ready(_authority: String) -> void: pass
+
 @rpc("authority")
 func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary, account_id: int, attempt_id: String) -> void:
 	var character_id := 0
 	if database.wallet_ready and database.store.bind_account_identity(username,account_id,true):
 		character_id = database.create_player_character(username, character_data)
+		if character_id>0 and database.economy_backend=="postgresql":
+			var bound: Dictionary=await world_server.inventory_runtime.ensure_identity(account_id,character_id)
+			# Keep the committed profile on failure. Login/retry converges the SAME
+			# mapping; never delete/recreate it or repeat a starter grant.
+			if not bound.ok or not database.wallet_ready or not world_server.economy_bootstrap.ready(): character_id=0
 	
 	player_character_creation_result.rpc_id(
 		1,
@@ -435,6 +458,10 @@ func request_login(
 	if not database.wallet_ready or player == null or player.account_name != username:
 		result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id,attempt_id)
 		return
+	if database.economy_backend=="postgresql":
+		var bound: Dictionary=await world_server.inventory_runtime.ensure_identity(database.store.resolve_account_id(character_id),character_id)
+		if not bound.ok or not database.wallet_ready or not world_server.economy_bootstrap.ready():
+			result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id,attempt_id);return
 	result_login.rpc_id(
 		1,
 		OK,
