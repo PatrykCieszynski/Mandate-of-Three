@@ -12,6 +12,8 @@ var _pools: Dictionary={}
 var _settings: Dictionary={}
 const WORLD_POOLS: Dictionary={"inventory":2,"wallet":1,"npc":1,"storage":1,"ground":1,"market":2}
 
+func stopped() -> bool: return state==State.STOPPED
+func authority_id() -> String: return str(_settings.get("authority_id",""))
 func ready() -> bool: return state==State.READY
 func sessions_valid() -> bool: return state in [State.READY,State.DRAINING,State.BLOCKED]
 func status() -> Dictionary:
@@ -28,6 +30,18 @@ func start_world(world: WorldServer, settings: Dictionary) -> bool:
 		world.database.runtime_wallets.clear()
 		if world.database.store!=null: world.database.store.economic_initialization=false
 	if not await _prepare(settings,"inventory",2): return false
+	if settings.has("profile_id"):
+		if world.database.db==null or world.database.store==null or world.database.store.db!=world.database.db or not world.database.db.query("SELECT 1;"): return await _failed("profiles")
+		var queued: Dictionary=_pools.inventory.submit_profile_binding(str(settings.profile_id))
+		if not queued.queued: return await _failed("profiles")
+		var result: Dictionary={}
+		while result.is_empty():
+			for event: Dictionary in _pools.inventory.poll():
+				if event.ticket==queued.ticket: result=event.result
+			if not _pools.inventory.is_ready(): return await _failed("workers")
+			if result.is_empty(): await _tree().process_frame
+		if not result.get("ok",false): return await _failed(str(result.get("error","profiles")))
+		ServerLog.info("PostgreSQL realm/profile binding ready.")
 	for name: String in WORLD_POOLS:
 		if name!="inventory" and not _start_pool(name,WORLD_POOLS[name]): return await _failed("workers")
 	if not await _wait_ready(): return await _failed("workers")
@@ -113,6 +127,7 @@ func check_health() -> void:
 			_world.invalidate_inventory_admissions()
 
 func shutdown_world() -> bool:
+	if _world!=null and state==State.FAILED and status().stopped: return true
 	if _world==null or state not in [State.READY,State.BLOCKED,State.DRAINING]: return false
 	state=State.DRAINING
 	if _world.database!=null: _world.database.wallet_ready=false
@@ -131,6 +146,7 @@ func shutdown_world() -> bool:
 	return true
 
 func shutdown_master() -> bool:
+	if _master!=null and state==State.FAILED and status().stopped: return true
 	if _master==null or state not in [State.READY,State.BLOCKED,State.DRAINING]: return false
 	state=State.DRAINING
 	for username: String in _master._world_sessions.keys(): _master.revoke_world_session(username)

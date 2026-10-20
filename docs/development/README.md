@@ -36,3 +36,5 @@
 - [Third-party attribution](../third-party-credits.md) — retain licence obligations.
 
 Use the repository's pinned Godot/runtime versions; don't treat a historical one-off test as a production acceptance gate.
+
+- [PostgreSQL normal process startup (P3s)](postgres-process-startup.md)

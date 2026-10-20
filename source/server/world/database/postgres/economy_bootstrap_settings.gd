@@ -1,5 +1,16 @@
 extends RefCounted
 ## Explicit server configuration only. Never place a connection string in world_info.
+static func load_config(path: String) -> Dictionary:
+	var config:=ConfigFile.new()
+	if config.load(path)!=OK: return {"ok":false,"error":"config"}
+	var settings: Dictionary={}
+	if config.has_section("economy"):
+		for key: String in config.get_section_keys("economy"): settings[key]=config.get_value("economy",key)
+	var result:=resolve(settings)
+	if result.ok and result.backend=="postgresql":
+		result["profile_path"]=settings.get("profile_path","")
+	return result
+
 static func resolve(settings: Dictionary) -> Dictionary:
 	var backend: Variant=settings.get("backend","sqlite")
 	if backend not in ["sqlite","postgresql"]: return {"ok":false,"error":"backend"}

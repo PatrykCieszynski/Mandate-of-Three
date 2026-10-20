@@ -47,6 +47,7 @@ const RES_CONFIG_PATH: String = "res://data/config/dashboard.cfg"
 
 var _started_at_unix: int = 0
 var _auth_token: String = ""
+var _configured_port: int=PORT
 var _bind_address: String = DASHBOARD_BIND_DEFAULT
 
 
@@ -77,8 +78,8 @@ func _ready() -> void:
 	router.register_route(HTTPClient.Method.METHOD_GET,  &"/v1/accounts",                _handle_accounts)
 	router.register_route(HTTPClient.Method.METHOD_POST, &"/v1/accounts/reset_password", _handle_account_reset_password)
 
-	server.listen(PORT, _bind_address)
-	ServerLog.info("Dashboard listening on %s:%d" % [_bind_address, PORT])
+	server.listen(_configured_port, _bind_address)
+	ServerLog.info("Dashboard listening on %s:%d" % [_bind_address, _configured_port])
 	if _bind_address == "*" and _auth_token.is_empty():
 		ServerLog.warn("Dashboard: bound to ALL interfaces with NO auth token — admin routes are open. Set [auth] token or [server] bind=127.0.0.1 in dashboard.cfg.")
 	DiscordNotifier.notify_master_online()
@@ -411,10 +412,11 @@ func _unauthorized() -> Dictionary:
 
 func _load_config() -> void:
 	var config: ConfigFile = ConfigFile.new()
-	var path: String = USER_CONFIG_PATH if FileAccess.file_exists(USER_CONFIG_PATH) else RES_CONFIG_PATH
+	var path: String = str(CmdlineUtils.get_parsed_args().get("dashboard-config", USER_CONFIG_PATH if FileAccess.file_exists(USER_CONFIG_PATH) else RES_CONFIG_PATH))
 	if config.load(path) != OK:
 		ServerLog.warn("Dashboard: no config found, running with auth DISABLED. Create %s or %s with [auth] token=\"...\"" % [USER_CONFIG_PATH, RES_CONFIG_PATH])
 		return
+	_configured_port=int(config.get_value("server","port",PORT))
 	_auth_token = str(config.get_value("auth", "token", ""))
 	if _auth_token.is_empty():
 		ServerLog.warn("Dashboard: token is empty in config, running with auth DISABLED.")

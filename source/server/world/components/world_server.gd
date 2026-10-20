@@ -13,7 +13,7 @@ extends BaseMultiplayerEndpoint
 ## player, keeps the data-loss window short); the backup folds in every Nth save. Side
 ## benefit: with keep_last=10 the retained history stretches from ~50 min to ~5 h.
 ## See docs/netcode_perf_audit.md.
-const BACKUP_EVERY_N_SAVES: int = 6  # 6 × 5 min = 30 min
+const BACKUP_EVERY_N_SAVES: int = 6  # 6 Ä‚â€” 5 min = 30 min
 var _periodic_save_count: int = 0
 
 ## Short-lived, single-use Master tickets, not cached character snapshots.
@@ -114,7 +114,7 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 	return speed/100.0
 
 func _inventory_combat_ready(owner_id: int) -> bool:
-	if economy_bootstrap!=null and not economy_bootstrap.ready(): return false
+	if economy_bootstrap!=null and (not economy_bootstrap.ready() or database==null or not database.wallet_ready): return false
 	return inventory_runtime==null or inventory_runtime.mutations_allowed(player_id_to_peer_id.get(owner_id,0))
 
 func invalidate_runtime_equipment(owner_id: int) -> void:
@@ -150,7 +150,7 @@ func invalidate_inventory_admissions() -> void:
 
 ## Internal Master connection only; public clients submit a token, never an ID.
 func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> bool:
-	if economy_bootstrap!=null and not economy_bootstrap.ready(): return false
+	if economy_bootstrap!=null and (not economy_bootstrap.ready() or database==null or not database.wallet_ready): return false
 	if not inventory_master_available(): return false
 	if inventory_runtime!=null or wallet_runtime!=null:
 		if not inventory_context.get("epoch") is int or inventory_context.epoch<=0 or inventory_context.get("account_id")!=account_id or inventory_context.get("character")!=character_id or inventory_context.get("session_fingerprint")!=auth_token.sha256_text(): return false
@@ -284,13 +284,19 @@ func _on_periodic_save() -> void:
 ## is master-triggered (master_save / master_restart, RPC-driven so it's signal-
 ## free) — the deploy calls /v1/save_all before stopping. This handler stays only
 ## for the interactive/windowed case; it's harmless and never the sole safety net.
+func shutdown_economy() -> bool:
+	if economy_bootstrap!=null:
+		if economy_bootstrap.stopped(): return true
+		return await economy_bootstrap.shutdown_world()
+	return await flush_postgres_wallets(true)
+
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_WM_CLOSE_REQUEST:
 		return
 	if database == null:
 		return
 	get_tree().auto_accept_quit=false
-	if not await flush_postgres_wallets(true):
+	if not await shutdown_economy():
 		push_error("Window shutdown refused: PostgreSQL wallet checkpoint unresolved.")
 		return
 	if database.save_all_connected(connected_players)<0 or not await database.shutdown_database():

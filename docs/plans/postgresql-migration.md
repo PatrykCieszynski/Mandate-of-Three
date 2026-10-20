@@ -439,6 +439,17 @@ pool; captured unknown money must settle before shutdown. Profile/progression
 SQLite remains. Normal Main/config/identity-manifest integration, operational
 health/backup/handoff, full PG gameplay and P4 remain open; no default switch.
 
+**P3s progress:** [Normal process startup](../development/postgres-process-startup.md)
+now selects the shared bootstrap from private config, binds one persistent profile
+identity per realm and gates World publication on backend/authority + trusted
+Master manifest readiness. Character create/login atomically verifies PG identity
+before issuing a grant, without resetting wallets or importing SQLite economics.
+Separate normal Gateway/Master/World processes and a real headless client exercise
+foreign mapping refusal, same-profile recovery, equip/relog, full process restart
+and orderly pool closure. SQLite remains default and retains profiles/progression.
+Operator recovery/consistent backup-restore, controlled handoff, broader gameplay
+acceptance and P4 load/soak/import/cutover remain open; this is single-World only.
+
 **Storage cross-port invariant:** the database's unique starting-cell index is
 not a full-footprint exclusion constraint. Any subsequent port, especially Player
 Shop or Exchange, that receives/moves items into or out of account Storage must

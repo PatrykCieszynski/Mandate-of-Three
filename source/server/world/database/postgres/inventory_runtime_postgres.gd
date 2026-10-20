@@ -23,6 +23,19 @@ var _external: Dictionary={}
 var _storage_enabled:=false
 var _initialization_enabled:=false
 var _draining:=false
+var _identity_jobs: Dictionary={}
+
+## Internal process lifecycle only. Share the existing bounded Inventory pool;
+## SQL completions still have exactly one poll owner, no extra native worker.
+func ensure_identity(account: int, character: int) -> Dictionary:
+	if _draining or _identity_jobs.size()>=4: return {"ok":false,"error":"unavailable"}
+	var queued: Dictionary=_executor.submit_identity_binding(account,character)
+	if not queued.queued: return {"ok":false,"error":queued.get("error","storage")}
+	var pending: Dictionary={"done":false,"result":{}}
+	_identity_jobs[queued.ticket]=pending
+	while not pending.done: await _world.get_tree().process_frame
+	return pending.result
+
 
 func begin_drain() -> void: _draining=true
 
@@ -212,6 +225,12 @@ func _pause(binding: Dictionary, reason: String) -> void:
 ## Caller invokes on the World thread. No SQL/await/wait-to-finish here.
 func poll() -> void:
 	for completion: Dictionary in _executor.poll():
+		if _identity_jobs.has(completion.ticket):
+			var pending: Dictionary=_identity_jobs[completion.ticket]
+			_identity_jobs.erase(completion.ticket)
+			pending.result=completion.result.duplicate(true)
+			pending.done=true
+			continue
 		var job: Dictionary=_jobs.get(completion.ticket,{})
 		_jobs.erase(completion.ticket)
 		if job.is_empty(): continue
