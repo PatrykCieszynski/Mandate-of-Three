@@ -40,3 +40,5 @@ Use the repository's pinned Godot/runtime versions; don't treat a historical one
 - [PostgreSQL normal process startup (P3s)](postgres-process-startup.md)
 
 - [PostgreSQL operator maintenance barrier (P3t)](postgres-maintenance.md)
+
+- [PostgreSQL stopped-writer backup and restore](postgres-backup-restore.md)

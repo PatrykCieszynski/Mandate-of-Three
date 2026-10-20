@@ -511,3 +511,13 @@ P1 and P2 are **backend correctness**, P3 is **execution/topology**, and P4 is *
 - Local CHs within **one World Process** remain compatible with SQLite; P1–P4 are an explicit future implementation milestone, **not** an immediate prerequisite for local MapInstance work.
 - Remote World hosts, auto-placement, failover and gameplay dungeons may build on the completed economy migration but are not implemented by it. Document an additional distributed acceptance gate before the second World Process serves live accounts.
 - Keep CI smoke focused and deterministic; run heavy stress manually/opt-in with real PostgreSQL. Do not include credentials, native binaries, personal game DBs or benchmark runtime artifacts in Git.
+
+
+**P3u progress:** [Stopped-writer backup/restore](../development/postgres-backup-restore.md)
+now captures the economy schema, committed SQLite profile/WAL image and Master
+account collection as one private bundle. Explicit stopped-supervisor preconditions,
+DB session/lock guards, identity/custody/reservation checks and file hashes gate
+success. Restore requires a new empty DB/output, verifies every economy table and
+sequence, and is rehearsed with normal processes/login against the restored set.
+This is not a live/distributed backup, import or cutover; SQLite stays default.
+Controlled handoff, production-scale operational/load/soak acceptance and P4 remain.

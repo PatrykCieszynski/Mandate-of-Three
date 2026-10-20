@@ -1,6 +1,8 @@
 extends "res://tests/postgres_process_startup.gd"
 const Barrier = preload("res://source/server/master/operations/realm_maintenance.gd")
 var round_number:=0
+func profile_file() -> String: return directory+"/profiles.db"
+func account_file() -> String: return directory+"/accounts.tres"
 class Drain extends RefCounted:
 	var stopped:=false
 	func shutdown_master() -> bool: stopped=true;return true
@@ -133,17 +135,17 @@ func close_roles(world: int, gateway: int, master: int) -> void:
 	assert("POSTGRES_PROCESS_CLIENT_OK maintenance disconnect" in FileAccess.get_file_as_string(directory+"/maintenance-client-"+str(round_number)+".log"))
 	assert(int(pg.query("SELECT yang FROM economy.account_wallets WHERE account_id=:id;",{"id":int(report.account)}).rows[0].yang)==balance+37)
 	assert(int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name LIKE 'mandate-inventory-executor-%';").rows[0].n)==0)
-	var profiles:=SQLite.new();profiles.path=directory+"/profiles.db";assert(profiles.open_db())
+	var profiles:=SQLite.new();profiles.path=profile_file();assert(profiles.open_db())
 	assert(profiles.query_with_bindings("SELECT level,experience,available_attributes_points FROM players WHERE player_id=?;",[int(report.character)]))
 	assert(profiles.query_result[0].level==expected.level and profiles.query_result[0].experience==expected.experience and profiles.query_result[0].available_attributes_points==expected.points)
 	profiles.close_db()
-	var accounts_hash: String=FileAccess.get_sha256(directory+"/accounts.tres")
+	var accounts_hash: String=FileAccess.get_sha256(account_file())
 	var refused_admin: Dictionary=await post("http://127.0.0.1:"+str(int(ports[4]))+"/v1/accounts/reset_password",{"token":"fixture-only","username":"processfixture","new_password":"Must-not-be-written"})
-	assert(refused_admin.error=="maintenance" and FileAccess.get_sha256(directory+"/accounts.tres")==accounts_hash)
+	assert(refused_admin.error=="maintenance" and FileAccess.get_sha256(account_file())==accounts_hash)
 	# Lost operator response: same ID reports the completed barrier, no new drain.
 	assert((await admin("quiesce",{"operation_id":id})).maintenance.quiesced)
 	await super.close_roles(world,gateway,master)
-	assert(FileAccess.get_sha256(directory+"/accounts.tres")==accounts_hash,"tree exit must not rewrite a frozen checkpoint")
+	assert(FileAccess.get_sha256(account_file())==accounts_hash,"tree exit must not rewrite a frozen checkpoint")
 	if round_number==2:
 		await blocked_native()
 		print("POSTGRES_MAINTENANCE_OK: authenticated status, active-session dirty drain, operator replay, restart and fail-closed SQL/timeout contracts")
