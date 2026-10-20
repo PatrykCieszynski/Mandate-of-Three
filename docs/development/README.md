@@ -44,3 +44,5 @@ Use the repository's pinned Godot/runtime versions; don't treat a historical one
 - [PostgreSQL stopped-writer backup and restore](postgres-backup-restore.md)
 
 - [Controlled PostgreSQL World replacement](postgres-world-replacement.md)
+
+- [PostgreSQL mixed World/Economy load baseline](postgres-mixed-load.md)

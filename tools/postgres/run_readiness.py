@@ -48,7 +48,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
+    parser.add_argument("--load-seconds", type=int, default=8, choices=range(2,1801))
+    parser.add_argument("--load-repeats", type=int, default=3, choices=(1,2,3))
     args = parser.parse_args()
     extension = ".exe" if os.name == "nt" else ""
     binaries = {name: args.pg_bin.resolve() / (name + extension)
@@ -100,6 +102,9 @@ def main():
         run(psql, env=env, log=control_log, sql=f"CREATE ROLE mandate_fixture LOGIN PASSWORD '{password}';")
         run(psql + ["-c", "CREATE DATABASE mandate_readiness OWNER mandate_fixture;"], env=env, log=control_log)
         env["MANDATE_PG_FIXTURE"] = "owned-local-cluster"
+        if args.suite == "mixed-load":
+            env["MANDATE_PG_LOAD_SECONDS"] = str(args.load_seconds)
+            env["MANDATE_PG_LOAD_REPEATS"] = str(args.load_repeats)
         env["MANDATE_PG_FIXTURE_DIR"] = "res://" + directory.relative_to(ROOT).as_posix()
         env["MANDATE_PG_FIXTURE_CONNECTION"] = f"host=127.0.0.1 port={port} dbname=mandate_readiness user=mandate_fixture password={password} connect_timeout=3"
         if args.suite == "backup":
@@ -153,12 +158,13 @@ def main():
             "maintenance": ("postgres_maintenance", "POSTGRES_MAINTENANCE_OK"),
             "backup": ("postgres_backup", "POSTGRES_BACKUP_OK"),
             "world-replacement": ("postgres_world_replacement", "POSTGRES_WORLD_REPLACEMENT_OK"),
+            "mixed-load": ("postgres_mixed_load", "POSTGRES_MIXED_LOAD_OK"),
             "inventory-session-bridge": ("postgres_inventory_session_bridge", "POSTGRES_INVENTORY_SESSION_BRIDGE_OK"),
             "inventory-endpoint": ("postgres_inventory_endpoint", "POSTGRES_INVENTORY_ENDPOINT_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
-             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement") else ["--quit-after", "1200"]),
-            env=env, log=directory / "godot.log", timeout=225 if args.suite in ("inventory-endpoint", "process-startup", "maintenance", "backup", "world-replacement") else 60)
+             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load") else ["--quit-after", "1200"]),
+            env=env, log=directory / "godot.log", timeout=(args.load_seconds*args.load_repeats*4+240) if args.suite=="mixed-load" else 225 if args.suite in ("inventory-endpoint", "process-startup", "maintenance", "backup", "world-replacement") else 60)
         output = (directory / "godot.log").read_text(encoding="utf-8", errors="replace")
         if marker not in output or any(word in output for word in ("SCRIPT ERROR", "Parse Error", "POSTGRES_READINESS_FAILED")):
             raise RuntimeError("Godot readiness contract failed; see " + str(directory.relative_to(ROOT) / "godot.log"))

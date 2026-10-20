@@ -30,7 +30,10 @@ in the Economy backend port.
 
 ## Remaining gates
 
-1. **P4 load/fault/soak:** mix actual World economy operations and indexed reads;
+1. **P4 load/fault/soak:** the [P4a baseline](../development/postgres-mixed-load.md)
+   now mixes World economy operations and indexed reads in three fresh clusters.
+   Offered 100/s is not achieved successful throughput; queues remain bounded.
+   Continue with sustained load/fault/soak and broader network/combat/domain traffic;
    record admission, transaction/pool/lock behavior and World tick tails. Use
    repeated comparable runs and the planned sustained soak. A short correctness
    fixture is not a capacity result.
@@ -517,3 +520,13 @@ process fixture drains dirty Yang/XP through temporarily locked SQL, verifies ol
 worker exit/grant retirement, starts a replacement under the live Master/Gateway,
 rejects an old ticket and logs in with the same UID/equipment. No distributed
 lease, concurrent World owner, schema change or default backend switch.
+
+
+**P4a progress:** [Mixed runtime baseline](../development/postgres-mixed-load.md)
+adds opt-in sanitized native queue/worker/poll diagnostics and a repeatable mixed
+World/native PG workload. Three fresh clusters compare no-economic-traffic
+baseline with offered 10/30/100 writes/s plus indexed 10k-offer reads and real
+movement/AI. UID/custody/full footprints, money/material/reservations and receipt
+invariants pass. The measured workload saturates below 100 successful operations/s;
+no pool/budget tuning or capacity/cutover claim. Sustained soak and mixed-load
+fault/connected-client/combat acceptance remain separate P4 gates.
