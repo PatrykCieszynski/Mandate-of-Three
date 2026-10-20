@@ -203,7 +203,7 @@ export function mountExchange(root, o) {
                     order.status +
                     ' · received ' +
                     order.received;
-            if (order.status === 'active')
+            if (order.status === 'active' && !state.ledgerOnly)
                 row.append(button('Cancel remaining', () => void submit('cancel_order', {
                     command_id: marketCommandId(),
                     order_id: order.id,
@@ -221,7 +221,15 @@ export function mountExchange(root, o) {
             fills.append(p);
         }
         retry.hidden = !state.retryAvailable;
-        depositButton.disabled = withdrawButton.disabled = state.busy;
+        retry.disabled = state.busy;
+        depositButton.disabled = withdrawButton.disabled =
+            state.busy || state.retryAvailable;
+        for (const control of orderRow.querySelectorAll('input, select, button'))
+            control.disabled =
+                !!state.ledgerOnly || state.busy || state.retryAvailable;
+        label.textContent = state.ledgerOnly
+            ? 'Material deposits and withdrawals are available. Order trading is not enabled yet.'
+            : 'Limit: Yang numerator / Material denominator. Whole Material quantity; no fees.';
         shell.refresh();
         o.regions();
     }

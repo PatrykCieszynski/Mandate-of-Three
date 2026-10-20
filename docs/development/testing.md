@@ -644,3 +644,20 @@ lost reply/UI recreation through production bridge/journals. Run sequentially
 with other 18098/18099 suites. Web contracts check restored purchase retry after
 an offer disappears; `run-web-inventory.ps1 -Scene market_network` retains SQLite.
 See [settlement runtime](postgres-market-settlement-runtime.md) for scope limits.
+
+
+## PostgreSQL Exchange ledger runtime (P3o, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite exchange-runtime`
+checks bag/Storage stack conversion, current shared projections, ownership/replay,
+native COMMIT failure, independent progress, conservation and original-issuer/alt
+receipt recovery. Existing `exchange-ledger` and `exchange-orders` suites retain
+backend parity, rollback, capacity, races and the composed read-model regression.
+
+`inventory-endpoint` now runs nine actual headless clients: Exchange Storage
+transfer/deposit lost reply, `ui.ready` retry, withdrawal to claims, withdrawal
+lost reply/process relog and saved-but-unsent explicit retry, retaining earlier
+Inventory/wallet/NPC/Storage/ground/Marketplace contracts. Run sequentially with
+other suites on 18098/18099. A Web contract checks Retry without a source stack
+and the ledger-only trading gate. See [runtime](postgres-exchange-ledger-runtime.md)
+for the deferred matching, platform and production boundaries.

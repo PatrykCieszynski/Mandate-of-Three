@@ -98,7 +98,7 @@ class SessionWorker extends RefCounted:
 				if intent=="seller_execute": result=store.execute(job.session,job.action,job.body,job.get("income",0),job.get("token",""))
 				elif intent=="seller_receipt": result=store.receipt(job.session,job.operation_id)
 				elif intent=="seller_visit": result=store.visit(job.session,job.shop)
-				elif intent=="seller_snapshot": result=store.snapshot(job.session)
+				elif intent=="seller_snapshot": result=store.snapshot(job.session,job.get("include_exchange",false))
 				elif intent=="item_initialize": result=store.initialize(job.session)
 				elif intent=="ground_claim": result=store.claim(job.session,job.operation_id,job.drop)
 				elif intent=="ground_receipt": result=store.receipt(job.session,job.operation_id)
@@ -236,8 +236,8 @@ func submit_seller_visit(context: Dictionary, shop: int) -> Dictionary:
 func submit_seller_receipt(context: Dictionary, id: String) -> Dictionary:
 	return _session_job(context,"seller_receipt",id,{})
 
-func submit_seller_snapshot(context: Dictionary) -> Dictionary:
-	return _session_job(context,"seller_snapshot","",{})
+func submit_seller_snapshot(context: Dictionary, include_exchange: bool = false) -> Dictionary:
+	return _session_job(context,"seller_snapshot","",{"include_exchange":include_exchange})
 
 func submit_item_initialization(context: Dictionary) -> Dictionary:
 	return _session_job(context,"item_initialize","",{})

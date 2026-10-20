@@ -9,14 +9,14 @@ func authorize_session(context: Dictionary) -> void: _session=context.duplicate(
 func _init(database: Object) -> void:
 	db=database
 
-func mine(character: int) -> Dictionary:
-	return _mine(character,true)
+func mine(character: int, include_exchange: bool = false) -> Dictionary:
+	return _mine(character,true,include_exchange)
 
 ## Preserve the existing seller-only projection on pre-claims schemas.
 func seller_mine(character: int) -> Dictionary:
 	return _mine(character,false)
 
-func _mine(character: int, full_account: bool) -> Dictionary:
+func _mine(character: int, full_account: bool, include_exchange: bool = false) -> Dictionary:
 	if db.in_transaction() or not db.begin(): return _error("storage")
 	var identity: Dictionary=db.query("SELECT c.account_id FROM economy.characters c JOIN economy.accounts a ON a.account_id=c.account_id WHERE c.character_id=:id FOR NO KEY UPDATE OF a;",{"id":character})
 	if not identity.ok or identity.rows.is_empty(): return _rollback("storage" if not identity.ok else "owner")
@@ -39,6 +39,11 @@ func _mine(character: int, full_account: bool) -> Dictionary:
 			var view:=_item_view(row)
 			if view.is_empty(): return _rollback("unknown_definition")
 			snapshot.claims.append(view)
+	if include_exchange:
+		snapshot.exchange=preload("res://source/server/world/database/postgres/exchange_orders_postgres.gd").new(db).read_snapshot_in_transaction(character)
+		if not snapshot.exchange.ok: return _rollback(str(snapshot.exchange.error))
+		snapshot.exchange.exchange_runtime=true
+		snapshot.exchange.ledger_only=true
 	if not _session.is_empty():
 		snapshot.item_state=preload("res://source/server/world/database/postgres/economy_command_postgres.gd").read_state(db,character)
 		if snapshot.item_state.is_empty(): return _rollback("storage")

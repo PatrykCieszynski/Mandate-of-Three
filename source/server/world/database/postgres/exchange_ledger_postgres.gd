@@ -7,6 +7,12 @@ const Claims = preload("res://source/server/world/database/postgres/account_clai
 const Seller = preload("res://source/server/world/database/postgres/shop_seller_postgres.gd")
 const MAX_BALANCE: int=9000000000000000
 var db: Object
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+
+func authorize_session(context: Dictionary) -> void:
+	_transaction.economic_context=context.duplicate(true)
+
 var rejected: MarketRejectedCommands
 var _transaction: RefCounted
 var committed: bool:

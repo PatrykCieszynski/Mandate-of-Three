@@ -1,3 +1,4 @@
+import { mountExchange } from '../web/screens/market/exchange-view.js';
 import { MAX_STATE_BYTES, MAX_BYTES } from '../web/protocol.js';
 import { transfer } from '../web/screens/storage/transfer.js';
 import { mountStorage } from '../web/screens/storage/storage-view.js';
@@ -952,6 +953,78 @@ test('restored purchase retries via native journal after the offer disappeared',
   });
   assert.equal(retry.hidden, true);
   view.dispose();
+  manager.dispose();
+  host.close();
+});
+
+test('Exchange ledger mode keeps native Retry available without a source stack and disables trading', async () => {
+  const { manager, host } = environment();
+  Object.assign(globalThis, { Option: host.Option });
+  const root = target();
+  const drag = new ItemDragRuntime({
+    scale: () => 1,
+    onRegionsChanged: () => {},
+  });
+  let retries = 0,
+    commands = 0;
+  const view = mountExchange(root, {
+    manager,
+    drag,
+    command: async () => {
+      commands++;
+      return { ok: true };
+    },
+    retry: async () => {
+      retries++;
+      return { ok: true };
+    },
+    close: () => {},
+    regions: () => {},
+  });
+  const state = {
+    active: true as const,
+    yang: 1500,
+    reservedYang: 0,
+    assets: [
+      {
+        asset_id: 'upgrade_ore',
+        name: 'Ore',
+        stack_limit: 200,
+        free: 2,
+        reserved: 0,
+      },
+    ],
+    orders: [],
+    depth: [],
+    fills: [],
+    busy: false,
+    retryAvailable: true,
+    ledgerOnly: true,
+  };
+  view.setState(state);
+  const buttons = [...root.querySelectorAll('button')];
+  const retry = buttons.find((b) => b.textContent === 'Retry same command')!;
+  assert.equal(retry.hidden, false);
+  assert.equal(
+    buttons.find((b) => b.textContent === 'Place limit order')!.disabled,
+    true,
+  );
+  assert.equal(
+    buttons.find((b) => b.textContent === 'Deposit')!.disabled,
+    true,
+  );
+  retry.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(retries, 1);
+  assert.equal(commands, 0);
+  view.setState({ ...state, retryAvailable: false });
+  assert.equal(retry.hidden, true);
+  assert.equal(
+    buttons.find((b) => b.textContent === 'Withdraw')!.disabled,
+    false,
+  );
+  view.dispose();
+  drag.dispose();
   manager.dispose();
   host.close();
 });
