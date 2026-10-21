@@ -69,6 +69,12 @@ No 100/300/500-player capacity conclusion follows from the small integration run
 
 ## Scale and observation policy
 
+The separate [Representative Economy profile](representative-economy.md) uses
+offline sellers plus a smaller admitted buyer population. It is a mandatory P4
+soak profile, not a replacement for either adversarial stress or broader MMO
+integration. `--profile representative` defaults to 300 economic accounts,
+40 active bindings and 1,800 seconds, with controlled peaks.
+
 ```powershell
 python tools/postgres/run_realm_workload.py --pg-bin Y:/Software/PostgreSQL/bin --profile load --players 300
 python tools/postgres/run_realm_workload.py --pg-bin Y:/Software/PostgreSQL/bin --profile soak --players 500

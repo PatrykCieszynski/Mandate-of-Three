@@ -1,5 +1,43 @@
 # P4c — sustained fixture and PostgreSQL backend-process loss
 
+## Clean sustained repeat: PASS (2026-10-21)
+
+`run-frkna2kb`, integrated baseline `b442adaa` (PR #109): unchanged command
+`run_readiness.py --suite mixed-load --load-seconds 450 --load-repeats 1`
+with `Y:/Software/PostgreSQL/bin`. Four 450-second arrival cohorts: 7.5 minutes
+baseline and 22.5 minutes traffic, plus separately timed drain/setup/audits.
+Only source/document editing and lightweight static/CLI checks ran alongside;
+no other benchmark ran concurrently.
+The running process used the baseline scripts loaded before the subsequent
+Representative Economy implementation edits.
+
+| Offered writes/s | Offered attempts | Successful including tail | Source busy | Terminal rejections | Max native pending | Physics gap p99 / max ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 0 | 0 | 0 | 0 | 0 | 16.8 / 47.508 |
+| 10 | 4,500 | 4,493 | 7 | 0 | 5 | 16.7 / 33.342 |
+| 30 | 13,500 | 11,246 | 832 | 1,422 | 9 | 16.7 / 33.349 |
+| 100 | 45,000 | 15,508 | 22,940 | 6,552 | 10 | 16.7 / 62.003 |
+
+Exact observed success IDs = **31,247 durable success IDs**, no missing/extra IDs.
+UID/custody/full-footprint, money/material/reservation, receipt and drain audits
+PASS. Zero PostgreSQL deadlocks. `native_workers_stopped=true`; runner exit 0,
+`POSTGRES_MIXED_LOAD_PASS`, owned cluster `stopped=true`, data cleanup confirmed
+by its owner. Per-cohort tails: 0.013 / 0.021 / 0.118 / 0.092 seconds.
+
+At 100/s offered, successful arrival-window work was 15,506 operations in
+450 seconds, approximately **34.46/s**, not 100/s achieved throughput. Busy,
+participant changes and receipt-recovery outcomes remain explicitly counted.
+World poll/projection p99 was 5.4 ms, max 54.830 ms in that cohort; the isolated
+62.003 ms physics gap remains an observed tail, not hidden by stable p99.
+No new faults were injected into this clean measurement; the separate backend
+loss/COMMIT/response-loss evidence below remains the fault acceptance evidence.
+
+This closes the previously missing clean sustained repeat, not all of P4.
+Representative Economy's separate 30-minute profile, agreed responsiveness
+assessment and remaining World/cluster/network acceptance remain open.
+No SQLite import or production cutover is implied. Raw reports remain ignored
+under `.godot/verification/postgres-readiness/run-frkna2kb/`.
+
 Windows, Godot 4.7.2, SOCI 0.4.3, PostgreSQL 18.6, owned disposable clusters only.
 Runtime defaults, production data/schema, worker budgets and economy rules are
 unchanged; the paused-projection notification correction is described below. This extends the existing mixed fixture, not a new framework.

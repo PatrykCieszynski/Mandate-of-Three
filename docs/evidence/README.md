@@ -57,3 +57,5 @@ This directory retains reproducible raw evidence. The documentation cleanup remo
 - [P4c backend-process recovery and sustained-run investigation](postgres-p4c/README.md)
 
 - [MMO Integration & Load: first seeded runtime story baseline](realm-workload-foundation/README.md)
+
+- [P4 Representative Economy: dispersed offline shops and controlled peaks](representative-economy/README.md)

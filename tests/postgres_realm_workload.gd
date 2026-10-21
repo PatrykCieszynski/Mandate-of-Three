@@ -171,7 +171,7 @@ func command(actor: Dictionary, action: String, body: Dictionary = {}, domain: S
 
 func search(actor: Dictionary, cursor: String = "", filtered: bool = false) -> Dictionary:
 	serial+=1
-	var payload:=SEARCH.duplicate(true);payload.cursor=cursor
+	var payload:=search_payload(actor);payload.cursor=cursor
 	if filtered: payload.affix_filters=[{"stat_id":"monster_damage","minimum":5}]
 	var box: Dictionary={};var started:=Time.get_ticks_usec()
 	actor.actions+=1;stats.searches+=1
@@ -180,9 +180,19 @@ func search(actor: Dictionary, cursor: String = "", filtered: bool = false) -> D
 	world.seller_runtime.auction.submit(actor.peer,"realm-query-"+str(serial),payload,func(result: Dictionary)->void:box.result=result;box.received_us=Time.get_ticks_usec(),func()->bool:return world.inventory_runtime.mutations_allowed(actor.peer))
 	await until(func()->bool:return box.has("result"),"Auction response")
 	sample("action:search",int(box.received_us)-started)
-	if box.result.get("ok",false): stats.searches_ok+=1
-	else: error("search",str(box.result.get("error","unknown")))
+	if box.result.get("ok",false):
+		stats.searches_ok+=1;sample("action_ok:search",int(box.received_us)-started)
+	else:
+		error("search",str(box.result.get("error","unknown")));sample("action_rejected:search",int(box.received_us)-started)
 	return box.result
+
+func search_payload(_actor: Dictionary) -> Dictionary: return SEARCH.duplicate(true)
+
+func seed_catalogue() -> void:
+	var catalogue:=Catalogue.new();catalogue.pg=pg;catalogue.benchmark();catalogue.free()
+
+func begin_window() -> void: pass
+func extend_report(_report: Dictionary) -> void: pass
 
 func shopping(actor: Dictionary, bulk: bool) -> bool:
 	var first: Dictionary=await search(actor)
@@ -314,7 +324,8 @@ func _ready() -> void:
 func run() -> void:
 	pg=ClassDB.instantiate("GodotSociDatabase")
 	if not pg.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) or not Schema.ensure_schema(pg): die("database setup");return
-	var catalogue:=Catalogue.new();catalogue.pg=pg;catalogue.benchmark();catalogue.free()
+	seed_catalogue()
+	if failed: return
 	world.database=WorldDatabase.new();add_child(world);world.add_child(world.database)
 	if not world.database.start_profile_database(directory+"/profiles.db"): die("profiles");return
 	var authority: String=pg.query("SELECT value FROM economy.meta WHERE key='economy_authority_id';").rows[0].value
@@ -369,6 +380,7 @@ func run() -> void:
 	await get_tree().create_timer(1).timeout
 	var started:=Time.get_ticks_usec();var next_memory:=started
 	measuring=true;window_open=true;running=true
+	begin_window()
 	for actor: Dictionary in actors: actor_loop(actor)
 	while Time.get_ticks_usec()-started<duration*1000000 and not failed:
 		var pending:=0
@@ -407,5 +419,6 @@ func run() -> void:
 	var timings: Dictionary={}
 	for key: String in histograms: timings[key]=histograms[key].summary()
 	var report: Dictionary={"case":"MMO Integration & Load","schema":1,"metrics_version":3,"scenario_version":3,"environment":{"os":OS.get_name(),"processors":OS.get_processor_count(),"godot":Engine.get_version_info().string},"seed":workload_seed,"requested_players":requested,"admitted_players":actors.size(),"admission_rejected_players":rejected,"connected_clients":0,"requested_roles":requested_roles,"refused_actors":refused_actors,"roles":role_counts,"mobs":simulation.mob_system.mobs.size(),"workers":Bootstrap.WORLD_POOLS,"queue_capacity_per_worker":2,"active_economic_accounts":actors.filter(func(a: Dictionary)->bool:return a.actions>0).size(),"actor_activity":actors.map(func(a: Dictionary)->Dictionary:return {"index":a.index,"role":a.role,"actions":a.actions,"window_action_attempts":a.window_actions,"window_action_hz":a.window_actions/float(duration),"income_events":a.income_events,"window_income_events":a.window_income,"window_income_hz":a.window_income/float(duration),"stories":a.stories,"completed":a.completed}),"duration_seconds":duration,"tail_seconds":tail_seconds,"successful_actions_in_window":window_successes,"stats":stats,"action_successes":action_successes,"native_jobs":native_jobs,"errors":errors,"timings":timings,"memory_samples":memory_samples,"connections":connections,"audit":audit,"exchange_outcomes":exchange_outcomes,"workers_stopped":bootstrap.status().stopped,"invariants":"PASS","limits":{"synthetic_sessions":true,"connected_clients":0,"combat_damage":false,"scripted_rewards":true,"network_relogin":false,"allocator_memory_not_rss":true},"mechanisms":["movement","passive_mob_ai","scripted_grind_income","ground_pickup","auction_filters_pages","shop_visit","single_bulk_purchase","seller_list_edit_collect","exchange_place_cancel","runtime_rebind"]}
+	extend_report(report)
 	FileAccess.open(directory+"/realm-workload.json",FileAccess.WRITE).store_string(JSON.stringify(report,"  "))
 	pg.close();print("POSTGRES_REALM_WORKLOAD_OK");get_tree().quit()

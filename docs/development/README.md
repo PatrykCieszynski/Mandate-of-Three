@@ -48,3 +48,5 @@ Use the repository's pinned Godot/runtime versions; don't treat a historical one
 - [PostgreSQL mixed World/Economy load baseline](postgres-mixed-load.md)
 
 - [MMO Integration & Load and separate Economy stress case](realm-workload.md)
+
+- [P4 Representative Economy Soak](representative-economy.md)
