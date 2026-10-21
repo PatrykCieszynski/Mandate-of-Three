@@ -2,7 +2,7 @@
 
 This profile supplements the unchanged adversarial Stress & Recovery case.
 The [focused native verification](../evidence/representative-economy/README.md)
-passes; the full 30-minute representative soak remains pending.
+passes; the full 30-minute representative soak also passed and was accepted on 2026-10-21. See [final soak evidence](../evidence/postgres-full-cutover/README.md).
 Both 30-minute soak profiles are required P4 acceptance before import/cutover.
 Adding this runner is not acceptance evidence. Responsiveness criteria still
 need agreement; integrity PASS alone does not certify performance or production

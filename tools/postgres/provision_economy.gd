@@ -7,7 +7,7 @@ func _initialize() -> void:
 	var database: Object=ClassDB.instantiate("GodotSociDatabase") if ClassDB.class_exists("GodotSociDatabase") else null
 	if database==null or not database.open("postgresql",OS.get_environment("MANDATE_ECONOMY_CONNECTION")+" connect_timeout=3"):
 		printerr("PostgreSQL provisioning connection failed.");quit(1);return
-	var ok: bool=preload("res://source/server/world/database/postgres/economy_schema_postgres.gd").ensure_schema(database)
+	var ok: bool=preload("res://source/server/world/database/postgres/realm_schema_postgres.gd").ensure_schema(database)
 	if ok:
 		var found: Dictionary=database.query("SELECT value FROM economy.meta WHERE key='economy_authority_id';")
 		ok=found.ok and found.rows.size()==1

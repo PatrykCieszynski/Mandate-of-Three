@@ -125,6 +125,9 @@ func handle_update_account(payload: Dictionary) -> Dictionary:
 
 	if account == null:
 		return {"ok": false, "error": "account_not_found"}
+	# A legacy resource rename cannot update live grants/profile identity safely.
+	if authentication_manager.postgres_store!=null and patch.has("username") and str(patch.username)!=current_username:
+		return {"ok":false,"error":"account_identity_immutable"}
 
 	if patch.has("peer_id"):
 		account.peer_id = int(patch["peer_id"])
@@ -168,7 +171,7 @@ func _find_account_by_id(id: int) -> Dictionary:
 
 
 func handle_save(_payload: Dictionary) -> Dictionary:
-	authentication_manager.save_account_collection()
+	if not authentication_manager.save_account_collection(): return {"ok":false,"error":"storage"}
 	return {"ok": true, "message": "Saved."}
 
 

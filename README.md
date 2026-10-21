@@ -9,7 +9,7 @@ This repository contains a working technical vertical slice, not a game alpha.
 - Gateway, master and world: login, sessions, character creation and instance entry.
 - 3D spike: server-side movement and physics, collisions and remote-character interpolation.
 - ItemDefinition and persistent ItemInstance: UID, owner, bonuses, equipping a specific
-  instance and transactional SQLite persistence.
+  instance and transactional PostgreSQL persistence (accounts/profiles included).
 - Initial loot progression: weapon attack shown on the ground, comparison with the
   equipped instance, attack preview after swapping and persistent sword equipment.
 - [First region graybox](docs/world/first-region-graybox.md): hub/Blacksmith, three combat areas,
@@ -25,7 +25,7 @@ This repository contains a working technical vertical slice, not a game alpha.
   dirty progression checkpoints approximately every 60 seconds and session-end saves.
 - Yang wallet, ground currency with loot rights and auto-pickup; a separate dirty
   delta checkpoint every 30 seconds and an atomic test spend including pending income.
-- Active-character combat stats in RAM; swings do not query SQLite inventory.
+- Active-character combat stats in RAM; swings do not query persistent Inventory.
   Item pickup and equipment retain immediate DB transactions.
 - An opt-in [Web UI foundation](docs/ui/web-ui.md): protocol v1, explicit commands,
   domain snapshots and region-based input routing. The root gameplay client uses the new Inventory screen,
@@ -140,7 +140,7 @@ with `--no-ff`. See [AGENTS.md](AGENTS.md).
 - [Accepted decisions](docs/decisions/README.md) and [active plans](docs/plans/README.md)
 - [Historical evidence](docs/evidence/README.md); obsolete milestone plans are recoverable from Git history
 
-The running single-World + SQLite implementation is distinct from the accepted future Economy V2 and multi-World architecture.
+Normal development uses one World Process and PostgreSQL for Economy, accounts and profiles. SQLite remains a reference fixture backend. See [full-state PostgreSQL setup](docs/development/postgres-full-state.md); distributed Economy and overlapping multi-World hosting remain future work.
 
 ## Upstream and credits
 

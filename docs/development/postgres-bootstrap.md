@@ -1,5 +1,9 @@
 # PostgreSQL bootstrap ownership — P3r
 
+**Current adoption:** normal configs also use PostgreSQL profiles and Master
+credentials. See [full-state setup](postgres-full-state.md). The hybrid/file
+details below describe the retained compatibility fixture rather than defaults.
+
 P3r supplies one explicit bootstrap API for the optional Master and World Economy
 owners. The ten-client acceptance fixture now uses it instead of manually creating
 seven pools and wiring individual domains. P3r itself did not select a process

@@ -27,6 +27,9 @@ def main():
     directory = (ROOT/os.environ["MANDATE_PG_FIXTURE_DIR"].removeprefix("res://")).resolve()
     assert directory.is_relative_to((ROOT/".godot/verification/postgres-readiness").resolve())
     pg = backup.Pg(os.environ["MANDATE_PG_FIXTURE_BIN"])
+    if os.environ.get("MANDATE_PG_FULL_STATE") == "1":
+        full_state(pg, directory)
+        return
     godot = Path(os.environ["MANDATE_PG_FIXTURE_GODOT"])
     profiles, accounts = directory/"profiles.db", directory/"accounts.tres"
     bundle, output = directory/"bundle", directory/"restored"
@@ -102,6 +105,32 @@ COMMIT;
     # Sequence next values also remain safe after restore (no reused fill ID).
     assert target.query("SELECT nextval('economy.exchange_fills_fill_id_seq');") == 2
     print("POSTGRES_BACKUP_FILES_OK: exact table/sequence audit, identity, checksums, live-grant/session refusal and empty-target restore")
+
+
+def full_state(pg, directory):
+    bundle, output = directory/"full-bundle", directory/"full-restored"
+    with backup.Guard(pg):
+        refused(lambda: backup.create_full(pg, directory/"active-refused"))
+    manifest = backup.create_full(pg, bundle)
+    assert manifest["audit"]["tables"]["realm.accounts"]["count"] == 1
+    assert manifest["audit"]["tables"]["realm.players"]["count"] == 1
+    assert manifest["audit"]["tables"]["item_instances"]["count"] == 2
+    refused(lambda: backup.restore_full(pg, bundle, output))
+    assert not output.exists()
+    bad = directory/"bad-full-bundle"
+    shutil.copytree(bundle, bad)
+    with (bad/"realm.dump").open("ab") as stream:
+        stream.write(b"tampered")
+    refused(lambda: backup.restore_full(pg, bad, output))
+    assert not output.exists()
+    admin = backup.Pg(pg.bin, dict(pg.env, PGDATABASE="postgres"))
+    admin.command("psql", ["-X", "-w", "-v", "ON_ERROR_STOP=1"], "CREATE DATABASE mandate_restored;")
+    target = backup.Pg(pg.bin, dict(pg.env, PGDATABASE="mandate_restored"))
+    assert backup.restore_full(target, bundle, output) == manifest["audit"]
+    assert target.query("SELECT experience FROM realm.players;") == 41
+    assert target.query("SELECT nextval('realm.account_ids');") > target.query("SELECT max(master_account_id) FROM realm.accounts;")
+    assert target.query("SELECT nextval('realm.player_ids');") > target.query("SELECT max(player_id) FROM realm.players;")
+    print("POSTGRES_FULL_BACKUP_OK: all-state archive, exact fingerprints/sequence restore, tamper/populated-target/live-session refusal")
 
 
 if __name__ == "__main__":

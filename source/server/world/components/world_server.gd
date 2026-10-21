@@ -224,7 +224,10 @@ func start_world_server() -> void:
 	else:
 		create(Role.SERVER, configuration.bind_address, configuration.port)
 
-	chat_service.setup_with_db(database.db)
+	if database.profile_pg!=null:
+		chat_service.store=preload("res://source/server/world/database/postgres/chat_store_postgres.gd").new(database.profile_pg)
+	else:
+		chat_service.setup_with_db(database.db)
 	$InstanceManager.start_instance_manager()
 
 	# Periodic save + backup. 5 minutes balances "low data loss on crash"
@@ -276,7 +279,7 @@ func _on_periodic_save() -> void:
 		ServerLog.info("Periodic save: %d player(s) flushed." % saved)
 		return
 	var ok: bool = await database.coordinated_backup()
-	ServerLog.info("Periodic save: %d player(s) flushed, backup %s." % [saved, "ok" if ok else "FAILED"])
+	ServerLog.info("Periodic save: %d player(s) flushed, %s %s." % [saved,"checkpoint" if database.profile_pg!=null else "backup","ok" if ok else "FAILED"])
 
 
 ## Best-effort save on a window-manager close (editor run / windowed build).

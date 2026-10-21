@@ -42,7 +42,7 @@ func start_world(world: WorldServer, settings: Dictionary) -> bool:
 		if world.database.store!=null: world.database.store.economic_initialization=false
 	if not await _prepare(settings,"inventory",2): return false
 	if settings.has("profile_id"):
-		if world.database.db==null or world.database.store==null or world.database.store.db!=world.database.db or not world.database.db.query("SELECT 1;"): return await _failed("profiles")
+		if not world.database.profile_store_ready(): return await _failed("profiles")
 		var queued: Dictionary=_pools.inventory.submit_profile_binding(str(settings.profile_id))
 		if not queued.queued: return await _failed("profiles")
 		var result: Dictionary={}
@@ -56,7 +56,7 @@ func start_world(world: WorldServer, settings: Dictionary) -> bool:
 	for name: String in WORLD_POOLS:
 		if name!="inventory" and not _start_pool(name,WORLD_POOLS[name]): return await _failed("workers")
 	if not await _wait_ready(): return await _failed("workers")
-	if world.database.db==null or world.database.store==null or world.database.store.db!=world.database.db or not world.database.db.query("SELECT 1;"): return await _failed("profiles")
+	if not world.database.profile_store_ready(): return await _failed("profiles")
 	world.inventory_runtime=preload("res://source/server/world/database/postgres/inventory_runtime_postgres.gd").new(world,_pools.inventory)
 	world.inventory_runtime.enable_initialization()
 	world.wallet_runtime=preload("res://source/server/world/database/postgres/wallet_runtime_postgres.gd").new(world,_pools.wallet)

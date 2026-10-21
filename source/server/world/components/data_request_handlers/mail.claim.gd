@@ -18,7 +18,7 @@ func data_request_handler(
 	if mail_id <= 0:
 		return {"ok": false, "reason": "missing"}
 
-	var store: MailStore = instance.world_server.database.mail_store
+	var store: RefCounted = instance.world_server.database.mail_store
 	var claimable: Dictionary = store.get_claimable(pr.player_id, mail_id)
 	if not bool(claimable.get("ok", false)):
 		return {"ok": false, "reason": str(claimable.get("reason", "missing"))}

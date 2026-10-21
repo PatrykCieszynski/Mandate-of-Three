@@ -413,7 +413,7 @@ func _handle_account_reset_password(payload: Dictionary) -> Dictionary:
 		return {"ok": false, "error": "account_not_found"}
 	var account: AccountResource = collection[username]
 	account.password = PasswordHasher.hash_password(new_password)
-	authentication_manager.save_account_collection()
+	if not authentication_manager.save_account_collection(): return {"ok":false,"error":"storage"}
 	ServerLog.info("Dashboard: reset password for account '%s' (id %d)." % [account.username, account.id])
 	return {"ok": true, "username": account.username, "id": account.id}
 

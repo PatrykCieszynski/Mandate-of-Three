@@ -1,5 +1,10 @@
 # Persistence policy - explicit state categories
 
+Normal development now uses PostgreSQL for Economy, Master accounts and World
+profiles/legacy persistent services. The owner approved a clean test-data start
+on 2026-10-21. See [full-state cutover](../development/postgres-full-state.md).
+SQLite remains a legacy/reference fixture backend, without automatic fallback.
+
 Accepted following the user's review. The database is the persistence layer;
 an active character's authoritative state lives in World Server memory. Do not
 build a generic stats/event framework or autosave the entire profile for each change.

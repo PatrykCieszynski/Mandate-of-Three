@@ -1,5 +1,9 @@
 # Opt-in PostgreSQL process startup — P3s
 
+**Historical hybrid path:** current normal configs use
+[all-PostgreSQL state](postgres-full-state.md), including profiles and accounts.
+The file-based details below describe the retained compatibility fixtures.
+
 Normal Master and World scenes can now select the shared P3r bootstrap. SQLite
 remains the default. This is an explicit single-World development deployment,
 not a production cutover, a SQLite economy import or multi-World admission.

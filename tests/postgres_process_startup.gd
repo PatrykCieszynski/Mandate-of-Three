@@ -5,6 +5,7 @@ var directory: String
 var pids: Array[int]=[]
 var request: HTTPRequest
 var ports: Array
+var full_state:=OS.get_environment("MANDATE_PG_FULL_STATE")=="1"
 func _ready() -> void:
 	Engine.max_fps=120
 	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster")
@@ -52,7 +53,10 @@ func close_roles(world: int, gateway: int, master: int) -> void:
 func run() -> void:
 	pg=ClassDB.instantiate("GodotSociDatabase")
 	assert(pg.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")))
-	assert(preload("res://source/server/world/database/postgres/economy_schema_postgres.gd").ensure_schema(pg))
+	if full_state:
+		assert(preload("res://source/server/world/database/postgres/realm_schema_postgres.gd").ensure_schema(pg))
+	else:
+		assert(preload("res://source/server/world/database/postgres/economy_schema_postgres.gd").ensure_schema(pg))
 	var authority: String=pg.query("SELECT value FROM economy.meta WHERE key='economy_authority_id';").rows[0].value
 	# Idempotent retry after an unobserved success cannot reset wallet or rebind.
 	var identity:=Identity.new(pg)
@@ -72,6 +76,7 @@ func run() -> void:
 	assert(database.economy_backend=="postgresql" and not database.wallet_ready)
 	database.db.close_db();database.queue_free()
 	var economy: String='\n[economy]\nbackend="postgresql"\nconnection_env="MANDATE_PG_FIXTURE_CONNECTION"\nauthority_id="'+authority+'"\n'
+	if full_state: economy+='realm_state=true\n'
 	write("master.cfg",'[gateway-manager-server]\nport='+str(ports[0])+'\nbind_address="127.0.0.1"\n[world-manager-server]\nport='+str(ports[1])+'\nbind_address="127.0.0.1"\n[authentication]\naccount_collection_path="'+directory+'/accounts.tres"\n'+economy)
 	write("world.cfg",'[world-server]\nport='+str(ports[2])+'\nbind_address="127.0.0.1"\nname="PG Process Fixture"\n[world-manager-client]\naddress="127.0.0.1"\nport='+str(ports[1])+economy+'profile_path="'+directory+'/profiles.db"\n')
 	write("gateway.cfg",'[gateway-server]\nport='+str(ports[3])+'\nbind_address="127.0.0.1"\n[gateway-manager-client]\naddress="127.0.0.1"\nport='+str(ports[0])+'\n')
@@ -95,18 +100,33 @@ func run() -> void:
 	# Operator repair on the disposable fixture only; no items/grants exist for it.
 	assert(pg.execute("DELETE FROM economy.characters WHERE character_id=1;").ok)
 	write("identity-conflict-cleared","ok")
+	if full_state: write("seed-maintenance","ok")
 	await wait_exit(client)
 	assert("POSTGRES_PROCESS_CLIENT_OK" in FileAccess.get_file_as_string(directory+"/client.log"))
 	var report: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(directory+"/client-report.json"))
 	var durable: Dictionary=pg.query("SELECT account_id FROM economy.characters WHERE character_id=:character;",{"character":int(report.character)})
 	assert(durable.ok and int(durable.rows[0].account_id)==int(report.account))
 	await close_roles(world,gateway,master)
-	var profiles:=SQLite.new();profiles.path=directory+"/profiles.db";assert(profiles.open_db())
-	assert(profiles.query("SELECT name FROM sqlite_master WHERE type='table' AND name='account_wallets';") and profiles.query_result.is_empty())
-	assert(profiles.query("SELECT COUNT(*) AS n FROM item_instances;") and profiles.query_result[0].n==0)
-	assert(profiles.query("SELECT COUNT(*) AS n FROM players;") and profiles.query_result[0].n==1)
-	profiles.close_db()
+	if full_state:
+		assert(not FileAccess.file_exists(directory+"/profiles.db") and not FileAccess.file_exists(directory+"/accounts.tres"))
+		assert(pg.query("SELECT COUNT(*) AS n FROM realm.accounts;").rows[0].n==1)
+		assert(pg.query("SELECT experience FROM realm.players;").rows[0].experience==41)
+		assert(pg.query("SELECT password_hash FROM realm.accounts;").rows[0].password_hash!="Fixture-only-strong-password-1")
+	else:
+		var profiles:=SQLite.new();profiles.path=directory+"/profiles.db";assert(profiles.open_db())
+		assert(profiles.query("SELECT name FROM sqlite_master WHERE type='table' AND name='account_wallets';") and profiles.query_result.is_empty())
+		assert(profiles.query("SELECT COUNT(*) AS n FROM item_instances;") and profiles.query_result[0].n==0)
+		assert(profiles.query("SELECT COUNT(*) AS n FROM players;") and profiles.query_result[0].n==1)
+		profiles.close_db()
 	# Fresh normal processes, same trusted profile/PG realm. No fixture grants.
+	if full_state:
+		DirAccess.remove_absolute(directory+"/seed-maintenance")
+		pg.close()
+		var output: Array=[]
+		assert(OS.execute(OS.get_environment("MANDATE_PG_FIXTURE_PYTHON"),[ProjectSettings.globalize_path("res://tests/postgres_backup_fixture.py")],output,true)==0,"all-state backup/restore: "+str(output))
+		print(str(output))
+		OS.set_environment("MANDATE_PG_FIXTURE_CONNECTION",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION").replace("dbname=mandate_readiness","dbname=mandate_restored"))
+		assert(pg.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")))
 	master=start("master",true)
 	await get_tree().create_timer(1).timeout
 	gateway=start("gateway",true);world=start("world",true)
@@ -114,6 +134,7 @@ func run() -> void:
 	client=start("client",true);await wait_exit(client)
 	assert("POSTGRES_PROCESS_CLIENT_OK restart" in FileAccess.get_file_as_string(directory+"/client-restart.log"))
 	await close_roles(world,gateway,master)
+	if full_state: preload("res://tests/support/postgres_realm_state_contract.gd").run(pg)
 	pg.close()
 	print("POSTGRES_PROCESS_STARTUP_OK: real Gateway/Master/World creation, grant, equip, relog, restart and clean drain")
 	get_tree().quit()

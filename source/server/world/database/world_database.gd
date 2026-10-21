@@ -15,8 +15,9 @@ func award_experience(player: PlayerResource, amount: int) -> void:
 var economy_backend: String="sqlite" # Explicit bootstrap selection; never auto-fallback.
 var database_path: String
 var db: SQLite
-var store: WorldStoreSqlite
-var mail_store: MailStore
+var store: RefCounted
+var mail_store: RefCounted
+var profile_pg: Object
 var item_store: ItemStoreSqlite
 var wallet_store: WalletStoreSqlite
 const WALLET_SAVE_SECONDS: float = 30.0
@@ -50,6 +51,8 @@ func start_auction_queries() -> bool:
 	return await auction_queries.start(db,wanted)
 
 func coordinated_backup(keep_last: int = 10, restart_reader: bool = true, final_flush: bool = false) -> bool:
+	# PostgreSQL checkpoints are not file backups. Offline pg_dump owns backups.
+	if profile_pg!=null: return flush_character()
 	if _auction_lifecycle_busy: return false
 	_auction_lifecycle_busy=true
 	var had_reader:=auction_queries!=null
@@ -66,6 +69,9 @@ func shutdown_database() -> bool:
 	if not await coordinated_backup(10,false,true): return false
 	wallet_ready=false
 	_economy_identity = ""
+	if profile_pg!=null:
+		profile_pg.close()
+		return true
 	return db!=null and db.close_db()
 
 func economic_context(character_id: int) -> Dictionary:
@@ -82,7 +88,7 @@ func economic_context(character_id: int) -> Dictionary:
 
 func wallet_account_id(character_id: int) -> int:
 	if not _wallet_accounts.has(character_id) and store != null:
-		var account_id := store.resolve_account_id(character_id)
+		var account_id: int = store.resolve_account_id(character_id)
 		if account_id > 0: _wallet_accounts[character_id] = account_id
 	return _wallet_accounts.get(character_id,0)
 
@@ -336,7 +342,24 @@ func _postgres_wallet_runtime() -> RefCounted:
 	return null if world==null or world.database!=self else world.wallet_runtime
 
 
-## Explicit opt-in profile file. Refuse legacy economy data; never import it.
+## Native full-state selection; runtime checks schema and never provisions it.
+func start_postgres_profiles(settings: Dictionary) -> bool:
+	economy_backend="postgresql"
+	wallet_ready=false
+	profile_pg=preload("res://source/server/world/database/postgres/realm_schema_postgres.gd").connect_store(settings)
+	if profile_pg==null: return false
+	var identity: Dictionary=profile_pg.query("SELECT value FROM economy.meta WHERE key='world_profile_id';")
+	if not identity.ok or identity.rows.size()!=1 or not ItemInstance.valid_uid(identity.rows[0].value):
+		profile_pg.close();return false
+	economy_profile_id=identity.rows[0].value
+	store=preload("res://source/server/world/database/postgres/world_store_postgres.gd").new(profile_pg)
+	mail_store=preload("res://source/server/world/database/postgres/mail_store_postgres.gd").new(profile_pg)
+	return true
+
+func profile_store_ready() -> bool:
+	if profile_pg!=null: return store!=null and store.db==profile_pg and profile_pg.query("SELECT 1;").ok
+	return db!=null and store!=null and store.db==db and db.query("SELECT 1;")
+
 func start_profile_database(path: String) -> bool:
 	economy_backend="postgresql"
 	wallet_ready=false
@@ -455,7 +478,7 @@ func save_all_connected(connected_players: Dictionary) -> int:
 		var p: PlayerResource = connected_players[peer_id]
 		if p == null:
 			continue
-		store.save_player(p)
+		if not store.save_player(p): return -1
 		count += 1
 	return count
 
