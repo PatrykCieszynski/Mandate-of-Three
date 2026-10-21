@@ -8,7 +8,7 @@ implementation for workers/operation budgets remains separate; no limits are rai
 
 **Target:** Keep Godot 4.7.2 as both client and authoritative World Server. Reduce unnecessary physics and per-viewer replication work while keeping the Metin-like gameplay contract, existing Economy ownership, RPC/session security and instance architecture intact.
 
-**Reference:** [Pre-alpha hardening](architecture-hardening.md), [World MapInstance/channel ADR](../architecture/world-instance-architecture.md), [Economy C1–C5](../architecture/economy/README.md), and the historical [experimental World PR #18](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/18). The experiment branch is evidence/source code, **not** a branch to merge wholesale over the newer Economy/SoC work.
+**Reference:** [Pre-alpha hardening](../history/postgresql-migration.md), [World MapInstance/channel ADR](../architecture/world-instance-architecture.md), [Economy C1–C5](../architecture/economy/README.md), and the historical [experimental World PR #18](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/18). The experiment branch is evidence/source code, **not** a branch to merge wholesale over the newer Economy/SoC work.
 
 ## 0. Execution rules (for Codex)
 

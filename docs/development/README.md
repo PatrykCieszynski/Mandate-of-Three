@@ -9,6 +9,6 @@ Read [project direction](../decisions/project-direction.md), [runtime persistenc
 - [CEF integration](../ui/cef-addon-integration.md), [local visuals](local-dev-visuals.md).
 
 ## Older implementation notes
-The numerous `postgres-*-parity.md`, `postgres-*-runtime.md` and other incremental P1–P3 documents describe development stages. Many were written when the live backend was SQLite or World integration was still pending. **Their historical status statements are superseded** by the full-state runbook and current code. Keep them for detailed recovery/contract investigation, but do not list them as active onboarding steps or as pending tasks.
+The old `postgres-*-parity.md` and P3 `postgres-*-runtime.md` reports described incremental implementation stages. Thirty superseded stage-level documents have been removed from this directory and indexed in [completed PostgreSQL milestone history](../history/postgresql-migration.md), with exact source paths recoverable in Git history. The remaining operational runbooks and [evidence](../evidence/README.md) are authoritative for their respective purposes.
 
 Do not write a new development report for every change: update a canonical runbook if behavior changes; put test commands and outcomes in the PR; write a dated [milestone summary](../evidence/README.md) only when a milestone closes.
