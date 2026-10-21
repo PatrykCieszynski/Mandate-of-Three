@@ -9,13 +9,17 @@ It does not transplant experimental movement or AOI implementations.
 ## Frozen cohorts
 
 1. **Synthetic movement:** 0/0, 100/200 and 250/500 players/mobs; three repeats
-   per case, 3 seconds warmup + 12 seconds observation, 60 physics Hz/60 FPS.
+   per case, requested 3-second warmup + 12-second Godot timer, 60 physics Hz/60 FPS.
    Dense uses the existing 32 m arena and obstacles; wide uses a flat 512 m
    floor. One singleton pack per dog, stationary pack anchors, no automatic
    acquisition; assigned targets chase using current AI/motion. Player intentions
    refresh at production cadence using simulation-time deterministic directions.
    Seed 1729; spawn radius zero. Attack cooldowns are held beyond the run, so
    this cohort has no damage/death/economic work. It is not gameplay parity.
+   The reused support initializes four arena packs; their actors are removed,
+   leaving four empty pack owners alongside the requested singleton packs.
+   Its production CombatEndpoint also bakes arena navigation during startup;
+   this contributes to whole-process peak RSS, especially for the 512 m floor.
 2. **Ready binding/cache probe:** 0/24/64/65 requested Inventory + Wallet accounts,
    with 0/12/180 one-cell material items per Inventory. Actual public attach and
    session fingerprint checks run against fixture session maps, then the probe
@@ -54,6 +58,10 @@ after measurement do not change the measured control; record the measurement SHA
   server step or all OS scheduling**. Use tick intervals and observed Hz alongside it.
 - `tick_interval`: p50/p95/p99/max time between tick beginnings. Catch-up physics
   ticks may be bunched; average Hz alone can hide expensive frames.
+- Godot timers can stretch relative to wall time under overload. Result `seconds`
+  is the measured monotonic observation duration and is used for observed Hz;
+  do not divide by the requested 12 seconds. Same engine-time trajectory and
+  requested timer are held fixed; this is not a fixed-wall-duration arrival test.
 - `over_budget_ticks`: callback spans above 16.667 ms, an observation, not a CI gate.
 - Player snapshot construction mirrors the current production roster and runs at
   its cadence. One Variant serialization is a proxy; real per-viewer RPC encoding,
