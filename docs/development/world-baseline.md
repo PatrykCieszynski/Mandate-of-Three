@@ -46,7 +46,12 @@ owns only its child; timeout kills that child, never a live Master/World/PG.
 No sockets, databases or connection strings are needed. APPDATA and equivalent
 directories are isolated under ignored `.godot/verification/world-capacity/`.
 
-## Artifact schema v1 and interpretation
+## Artifact schema and interpretation
+
+Historical W0 evidence uses schema v1. The W1 extension emits v2 and splits
+control/profile summaries; see [profiling contract](world-profiling.md). Default
+`--profile off` retains native simulation behavior; new frame probes and separate
+cache timings still mean that comparisons must use same-commit controls.
 
 Every run stores raw stdout/stderr and `results.json`, with Git SHA/status,
 tracked source fingerprint, executable SHA/version, OS/CPU, flags and repeats.
@@ -80,8 +85,9 @@ after measurement do not change the measured control; record the measurement SHA
 
 No TPS/p95/p99 success threshold or advertised player capacity. Fail only for
 broken setup, missing observations, count mismatch, script failure or lifecycle
-assertion. Keep large runs out of default CI. W1 adds detailed nested hotspot
-instrumentation and quantifies its overhead; W0 does not claim those timings.
+assertion. Keep large runs out of default CI. The optional W1 extension adds
+detailed nested hotspot instrumentation and quantifies its overhead; historical
+W0 evidence does not claim those timings.
 
 ## Preserved behavior and rollback
 
