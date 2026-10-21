@@ -27,6 +27,8 @@ ignored subclasses beside each run's logs. It inserts timers at exact anchors
 and fails before launch if a method/anchor is missing or ambiguous. It never
 edits the originals. Generated scripts and hashes are retained with results for
 inspection, preventing a separately maintained copy of old movement/AI logic.
+Generated-source hashes cover UTF-8 text with LF-normalized newlines; Windows
+files may have CRLF. Engine/source-tree fingerprints cover their actual bytes.
 The factory changes only which test subclass is allocated. Tests run production
 setup, collision policy and native `move_and_slide()`/`intersect_shape()`.
 
@@ -80,6 +82,8 @@ context probe is a different call and must not be subtracted as an exact split.
 Neither probe measures native SQL loading, paused recovery or login bursts.
 
 ## Review and rollback
+
+Executed results and limitations: [W1 evidence](../evidence/world-w1-profile/README.md).
 
 Report median-of-three dense/wide rankings with their control overhead and raw
 artifact path. CPU/RSS measurements still cover the whole process lifetime.
