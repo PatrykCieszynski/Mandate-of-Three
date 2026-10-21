@@ -25,7 +25,8 @@ func data_request_handler(
 	if BlockList.is_blocked(from_player.player_id, target_id):
 		return {"error": 0, "ok": true, "msg": "Already blocked.", "id": target_id}
 
-	BlockList.add(from_player.player_id, target_id)
+	var mutation:=RealmProfileMutation.new(world_server.database.store,[from_player])
+	if not mutation.started: return mutation.failure()
 
 	# Mirror into the persisted PackedInt64Array so the next session keeps it.
 	var ids: PackedInt64Array = from_player.blocked_ids.duplicate()
@@ -41,6 +42,8 @@ func data_request_handler(
 		friends.remove_at(idx)
 		from_player.friends = friends
 
-	world_server.database.save_player(from_player)
+	if not mutation.save_player(from_player): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
+	BlockList.add(from_player.player_id, target_id)
 
 	return {"error": 0, "ok": true, "msg": "Blocked.", "id": target_id}

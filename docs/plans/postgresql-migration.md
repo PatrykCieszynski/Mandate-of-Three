@@ -1,97 +1,44 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status (2026-10-21):** P1 domain ports and P2 concurrency acceptance are
-delivered. P3 now includes all existing economic domains, bounded asynchronous
-execution/recovery, normal opt-in Master/World startup, identity manifests,
-operator maintenance, coherent stopped-writer backup/restore and sequential
-World replacement. **SQLite remains the default; no production cutover or
-SQLite economy import has happened.** The progress entries below are delivery
-history, not the current list of missing runtime ports.
+**Current status (2026-10-21): clean development cutover implemented.**
+Normal Master/World configs now select PostgreSQL for all database-backed state:
+Economy, Master accounts/password hashes, World profiles/progression, retained
+guilds, mail and persistent chat. SQLite remains a legacy/reference fixture
+backend, without fallback from PostgreSQL. The history below records staged ports,
+not unfinished runtime adoption.
 
-## Runtime adoption status
+## Accepted completion scope
 
-Normal startup selects one realm Economy backend from private configuration.
-PostgreSQL selection is sticky and fails closed; it never falls back to SQLite
-for economic writes. World profiles/progression remain an explicitly separate
-SQLite database, bound to the PG realm by persistent profile identity. Master
-credentials remain its account collection resource. Neither is silently included
-in the Economy backend port.
+1. P1/P2 domain ports, atomic economic invariants and concurrency acceptance.
+2. P3 bounded async Economy execution, receipts/recovery, Gateway/Master/World
+   sessions and fail-closed admission, maintenance and sequential replacement.
+3. P4 adversarial 30-minute sustained repeat and fault/recovery probes passed.
+   The independent 30-minute Representative Economy profile also passed:
+   300 economic accounts, 40 active runtime bindings, zero network clients,
+   three controlled peaks, exact receipts and integrity audits. Both were
+   reviewed/accepted; see [consolidated evidence](../evidence/postgres-full-cutover/README.md).
+4. The owner approved a **clean start** instead of importing disposable old data.
+   SQLite-to-PG import is therefore waived for this local cutover, not silently
+   implemented or accepted for future real-player deployments.
+5. All-state PG archive/restore into another empty database, followed by normal
+   process restart/login/equipped item and XP recovery, passed.
 
-| Boundary | Implemented in opt-in PG runtime | Remaining acceptance |
-| --- | --- | --- |
-| Inventory / equipment / ground pickup | Native transactions, receipts, initialization, client journals, current authoritative projections | Broader mixed workload and soak; no duplicate port needed |
-| Yang / NPC Shop / Upgrade | RAM income checkpoints, critical transactions, captured pending prefixes and recovery | Mixed workload/fault acceptance |
-| Account Storage | Account-locked custody, original issuer recovery, combined Inventory/Storage snapshots | Shared-state workload/soak; never bypass its full-footprint lock contract |
-| Player Shop / claims / proceeds | Seller lifecycle, purchase settlement, partial collection and receipt recovery | Mixed trading/concurrency workload |
-| Exchange / Auction | Ledger conversions, reservations/orders/matching, indexed bounded async public search | Mixed read/write load, saturation/tick-tail measurements |
-| Bootstrap / sessions | Normal Gateway/Master/World startup, provisioning/preflight, immutable identity binding, no fallback and readiness gates | Deployment/cutover approval; no second live World owner |
-| Operations | Token-required maintenance/status, stopped-writer bundle/restore and controlled sequential World replacement | Production-scale backup timing/memory, retention, failure runbooks and P4 acceptance |
-| Profiles / Master accounts / other legacy World data | Retained stores with explicit identity/backup boundaries | Separate port/removal decision; not justification to delete all SQLite |
+Use [full-state setup and operational limits](../development/postgres-full-state.md).
+The local helper owns a new loopback cluster under ignored runtime storage; no
+installed PostgreSQL service or historical account file is overwritten.
 
-## Remaining gates
+## Deliberately outside migration completion
 
-1. **P4 load/fault/soak:** the [P4a baseline](../development/postgres-mixed-load.md)
-   now mixes World economy operations and indexed reads in three fresh clusters.
-   Offered 100/s is not achieved successful throughput; queues remain bounded.
-   [P4b receipt recovery](../evidence/postgres-p4b/README.md) now verifies deferred
-   COMMIT rollback and lost successful application delivery under mixed traffic.
-   [P4c investigation](../evidence/postgres-p4c/README.md) adds real backend-process
-   loss and a paused-projection recovery correction. The sustained attempt failed
-   receipt cardinality. The [clean sustained repeat](../evidence/postgres-p4c/README.md)
-   now passes (2026-10-21): 31,247 exact observed/durable successful IDs, no
-   missing/extra IDs, invariants/drain and owned-cluster shutdown PASS.
-   Test infrastructure has two separate cases:
-   Database/Economy Stress & Soak and [MMO Integration & Load](../development/realm-workload.md).
-   The latter has a [24-account/180-second story baseline](../evidence/realm-workload-foundation/README.md),
-   not a large-network or complete-combat capacity result. Current production
-   binding limits are reported as admission refusals, not bypassed by the test.
-   The prior stress-soak repeat was stopped on user request and is not silently
-   resumed inside the new player-story case.
-   **Accepted P4 correction (2026-10-21): two mandatory soak profiles before
-   import/cutover acceptance.** First complete the unchanged 30-minute
-   Stress & Recovery sustained schedule and its separate fault/recovery probes.
-   Then add a distinct 30-minute Representative Economy Soak using the existing
-   infrastructure, without replacing the adversarial scheduler or raising
-   production session/binding limits. Both are required; neither proves
-   production readiness or simultaneous-client capacity.
+This is alpha/development persistence acceptance, not a production capacity claim.
+The retained synchronous profile/account API needs burst/tick profiling. Further
+World optimization, actual connected-client combat load, production backup sizing,
+Linux and physical CEF checks remain their own scopes. Existing Economy soaks do
+not measure the new credential/profile boundary. Multiple overlapping World
+owners, distributed invalidation/publication and automatic failover are unshipped.
+The SQLite reference stores and parity suites remain useful; deleting them is a
+separate cleanup and not a prerequisite for routing normal gameplay to PG.
 
-   The representative profile is a focused follow-up change; acceptance evidence
-   remains required (see [profile and reporting](../development/representative-economy.md)).
-   Start with approximately 300 economic accounts and 30–50 active buyers;
-   remaining accounts supply offline shops and a broad existing catalogue.
-   Distinguish economic population, admitted sessions and economically active
-   buyers. Disperse visits/purchases, include read-only shoppers and a small
-   heavy-trader cohort, leave most listings unsold, and report rare offer
-   conflicts separately. Include controlled 30–60-second activity peaks above
-   normal search/visit/purchase demand. Record the seed, offered rates and
-   behaviour mix, so the profile cannot silently become a nearly idle test.
-
-   Report normal and peak windows separately: offered/admitted/completed work,
-   refusals, conflicts/retries/recovery, active buyers/shops, read/write mix,
-   shop-open and purchase latency distributions, queue behaviour and World tick
-   tails. Waiting/retrying in stories must not be presented as maximum server
-   throughput. Agree responsiveness criteria before acceptance; the existing
-   24-account story baseline does not satisfy this new soak gate. Keep immutable
-   economic audits and accepted-operation recovery mandatory in both profiles.
-
-   Continue with cluster or World faults and broader network/combat/domain traffic;
-   record admission, transaction/pool/lock behavior and World tick tails. Use
-   repeated comparable runs and the planned sustained soak. A short correctness
-   fixture is not a capacity result.
-2. **Quiesced SQLite-to-PG import rehearsal:** on disposable verified backups,
-   conserve account/character IDs, UIDs/custody, money/revenue/reservations,
-   revisions and original receipts. Existing PG-to-PG restore does not prove import.
-3. **Operator-approved cutover and cleanup:** verify the deployment/restore set,
-   choose the authoritative backend explicitly, then retire unused SQLite
-   *economic* runtime paths. Profile/progression persistence, reference/parity
-   fixtures and Master credentials remain separate decisions.
-
-Controlled World replacement is now sequential on the same host: Master/Gateway
-stay up, the old World closes routing and drains, supervision verifies its exit,
-then a fresh World opens the same stores. This does **not** implement overlapping
-owners, cross-host live migration, distributed publication or automatic failover.
-Those need their own acceptance before a second World serves live accounts.
-
+## Staged implementation history
 The implementation follows accepted [Economy C1–C5](../architecture/economy/README.md)
 and [World topology](../architecture/world-instance-architecture.md). No fixed
 remaining PR count or cutover date is inferred from completed backend ports.

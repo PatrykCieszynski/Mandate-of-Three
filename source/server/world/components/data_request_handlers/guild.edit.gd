@@ -3,7 +3,7 @@ extends DataRequestHandler
 
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var guild_name: String = str(args.get("name", "")).strip_edges()
 	if guild_name.is_empty():
@@ -40,6 +40,9 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 			return {"error": 1, "ok": false, "message": "Your guild doesn't own that emblem."}
 		guild.logo_id = logo_id
 
-	store.save_guild(guild)
+	var mutation:=RealmProfileMutation.new(store)
+	if not mutation.started: return mutation.failure()
+	if not mutation.save_guild(guild): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	return {"error": 0, "ok": true, "message": "Saved."}

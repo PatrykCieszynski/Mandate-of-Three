@@ -47,7 +47,8 @@ func _ready() -> void:
 		if not settings.ok:
 			push_error("World economy startup refused: "+str(settings.error));return
 		if settings.backend=="postgresql":
-			if not $Database.start_profile_database(str(settings.profile_path)):
+			var profiles_ready: bool=$Database.start_postgres_profiles(settings) if settings.get("realm_state",false) else $Database.start_profile_database(str(settings.profile_path))
+			if not profiles_ready:
 				push_error("World economy startup refused: profiles");return
 			settings["profile_id"]=$Database.economy_profile_id
 			var owner:=preload("res://source/server/world/database/postgres/economy_bootstrap_postgres.gd").new()

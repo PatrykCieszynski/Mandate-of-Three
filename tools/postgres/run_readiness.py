@@ -49,7 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
     parser.add_argument("--load-seconds", type=int, default=8, choices=range(2,1801))
     parser.add_argument("--load-repeats", type=int, default=3, choices=(1,2,3))
     parser.add_argument("--load-faults", action="store_true", help="Inject fixture-only COMMIT failure and lost application reply under mixed load")
@@ -76,7 +76,7 @@ def main():
         parser.error("--load-faults requires --suite mixed-load")
     extension = ".exe" if os.name == "nt" else ""
     binaries = {name: args.pg_bin.resolve() / (name + extension)
-                for name in (("initdb", "pg_ctl", "psql", "pg_dump", "pg_restore") if args.suite == "backup" else ("initdb", "pg_ctl", "psql"))}
+                for name in (("initdb", "pg_ctl", "psql", "pg_dump", "pg_restore") if args.suite in ("backup", "full-state") else ("initdb", "pg_ctl", "psql"))}
     if not args.godot.is_file() or not all(path.is_file() for path in binaries.values()):
         raise RuntimeError("Godot/PostgreSQL binaries missing; use --pg-bin and install the pinned SOCI payload")
     run_check = subprocess.run([sys.executable, str(ROOT / "tools/soci/setup.py"), "--check"],
@@ -113,7 +113,9 @@ def main():
         initialized = True
         password_file.unlink()
         # Full composition: World 8 + Master 1 + fixture control 1; retain reserved slots.
-        connections = 14 if args.suite in ("inventory-endpoint", "process-startup", "maintenance", "backup", "world-replacement") else 12
+        connections = 14 if args.suite in ("inventory-endpoint", "process-startup", "full-state", "maintenance", "backup", "world-replacement") else 12
+        # Full-state adds one profile and one credential session, not more workers.
+        if args.suite == "full-state": connections = 16
         options = f"-h 127.0.0.1 -p {port} -c max_connections={connections} -c statement_timeout=1000 -c lock_timeout=750 -c idle_in_transaction_session_timeout=2000 -c log_min_error_statement=panic"
         run([binaries["pg_ctl"], "-D", data, "-l", directory / "postgres.log", "-o", options,
              "-w", "-t", "15", "start"], log=control_log)
@@ -124,6 +126,7 @@ def main():
         run(psql, env=env, log=control_log, sql=f"CREATE ROLE mandate_fixture LOGIN PASSWORD '{password}';")
         run(psql + ["-c", "CREATE DATABASE mandate_readiness OWNER mandate_fixture;"], env=env, log=control_log)
         env["MANDATE_PG_FIXTURE"] = "owned-local-cluster"
+        env["MANDATE_PG_FULL_STATE"] = "1" if args.suite == "full-state" else "0"
         if args.suite == "realm-workload":
             env["MANDATE_REALM_PLAYERS"] = str(args.realm_players)
             env["MANDATE_REALM_SECONDS"] = str(args.realm_seconds)
@@ -140,13 +143,13 @@ def main():
             env["MANDATE_PG_LOAD_REPEATS"] = str(args.load_repeats)
         env["MANDATE_PG_FIXTURE_DIR"] = "res://" + directory.relative_to(ROOT).as_posix()
         env["MANDATE_PG_FIXTURE_CONNECTION"] = f"host=127.0.0.1 port={port} dbname=mandate_readiness user=mandate_fixture password={password} connect_timeout=3"
-        if args.suite == "backup":
+        if args.suite in ("backup", "full-state"):
             run(psql, env=env, log=control_log, sql="ALTER ROLE mandate_fixture CREATEDB;")
             env.update(PGHOST="127.0.0.1", PGPORT=str(port), PGUSER="mandate_fixture", PGDATABASE="mandate_readiness")
             env["MANDATE_PG_FIXTURE_BIN"] = str(args.pg_bin.resolve())
             env["MANDATE_PG_FIXTURE_GODOT"] = str(args.godot.resolve())
             env["MANDATE_PG_FIXTURE_PYTHON"] = sys.executable
-        if args.suite in ("process-startup", "maintenance", "backup", "world-replacement"):
+        if args.suite in ("process-startup", "full-state", "maintenance", "backup", "world-replacement"):
             probes = [socket.socket() for _ in range(5)]
             try:
                 for probe in probes:
@@ -188,6 +191,7 @@ def main():
             "auction-runtime": ("postgres_auction_runtime", "POSTGRES_AUCTION_RUNTIME_OK"),
             "bootstrap": ("postgres_bootstrap", "POSTGRES_BOOTSTRAP_OK"),
             "process-startup": ("postgres_process_startup", "POSTGRES_PROCESS_STARTUP_OK"),
+            "full-state": ("postgres_process_startup", "POSTGRES_PROCESS_STARTUP_OK"),
             "maintenance": ("postgres_maintenance", "POSTGRES_MAINTENANCE_OK"),
             "backup": ("postgres_backup", "POSTGRES_BACKUP_OK"),
             "world-replacement": ("postgres_world_replacement", "POSTGRES_WORLD_REPLACEMENT_OK"),
@@ -197,8 +201,8 @@ def main():
             "inventory-endpoint": ("postgres_inventory_endpoint", "POSTGRES_INVENTORY_ENDPOINT_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
-             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload") else ["--quit-after", "1200"]),
-            env=env, log=directory / "godot.log", timeout=(args.realm_seconds+args.realm_players*3+300) if args.suite=="realm-workload" else (args.load_seconds*args.load_repeats*4+240) if args.suite=="mixed-load" else 225 if args.suite in ("inventory-endpoint", "process-startup", "maintenance", "backup", "world-replacement") else 60)
+             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload") else ["--quit-after", "1200"]),
+            env=env, log=directory / "godot.log", timeout=(args.realm_seconds+args.realm_players*3+300) if args.suite=="realm-workload" else (args.load_seconds*args.load_repeats*4+240) if args.suite=="mixed-load" else 225 if args.suite in ("inventory-endpoint", "process-startup", "full-state", "maintenance", "backup", "world-replacement") else 60)
         output = (directory / "godot.log").read_text(encoding="utf-8", errors="replace")
         if marker not in output or any(word in output for word in ("SCRIPT ERROR", "Parse Error", "POSTGRES_READINESS_FAILED")):
             raise RuntimeError("Godot readiness contract failed; see " + str(directory.relative_to(ROOT) / "godot.log"))
@@ -207,7 +211,7 @@ def main():
                 client_output = (directory / f"client-{role}.log").read_text(encoding="utf-8", errors="replace")
                 if "POSTGRES_INVENTORY_ENDPOINT_CLIENT_OK" not in client_output or any(word in client_output for word in ("SCRIPT ERROR", "Parse Error")):
                     raise RuntimeError(f"Native client {role} failed; see {directory.relative_to(ROOT)}")
-        if args.suite in ("process-startup", "maintenance", "backup", "world-replacement"):
+        if args.suite in ("process-startup", "full-state", "maintenance", "backup", "world-replacement"):
             for role in ("master", "world", "gateway", "client"):
                 for suffix in ("", "-restart"):
                     child_output = (directory / f"{role}{suffix}.log").read_text(encoding="utf-8", errors="replace")

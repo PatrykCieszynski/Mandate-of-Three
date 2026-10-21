@@ -14,7 +14,7 @@ static var _last_tag_ms: Dictionary[int, int] = {}
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var player: PlayerResource = world_server.connected_players.get(peer_id)
 	if player == null:
@@ -57,10 +57,13 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 		if tagged_online >= cap:
 			return {"error": 1, "ok": false, "message": "Tag limit reached (%d online). Upgrade Member Capacity or wait for a slot." % cap}
 
+	var mutation:=RealmProfileMutation.new(store,[player])
+	if not mutation.started: return mutation.failure()
 	# Toggle the tag.
 	player.active_guild_id = 0 if was_active else guild_id
+	if not mutation.save_player(player): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 	_last_tag_ms[player.player_id] = now_ms
-	store.save_player(player)
 	# Keep the client's ClientState.active_guild_id in sync (drives ally tints etc.).
 	world_server.data_push.rpc_id(peer_id, &"active_guild_id.set", {"active_guild_id": player.active_guild_id})
 	# Sync the player node's tag so OTHER players re-tint this player's ally bar live.

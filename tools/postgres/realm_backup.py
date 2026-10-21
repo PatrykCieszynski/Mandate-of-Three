@@ -113,7 +113,7 @@ class Guard:
 
     def __enter__(self):
         try:
-            self.execute("SET statement_timeout='10s'; SET lock_timeout='1s'; SET idle_in_transaction_session_timeout=0; BEGIN; DO $$ DECLARE r record; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='economy' ORDER BY tablename LOOP EXECUTE format('LOCK TABLE economy.%I IN SHARE MODE',r.tablename); END LOOP; END $$;")
+            self.execute("SET statement_timeout='10s'; SET lock_timeout='1s'; SET idle_in_transaction_session_timeout=0; BEGIN; DO $$ DECLARE r record; BEGIN FOR r IN SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('economy','realm') ORDER BY schemaname,tablename LOOP EXECUTE format('LOCK TABLE %I.%I IN SHARE MODE',r.schemaname,r.tablename); END LOOP; END $$;")
             self.pid = int(self.execute("SELECT pg_backend_pid();")[0])
             return self
         except BaseException:
@@ -130,7 +130,7 @@ class Guard:
         self.process.stdin.close(); self.process.stdout.close()
 
 
-def inspect(pg, profile, accounts, godot):
+def inspect(pg, profile=None, accounts=None, godot=None):
     """Exact per-table content fingerprints include receipts, custody and money.
 
     Offline audit only: sorting/aggregation is deliberately not a runtime query.
@@ -142,6 +142,13 @@ def inspect(pg, profile, accounts, godot):
     for table in tables:
         require(re.fullmatch(r"[a-z_]+", table), "Unexpected economy relation")
         fingerprints[table] = pg.query(f"SELECT json_build_object('count',count(*),'md5',md5(coalesce(string_agg(row_to_json(t)::text,E'\\n' ORDER BY row_to_json(t)::text),''))) FROM economy.{table} t;")
+    native = profile is None
+    if native:
+        realm_tables = pg.query("SELECT coalesce(json_agg(tablename ORDER BY tablename),'[]') FROM pg_tables WHERE schemaname='realm';")
+        require(realm_tables, "Missing PostgreSQL realm state")
+        for table in realm_tables:
+            require(re.fullmatch(r"[a-z_]+", table), "Unexpected realm relation")
+            fingerprints["realm."+table] = pg.query(f"SELECT json_build_object('count',count(*),'md5',md5(coalesce(string_agg(row_to_json(t)::text,E'\\n' ORDER BY row_to_json(t)::text),''))) FROM realm.{table} t;")
     meta = pg.query("SELECT json_object_agg(key,value) FROM economy.meta;")
     authority, identity = meta.get("economy_authority_id", ""), meta.get("world_profile_id", "")
     require(all(re.fullmatch(r"[0-9a-f]{32}", value) for value in (authority, identity)), "Missing realm/profile identity")
@@ -156,6 +163,16 @@ def inspect(pg, profile, accounts, godot):
     require(pg.query("SELECT count(*) FROM economy.exchange_assets a WHERE a.reserved<>coalesce((SELECT sum(o.reserved_amount) FROM economy.exchange_orders o WHERE o.account_id=a.account_id AND o.base_asset=a.asset_id AND o.side='sell' AND o.status='active'),0);") == 0,
             "Asset reservations do not match active orders")
     mappings = pg.query("SELECT coalesce(json_object_agg(character_id::text,account_id),'{}') FROM economy.characters;")
+    if native:
+        rows = pg.query("SELECT coalesce(json_agg(json_build_array(p.player_id,a.account_name,a.master_account_id)),'[]') FROM realm.players p JOIN realm.accounts a USING(account_name);")
+        profile_accounts = pg.query("SELECT coalesce(json_agg(json_build_array(account_name,master_account_id)),'[]') FROM realm.accounts;")
+        master_ids = dict(profile_accounts)
+    else:
+        return inspect_legacy(pg, profile, accounts, godot, fingerprints, authority, identity, mappings)
+    return finish_inspection(pg, rows, profile_accounts, master_ids, mappings, fingerprints, authority, identity, native=True)
+
+
+def inspect_legacy(pg, profile, accounts, godot, fingerprints, authority, identity, mappings):
     with closing(sqlite3.connect(profile.as_uri() + "?mode=ro", uri=True)) as db:
         require(db.execute("PRAGMA integrity_check").fetchall() == [("ok",)], "Profile integrity check failed")
         require(db.execute("SELECT value FROM meta WHERE key='pg_profile_id'").fetchone() == (identity,), "Profile identity mismatch")
@@ -172,12 +189,59 @@ def inspect(pg, profile, accounts, godot):
                                 capture_output=True, timeout=30, creationflags=HIDDEN)
         require(result.returncode == 0 and output.is_file() and b"SCRIPT ERROR" not in result.stderr, "Master account resource validation failed")
         master_ids = json.loads(output.read_text(encoding="utf-8"))
+    return finish_inspection(pg, rows, profile_accounts, master_ids, mappings, fingerprints, authority, identity)
+
+
+def finish_inspection(pg, rows, profile_accounts, master_ids, mappings, fingerprints, authority, identity, native=False):
     require(all(isinstance(account, int) and account > 0 and master_ids.get(name) == account for name, account in profile_accounts), "Master/profile account mismatch")
     require(all(isinstance(account, int) and account > 0 and master_ids.get(name) == account and mappings.get(str(character)) == account for character, name, account in rows), "PostgreSQL/profile character mismatch")
-    sequences = pg.query("SELECT coalesce(json_agg(json_build_array(sequencename,last_value) ORDER BY sequencename),'[]') FROM pg_sequences WHERE schemaname='economy';")
+    if native:
+        sequences = pg.query("SELECT coalesce(json_agg(json_build_array(schemaname,sequencename,last_value) ORDER BY schemaname,sequencename),'[]') FROM pg_sequences WHERE schemaname IN ('economy','realm');")
+    else:
+        sequences = pg.query("SELECT coalesce(json_agg(json_build_array(sequencename,last_value) ORDER BY sequencename),'[]') FROM pg_sequences WHERE schemaname='economy';")
     return {"authority_id": authority, "profile_id": identity, "tables": fingerprints,
             "sequences": sequences, "profiles": len(rows), "master_accounts": len(master_ids),
             "schema_versions": pg.query("SELECT json_object_agg(feature,version) FROM economy.schema_versions;")}
+
+
+def create_full(pg, destination):
+    """Format 2: credentials, profiles, economic state and sequences in one archive."""
+    require(not destination.exists(), "Bundle destination already exists")
+    pg.idle()
+    destination.mkdir(parents=False, mode=0o700)
+    with Guard(pg) as guard:
+        audit = inspect(pg)
+        pg.command("pg_dump", ["-w", "--format=custom", "--schema=economy", "--schema=realm", "--no-owner", "--no-privileges", "--lock-wait-timeout=3s", "--file", destination/"realm.dump"])
+        guard.execute("SELECT 1;")
+        pg.idle(guard.pid)
+        require(inspect(pg) == audit, "Realm changed during capture")
+        sync_files(destination, ("realm.dump",))
+        manifest = {"format": 2, "complete": True, "created_unix": int(time.time()),
+                    "precondition": "supervised writers stopped; no automatic restart",
+                    "audit": audit, "sha256": {"realm.dump": digest(destination/"realm.dump")}}
+        publish_json(destination/"manifest.json", manifest)
+    return manifest
+
+
+def restore_full(pg, bundle, destination):
+    require(not destination.exists(), "Restore directory already exists")
+    manifest = json.loads((bundle/"manifest.json").read_text(encoding="utf-8"))
+    require(manifest.get("format") == 2 and manifest.get("complete") is True, "Incomplete/unsupported bundle")
+    require(set(manifest.get("sha256", {})) == {"realm.dump"}, "Bundle file list mismatch")
+    require(digest(bundle/"realm.dump") == manifest["sha256"]["realm.dump"], "Bundle checksum mismatch")
+    pg.idle()
+    require(pg.query("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND c.relkind IN ('r','p','v','m','S','f');") == 0,
+            "Restore requires an empty, separately created database")
+    database = pg.env.get("PGDATABASE", "")
+    require(re.fullmatch(r"[a-zA-Z_][a-zA-Z_0-9]*", database), "PGDATABASE must be a plain database name")
+    destination.mkdir(parents=False, mode=0o700)
+    pg.command("pg_restore", ["-w", "--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges", "-d", database, bundle/"realm.dump"])
+    with Guard(pg) as guard:
+        audit = inspect(pg)
+        require(audit == manifest["audit"], "Restored data differs from the captured audit")
+        pg.idle(guard.pid)
+    publish_json(destination/"RESTORE_VERIFIED.json", {"format": 2, "audit": audit})
+    return audit
 
 
 def create(pg, profiles, accounts, destination, godot):
@@ -252,15 +316,23 @@ def main():
     parser.add_argument("--profiles", type=Path)
     parser.add_argument("--accounts", type=Path)
     parser.add_argument("--writers-stopped", action="store_true", help="Operator confirms all supervisors/automatic restarts are disabled and realm writers stopped")
+    parser.add_argument("--full-state", action="store_true", help="All-PostgreSQL realm; no SQLite profile or Master resource files")
     args = parser.parse_args()
     require(args.writers_stopped, "Explicit stopped-writer precondition required")
     pg = Pg(args.pg_bin)
     if args.action == "backup":
+        if args.full_state:
+            create_full(pg, args.bundle.resolve())
+            print("REALM_BACKUP_VERIFIED format=2")
+            return
         require(args.profiles is not None and args.accounts is not None, "Provide profile and account files")
         create(pg, args.profiles, args.accounts, args.bundle.resolve(), args.godot.resolve())
     else:
         require(args.output is not None, "Provide new restore output directory")
-        restore(pg, args.bundle.resolve(), args.output.resolve(), args.godot.resolve())
+        if args.full_state:
+            restore_full(pg, args.bundle.resolve(), args.output.resolve())
+        else:
+            restore(pg, args.bundle.resolve(), args.output.resolve(), args.godot.resolve())
     print("REALM_" + args.action.upper() + "_VERIFIED")
 
 

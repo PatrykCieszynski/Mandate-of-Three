@@ -15,7 +15,7 @@ var maintenance: RefCounted
 var _startup_pending:=false
 
 func admissions_open() -> bool:
-	return not _startup_pending and maintenance==null and (economy_bootstrap==null or economy_bootstrap.ready())
+	return not _startup_pending and maintenance==null and (authentication_manager==null or authentication_manager.storage_ready) and (economy_bootstrap==null or economy_bootstrap.ready())
 
 func begin_maintenance(id: String) -> Dictionary:
 	if not ItemInstance.valid_uid(id): return {"ok":false,"error":"operation_id"}

@@ -1,5 +1,12 @@
 # Prototype testing policy
 
+Full-state PostgreSQL acceptance:
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite full-state`.
+This owns disposable data and real Gateway/Master/World/client processes,
+backup/restore and restart. See [full-state setup](postgres-full-state.md).
+Older parity/hybrid milestone descriptions below are historical regression
+references; they do not select the current normal deployment backend.
+
 Accepted 2026-10-09: keep a small set of stable regression contracts during rapid
 prototyping. A tiny UI/style or balance change should not require repairing a
 browser screenshot, a specific DOM tree or a combat animation timeline.

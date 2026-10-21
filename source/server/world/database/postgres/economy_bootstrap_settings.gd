@@ -9,13 +9,16 @@ static func load_config(path: String) -> Dictionary:
 	var result:=resolve(settings)
 	if result.ok and result.backend=="postgresql":
 		result["profile_path"]=settings.get("profile_path","")
+		result["realm_state"]=settings.get("realm_state",false)
 	return result
 
 static func resolve(settings: Dictionary) -> Dictionary:
 	var backend: Variant=settings.get("backend","sqlite")
 	if backend not in ["sqlite","postgresql"]: return {"ok":false,"error":"backend"}
+	if not settings.get("realm_state",false) is bool: return {"ok":false,"error":"realm_state"}
+	if settings.get("realm_state",false) and backend!="postgresql": return {"ok":false,"error":"realm_state_backend"}
 	if backend=="sqlite": return {"ok":true,"backend":"sqlite"}
-	var authority: Variant=settings.get("authority_id")
+	var authority: Variant=settings.get("authority_id",OS.get_environment(str(settings.get("authority_env","MANDATE_ECONOMY_AUTHORITY_ID"))))
 	var environment: Variant=settings.get("connection_env")
 	var capacity: Variant=settings.get("queue_capacity",2)
 	if not authority is String or not ItemInstance.valid_uid(authority): return {"ok":false,"error":"authority"}

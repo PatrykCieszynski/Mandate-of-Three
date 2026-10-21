@@ -7,7 +7,7 @@ extends DataRequestHandler
 
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var actor: PlayerResource = world_server.connected_players.get(peer_id)
 	if actor == null:
@@ -36,7 +36,10 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 
 	if not guild.pending_invites.has(target_id):
 		guild.pending_invites.append(target_id)
-		store.save_guild(guild)
+		var mutation:=RealmProfileMutation.new(store)
+		if not mutation.started: return mutation.failure()
+		if not mutation.save_guild(guild): return mutation.abort()
+		if not mutation.commit(): return mutation.failure()
 
 	var target_peer_id: int = int(world_server.player_id_to_peer_id.get(target_id, 0))
 	if target_peer_id > 0:

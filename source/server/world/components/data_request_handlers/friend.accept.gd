@@ -7,7 +7,7 @@ func data_request_handler(
 	args: Dictionary
 ) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var from_player: PlayerResource = world_server.connected_players.get(peer_id)
 	if from_player == null:
@@ -27,9 +27,12 @@ func data_request_handler(
 	if from_player.friends.has(target_id):
 		return {"error": 1, "ok": false, "msg": "Already friend."}
 
+	var mutation:=RealmProfileMutation.new(world_server.database.store,[from_player])
+	if not mutation.started: return mutation.failure()
 	from_player.friends.append(target_id)
 
 	# Persist now (safe + predictable)
-	world_server.database.save_player(from_player)
+	if not mutation.save_player(from_player): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	return {"error": 0, "ok": true, "msg": "Added friend."}
