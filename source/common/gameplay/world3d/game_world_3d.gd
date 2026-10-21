@@ -2,6 +2,8 @@ class_name GameWorld3D
 extends Node3D
 var services := MandateWorldServices.new()
 var mob_system := MobSystem.new()
+## Explicit pure-heightfield surface; empty means ray/native support for mixed floors.
+@export var mob_grounding_terrain: NodePath
 var ground_loot := GroundLootSystem.new()
 var kill_rewards := KillRewardResolver.new()
 ## Shared RPC endpoint under the authenticated world instance path.

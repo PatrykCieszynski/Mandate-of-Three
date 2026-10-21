@@ -10,11 +10,19 @@ var _warned_unknown_mob_keys: Dictionary[StringName, bool] = {}
 var _world: GameWorld3D
 var _endpoint: Node
 var services: MandateWorldServices
+const Grounding=preload("res://source/common/gameplay/mobs/mob_grounding_3d.gd")
+const TerrainGrounding=preload("res://source/common/gameplay/mobs/mob_terrain_grounding_3d.gd")
+var grounding:=Grounding.new()
 
 func setup(world: GameWorld3D, endpoint: Node, adapter: MandateWorldServices) -> void:
 	_world = world
 	_endpoint = endpoint
 	services = adapter
+	if not world.mob_grounding_terrain.is_empty():
+		var terrain:=world.get_node_or_null(world.mob_grounding_terrain) as Node3D
+		if terrain!=null and terrain.is_class("Terrain3D") and world.is_ancestor_of(terrain) and terrain.get_world_3d()==world.get_world_3d():
+			grounding=TerrainGrounding.new(terrain)
+		else: push_warning("Invalid map-owned mob heightfield; retaining ray/native grounding")
 
 func create_pack(members: Array[MobSpawnEntry], anchor: Vector3, spawn_radius: float, wander_radius: float, leash_radius: float, respawn_seconds: float = 15, source_metinstone_id: String = "", expires_at: int = 0) -> MobPackRuntime:
 	assert(GameMode.is_world_server() and anchor.is_finite() and not members.is_empty())
@@ -66,6 +74,7 @@ func spawn_mob(definition: MobDefinition, position: Vector3, pack: MobPackRuntim
 	dog.respawn_enabled = pack.respawn_enabled
 	dog.expires_at = pack.expires_at
 	dog.setup_mob(_next_mob_id,position)
+	dog.grounding=grounding
 	dog.home = pack.anchor
 	dog.wander_at_ms = Time.get_ticks_msec() + pack.rng.randi_range(1000,4000)
 	_world.add_child(dog)

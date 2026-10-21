@@ -46,7 +46,7 @@ var presentation: DogVisual3D
 var movement_collider: CollisionShape3D
 const Grounding = preload("res://source/common/gameplay/mobs/mob_grounding_3d.gd")
 var lightweight_movement:=false
-var _grounding:=Grounding.new()
+var grounding:=Grounding.new()
 var light_grounded_ticks:=0
 var light_native_ticks:=0
 
@@ -113,7 +113,7 @@ func simulate_mob(delta: float, direction: Vector2, now: int) -> void:
 	if direction.length_squared() > 0.001: rotation.y = atan2(-direction.x, -direction.y)
 	if lightweight_movement and GameMode.is_world_server() and not displaced:
 		var next:=global_position+Vector3(velocity.x,0,velocity.z)*delta
-		var grounded:=_grounding.resolve(self,next)
+		var grounded:=grounding.resolve(self,next)
 		if not grounded.is_empty():
 			light_grounded_ticks+=1
 			global_position=grounded.position

@@ -3,14 +3,22 @@ extends Node
 const Support = preload("res://tests/support/postgres_workload_support.gd")
 const Bindings = preload("res://tests/support/world_binding_probe.gd")
 const Profile = preload("res://tests/support/world_profile.gd")
+const TerrainGrounding = preload("res://source/common/gameplay/mobs/mob_terrain_grounding_3d.gd")
 
 class BenchMap extends Support.SimMap:
 	var wide:=false
+	var with_terrain:=false
+	var terrain_collision:="full"
+	var height_grounding:=false
 	var snapshots:=0
 	var snapshot_bytes:=0
 	func _build_arena() -> void:
 		if wide: _box("Floor",Vector3(0,-0.25,0),Vector3(512,0.5,512),Color.WHITE)
 		else: super._build_arena()
+		if with_terrain:
+			if terrain_collision=="full": get_node("Floor").free()
+			preload("res://tests/support/world_bench_terrain.gd").add_to(self,256 if wide else 64,terrain_collision=="full")
+			if height_grounding: mob_grounding_terrain=NodePath("BenchTerrain")
 	func _broadcast_snapshot() -> void:
 		# Same roster construction as production; one encoding proxy, no RPC fan-out.
 		var started:=Time.get_ticks_usec()
@@ -66,6 +74,9 @@ func _ready() -> void:
 		world.mob_system=load(directory+"/mobs.gd").new()
 	else: world=BenchMap.new()
 	world.wide=wide;world.extra_mobs=0
+	world.with_terrain=args.get("bench-terrain","0")=="1"
+	world.terrain_collision=args.get("bench-terrain-collision","full")
+	world.height_grounding=args.get("bench-grounding","ray")=="height"
 	add_child(world)
 	for id: int in world.mob_system.mobs.keys(): world.mob_system.remove_mob(id)
 	for i: int in players:
@@ -102,7 +113,14 @@ func _ready() -> void:
 	var result: Dictionary={"cohort":"synthetic_movement_no_clients_no_sql","profiled":profiled,"displacement":displacement,"profile":Profile.report(),"frame_interval":summary(frames),"players":players,"mobs":world.mob_system.mobs.size(),"packs":world.mob_system.packs.size(),"wide":wide,"seed":1729,"seconds":elapsed,"physics_work":summary(work),"tick_interval":summary(intervals),"observed_hz":work.size()/elapsed,"over_budget_ticks":over,"static_memory_bytes":OS.get_static_memory_usage(),"player_snapshot_bytes":world.snapshot_bytes,"mob_snapshot_bytes":var_to_bytes(world.mob_system.snapshot()).size(),"snapshot_count":world.snapshots,"actual_network_bytes":0,"debug_build":OS.is_debug_build(),"editor_binary":OS.has_feature("editor")}
 	result.mob_movement="light" if "--dev-light-mob-movement" in (OS.get_cmdline_args()+OS.get_cmdline_user_args()) else "native"
 	result.light_grounded_ticks=0;result.light_native_ticks=0
+	result.terrain_fixture=world.with_terrain
+	result.terrain_collision=world.terrain_collision if world.with_terrain else "box"
+	result.terrain_region_size=(256 if wide else 64) if world.with_terrain else 0
+	result.grounding="height" if world.height_grounding else "ray"
+	if world.height_grounding:
+		assert(world.mob_system.grounding is TerrainGrounding,"requested height provider actually bound")
 	for body: MobActor3D in world.mob_system.mobs.values():
+		assert(body.grounding==world.mob_system.grounding,"one grounding owner per map")
 		result.light_grounded_ticks+=body.light_grounded_ticks
 		result.light_native_ticks+=body.light_native_ticks
 	print("WORLD_BASELINE_RESULT "+JSON.stringify(result))

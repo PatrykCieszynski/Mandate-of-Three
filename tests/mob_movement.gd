@@ -1,5 +1,7 @@
 extends Node3D
 ## W4a movement/contact contracts; actual damage/replication uses existing network suites.
+class TransformedHeightfield extends Node3D:
+	var data
 func box(at: Vector3, size: Vector3, layer: int) -> void:
 	var body:=StaticBody3D.new();body.position=at;body.collision_layer=layer
 	var shape:=CollisionShape3D.new();var geometry:=BoxShape3D.new();geometry.size=size
@@ -71,14 +73,51 @@ func terrain() -> void:
 	heightfield.set_physics_process(false)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	for light: bool in [false,true]:
+	var height_source:=preload("res://source/common/gameplay/mobs/mob_terrain_grounding_3d.gd").new(heightfield)
+	for policy: String in ["native","ray","height"]:
 		for origin: Vector3 in [Vector3(13,0,14),Vector3(15,0,30),Vector3(24,0,30)]:
 			origin.y=heightfield.data.get_height(origin)+.1
 			assert(origin.is_finite())
-			var body:=dog(light,origin)
+			var body:=dog(policy!="native",origin)
+			if policy=="height": body.grounding=height_source
 			await step(body,Vector2.RIGHT,60)
-			print("W4A_TERRAIN light=",light," ",origin," -> ",body.position," fast=",body.light_grounded_ticks," native=",body.light_native_ticks)
+			print("W4A_TERRAIN policy=",policy," ",origin," -> ",body.position," fast=",body.light_grounded_ticks," native=",body.light_native_ticks)
 			assert(body.position.x>origin.x+1,"flat/uphill/downhill traverse saved Terrain3D")
 			assert(absf(body.position.y-heightfield.data.get_height(body.position))<.15,"feet match actual saved heightfield")
 			body.queue_free();await get_tree().physics_frame
+	# API takes global coordinates even when the actor's parent is translated.
+	var translated:=Node3D.new();translated.position.x=10;add_child(translated)
+	var global_start:=Vector3(13,heightfield.data.get_height(Vector3(13,0,14))+.1,14)
+	var shifted:=dog(true,global_start);shifted.grounding=height_source;shifted.reparent(translated,true)
+	await step(shifted,Vector2.RIGHT,20)
+	assert(absf(shifted.global_position.y-heightfield.data.get_height(shifted.global_position))<.05,"height API uses global actor position")
+	translated.queue_free()
+	# Mixed surface chooses ray grounding: a low bridge must not snap to terrain.
+	var bridge_top: float=heightfield.data.get_height(Vector3(13,0,14))+.5
+	box(Vector3(14,bridge_top-.1,14),Vector3(4,.2,4),17)
+	var bridge_dog:=dog(true,Vector3(13,bridge_top+.1,14))
+	await step(bridge_dog,Vector2.RIGHT,30)
+	assert(absf(bridge_dog.position.y-bridge_top)<.05,"ray mode keeps the actual bridge surface")
+	bridge_dog.queue_free()
 	saved.queue_free()
+	await get_tree().physics_frame
+	# Mutate ONLY a fresh disposable heightfield, never the authored saved data.
+	var fresh:=preload("res://tests/support/world_bench_terrain.gd").add_to(self)
+	var source:=preload("res://source/common/gameplay/mobs/mob_terrain_grounding_3d.gd").new(fresh)
+	var probe:=dog(true,Vector3(3,.1,3))
+	assert(source.resolve(probe,Vector3(4,0,4)).position.y<.01)
+	assert(source.resolve(probe,Vector3(9999,0,0)).is_empty(),"missing region has no invented Y")
+	fresh.get("data").set_control_hole(Vector3(4,0,4),true)
+	assert(source.resolve(probe,Vector3(4,0,4)).is_empty(),"hole refuses height sampling")
+	fresh.get("data").set_control_hole(Vector3(4,0,4),false)
+	fresh.get("data").set_height(Vector3(4,0,4),100)
+	assert(source.resolve(probe,Vector3(4,0,4)).is_empty(),"no teleport up a cliff")
+	fresh.get("data").set_height(Vector3(4,0,4),-100)
+	assert(source.resolve(probe,Vector3(4,0,4)).is_empty(),"no teleport down a cliff")
+	# The addon resets its own transform; test our rejection without reparenting
+	# native Terrain3D (which would reinitialize its unsaved data_directory).
+	var shifted_terrain:=TransformedHeightfield.new()
+	shifted_terrain.data=fresh.get("data");shifted_terrain.position.x=10;add_child(shifted_terrain)
+	var unsupported:=preload("res://source/common/gameplay/mobs/mob_terrain_grounding_3d.gd").new(shifted_terrain)
+	assert(unsupported.resolve(probe,Vector3(5,0,5)).is_empty(),"unsupported transformed terrain fails to native handling")
+	probe.queue_free();shifted_terrain.queue_free();fresh.queue_free()

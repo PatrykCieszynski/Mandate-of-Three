@@ -55,10 +55,19 @@ def main():
     parser.add_argument("--displacement", action="store_true", help="separate diagnostic: periodic advance/knockback, no damage")
     parser.add_argument("--mob-movement", choices=("native", "light", "compare"), default="native",
                         help="W4a server-only experiment; compare uses unprofiled paired movement policies")
+    parser.add_argument("--terrain", action="store_true", help="native disposable flat Terrain3D data, full collider by default")
+    parser.add_argument("--terrain-collision", choices=("full", "box"), default="full",
+                        help="box keeps common flat physics support and disables terrain collision to isolate grounding API cost")
+    parser.add_argument("--mob-grounding", choices=("ray", "height", "compare"), default="ray",
+                        help="compare: native, light/ray and light/height on the same Terrain3D")
     args = parser.parse_args()
     if args.mob_movement == "compare" and args.profile != "off":
         parser.error("Movement A/B holds profiling off; use a separate profiled diagnostic")
-    if args.cohort == "bindings" and (args.profile != "off" or args.displacement or args.mob_movement != "native"):
+    if args.mob_grounding != "ray" and not args.terrain:
+        parser.error("Height grounding needs --terrain; never substitute fake height samples")
+    if args.mob_grounding == "compare" and args.mob_movement != "compare":
+        parser.error("Three-way grounding comparison needs --mob-movement compare")
+    if args.cohort == "bindings" and (args.profile != "off" or args.displacement or args.mob_movement != "native" or args.terrain):
         parser.error("Binding probe has its own poll/copy metrics; profiling/displacement is simulation-only")
     if os.name == "nt" and "_console" in args.godot.name:
         parser.error("Use the actual win64.exe engine; the console launcher measures a wrapper process")
@@ -87,17 +96,22 @@ def main():
             modes = [False, True] if args.profile == "compare" else [args.profile == "on"]
             if repeat % 2 == 0:
                 modes.reverse()
-            policies = ["native", "light"] if args.mob_movement == "compare" else [args.mob_movement]
-            if repeat % 2 == 0: policies.reverse()
-            jobs.extend((layout, players, mobs, repeat, mode, policy) for policy in policies for mode in modes)
-    for layout, players, mobs, repeat, profiled, policy in jobs:
-        name = f"{layout}-{players}-{mobs}-{repeat}-{'profile' if profiled else 'control'}-{policy}"
+            if args.mob_grounding == "compare":
+                variants = [("native", "ray"), ("light", "ray"), ("light", "height")]
+            else:
+                variants = [(policy, args.mob_grounding) for policy in (["native", "light"] if args.mob_movement == "compare" else [args.mob_movement])]
+            if repeat % 2 == 0: variants.reverse()
+            jobs.extend((layout, players, mobs, repeat, mode, policy, grounding) for policy, grounding in variants for mode in modes)
+    for layout, players, mobs, repeat, profiled, policy, grounding in jobs:
+        name = f"{layout}-{players}-{mobs}-{repeat}-{'profile' if profiled else 'control'}-{policy}-{grounding}"
         command = [str(args.godot.resolve()), "--headless", "--path", str(ROOT),
                    "--mode=world-server", "res://tests/world_load_bench.tscn",
                    f"--bench-cohort={args.cohort}", f"--bench-players={players}",
                    f"--bench-mobs={mobs}", f"--bench-wide={int(layout == 'wide')}",
                    f"--bench-profile={int(profiled)}", f"--bench-profile-dir={profile_uri}",
                    f"--bench-displacement={int(args.displacement)}",
+                   f"--bench-terrain={int(args.terrain)}", f"--bench-grounding={grounding}",
+                   f"--bench-terrain-collision={args.terrain_collision}",
                    f"--bench-warmup={args.warmup}", f"--bench-seconds={args.seconds}"]
         if policy == "light": command.append("--dev-light-mob-movement")
         with (directory / f"{name}.out.log").open("w", encoding="utf-8") as out, (directory / f"{name}.err.log").open("w", encoding="utf-8") as err:
@@ -124,8 +138,10 @@ def main():
         if code or re.search(r"SCRIPT ERROR|Parse Error|Assertion failed", text + errors) or len(rows) != 1:
             raise RuntimeError(f"Benchmark failed: {directory / name}")
         record = json.loads(rows[0])
-        if args.cohort == "simulation" and record["mob_movement"] != policy:
+        if args.cohort == "simulation" and (record["mob_movement"] != policy or record["grounding"] != grounding or record["terrain_fixture"] != args.terrain):
             raise RuntimeError(f"Movement selector mismatch: {directory / name}")
+        if args.cohort == "simulation" and record["terrain_collision"] != (args.terrain_collision if args.terrain else "box"):
+            raise RuntimeError(f"Terrain collider mismatch: {directory / name}")
         if args.cohort == "simulation" and (record["players"] != players or record["mobs"] != mobs or record["physics_work"]["samples"] < 5):
             raise RuntimeError(f"Invalid actor/sample counts: {directory / name}")
         if args.cohort == "simulation" and profiled:
@@ -155,9 +171,18 @@ def main():
     if args.mob_movement == "compare":
         for layout, p, m in cases:
             rows = [row for row in records if row['name'].startswith(f'{layout}-{p}-{m}-')]
-            medians = {policy: {metric: statistics.median(row[metric]['p95_ms'] for row in rows if row['mob_movement'] == policy) for metric in ('physics_work', 'tick_interval', 'frame_interval')} for policy in ('native', 'light')}
-            movement_comparisons[f'{layout}-{p}-{m}'] = {**medians, 'physics_p95_change_percent': (medians['light']['physics_work'] / medians['native']['physics_work'] - 1) * 100}
-    report = {"schema": 3, "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+            for grounding in set(row['grounding'] for row in rows if row['mob_movement'] == 'light'):
+                native = [row for row in rows if row['mob_movement'] == 'native']
+                light = [row for row in rows if row['mob_movement'] == 'light' and row['grounding'] == grounding]
+                medians = {policy: {metric: statistics.median(row[metric]['p95_ms'] for row in group) for metric in ('physics_work', 'tick_interval', 'frame_interval')} for policy, group in [('native', native), ('light', light)]}
+                movement_comparisons[f'{layout}-{p}-{m}-{grounding}'] = {**medians, 'physics_p95_change_percent': (medians['light']['physics_work'] / medians['native']['physics_work'] - 1) * 100}
+    groups = {}
+    if args.cohort == "simulation":
+        for row in records:
+            key = f"{'wide' if row['wide'] else 'dense'}-{row['players']}-{row['mobs']}-{'profile' if row['profiled'] else 'control'}-{row['mob_movement']}-{row['grounding']}"
+            groups.setdefault(key, []).append(row)
+    medians = {key: {metric: statistics.median(row[metric]['p95_ms'] for row in rows) for metric in ('physics_work', 'tick_interval')} for key, rows in groups.items()}
+    report = {"schema": 4, "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "git_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
               "source_sha256": fingerprint.hexdigest(), "host": {"platform": platform.platform(), "processor": platform.processor(), "logical_cpus": os.cpu_count()},
               "engine_version": subprocess.check_output([str(args.godot.resolve()), "--version"], text=True).strip(),
@@ -165,7 +190,7 @@ def main():
               "settings": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()}, "cases": records,
               "profile_source_sha256": profile_sources, "instrumentation_comparison": comparisons,
               "movement_comparison": movement_comparisons,
-              "median_simulation": {f"{layout}-{p}-{m}-{'profile' if flag else 'control'}-{policy}": {metric: statistics.median(row[metric]["p95_ms"] for row in records if row["name"].startswith(f"{layout}-{p}-{m}-") and row["profiled"] == flag and row['mob_movement'] == policy) for metric in ("physics_work", "tick_interval")} for layout, p, m in cases for flag in set(row['profiled'] for row in records) for policy in set(row['mob_movement'] for row in records)} if args.cohort == "simulation" else {}}
+              "median_simulation": medians}
     (directory / "results.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print("WORLD_BASELINE_REPORT", directory.relative_to(ROOT), flush=True)
 
