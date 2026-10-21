@@ -54,7 +54,7 @@ disposable Godot/SOCI PostgreSQL probe and a sanitized SQLite schema/source audi
 Full domain backend/schema parity and runtime extraction remain incomplete; this
 preparatory package does not complete P1 or change the game's SQLite backend.
 
-**P1b progress:** [account wallet parity](../development/postgres-wallet-parity.md)
+**P1b progress:** [account wallet parity](../history/postgresql-migration.md)
 adds an opt-in PostgreSQL wallet schema/store and SQLite comparison fixture for
 delta checkpoints, atomic pending-income spend/credit, reservations, revisions,
 rollback and reconnect. Production identity hydration, other domain stores and
@@ -64,20 +64,20 @@ v0.4.1. User-authorized adoption of official v0.4.2 fixes the MSVC exception ABI
 configuration; installed-payload COMMIT/rollback, wallet parity and readiness
 now pass. This closes that driver gate, not P1's remaining domain ports or P2–P4.
 
-**P1c progress:** [NPC purchase parity](../development/postgres-npc-shop-parity.md)
+**P1c progress:** [NPC purchase parity](../history/postgresql-migration.md)
 adds an opt-in transaction spanning character Inventory capacity/custody, pending
 Yang, item/wallet watermarks and a durable success receipt. Existing SQLite code
 shares the unchanged receipt codec. Other Inventory mutations, Storage, Player
 Shop, Upgrade and Exchange ports remain pending; World continues using SQLite.
 
-**P1d progress:** [character Inventory parity](../development/postgres-inventory-parity.md)
+**P1d progress:** [character Inventory parity](../history/postgresql-migration.md)
 adds opt-in starter initialization, durable ground pickup and receipt-backed
 move/equip/swap/unequip/activate with SQLite behavior comparisons and native
 COMMIT-failure recovery checks. This extends the same character custody model;
 account Storage remains a separate risk/slice. World still uses SQLite and
 independent-connection P2 races, P3 execution/fencing and cutover remain pending.
 
-**P1e progress:** [account Storage parity](../development/postgres-storage-parity.md)
+**P1e progress:** [account Storage parity](../history/postgresql-migration.md)
 adds an explicit account custody extension, atomic deposit/move/withdrawal with
 issuing-character receipts, replay/reopen and SQLite comparisons. Targeted native
 two-session fixtures cover competing withdrawal, shared capacity, cross-alt
@@ -85,14 +85,14 @@ provenance and operation-ID conflict. This does not complete the broader P2 gate
 or introduce PostgreSQL clients/World execution. Player Shop, Upgrade and Exchange
 ports remain pending; production continues using SQLite.
 
-**P1f progress:** [Upgrade parity](../development/postgres-upgrade-parity.md)
+**P1f progress:** [Upgrade parity](../history/postgresql-migration.md)
 adds the opt-in existing +0 to +1 transaction: ordered material stack consumption,
 pending Yang plus critical spend, unchanged target UID and durable receipt.
 SQLite comparisons, partial-write/COMMIT faults and replay/reopen are covered;
 no new schema, recipe/gameplay, client protocol or runtime switch is introduced.
 Player Shop/Exchange ports, the broad P2 gate and P3–P4 remain pending.
 
-**P1g progress:** [Player Shop seller lifecycle](../development/postgres-shop-seller-parity.md)
+**P1g progress:** [Player Shop seller lifecycle](../history/postgresql-migration.md)
 adds opt-in listing, offer/Shop edits, direct Inventory withdrawal, escrow/cell
 constraints and account-scoped receipt/reopen parity. Targeted overlapping
 listing/withdrawal/replay fixtures cover this custody boundary. The seller-only
@@ -100,7 +100,7 @@ projection omits unported claims/revenue; purchase/settlement, those projections
 Auction reads and Exchange still need separate ports. This is not full P1/P2 or
 a live Marketplace backend switch.
 
-**P1h progress:** [Player Shop settlement](../development/postgres-shop-settlement-parity.md)
+**P1h progress:** [Player Shop settlement](../history/postgresql-migration.md)
 adds opt-in purchase, offline seller claimable revenue and partial collection in
 native transactions with success receipts. Sorted buyer/seller account admission,
 additive proceeds, Inventory-only receiving, pending-income/reservation behavior,
@@ -108,7 +108,7 @@ replay/reopen and targeted independent-session conflicts are covered. Legacy
 claims, complete Marketplace projections/public reads and Exchange remain pending;
 this does not switch runtime or complete the broader P2/P3/P4 gates.
 
-**P1i progress:** [account claims and Shop projections](../development/postgres-account-claims-parity.md)
+**P1i progress:** [account claims and Shop projections](../history/postgresql-migration.md)
 adds explicit account claim custody, atomic claim-to-Inventory with original
 receipts/reopen, complete private Shop revenue/claims and coherent public visitor
 reads. Prior seller-only projections remain compatible. Targeted alt/capacity
@@ -116,14 +116,14 @@ conflicts, provenance constraints and read snapshot consistency are covered;
 Exchange claim creation/ledger/matching and Auction search remain separate ports.
 The existing 200-claim window is preserved; there is no client/runtime switch.
 
-**P1j progress:** [Auction search parity](../development/postgres-auction-search-parity.md)
+**P1j progress:** [Auction search parity](../history/postgresql-migration.md)
 adds bounded opt-in native reads and a transactional rolled-affix projection,
 sharing filter/cursor/result logic with the existing SQLite reader. Exact row and
 pagination parity, migration/projection failure recovery and 10k active-offer
 observations are covered. World still uses its current SQLite async scheduler;
 Exchange ledger/matching and P2/P3/P4 remain separate unfinished gates.
 
-**P1k progress:** [Exchange ledger conversion](../development/postgres-exchange-ledger-parity.md)
+**P1k progress:** [Exchange ledger conversion](../history/postgresql-migration.md)
 adds opt-in account fungible balances, Inventory/Storage deposits, Inventory or
 explicit claim withdrawals and original operation recovery. Storage owns its
 authorization/consumption; Claims owns new claim production. SQLite parity and
@@ -131,21 +131,21 @@ targeted native alt/withdrawal/Storage-transfer conflicts are covered. Order
 reservations/release, matching and cross-party settlement remain the next separate
 port; runtime and broad P2/P3/P4 are unchanged.
 
-**P1l progress:** [Exchange order settlement](../development/postgres-exchange-orders-parity.md)
+**P1l progress:** [Exchange order settlement](../history/postgresql-migration.md)
 adds opt-in pair-coordinated reservation, price-time matching, partial fills,
 cancel/refund and cross-party atomic settlement/receipts. SQLite snapshot parity,
 native independent-session conflicts and placement/cancel COMMIT recovery are
 covered. The planned P1 Exchange domain port is complete; broad P2 race/retry,
 P3 execution/fencing and P4 operational gates remain. Production stays on SQLite.
 
-**P2a progress:** [shared wallet concurrency](../development/postgres-wallet-concurrency.md)
+**P2a progress:** [shared wallet concurrency](../history/postgresql-migration.md)
 adds account-first NPC/Upgrade and sorted multi-account checkpoint admission.
 Native cross-operation spend/reservation/collect/receipt conflicts and a reproduced
 checkpoint-versus-matching lock cycle are covered. Broader custody/conflict and
 bounded retry policy remain P2 work; unstructured native failure text is not a
 safe retry classifier. Runtime, P3/P4 and pending-income fencing are unchanged.
 
-**P2b progress:** [Inventory custody/receiving conflicts](../development/postgres-inventory-concurrency.md)
+**P2b progress:** [Inventory custody/receiving conflicts](../history/postgresql-migration.md)
 adds account-first native Inventory command/starter/pickup admission and explicit
 cross-alt receipt conflict recovery. Native tests cover one-UID equip/list/deposit/
 conversion, cross-producer full-footprint/last-space receiving and global ground
@@ -233,7 +233,7 @@ full native matrix and default smoke are recorded in the evidence report. This
 closes backend correctness acceptance for current operations, not runtime
 execution, pending-income/session fencing, load/soak or production cutover.
 
-**P3a progress:** [Bounded Inventory execution](../development/postgres-inventory-executor.md)
+**P3a progress:** [Bounded Inventory execution](../history/postgresql-migration.md)
 adds opt-in worker-owned native sessions for full existing Inventory transactions
 and receipt lookup, bounded per-worker work/results, main-thread polling and
 nonblocking drain. Native tests cover independent completion/SceneTree physics
@@ -242,7 +242,7 @@ lock timeout and session cleanup. Volatile `queued` is NOT durable admission;
 session/epoch fencing, unresolved discovery, pending-income ownership, actual
 World integration, other domains and P4 remain separate. No live backend switch.
 
-**P3b progress:** [Durable Inventory identity/recovery](../development/postgres-inventory-intents.md)
+**P3b progress:** [Durable Inventory identity/recovery](../history/postgresql-migration.md)
 adds explicit admission COMMIT, immutable ID/body reservation, original-ID resume
 and bounded discovery after process loss. Item mutation, success/rejection receipt
 and terminal intent finalize atomically. Other command paths respect pending
@@ -252,7 +252,7 @@ finalization rollback/retry, COMMIT unknown and bounded/int64 recovery pages.
 Session/epoch authorization, World reconciliation, handoff and other domains
 remain later P3 work; no live PostgreSQL route is enabled.
 
-**P3c progress:** [Inventory session fence](../development/postgres-inventory-sessions.md)
+**P3c progress:** [Inventory session fence](../history/postgresql-migration.md)
 adds an optional delegated grant projection, account-locked CAS epochs/revocation,
 session checks before Inventory receipt/admission and an account-wide pending
 recovery plus fresh-snapshot readiness barrier. Previously admitted work may
@@ -263,7 +263,7 @@ grant API does not authenticate a Master ticket: the actual trusted issuer
 bridge, World result filtering/reconciliation, handoff/pending Yang and other
 domains remain open. No live PostgreSQL route or full C5 completion is claimed.
 
-**P3d progress:** [World Inventory delivery](../development/postgres-inventory-runtime.md)
+**P3d progress:** [World Inventory delivery](../history/postgresql-migration.md)
 adds a bounded World-thread owner for discovery/resume, hydration into the actual
 World equipment/stat cache, fresh-marker acknowledgement, and command delivery
 after authoritative repair. Captured native peer/ticket identity plus local
@@ -274,7 +274,7 @@ after admission/mutation COMMIT uncertainty. This component is not wired into
 live login/endpoints: trusted issuer delivery, endpoint/client/publication wiring,
 other domains, handoff/pending Yang and P4 remain open. No backend switch.
 
-**P3e progress:** [Master Inventory session bridge](../development/postgres-inventory-session-bridge.md)
+**P3e progress:** [Master Inventory session bridge](../history/postgresql-migration.md)
 connects the existing current Master ticket marker to an optional bounded control
 owner: inspect/CAS grant COMMIT precedes authority-only World ticket delivery.
 Native World authentication automatically attaches its delegated context; matching
@@ -286,7 +286,7 @@ copy. This is not a playable PG backend selector: normal endpoint/client/public
 publication wiring, other domains, cross-domain invalidation, indexed pending
 discovery, pending Yang/handoff, operational bootstrap/shutdown and P4 remain open.
 
-**P3f progress:** [Inventory endpoint/client flow](../development/postgres-inventory-endpoint.md)
+**P3f progress:** [Inventory endpoint/client flow](../history/postgresql-migration.md)
 routes existing native move/activate/equip/unequip and receipt RPCs through the
 optional runtime. Stable client journal IDs survive lost replies, browser reload
 and process/relogin recovery; terminal rejection can close its journal after
@@ -298,7 +298,7 @@ adapter in this opt-in mode; soft progression stays separate. Normal bootstrap
 still uses SQLite. Other domains, cross-domain invalidation, indexed pending-only
 discovery, pending Yang/handoff, operational lifecycle and P4 remain open.
 
-**P3g progress:** [Inventory cache reconciliation](../development/postgres-inventory-cache-fence.md)
+**P3g progress:** [Inventory cache reconciliation](../history/postgresql-migration.md)
 acknowledges post-command/receipt snapshots against the backend before reopening
 local operations and publishing terminal results/change facts. Trusted committed
 account markers close/gate stale views, coalesce a revision floor, and trigger
@@ -309,7 +309,7 @@ Other domains must still integrate their committed publishers. Cross-process
 transport/missed idle facts, indexed pending discovery, pending Yang/handoff,
 operational lifecycle and P4 remain open; normal startup stays SQLite.
 
-**P3h progress:** [Indexed pending Inventory recovery](../development/postgres-pending-recovery.md)
+**P3h progress:** [Indexed pending Inventory recovery](../history/postgresql-migration.md)
 adds transactional intent schema v2 with an account/sequence partial pending
 index and session-qualified pending-only worker discovery. Runtime no longer
 enumerates terminal history during recovery. Historical discovery, original-ID
@@ -319,7 +319,7 @@ plan, data-preserving v1 upgrade/failure rollback, paging/alt/session isolation,
 and existing actual client recovery. Other runtime domains/bootstrap and P4 remain
 open as detailed in the adoption table above.
 
-**P3i progress:** [Wallet runtime](../development/postgres-wallet-runtime.md)
+**P3i progress:** [Wallet runtime](../history/postgresql-migration.md)
 adds an optional account RAM owner, 30-second income batches with stable receipt
 identity, pending-funded atomic test spend and bounded native worker execution.
 Existing currency pickup/RPC/HUD and World lifecycle use the optional owner without
@@ -331,7 +331,7 @@ remains SQLite; production provisioning, item-dependent economic use cases,
 cross-domain wallet publishers/freshness, transparent async CH/multi-World handoff
 and P4 remain open. A synchronous transfer fails closed until its checkpoint is
 settled; this does not implement distributed wallet ownership.
-**P3j progress:** [NPC Shop and Upgrade runtime](../development/postgres-npc-runtime.md)
+**P3j progress:** [NPC Shop and Upgrade runtime](../history/postgresql-migration.md)
 connects the existing authenticated endpoints and Web UI journals to bounded PG
 execution. Current session fencing, atomic pending Yang/item/material mutations,
 capture-token-qualified replay and Inventory/wallet reconciliation precede terminal
@@ -342,7 +342,7 @@ No server durable-admission queue, schema or protocol signature change is added.
 Normal startup, shared Storage, other economic domains, distributed publication,
 operational bootstrap/handoff and P4 remain open.
 
-**P3k progress:** [Account Storage runtime](../development/postgres-storage-runtime.md)
+**P3k progress:** [Account Storage runtime](../history/postgresql-migration.md)
 adds optional bounded transfer/receipt execution with delegated session fences,
 account-locked full footprints and combined Inventory/Storage snapshots. Current
 revision ACK/reconciliation precedes terminal publication. Native acceptance covers
@@ -352,7 +352,7 @@ No schema/protocol change, durable Storage admission, wallet mutation or bootstr
 switch. Ground-item initialization/pickup, Marketplace/Exchange/Auction runtime,
 cross-process publication, operational lifecycle and P4 remain open.
 
-**P3l progress:** [Initialization and ground items](../development/postgres-ground-items.md)
+**P3l progress:** [Initialization and ground items](../history/postgresql-migration.md)
 adds optional marker-based starter hydration and bounded native pickup execution
 through the existing UID-only RPC. Grant/rights/range/liveness, global claim marker,
 full bag/capacity and original rolled UID are preserved. Unknown COMMIT initiates
@@ -361,7 +361,7 @@ before terminal feedback. Native fault/race and six-client pickup/relog acceptan
 pass. Normal startup, remaining Marketplace/Exchange/Auction runtime, operational
 bootstrap/handoff, full PG combat acceptance and P4 remain open.
 
-**P3m progress:** [Seller runtime](../development/postgres-seller-runtime.md)
+**P3m progress:** [Seller runtime](../history/postgresql-migration.md)
 connects optional list/edit/cancel/configure/item-claim RPC execution, current
 session fences, native seller journals and account-scoped receipt discovery.
 Private snapshots are reconciled against acknowledged Inventory before terminal
@@ -370,7 +370,7 @@ cover lost replies, reload/relog and saved-but-unsent explicit retry. Existing
 claims pagination limits remain R6; buyer/proceeds settlement, Exchange/public
 Auction, distributed publication, bootstrap/handoff and P4 remain open.
 
-**P3n progress:** [Marketplace settlement runtime](../development/postgres-market-settlement-runtime.md)
+**P3n progress:** [Marketplace settlement runtime](../history/postgresql-migration.md)
 connects optional buy/partial proceeds collection with current session fences,
 captured-income receipt tokens, buyer Inventory/wallet reconciliation and
 online seller private refresh. Public shop visits use bounded native execution;
@@ -380,7 +380,7 @@ uncertainty prevents safe shutdown until read-only discovery resolves the prefix
 Normal startup, Exchange, cross-process publication, bootstrap/handoff and P4
 remain open.
 
-**P3o progress:** [Exchange ledger runtime](../development/postgres-exchange-ledger-runtime.md)
+**P3o progress:** [Exchange ledger runtime](../history/postgresql-migration.md)
 connects optional session-qualified deposit/withdraw to the existing native owner,
 combined Inventory/Storage and private Exchange projections, durable client IDs
 and explicit receipt-first retry. Native conversion faults/alt recovery and nine
@@ -388,7 +388,7 @@ actual clients cover lost reply, reload/relog and saved-but-unsent intents.
 Order/matching writes, multi-party reservation/freshness, public Auction, bootstrap
 and P4 remain separate; normal gameplay stays SQLite.
 
-**P3p progress:** [Exchange matching runtime](../development/postgres-exchange-matching-runtime.md)
+**P3p progress:** [Exchange matching runtime](../history/postgresql-migration.md)
 connects optional order/cancel/matching through prepare/capture/revalidate, existing
 atomic price-time transactions and per-account income tokens. Account wallet fences
 cover late login, World-local generations refresh participant ledger projections,
@@ -397,7 +397,7 @@ Ten actual clients retain prior contracts and add fill/reserve/cancel recovery.
 Public Auction, bootstrap, distributed publication and P4 remain open; normal
 startup stays SQLite. No schema or public RPC signature changes.
 
-**P3q progress:** [Auction runtime](../development/postgres-auction-runtime.md)
+**P3q progress:** [Auction runtime](../history/postgresql-migration.md)
 adds optional catalog/search RPC delivery through the existing bounded native
 pool. One active search and bounded per-account queue/rates apply across maps.
 Current delegated session authorizes the read, rows project on World, and RPC IDs

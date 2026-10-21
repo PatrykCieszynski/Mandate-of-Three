@@ -100,38 +100,38 @@ See [setup, safety and verification limits](postgres-readiness.md).
 
 Wallet backend parity uses the same owned runner with `--suite wallet`; pass
 `--pg-bin 'Y:/Software/PostgreSQL/bin'` to use an installed binary directory while
-still creating a fresh disposable cluster. See [wallet parity](postgres-wallet-parity.md).
+still creating a fresh disposable cluster. See [wallet parity](../history/postgresql-migration.md).
 
 `--suite npc-shop` compares the existing SQLite NPC purchase with the PostgreSQL
 port, including custody/receipts, full bag, exact target replay/reopen, SQL and
 COMMIT failures, and integer watermarks above 2^53. This remains opt-in, with no
-PostgreSQL dependency in default CI. See [NPC purchase parity](postgres-npc-shop-parity.md).
+PostgreSQL dependency in default CI. See [NPC purchase parity](../history/postgresql-migration.md).
 
 `--suite inventory` compares character-local move/equip/swap/unequip/activate,
 starter initialization and ground pickup against SQLite, including durable
 receipt replay/reopen, full bag, partial-write rollback and native COMMIT faults.
 It is opt-in and does not switch World to PostgreSQL or cover account Storage.
-See [Inventory parity](postgres-inventory-parity.md).
+See [Inventory parity](../history/postgresql-migration.md).
 
 `--suite storage` compares account-shared deposit/move/withdrawal with SQLite and
 checks independent native sessions competing for one UID, shared cell and command
 ID. It covers provenance, account/character/kind isolation, partial-write/COMMIT
 faults, full destinations and replay/reopen. The populated schema upgrade must
 preserve existing Inventory. This remains opt-in; no PostgreSQL service is needed
-by default CI. See [Storage parity and limits](postgres-storage-parity.md).
+by default CI. See [Storage parity and limits](../history/postgresql-migration.md).
 
 `--suite upgrade` compares the current atomic +0 to +1 Upgrade with SQLite:
 whole/partial materials, pending/reserved Yang, target and receipt rollback,
 replay/reopen, ineligible Storage/alt materials and exact issuer/revisions.
 It remains opt-in, on fresh owned clusters. The current two-client Upgrade
-runtime stays on SQLite. See [Upgrade parity](postgres-upgrade-parity.md).
+runtime stays on SQLite. See [Upgrade parity](../history/postgresql-migration.md).
 
 `--suite shop-seller` checks PostgreSQL/SQLite seller lifecycle parity: listing,
 offer/Shop edit, direct Inventory withdrawal, escrow/occupied-cell/receipt
 atomicity, negative-cache bounds and reopen. Native overlapping sessions cover
 footprint conflict and single-transfer/cross-alt replay. Purchases, claims,
 revenue and Auction search are outside this fixture. See
-[seller parity and limits](postgres-shop-seller-parity.md).
+[seller parity and limits](../history/postgresql-migration.md).
 
 `--suite shop-settlement` compares fixed-price purchase, offline seller revenue
 and partial wallet collection against SQLite, including pending income,
@@ -139,21 +139,21 @@ reservations, full bag, overflow, statement/COMMIT faults and receipt recovery.
 Independent native sessions cover double-buy, buy/cancel/edit, additive sales,
 same-ID buy/collect and reciprocal account locking. It is opt-in and does not
 switch World or complete the broader concurrency/load gates. See
-[settlement parity and limits](postgres-shop-settlement-parity.md).
+[settlement parity and limits](../history/postgresql-migration.md).
 
 `--suite account-claims` compares private/public Shop projections and account claim
 receiving against SQLite: original UID/metadata/revisions, full footprint/capacity,
 receipt/reopen, SQL/COMMIT rollback, provenance constraints and independent alt/
 receiving conflicts. It also checks coherent public reads across native writer
 commits and private account-data isolation. It preserves the 200-claim window and
-does not switch runtime. See [claim parity and limits](postgres-account-claims-parity.md).
+does not switch runtime. See [claim parity and limits](../history/postgresql-migration.md).
 
 `--suite auction-search` compares complete SQLite/PG query rows and cursors across
 filters, ties, negotiable listings and pagination, plus atomic affix backfill/
 mutation/recovery and a read-only native session. Its 10k active-offer observations
 are synchronous SQL/projection measurements, not World/concurrent-load evidence.
 Production remains on the existing async SQLite reader. See
-[Auction parity and limits](postgres-auction-search-parity.md).
+[Auction parity and limits](../history/postgresql-migration.md).
 
 The existing `--suite shop-settlement` also covers P2c bounded whole-operation
 retry on the published SOCI v0.4.3 payload. Server-injected statement SQLSTATEs,
@@ -168,14 +168,14 @@ cross-alt receipts, equip/list, move/deposit/conversion, full-footprint overlap,
 last-space receiving, starter/pickup and global UID uniqueness. Independent native
 sessions and original-store A/B cover the conflict boundary; no DOM, animation or
 PostgreSQL runtime dependency is added to smoke. See
-[Inventory concurrency](postgres-inventory-concurrency.md).
+[Inventory concurrency](../history/postgresql-migration.md).
 
 `--suite wallet-concurrency` is the opt-in P2 cross-operation shared-account check:
 NPC/Upgrade spends, Exchange reservations, partial collection, receipt conflicts,
 checkpoint lock ordering and known-rollback original-ID recovery. Native sessions
 overlap at real database lock barriers; the checkpoint/matching regression also
 fails against the pre-fix store. This is not a load or PostgreSQL World test.
-See [shared wallet concurrency](postgres-wallet-concurrency.md).
+See [shared wallet concurrency](../history/postgresql-migration.md).
 
 The same fixture also covers Player Shop purchase versus Exchange reservation/
 immediate fill, concurrent sale/partial collection, and independent Shop/Exchange
@@ -187,14 +187,14 @@ the domain fixtures to the migration gate; it is not added to default CI.
 boundary: blocked native SQL versus SceneTree progress, independent completion,
 bounded buffered/unconsumed work, replay/discovery, COMMIT unknown/reopen,
 timeout recovery and clean drain/restart. It is not World/session fencing or a
-production PostgreSQL switch. See [Inventory execution](postgres-inventory-executor.md).
+production PostgreSQL switch. See [Inventory execution](../history/postgresql-migration.md).
 
 `--suite inventory-intents` verifies P3b durable Inventory admission/recovery:
 an owned child process terminates after admission COMMIT; another owner discovers
 and resumes its random ID. It also covers concurrent resume/admission, reserved-ID
 conflicts, atomic terminal success/rejection, storage/COMMIT failure containment,
 pending bounds and paged/int64 discovery. All SQL uses the owned fixture cluster.
-See [Inventory identity/recovery](postgres-inventory-intents.md).
+See [Inventory identity/recovery](../history/postgresql-migration.md).
 
 `--suite inventory-sessions` verifies P3c's opt-in delegated Inventory grants:
 CAS epochs/revoke replay, queued admission versus takeover/revocation, stale
@@ -202,7 +202,7 @@ contexts, account-wide recovery without retargeting the original character,
 fresh-snapshot readiness, failed COMMIT without automatic retry, reopen and
 native int64 epochs. It models already verified Master grants; it does not test
 an actual issuer bridge or enable live PostgreSQL sessions.
-See [Inventory session fence](postgres-inventory-sessions.md).
+See [Inventory session fence](../history/postgresql-migration.md).
 
 `--suite inventory-runtime` verifies P3d's World-thread Inventory owner with real
 PostgreSQL and the production World combat projection: recovery before readiness,
@@ -210,7 +210,7 @@ equip/unequip and rejection repair, physics/independent progress during blocked
 SQL, takeover/disconnect stale delivery, fresh-marker repair and explicit same-ID
 recovery after admission or mutation COMMIT uncertainty. Its peer maps are seeded;
 the separate native World session fixture checks the ticket fingerprint helper.
-See [Inventory runtime](postgres-inventory-runtime.md). Neither fixture enables a
+See [Inventory runtime](../history/postgresql-migration.md). Neither fixture enables a
 live PostgreSQL backend or proves the complete three-process PG login path.
 
 `--suite inventory-session-bridge` verifies P3e's optional Master control owner
@@ -219,7 +219,7 @@ old grant SQL finishing after supersession, grant COMMIT before ticket delivery,
 native relog/disconnect/revoke, COMMIT unknown without automatic grant retry and
 Master socket loss. It shares ports 18098/18099; run sequentially with network
 suites. Gateway credentials/entry initiation and roster/UI setup are controlled.
-See [Inventory session bridge](postgres-inventory-session-bridge.md) and its
+See [Inventory session bridge](../history/postgresql-migration.md) and its
 separate three-normal-process SQLite `run-items -WithSession` regression evidence.
 
 `--suite exchange-orders` compares SQLite/PG reservation, maker-price matching,
@@ -227,13 +227,13 @@ partial fills, cancel/refund, snapshots, original receipts and conservation. Nat
 independent sessions cover two takers, cancel/fill, duplicate commands and shared
 accounts across two books; statement/COMMIT faults, reopen, overflow and limits
 are opt-in. World stays on SQLite; no default CI dependency or PostgreSQL network
-claim. See [order settlement parity](postgres-exchange-orders-parity.md).
+claim. See [order settlement parity](../history/postgresql-migration.md).
 
 `--suite exchange-ledger` compares Inventory/Storage stack conversion into account
 balances and Inventory/claim withdrawal against SQLite. It covers original UID
 replay, free/reserved/cap bounds, statement/COMMIT rollback/reopen and independent
 alt/Storage-transfer conflicts. It does not implement order reservation/matching
-or switch runtime. See [ledger parity and limits](postgres-exchange-ledger-parity.md).
+or switch runtime. See [ledger parity and limits](../history/postgresql-migration.md).
 
 The existing headless gameplay/network runners remain available on demand:
 `run-spike3d`, `run-pve`, `run-combat`, `run-progression`, `run-xp`, `run-yang`,
@@ -554,18 +554,18 @@ network contracts; see [initial channel selection](initial-channel-selection.md)
 PostgreSQL P3f `--suite inventory-endpoint` adds native Inventory RPC/client journal
 acceptance with separate headless client processes, current Master tickets and
 World runtime on owned fixtures. It uses ports 18098/18099 sequentially. See
-[scope and failure/recovery behavior](postgres-inventory-endpoint.md). No CEF
+[scope and failure/recovery behavior](../history/postgresql-migration.md). No CEF
 rendering or production bootstrap/cutover is claimed.
 
 P3g extends the existing PG runtime/endpoint suites with committed cache
 invalidations, post-command and delayed-ACK freshness, ACK COMMIT uncertainty,
 bounded repair and RAM-only combat input gating. No new default suite. See
-[cache fence contract and limits](postgres-inventory-cache-fence.md).
+[cache fence contract and limits](../history/postgresql-migration.md).
 
 P3h uses the same four PG intent/session/runtime/endpoint suites to verify
 pending-only recovery, transactional v1-to-v2 index migration with data, retained
 history/receipt lookup, int64 cursors and the partial-index plan against 10,033
-terminal records. It adds no default suite; see [pending recovery](postgres-pending-recovery.md).
+terminal records. It adds no default suite; see [pending recovery](../history/postgresql-migration.md).
 
 ## PostgreSQL wallet runtime (P3i, opt-in)
 
@@ -577,7 +577,7 @@ same-ID scheduled retry, alt/relogin, offline dirty retention after revocation,
 forced worker drain and wallet recreation. The existing `inventory-endpoint`
 suite additionally checks actual client currency RPCs/snapshots and process relog,
 with unchanged SQLite wallet rows. These are optional suites, not added to smoke.
-See [wallet runtime](postgres-wallet-runtime.md) for the supplied fixture boundaries
+See [wallet runtime](../history/postgresql-migration.md) for the supplied fixture boundaries
 and remaining production/multi-World adoption work.
 
 ## PostgreSQL NPC runtime (P3j, opt-in)
@@ -590,7 +590,7 @@ takeover and graceful drain. The extended `inventory-endpoint` suite additionall
 uses four actual client processes and the production Web UI bridge/adapters for
 NPC range checks, Shop retry, Upgrade reload and purchase process-relogin recovery.
 No default CI expansion or physical CEF validation is implied. See
-[NPC runtime](postgres-npc-runtime.md) and its evidence for the precise boundaries.
+[NPC runtime](../history/postgresql-migration.md) and its evidence for the precise boundaries.
 
 ## PostgreSQL account Storage runtime (P3k, opt-in)
 
@@ -605,7 +605,7 @@ retains the existing independent-session transaction/custody concurrency checks.
 Inventory, wallet and NPC contracts (five real headless client processes). Run
 sequentially with other suites using ports 18098/18099. `run-web-inventory.ps1
 -Scene storage_recovery` preserves the existing SQLite client recovery contract.
-See [Storage runtime](postgres-storage-runtime.md) for verified/deferred boundaries.
+See [Storage runtime](../history/postgresql-migration.md) for verified/deferred boundaries.
 
 ## PostgreSQL starter / ground items (P3l, opt-in)
 
@@ -619,7 +619,7 @@ now includes the UID-only pickup RPC and a sixth actual client restoring the
 saved drop after process relog; run sequentially with other 18098/18099 suites.
 The economic network map suppresses combat simulation/rendering; `run-combat.ps1`
 remains the existing server/two-client combat/pickup regression on SQLite.
-See [ground-item runtime](postgres-ground-items.md) for explicit scope limits.
+See [ground-item runtime](../history/postgresql-migration.md) for explicit scope limits.
 
 ## PostgreSQL seller / item claims (P3m, opt-in)
 
@@ -634,7 +634,7 @@ lost-reply retry, UI recreation, claim process-relog and saved-but-unsent explic
 retry through production RPC/bridge/adapters. Run sequentially with 18098/18099
 suites. `run-web-inventory.ps1 -Scene market_network` checks the existing SQLite
 path. No physical CEF, full Gateway/bootstrap or P4 cutover acceptance is implied.
-See [seller runtime](postgres-seller-runtime.md) and its evidence.
+See [seller runtime](../history/postgresql-migration.md) and its evidence.
 
 
 ## PostgreSQL Marketplace settlement (P3n, opt-in)
@@ -650,7 +650,7 @@ visit, purchase lost reply/process relog, seller proceeds refresh and collection
 lost reply/UI recreation through production bridge/journals. Run sequentially
 with other 18098/18099 suites. Web contracts check restored purchase retry after
 an offer disappears; `run-web-inventory.ps1 -Scene market_network` retains SQLite.
-See [settlement runtime](postgres-market-settlement-runtime.md) for scope limits.
+See [settlement runtime](../history/postgresql-migration.md) for scope limits.
 
 
 ## PostgreSQL Exchange ledger runtime (P3o, opt-in)
@@ -666,7 +666,7 @@ transfer/deposit lost reply, `ui.ready` retry, withdrawal to claims, withdrawal
 lost reply/process relog and saved-but-unsent explicit retry, retaining earlier
 Inventory/wallet/NPC/Storage/ground/Marketplace contracts. Run sequentially with
 other suites on 18098/18099. A Web contract checks Retry without a source stack
-and the ledger-only trading gate. See [runtime](postgres-exchange-ledger-runtime.md)
+and the ledger-only trading gate. See [runtime](../history/postgresql-migration.md)
 for the deferred matching, platform and production boundaries.
 
 
@@ -683,7 +683,7 @@ transaction and wallet regression boundaries.
 and adding matched order lost reply/process relog, online maker refresh, cancel
 lost reply/UI reload and reserve/refund. Run sequentially with other 18098/18099
 suites. `run-web-inventory.ps1 -Scene market_network` retains the normal SQLite
-path. See [runtime](postgres-exchange-matching-runtime.md) for explicit limits.
+path. See [runtime](../history/postgresql-migration.md) for explicit limits.
 
 
 ## PostgreSQL public Auction reads (P3q, opt-in)
@@ -699,7 +699,7 @@ filter/cursor parity; `matching-runtime` retains the shared executor regression.
 search, `ui.ready` snapshot recovery and duplicate/malformed/rate-limited request
 IDs before an actual purchase. Run shared 18098/18099 network suites sequentially.
 `run-web-inventory.ps1 -Scene market_network` retains SQLite RPC behavior. See
-[runtime](postgres-auction-runtime.md) and [evidence](../evidence/postgres-p3q/README.md).
+[runtime](../history/postgresql-migration.md) and [evidence](../evidence/postgres-p3q/README.md).
 No physical CEF, combat soak, production PG bootstrap or cutover is implied.
 
 
