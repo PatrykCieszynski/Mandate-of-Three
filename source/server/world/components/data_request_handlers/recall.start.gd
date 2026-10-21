@@ -9,7 +9,7 @@ const RECALL_ABILITY: RecallAbility = preload("res://source/common/gameplay/comb
 
 
 func data_request_handler(peer_id: int, instance: ServerInstance, _args: Dictionary) -> Dictionary:
-	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
+	var legacy_players: Dictionary = instance.players_by_peer_id
 	if not RateLimiter.check(peer_id, &"recall.start", 4, 1_000):
 		return {}
 	var player: Player = legacy_players.get(peer_id, null)

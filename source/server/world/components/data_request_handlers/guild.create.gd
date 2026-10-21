@@ -6,7 +6,7 @@ func data_request_handler(
 	instance: ServerInstance,
 	args: Dictionary
 ) -> Dictionary:
-	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
+	var legacy_players: Dictionary = instance.players_by_peer_id
 	var world_server: WorldServer = instance.world_server
 	var store: RefCounted = world_server.database.store
 

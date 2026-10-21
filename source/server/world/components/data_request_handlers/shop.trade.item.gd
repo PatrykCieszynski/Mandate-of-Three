@@ -9,8 +9,8 @@ func data_request_handler(
 	instance: ServerInstance,
 	args: Dictionary
 ) -> Dictionary:
-	var legacy_players: Dictionary = (instance as ServerInstance).players_by_peer_id if instance is ServerInstance else {}
-	var legacy_map: Map = (instance as ServerInstance).instance_map if instance is ServerInstance else null
+	var legacy_players: Dictionary = instance.players_by_peer_id
+	var legacy_map: Map = instance.instance_map
 	if legacy_map == null:
 		return {"ok": false, "error": ERR_UNAVAILABLE}
 	var player: Player = legacy_players.get(peer_id, null)

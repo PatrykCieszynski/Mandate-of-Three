@@ -65,7 +65,7 @@ func _ready() -> void:
 		api.peer_connected.connect(func(peer: int)->void:
 			var owner:=EconomyFixture.create_character(server.database.store,"map%d" % peer,{"name":"Map%d" % peer,"skin":1})
 			EconomyFixture.prepare(server.database)
-			var player:=server.database.store.get_player(owner)
+			var player: PlayerResource=server.database.store.get_player(owner)
 			player.current_peer_id=peer
 			server.connected_players[peer]=player
 			server.player_id_to_peer_id[owner]=peer

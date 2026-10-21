@@ -1,5 +1,5 @@
 extends DataRequestHandler
-## Join / leave / start / solo a DungeonMaster lobby. Args: {master_id, action}.
+## Join / leave / start / solo a dungeon-keeper lobby. Args: {master_id, action}.
 ## "start" sends the whole queue into a private run; "solo" sends just the caller.
 ## DungeonService handles the group + private-instance charge.
 

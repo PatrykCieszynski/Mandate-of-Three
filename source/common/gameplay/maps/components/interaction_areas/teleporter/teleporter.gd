@@ -3,7 +3,7 @@
 extends InteractionArea
 class_name Teleporter
 ## Used to teleport from a point A to a point B inside the same instance.
-## To change instance, use a Warper instead.
+## Cross-instance travel belongs to InstanceManagerServer, not this local teleporter.
 
 @export var one_way: bool = false
 @export var target: Teleporter:

@@ -46,7 +46,7 @@ signal wardstones_changed
 var wardstones: PackedStringArray
 ## The local character's level, mirrored from progression data (progression.get on
 ## spawn/map change + combat.reward pushes — see HUD._apply_progression). Client-side
-## cosmetic checks only (e.g. a gated Portal suppressing its fade); the server enforces.
+## cosmetic checks only; gameplay admission remains server-authoritative.
 var player_level: int = 1
 ## True while a blocking menu is open (NPC dialogue, shop, quest log, inventory).
 ## While set, the local player's movement and actions are suppressed, so you can't

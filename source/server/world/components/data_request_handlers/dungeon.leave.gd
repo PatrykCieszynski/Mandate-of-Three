@@ -3,16 +3,14 @@ extends DataRequestHandler
 ## from the group (recall_player → player_switch_instance → DungeonService
 ## .on_player_left dissolves the group when it empties). Args: none. The recall
 ## ability does the same thing from anywhere — this is the explicit, mob-proof exit
-## you reach from the DungeonExit station at the entrance.
+## requested through the dungeon exit UI.
 
 
 func data_request_handler(peer_id: int, instance: ServerInstance, _args: Dictionary) -> Dictionary:
-	if not instance is ServerInstance:
-		return {"ok": false, "error": ERR_UNAVAILABLE}
 	if WorldServer.curr == null:
 		return {"ok": false, "reason": "no_server"}
 	# Leave the run topped up (HP + mana), like the auto-eject on clear/fail — saves potions.
-	var player: Player = (instance as ServerInstance).get_player(peer_id) as Player
+	var player: Player = instance.get_player(peer_id) as Player
 	if player != null:
 		player.restore_full()
 	WorldServer.curr.instance_manager.recall_player(peer_id)
