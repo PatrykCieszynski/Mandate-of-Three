@@ -1,5 +1,17 @@
 # Evidence and validation
 
+- [PostgreSQL P3r bootstrap](postgres-p3r/README.md) - failed-start cleanup, offline provisioning and shared-owner native-client acceptance (topic branch until reviewed/merged).
+
+- [PostgreSQL P3q Auction reads](postgres-p3q/README.md) - 10k native World observations and public browser/RPC acceptance (topic branch until reviewed/merged).
+
+- [PostgreSQL P3p Exchange matching](postgres-p3p/README.md) - native multi-party settlement and ten-client recovery acceptance (topic branch until reviewed/merged).
+
+- [PostgreSQL P3o Exchange ledger](postgres-p3o/README.md) - native custody/recovery and nine-client acceptance (topic branch until reviewed/merged).
+
+- [PostgreSQL P3n settlement runtime](postgres-p3n/README.md) - purchases/proceeds, native uncertainty and eight-client recovery (topic branch until reviewed/merged).
+
+- [PostgreSQL P3m seller runtime](postgres-p3m/README.md) - optional seller/item claims, native failures and seven-client journal recovery (topic branch until reviewed/merged).
+
 Measured evidence must state **branch/commit**, platform, test command, runtime versions and limitations. A CI green check proves only the suites it actually ran.
 
 ## On `main`
@@ -12,6 +24,12 @@ Measured evidence must state **branch/commit**, platform, test command, runtime 
 - [PostgreSQL P3d Inventory runtime](postgres-p3d/README.md) — main-thread recovery, actual World combat cache and stale-delivery fencing.
 - [PostgreSQL P3e session bridge](postgres-p3e/README.md) — current Master ticket publication after grant COMMIT, native auth/relogin and normal-role SQLite regression.
 - [PostgreSQL P3f Inventory endpoint](postgres-p3f/README.md) — native client processes, stable journal/receipt recovery, private state/public weapon and no SQLite economic fallback.
+- [PostgreSQL P3g cache reconciliation](postgres-p3g/README.md) — command freshness ACK, versioned local invalidations, bounded repair and current client/stat projections.
+- [PostgreSQL P3h pending recovery](postgres-p3h/README.md) — indexed unresolved-only recovery, data-preserving index migration and retained receipt lookup.
+- [PostgreSQL P3i wallet runtime](postgres-p3i/README.md) — RAM batching, stable checkpoint/spend receipts, native client Yang delivery and lifecycle recovery.
+- [PostgreSQL P3j NPC runtime](postgres-p3j/README.md) — atomic Shop/Upgrade, captured-income replay safety and actual client journal recovery.
+- [PostgreSQL P3k Storage runtime](postgres-p3k/README.md) � shared account custody, combined projection and actual client journal recovery.
+- [PostgreSQL P3l ground items](postgres-p3l/README.md) � idempotent starter hydration, claim faults/races and six-client pickup/relog.
 - [CI / platform checks](../development/ci.md)
 - [Historical native validation](../history/README.md) (dated results, not current acceptance)
 - [Terrain3D adoption and verification](../world/visuals/visual-upgrade-v4-terrain3d.md)
@@ -23,3 +41,21 @@ The `shop` branch contains the Auction D0–D2 reports and evidence under `docs/
 Recorded D2 limitations: Linux runtime not verified, actual native-only SQL timing unavailable from the public addon API, and economy writes still cause measurable simulation tick tails. A benchmark passing on the developer's Windows host is not a production SLA.
 
 This directory retains reproducible raw evidence. The documentation cleanup removes obsolete *plans*, not Auction D2 performance data on `shop`. Large diagnostic P0 data needs separate review after integration.
+
+- [PostgreSQL normal process startup (P3s)](postgres-p3s/README.md)
+
+- [PostgreSQL operator maintenance barrier (P3t)](postgres-p3t/README.md)
+
+- [PostgreSQL P3u backup/restore rehearsal](postgres-p3u/README.md)
+
+- [PostgreSQL P3v World replacement](postgres-p3v/README.md)
+
+- [PostgreSQL P4a mixed-load baseline](postgres-p4a/README.md)
+
+- [P4b mixed-load receipt recovery](postgres-p4b/README.md)
+
+- [P4c backend-process recovery and sustained-run investigation](postgres-p4c/README.md)
+
+- [MMO Integration & Load: first seeded runtime story baseline](realm-workload-foundation/README.md)
+
+- [P4 Representative Economy: dispersed offline shops and controlled peaks](representative-economy/README.md)

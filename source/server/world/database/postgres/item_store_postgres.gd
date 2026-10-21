@@ -2,10 +2,14 @@ extends RefCounted
 ## Opt-in character Inventory port. World endpoints remain on SQLite.
 ## Every mutation and receipt is owned by one native transaction/session.
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
+const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
 const ITEM_SELECT = "SELECT i.*,c.location,c.position AS bag_position,c.equipment_slot FROM economy.item_instances i JOIN economy.item_custody c ON c.uid=i.uid "
 var db: Object
 var committed:=false
 var receipt_replay:=false
+var _session: Dictionary={}
+
+func authorize_session(context: Dictionary) -> void: _session=context.duplicate(true)
 
 func _init(database: Object) -> void:
 	db=database
@@ -85,7 +89,7 @@ func receive_item_in_transaction(item: ItemInstance, requested_position: int = -
 
 func initialize_character(owner: int) -> Dictionary:
 	committed=false
-	var started:=_begin_character(owner)
+	var started:=_begin_character(owner,false)
 	if not started.ok: return started
 	var result: Dictionary=db.query("SELECT owner_character_id FROM economy.item_initializations WHERE owner_character_id=:owner;",{"owner":owner})
 	if not result.ok: return _rollback("storage")
@@ -265,7 +269,7 @@ func _place(uid: String, owner: int, location: String, position: int, slot: Stri
 func _increment_revision(uid: String, owner: int) -> bool:
 	return db.execute("UPDATE economy.item_instances SET revision=revision+1 WHERE uid=:uid AND owner_character_id=:owner;",{"uid":uid,"owner":owner}).ok
 
-func _begin_character(owner: int) -> Dictionary:
+func _begin_character(owner: int, require_ready: bool = true) -> Dictionary:
 	if db.in_transaction() or not db.begin(): return _error("storage")
 	# Starter/pickup also mutate account item watermarks. Use the same account
 	# before character order as receipted Inventory and external receiving flows.
@@ -275,6 +279,8 @@ func _begin_character(owner: int) -> Dictionary:
 	var result: Dictionary=db.query("SELECT character_id FROM economy.characters WHERE character_id=:owner AND account_id=:account FOR NO KEY UPDATE;",{"owner":owner,"account":int(identity.rows[0].account_id)})
 	if not result.ok: return _rollback("storage")
 	if result.rows.is_empty(): return _rollback("owner")
+	var reason:=Sessions.check_in_transaction(db,int(identity.rows[0].account_id),owner,_session,require_ready)
+	if not reason.is_empty(): return _rollback(reason)
 	return {"ok":true}
 
 func _commit() -> Dictionary:

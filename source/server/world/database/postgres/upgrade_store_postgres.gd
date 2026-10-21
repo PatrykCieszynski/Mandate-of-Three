@@ -8,6 +8,13 @@ var db: Object
 var _transaction: RefCounted
 var committed: bool:
 	get: return _transaction.committed
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+var income_token: String=""
+
+func authorize_session(context: Dictionary, token: String) -> void:
+	_transaction.economic_context=context.duplicate(true)
+	income_token=token
 
 func _init(database: Object) -> void:
 	db=database
@@ -65,7 +72,9 @@ func _upgrade_once(owner: int, pending_yang: int, recipe: UpgradeDefinition, uid
 	result=db.execute("UPDATE economy.item_instances SET upgrade_level=:level,revision=revision+1 WHERE uid=:uid AND owner_character_id=:owner AND revision=:revision AND upgrade_level=:previous;",{"level":recipe.to_level,"uid":uid,"owner":owner,"revision":revision,"previous":recipe.from_level})
 	if not result.ok: return _transaction.rollback("storage")
 	if int(result.affected_rows)!=1: return _transaction.rollback("stale")
-	return _transaction.commit({"ok":true,"balance":spent.balance,"wallet_states":[spent.wallet_state]})
+	var response: Dictionary={"ok":true,"balance":spent.balance,"wallet_states":[spent.wallet_state]}
+	if not income_token.is_empty(): response.income_token=income_token
+	return _transaction.commit(response)
 
 func upgrade_receipt(owner: int, operation_id: String) -> Dictionary:
 	if not Commands.valid_id(operation_id): return _error("request")

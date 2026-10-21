@@ -81,7 +81,11 @@ static func evaluate(guild: Guild) -> Array[StringName]:
 static func check_and_announce(world_server: Node, guild: Guild) -> void:
 	if world_server == null or guild == null:
 		return
-	for trophy_id: StringName in evaluate(guild):
+	announce(world_server,guild,evaluate(guild))
+
+## Caller has already committed newly earned trophies.
+static func announce(world_server: Node, guild: Guild, newly: Array[StringName]) -> void:
+	for trophy_id: StringName in newly:
 		var trophy_name: String = display_name(trophy_id)
 		world_server.database.store.add_guild_log(
 			guild.guild_id, "trophy", "", "", {"trophy": trophy_name}

@@ -99,14 +99,18 @@ func _ready() -> void:
 	assert((await answer(executor.submit_inventory_revoke(a))).result.error=="stale_session")
 	assert((await answer(executor.submit_session_inventory(a,"terminal-reject","move",item.uid,0,15))).result.error=="stale_session")
 	assert((await answer(executor.submit_session_discovery(a))).result.error=="stale_session")
+	assert((await answer(executor.submit_session_pending_discovery(a))).result.error=="stale_session")
 	assert((await answer(executor.submit_session_outcome(a,"before-grant"))).result.error=="stale_session")
 	var forged:=b.duplicate(true)
 	forged.character=93000
 	assert((await answer(executor.submit_session_snapshot(forged))).result.error=="stale_session")
+	assert((await answer(executor.submit_session_pending_discovery(forged))).result.error=="stale_session")
 	var before_late:=await snapshot(b)
 	assert((await answer(executor.submit_inventory_recovery_ready(b,before_late.item_state))).result.error=="operations_pending")
 	var discovered: Dictionary=(await answer(executor.submit_session_discovery(b,0,10))).result
 	assert(discovered.ok and discovered.operations.any(func(row: Dictionary) -> bool: return row.operation_id=="late-A" and row.character==93000 and row.state=="pending"))
+	var pending_only: Dictionary=(await answer(executor.submit_session_pending_discovery(b,0,1))).result
+	assert(pending_only.ok and pending_only.operations.size()==1 and pending_only.operations[0].operation_id=="late-A" and not pending_only.more)
 	assert((await answer(executor.submit_session_resume(b,"late-A"))).result.state=="committed")
 	assert(Items.new(pg).inventory(93000).items[0].uid==item.uid and Items.new(pg).inventory(93001).items.is_empty(),"new active alt must not retarget the old issuer's command")
 	assert((await answer(executor.submit_inventory_recovery_ready(b,before_late.item_state))).result.error=="stale_snapshot")
@@ -155,6 +159,14 @@ func _ready() -> void:
 	assert(e.epoch==huge+1 and not Sessions.same_context(d,e))
 	current=await snapshot(e)
 	assert((await answer(executor.submit_inventory_recovery_ready(e,current.item_state))).result.ok)
+	# Pending keyset cursors and request revisions stay native int64 too.
+	assert(pg.query("SELECT setval(pg_get_serial_sequence('economy.inventory_intents','sequence'),:sequence,true);",{"sequence":huge}).ok)
+	assert((await answer(executor.submit_session_inventory(e,"large-cursor","move",item.uid,huge,20))).result.state=="pending")
+	pending_only=(await answer(executor.submit_session_pending_discovery(e,huge,1))).result
+	assert(pending_only.cursor==huge+1 and pending_only.operations[0].sequence==huge+1 and pending_only.operations[0].revision==huge)
+	assert((await answer(executor.submit_session_resume(e,"large-cursor"))).result.state=="rejected")
+	pending_only=(await answer(executor.submit_session_pending_discovery(e,huge,1))).result
+	assert(pending_only.operations.is_empty() and pending_only.cursor==huge and not pending_only.more)
 	executor.begin_drain()
 	await wait_until(func() -> bool: return executor.is_stopped())
 	pg.close()

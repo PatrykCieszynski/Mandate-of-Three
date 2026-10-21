@@ -9,7 +9,7 @@ func data_request_handler(
 	const MAX_RESULT: int = 10
 
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var query: String = str(args.get("q", "")).strip_edges()
 	if query.is_empty():

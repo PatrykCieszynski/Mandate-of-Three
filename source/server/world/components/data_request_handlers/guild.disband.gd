@@ -11,7 +11,7 @@ extends DataRequestHandler
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var legacy_players: Dictionary = instance.players_by_peer_id
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var actor: PlayerResource = world_server.connected_players.get(peer_id)
 	if actor == null:
@@ -34,7 +34,8 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 
 	var member_ids: Array = guild.members.keys()
 
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,world_server.connected_players.values())
+	if not mutation.started: return mutation.failure()
 	for member_id: int in member_ids:
 		var member: PlayerResource = _find_online(world_server, member_id)
 		if member == null:
@@ -46,9 +47,9 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 			member.active_guild_id = 0
 		if member.led_guild_id == guild_id:
 			member.led_guild_id = 0
-		store.save_player(member)
+		if not mutation.save_player(member): return mutation.abort()
 	store.delete_guild(guild_id)
-	store.commit()
+	if not mutation.commit(): return mutation.failure()
 
 	# Sync + notify everyone online who was a member.
 	for member_id: int in member_ids:

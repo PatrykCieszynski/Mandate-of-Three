@@ -31,6 +31,8 @@ func _on_peer_disconnected(peer_id: int) -> void:
 @rpc("any_peer", "call_remote")
 func gateway_request(request_id: int, request: Dictionary) -> void:
 	var gateway_id: int = multiplayer.get_remote_sender_id()
+	if not world_manager.admissions_open():
+		gateway_response.rpc_id(gateway_id,request_id,{"error":ERR_UNAVAILABLE});return
 	if not request.has("action"):
 		return
 	var action: String = request.get("action", "")
@@ -92,6 +94,7 @@ func update_worlds_info(_worlds_info: Dictionary) -> void:
 
 
 func login_request(username: String, password: String) -> Dictionary:
+	if not world_manager.admissions_open(): return {"error":ERR_UNAVAILABLE}
 	var account: AccountResource = authentication_manager.validate_credentials(
 		username, password
 	)
@@ -134,6 +137,7 @@ func login_request(username: String, password: String) -> Dictionary:
 
 
 func create_account_request(username: String, password: String, is_guest: bool) -> Dictionary:
+	if not world_manager.admissions_open(): return {"error":ERR_UNAVAILABLE}
 	var result_code: int
 	var return_data: Dictionary
 	var result: AccountResource = authentication_manager.create_account(username, password, is_guest)
@@ -160,7 +164,7 @@ func create_player_character_request(
 	if not account:
 		gateway_response.rpc_id(gateway_id, request_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS, "msg": "account not found."})
 		return
-	if not world_manager.connected_worlds.has(world_id):
+	if not world_manager.world_ready(world_id):
 		gateway_response.rpc_id(gateway_id, request_id, {"error": GatewayAPI.ERR_BAD_CREDENTIALS, "msg": "world not found."})
 		return
 	var attempt_id := world_manager.begin_entry_attempt(account.username, world_id, gateway_id, request_id, &"create")
@@ -174,7 +178,7 @@ func create_player_character_request(
 
 func request_player_characters(gateway_id: int, request_id: int, username: String, world_id: int) -> void:
 	if (
-		world_manager.connected_worlds.has(world_id)
+		world_manager.world_ready(world_id)
 		and authentication_manager.account_collection.collection.has(username)
 	):
 		var account: AccountResource = authentication_manager.account_collection.collection[username]
@@ -194,7 +198,7 @@ func request_enter_world(gateway_id: int, request_id: int, username: String, wor
 		gateway_response.rpc_id(gateway_id,request_id,{"error":GatewayAPI.ERR_BAD_CREDENTIALS})
 		return
 
-	if not world_manager.connected_worlds.has(world_id):
+	if not world_manager.world_ready(world_id):
 		return
 
 	var attempt_id := world_manager.begin_entry_attempt(account.username, world_id, gateway_id, request_id, &"login", character_id)

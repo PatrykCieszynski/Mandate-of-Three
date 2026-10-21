@@ -98,17 +98,18 @@ actions; merely constructing the component does not gate a live character.
 Handoff with pending Yang, real mixed World/network PostgreSQL traffic and P4
 load/soak/cutover remain open. No backend switch or dual writes are enabled.
 
-Before adding concurrent NPC Shop, Storage or other item-mutating domains,
-integrate versioned invalidation/reconciliation across those domains. The current
-post-command refresh opens the local Inventory lane after applying its snapshot;
-it does not perform another backend revision acknowledgement and cannot fence a
-different domain's commit after that snapshot was read. The attach/recovery
-barrier is not a substitute for cross-domain synchronization.
+[P3g cache reconciliation](postgres-inventory-cache-fence.md) now acknowledges
+post-command/receipt snapshots too, and consumes trusted account-revision
+invalidations with a coalesced floor, bounded repair and RAM-only combat gating.
+Future Shop/Storage/Upgrade ports must deliver their committed markers before
+dependent gameplay proceeds. Their publishers and distributed transport/missed
+idle notifications remain unimplemented; no broader domain activation is implied.
 
-Recovery currently scans terminal history as well as pending intents. Paging
-bounds each request and memory use, but not total recovery work as history grows.
-Plan indexed pending-only discovery before the P3/P4 production/load gate, keeping
-full original-ID receipt/outcome lookup and its replay guarantees intact.
+[P3h pending recovery](postgres-pending-recovery.md) now uses session-qualified
+pending-only discovery through an account/sequence partial index. Historical
+discovery and original-ID outcome/receipt lookup remain available explicitly,
+without pruning terminal records. This removes history enumeration from runtime
+recovery; it does not complete P4 storage/load/operational acceptance.
 
 Run `tools/postgres/run_readiness.py --suite inventory-runtime` on owned fixtures.
 The fixture uses real PostgreSQL workers, SceneTree physics and production World

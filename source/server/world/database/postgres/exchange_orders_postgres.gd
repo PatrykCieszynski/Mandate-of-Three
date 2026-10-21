@@ -7,6 +7,18 @@ const Ledger = preload("res://source/server/world/database/postgres/exchange_led
 const MAX_ACCOUNT_ORDERS: int=20
 const MAX_PAIR_ORDERS: int=2048
 var db: Object
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+var _captures: Dictionary={}
+var _participants: Array=[]
+var _runtime:=false
+const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
+func authorize_session(context: Dictionary, captures: Dictionary, participants: Array) -> void:
+	_transaction.economic_context=context.duplicate(true)
+	_captures=captures.duplicate(true)
+	_participants=participants.duplicate()
+	_runtime=true
+
 var rejected: MarketRejectedCommands
 var _transaction: RefCounted
 var committed: bool:
@@ -43,6 +55,7 @@ func _begin(character: int, command: String, kind: String, args: Array, base: St
 		var locked: Dictionary=db.query("SELECT account_id FROM economy.accounts WHERE account_id=:account FOR NO KEY UPDATE;",{"account":participant})
 		if not locked.ok or locked.rows.is_empty(): return _transaction.rollback("storage")
 	if not _transaction.admit_in_transaction(character,command,kind,args,account): return _transaction.cached
+	if _runtime and accounts!=_participants: return _transaction.rollback("participants_changed")
 	return {"ok":true,"admitted":true}
 
 static func price_before(a: Dictionary,b: Dictionary,ascending: bool) -> bool:
@@ -154,6 +167,11 @@ func release_in_transaction(account: int, asset: String, amount: int) -> bool:
 
 func _flush_pending(account: int, pending: Dictionary, touched: Dictionary) -> bool:
 	if touched.has(account): return true
+	var capture: Dictionary=_captures.get(account,{})
+	if not capture.get("context",{}).is_empty():
+		var context: Dictionary=capture.context
+		var reason:=Sessions.check_in_transaction(db,account,int(context.character),context,false)
+		if not reason.is_empty(): return false
 	if not Wallet.new(db)._apply_income(account,int(pending.get(account,0))).ok: return false
 	touched[account]=true
 	return true
@@ -188,6 +206,11 @@ func _finish(result: Dictionary, touched: Dictionary, pending: Dictionary) -> Di
 		state.pending_applied=int(pending.get(account,0))
 		states.append(state)
 	result.wallet_states=states
+	if _runtime:
+		result.income_tokens={}
+		for account: int in touched:
+			var token: String=str(_captures.get(account,{}).get("token",""))
+			if not token.is_empty(): result.income_tokens[str(account)]=token
 	return _transaction.commit(result)
 
 func _reject(error: String) -> Dictionary:
@@ -196,27 +219,34 @@ func _reject(error: String) -> Dictionary:
 func orders_snapshot(character: int, pending_yang: int = 0) -> Dictionary:
 	if db.in_transaction() or not db.begin(): return {"ok":false,"error":"storage"}
 	if not db.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;").ok: return _transaction.rollback("storage")
-	var snapshot:=Ledger.new(db).read_in_transaction(character)
+	var snapshot:=read_snapshot_in_transaction(character,pending_yang)
 	if not snapshot.ok: return _transaction.rollback(str(snapshot.error))
-	if pending_yang<0 or pending_yang>Wallet.MAX_YANG-int(snapshot.yang): return _transaction.rollback("storage")
+	if db.commit(): return snapshot
+	db.close()
+	return {"ok":false,"error":"storage"}
+
+## Compose the same bounded read model under the caller's account lock.
+func read_snapshot_in_transaction(character: int, pending_yang: int = 0) -> Dictionary:
+	if not db.in_transaction(): return {"ok":false,"error":"transaction"}
+	var snapshot:=Ledger.new(db).read_in_transaction(character)
+	if not snapshot.ok: return snapshot
+	if pending_yang<0 or pending_yang>Wallet.MAX_YANG-int(snapshot.yang): return {"ok":false,"error":"storage"}
 	snapshot.yang+=pending_yang
 	var identity: Dictionary=db.query("SELECT account_id FROM economy.characters WHERE character_id=:character;",{"character":character})
-	if not identity.ok or identity.rows.is_empty(): return _transaction.rollback("storage")
+	if not identity.ok or identity.rows.is_empty(): return {"ok":false,"error":"storage"}
 	var account: int=int(identity.rows[0].account_id)
 	var found: Dictionary=db.query("SELECT * FROM economy.exchange_orders WHERE account_id=:account ORDER BY (status='active') DESC,sequence DESC LIMIT 50;",{"account":account})
-	if not found.ok or found.truncated: return _transaction.rollback("storage")
+	if not found.ok or found.truncated: return {"ok":false,"error":"storage"}
 	snapshot.orders=found.rows
 	found=db.query("SELECT f.*,m.base_asset FROM economy.exchange_fills f JOIN economy.exchange_orders m ON m.order_id=f.maker_id JOIN economy.exchange_orders t ON t.order_id=f.taker_id WHERE m.account_id=:maker OR t.account_id=:taker ORDER BY f.fill_id DESC LIMIT 20;",{"maker":account,"taker":account})
-	if not found.ok or found.truncated: return _transaction.rollback("storage")
+	if not found.ok or found.truncated: return {"ok":false,"error":"storage"}
 	snapshot.fills=found.rows
 	found=db.query("SELECT base_asset,side,remaining,price_num,price_den,sequence FROM economy.exchange_orders WHERE status='active';",{},mini(100000,MAX_PAIR_ORDERS*ItemDefinitions.all_definitions().size()+1))
-	if not found.ok or found.truncated: return _transaction.rollback("storage")
+	if not found.ok or found.truncated: return {"ok":false,"error":"storage"}
 	var active: Array=found.rows
 	snapshot.depth=[]
 	for side: String in ["buy","sell"]:
 		var book:=active.filter(func(row: Dictionary) -> bool: return row.side==side)
 		book.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return price_before(a,b,side=="sell"))
 		for row: Dictionary in book.slice(0,10): snapshot.depth.append(row)
-	if db.commit(): return snapshot
-	db.close()
-	return {"ok":false,"error":"storage"}
+	return snapshot

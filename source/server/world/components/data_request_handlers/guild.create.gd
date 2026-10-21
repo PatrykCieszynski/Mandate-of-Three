@@ -8,7 +8,7 @@ func data_request_handler(
 ) -> Dictionary:
 	var legacy_players: Dictionary = instance.players_by_peer_id
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var guild_name: String = str(args.get("name", "")).strip_edges()
 	var player: PlayerResource = world_server.connected_players.get(peer_id)
@@ -29,21 +29,22 @@ func data_request_handler(
 		return {"error": 1, "ok": false, "message": "You need %d gold to create a guild." % Guild.CREATION_COST}
 
 	# Create + assign atomically
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,[player])
+	if not mutation.started: return mutation.failure()
 
 	var new_guild_id: int = store.create_guild(guild_name, player.player_id)
 	if new_guild_id <= 0:
-		store.rollback()
+		mutation.abort()
 		return {"error": 1, "ok": false, "message": "Guild name already taken."}
 
 	var guild: Guild = store.get_guild(new_guild_id)
 	if guild == null:
-		store.rollback()
+		mutation.abort()
 		return {"error": 1, "ok": false, "message": "Error while creating guild."}
 
 	# Ensure leader is member with rank 0
 	guild.members[player.player_id] = 0
-	store.save_guild(guild)
+	if not mutation.save_guild(guild): return mutation.abort()
 
 	# Charge the creation cost (already verified above; persisted by save_player).
 	Inventory.remove_amount_by_id(player.inventory, gold_id, Guild.CREATION_COST)
@@ -55,9 +56,9 @@ func data_request_handler(
 	if not player.joined_guild_ids.has(new_guild_id):
 		player.joined_guild_ids.append(new_guild_id)
 
-	store.save_player(player)
+	if not mutation.save_player(player): return mutation.abort()
 
-	store.commit()
+	if not mutation.commit(): return mutation.failure()
 
 	store.add_guild_log(new_guild_id, "created", player.display_name)
 

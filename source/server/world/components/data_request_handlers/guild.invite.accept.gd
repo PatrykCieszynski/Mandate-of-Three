@@ -7,7 +7,7 @@ extends DataRequestHandler
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var legacy_players: Dictionary = instance.players_by_peer_id
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var accepter: PlayerResource = world_server.connected_players.get(peer_id)
 	if accepter == null:
@@ -24,12 +24,16 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 		return {"error": 1, "ok": false, "message": "No pending invite."}
 	if guild.members.has(accepter.player_id):
 		guild.pending_invites.erase(accepter.player_id)
-		store.save_guild(guild)
+		var cleanup:=RealmProfileMutation.new(store)
+		if not cleanup.started: return cleanup.failure()
+		if not cleanup.save_guild(guild): return cleanup.abort()
+		if not cleanup.commit(): return cleanup.failure()
 		return {"error": 1, "ok": false, "message": "Already a member."}
 	if guild.members.size() >= GuildUpgrades.total_cap(guild):
 		return {"error": 1, "ok": false, "message": "Guild is full."}
 
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,[accepter])
+	if not mutation.started: return mutation.failure()
 	guild.add_member(accepter.player_id)
 	guild.pending_invites.erase(accepter.player_id)
 	if not accepter.joined_guild_ids.has(guild_id):
@@ -40,11 +44,12 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	if accepter.active_guild_id <= 0 and _online_tagged_count(world_server, guild_id) < GuildUpgrades.tag_cap(guild):
 		accepter.active_guild_id = guild_id
 	# Roster grew — the Full House trophy can only trigger here.
-	GuildTrophies.check_and_announce(world_server, guild)
-	store.save_guild(guild)
-	store.save_player(accepter)
-	store.commit()
+	var newly: Array[StringName]=GuildTrophies.evaluate(guild)
+	if not mutation.save_guild(guild): return mutation.abort()
+	if not mutation.save_player(accepter): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
+	GuildTrophies.announce(world_server,guild,newly)
 	store.add_guild_log(guild_id, "joined", accepter.display_name)
 
 	# May have been auto-tagged — keep the client's cached active_guild_id current.

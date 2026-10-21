@@ -18,7 +18,8 @@ func data_request_handler(
 	if mail_id <= 0:
 		return {"ok": false, "reason": "missing"}
 
-	var store: MailStore = instance.world_server.database.mail_store
+	var store: RefCounted = instance.world_server.database.mail_store
+	if store is MailStorePostgres: return _claim_postgres(instance.world_server.database.store,store,pr,mail_id)
 	var claimable: Dictionary = store.get_claimable(pr.player_id, mail_id)
 	if not bool(claimable.get("ok", false)):
 		return {"ok": false, "reason": str(claimable.get("reason", "missing"))}
@@ -32,3 +33,23 @@ func data_request_handler(
 	store.mark_claimed(pr.player_id, mail_id)
 	ServerLog.info("Player #%d (%s) claimed mail #%d." % [pr.player_id, pr.display_name, mail_id])
 	return {"ok": true, "rewards": rewards}
+
+func _claim_postgres(profiles: RefCounted, mail: MailStorePostgres, player: PlayerResource, mail_id: int) -> Dictionary:
+	var mutation:=RealmProfileMutation.new(profiles)
+	if not mutation.started: return mutation.failure()
+	if not mail.lock_claim(mail_id): return mutation.abort()
+	var claimable: Dictionary=mail.get_claimable(player.player_id,mail_id)
+	if not claimable.get("ok",false):
+		mutation.abort();return claimable
+	var attachments: Array=claimable.attachments
+	if not RedeemCodes.validate_grants(attachments):
+		mutation.abort();return {"ok":false,"reason":"invalid"}
+	# Grant on a detached resource: level signals cannot escape before COMMIT.
+	var staged: PlayerResource=player.duplicate(true)
+	var rewards: Array=RedeemCodes.apply_grants(staged,attachments)
+	if not mutation.save_player(staged) or not mail.mark_claimed(player.player_id,mail_id): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
+	var levels: int=staged.level-player.level
+	RealmProfileMutation.accept(player,staged)
+	for _level: int in levels: player.level_gained.emit()
+	return {"ok":true,"rewards":rewards}

@@ -4,7 +4,7 @@ extends DataRequestHandler
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var legacy_players: Dictionary = instance.players_by_peer_id
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var guild_name: String = str(args.get("guild_name", "")).strip_edges()
 	if guild_name.is_empty():
@@ -28,7 +28,8 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	if guild.leader_id == player.player_id:
 		return {"error": 1, "ok": false, "message": ""}
 
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,[player])
+	if not mutation.started: return mutation.failure()
 
 	# Update player fields
 	if player.active_guild_id == guild_id:
@@ -41,10 +42,10 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	# Update guild
 	guild.remove_member(player.player_id)
 
-	store.save_player(player)
-	store.save_guild(guild)
+	if not mutation.save_player(player): return mutation.abort()
+	if not mutation.save_guild(guild): return mutation.abort()
 
-	store.commit()
+	if not mutation.commit(): return mutation.failure()
 
 	store.add_guild_log(guild_id, "left", player.display_name)
 

@@ -13,8 +13,10 @@ actual World reconciliation remain unimplemented.
 ## Durable boundary
 
 `inventory_intent_schema_postgres.gd` explicitly installs schema feature
-`inventory_intents` version 1 after the existing Inventory schema. It adds one
-account-keyed intent table and a character/sequence discovery index. Existing
+`inventory_intents` after the existing Inventory schema. Version 1 added the
+account-keyed intent table and character/sequence history index;
+[P3h version 2](postgres-pending-recovery.md) adds the account/sequence partial
+pending index used by runtime recovery. Existing
 success receipts are not rewritten/backfilled. No SQLite migration or backend
 selection is changed.
 

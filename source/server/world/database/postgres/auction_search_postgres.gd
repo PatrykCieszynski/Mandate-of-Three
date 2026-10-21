@@ -1,6 +1,6 @@
 extends RefCounted
-## Opt-in bounded reader, not wired into World or the SQLite dispatcher.
-## One caller owns this session; project plain native rows on the main thread.
+## Domain reader/builder; the optional World runtime uses its builder on a worker
+## and projects copied rows on main. No SQLite dispatcher or connection ownership.
 const Contract = preload("res://source/server/world/database/auction_search_contract.gd")
 var db: Object
 var last_db_usec:=0

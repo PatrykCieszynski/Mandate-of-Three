@@ -12,9 +12,10 @@ Architecture references:
 - `docs/development/testing.md` — verification and regression-testing policy.
 
 Distinguish **accepted future architecture** from **currently implemented behavior**.
-The runtime currently uses Gateway, Master, a single World Process and SQLite.
-The Economy V2 contracts do not imply that a distributed Economy Service,
-PostgreSQL or multi-process hosting has already been implemented.
+Normal development uses Gateway, Master, a single World Process and PostgreSQL,
+including accounts/profiles. SQLite remains a reference/legacy fixture backend.
+See docs/development/postgres-full-state.md. This does not imply a distributed
+Economy Service or multi-World hosting.
 
 ## Development workflow
 
@@ -69,7 +70,7 @@ behavior over speculative abstractions or large structural rewrites.
 - Reconcile runtime state and publish committed changes only after successful transactions. Do not confuse receipt replay with a new commit.
 - Combat must not perform database or network round trips per hit.
 - Soft progression and eligible grinding Yang may continue using the documented bounded checkpoint policy.
-- Keep SQLite until a concrete multi-process milestone requires shared authoritative persistence.
+- Preserve SQLite reference/parity fixtures; never fall back to SQLite when a selected PostgreSQL deployment fails startup or a write.
 
 ### Refactoring
 

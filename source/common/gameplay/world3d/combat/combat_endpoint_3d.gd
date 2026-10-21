@@ -26,11 +26,16 @@ var _experience_bar: ProgressBar
 var _xp_notice: String = ""
 var _xp_notice_until_ms: int = 0
 var last_combat_ms: Dictionary[int, int] = {}
+var _ground_runtime: RefCounted
 
 func _ready() -> void:
 	_world = get_parent()
 	attacks.setup(_world,self,services)
 	client_combat.setup(_world,self)
+	_ground_runtime=services.ground_item_runtime()
+	if GameMode.is_world_server() and _ground_runtime!=null:
+		_ground_runtime.finished.connect(_ground_finished)
+		_ground_runtime.committed.connect(_ground_committed)
 	dev_god_mode = GameMode.is_world_server() and OS.has_feature("editor") and OS.get_cmdline_user_args().has("--dev-god-mode")
 	if dev_god_mode: print("DEV_GOD_MODE enabled for local World players")
 	_build_navigation() # Shared geometry also guides client NPC approach intentions.
@@ -67,6 +72,19 @@ func _ready() -> void:
 		_experience_bar.show_percentage = false
 		content.add_child(_experience_bar)
 		refresh_hud()
+
+func _disconnect_ground_runtime() -> void:
+	if _ground_runtime!=null:
+		if _ground_runtime.finished.is_connected(_ground_finished): _ground_runtime.finished.disconnect(_ground_finished)
+		if _ground_runtime.committed.is_connected(_ground_committed): _ground_runtime.committed.disconnect(_ground_committed)
+
+func _ground_finished(peer: int, ground: RefCounted, _uid: String, result: Dictionary) -> void:
+	if ground!=_world.ground_loot: return
+	_send_snapshot()
+	if _world.characters.has(peer) and services.inventory_runtime().status(peer)!="detached": _reply(peer,result)
+
+func _ground_committed(peer: int, ground: RefCounted) -> void:
+	if ground==_world.ground_loot and _world.characters.has(peer): _world.inventory_endpoint.publish_inventory_change(peer)
 
 func _build_navigation() -> void:
 	var mesh := NavigationMesh.new()
@@ -195,6 +213,7 @@ func request_pickup(uid: String) -> void:
 		return
 	_pickup_ms[peer_id] = now
 	var result: Dictionary = pickup_for_peer(peer_id, uid, now)
+	if result.get("queued",false): return # Final feedback follows PG reconciliation.
 	_reply(peer_id, result)
 	if result.ok:
 		_send_snapshot()
@@ -414,6 +433,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _exit_tree() -> void:
+	_disconnect_ground_runtime()
 	client_combat.dispose()
 
 func _tick_player_lifecycle(now: int) -> void:

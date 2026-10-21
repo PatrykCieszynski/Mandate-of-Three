@@ -20,6 +20,8 @@ export function isMarketSnapshot(v) {
                     v.claimableYang <= '9223372036854775807'))) &&
         (v.revenuePending === undefined || typeof v.revenuePending === 'boolean') &&
         (v.revenueBusy === undefined || typeof v.revenueBusy === 'boolean') &&
+        (v.sellerPending === undefined || typeof v.sellerPending === 'boolean') &&
+        (v.sellerBusy === undefined || typeof v.sellerBusy === 'boolean') &&
         Array.isArray(v.offers) &&
         v.offers.length <= 40 &&
         v.offers.every((o) => isObject(o) &&

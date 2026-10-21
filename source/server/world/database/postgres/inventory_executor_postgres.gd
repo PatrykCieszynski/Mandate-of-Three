@@ -6,6 +6,14 @@ const Items = preload("res://source/server/world/database/postgres/item_store_po
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
 const Intents = preload("res://source/server/world/database/postgres/inventory_intent_postgres.gd")
 const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
+const WalletSession = preload("res://source/server/world/database/postgres/wallet_session_postgres.gd")
+const NpcSession = preload("res://source/server/world/database/postgres/npc_session_postgres.gd")
+const StorageSession = preload("res://source/server/world/database/postgres/storage_session_postgres.gd")
+const GroundSession = preload("res://source/server/world/database/postgres/ground_item_session_postgres.gd")
+const Identity = preload("res://source/server/world/database/postgres/identity_bootstrap_postgres.gd")
+const Preflight = preload("res://source/server/world/database/postgres/economy_preflight_postgres.gd")
+const AuctionSession = preload("res://source/server/world/database/postgres/auction_session_postgres.gd")
+const SellerSession = preload("res://source/server/world/database/postgres/seller_session_postgres.gd")
 enum State { STOPPED = 0, STARTING = 1, RUNNING = 2, DRAINING = 3 }
 const MAX_WORKERS: int=4
 const MAX_CAPACITY_PER_WORKER: int=16
@@ -16,6 +24,10 @@ var _pending: Dictionary={}
 var _capacity: int
 var _next_ticket: int=0
 var _ready_count: int=0
+## Opt-in local diagnostics, never part of RPC/results or persistent receipts.
+## Disabled by default: no per-job clock reads or sample allocation.
+var profiling_enabled:=false
+signal observation(sample: Dictionary)
 
 class SessionWorker extends RefCounted:
 	var _connection: String
@@ -76,13 +88,43 @@ class SessionWorker extends RefCounted:
 			_mutex.unlock()
 			if stop: break
 			if job.is_empty(): continue
+			var started: int=Time.get_ticks_usec() if job.has("queued_us") else 0
 			var result: Dictionary={"ok":false,"error":"storage"}
 			var committed:=false
 			var replay:=false
 			if database.is_open() or _open(database):
 				var intent: String=str(job.get("intent",""))
-				var store: RefCounted=Items.new(database) if intent.is_empty() else (Sessions.new(database) if intent in ["session_install","session_inspect","session_revoke","session_ready"] else Intents.new(database))
-				if intent=="session_install": result=store.install_verified_grant(job.identity,job.expected_epoch)
+				var store: RefCounted
+				if intent in ["identity_bind","profile_bind"]: store=Identity.new(database)
+				elif intent=="economy_preflight": store=Preflight.new(database)
+				elif intent=="auction_search": store=AuctionSession.new(database)
+				elif intent in ["seller_execute","seller_receipt","seller_snapshot","seller_visit","seller_prepare"]: store=SellerSession.new(database)
+				elif intent in ["item_initialize","ground_claim","ground_receipt"]: store=GroundSession.new(database)
+				elif intent in ["storage_execute","storage_receipt"]: store=StorageSession.new(database)
+				elif intent in ["npc_execute","npc_receipt"]: store=NpcSession.new(database)
+				elif intent in ["wallet_snapshot","wallet_batch"]: store=WalletSession.new(database)
+				elif intent.is_empty(): store=Items.new(database)
+				elif intent in ["session_install","session_inspect","session_revoke","session_ready"]: store=Sessions.new(database)
+				else: store=Intents.new(database)
+				if intent=="profile_bind": result=store.bind_profile(job.profile_id)
+				elif intent=="identity_bind": result=store.bind(job.account_id,job.character)
+				elif intent=="economy_preflight": result=store.verify(job.authority_id)
+				elif intent=="auction_search": result=store.search(job.session,job.body)
+				elif intent=="seller_execute": result=store.execute(job.session,job.action,job.body,job.get("income",0),job.get("token",""),job.get("captures",{}),job.get("participants",[]))
+				elif intent=="seller_prepare": result=store.prepare(job.session,job.action,job.body)
+				elif intent=="seller_receipt": result=store.receipt(job.session,job.operation_id)
+				elif intent=="seller_visit": result=store.visit(job.session,job.shop)
+				elif intent=="seller_snapshot": result=store.snapshot(job.session,job.get("include_exchange",false))
+				elif intent=="item_initialize": result=store.initialize(job.session)
+				elif intent=="ground_claim": result=store.claim(job.session,job.operation_id,job.drop)
+				elif intent=="ground_receipt": result=store.receipt(job.session,job.operation_id)
+				elif intent=="storage_execute": result=store.execute(job.session,job.operation_id,job.body)
+				elif intent=="storage_receipt": result=store.receipt(job.session,job.operation_id)
+				elif intent=="npc_execute": result=store.execute(job.session,job.npc_kind,job.operation_id,job.body,job.income,job.income_token)
+				elif intent=="npc_receipt": result=store.receipt(job.session,job.issuer,job.npc_kind,job.operation_id)
+				elif intent=="wallet_snapshot": result=store.snapshot(job.session)
+				elif intent=="wallet_batch": result=store.batch(job.session,job.issuer,job.operation_id,job.income,job.cost)
+				elif intent=="session_install": result=store.install_verified_grant(job.identity,job.expected_epoch)
 				elif intent=="session_inspect": result=store.inspect_grant(job.identity)
 				elif intent=="session_revoke": result=store.revoke(job.session)
 				elif intent=="session_ready": result=store.finish_recovery(job.session,job.marker)
@@ -90,7 +132,8 @@ class SessionWorker extends RefCounted:
 				elif intent=="session_resume": result=store.resume_session(job.session,job.operation_id)
 				elif intent=="session_outcome": result=store.outcome_session(job.session,job.operation_id)
 				elif intent=="session_discover": result=store.discover_session(job.session,job.after,job.limit)
-				elif intent=="session_snapshot": result=store.snapshot_session(job.session)
+				elif intent=="session_pending": result=store.discover_pending_session(job.session,job.after,job.limit)
+				elif intent=="session_snapshot": result=store.snapshot_session(job.session,job.get("include_storage",false))
 				elif intent=="admit": result=store.admit(job.character,job.operation_id,job.action,job.uid,job.revision,job.position)
 				elif intent=="resume": result=store.execute(job.character,job.operation_id)
 				elif intent=="outcome": result=store.outcome(job.character,job.operation_id)
@@ -107,7 +150,9 @@ class SessionWorker extends RefCounted:
 					result={"ok":false,"error":"storage"} if job.lookup else {"ok":false,"error":"outcome_unknown","outcome_unknown":true}
 					committed=false
 					replay=false
-			_publish({"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"session":job.get("session",{}),"result":result,"committed":committed,"receipt_replay":replay})
+			var event: Dictionary={"kind":"result","ticket":job.ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"session":job.get("session",{}),"result":result,"committed":committed,"receipt_replay":replay}
+			if started>0: event.metrics={"queued_us":job.queued_us,"started_us":started,"finished_us":Time.get_ticks_usec()}
+			_publish(event)
 		database.close()
 		_connection=""
 
@@ -192,13 +237,80 @@ func submit_session_discovery(context: Dictionary, after: int = 0, limit: int = 
 	if after<0 or limit<1 or limit>Intents.MAX_PAGE: return {"queued":false,"error":"request"}
 	return _session_job(context,"session_discover","",{"after":after,"limit":limit})
 
-func submit_session_snapshot(context: Dictionary) -> Dictionary:
-	return _session_job(context,"session_snapshot","",{})
+func submit_session_pending_discovery(context: Dictionary, after: int = 0, limit: int = 50) -> Dictionary:
+	if after<0 or limit<1 or limit>Intents.MAX_PAGE: return {"queued":false,"error":"request"}
+	return _session_job(context,"session_pending","",{"after":after,"limit":limit})
+
+func submit_session_snapshot(context: Dictionary, include_storage: bool = false) -> Dictionary:
+	return _session_job(context,"session_snapshot","",{"include_storage":include_storage})
+
+func submit_seller(context: Dictionary, action: String, body: Dictionary, income: int = 0, token: String = "", captures: Dictionary = {}, participants: Array = []) -> Dictionary:
+	if action not in SellerSession.ACTIONS or not MarketRequestRules.valid_command(action,body): return {"queued":false,"error":"request"}
+	return _session_job(context,"seller_execute",body.command_id,{"action":action,"body":body.duplicate(true),"income":income,"token":token,"captures":captures.duplicate(true),"participants":participants.duplicate()})
+
+func submit_profile_binding(profile: String) -> Dictionary:
+	return _submit({"character":1,"operation_id":"profile","lookup":false,"intent":"profile_bind","profile_id":profile,"control":true})
+
+func submit_identity_binding(account: int, character: int) -> Dictionary:
+	if account<=0 or character<=0: return {"queued":false,"error":"owner"}
+	return _submit({"character":character,"operation_id":"identity","lookup":false,"intent":"identity_bind","account_id":account,"control":true})
+
+func submit_economy_preflight(authority: String) -> Dictionary:
+	if not ItemInstance.valid_uid(authority): return {"queued":false,"error":"request"}
+	return _submit({"character":1,"operation_id":"","lookup":true,"control":true,"intent":"economy_preflight","session":{},"authority_id":authority})
+
+func submit_auction_search(context: Dictionary, payload: Dictionary) -> Dictionary:
+	return _session_job(context,"auction_search","",{"body":payload.duplicate(true)})
+
+func submit_seller_prepare(context: Dictionary, action: String, body: Dictionary) -> Dictionary:
+	return _session_job(context,"seller_prepare",body.command_id,{"action":action,"body":body.duplicate(true)})
+
+func submit_seller_visit(context: Dictionary, shop: int) -> Dictionary:
+	return _session_job(context,"seller_visit","",{"shop":shop})
+
+func submit_seller_receipt(context: Dictionary, id: String) -> Dictionary:
+	return _session_job(context,"seller_receipt",id,{})
+
+func submit_seller_snapshot(context: Dictionary, include_exchange: bool = false) -> Dictionary:
+	return _session_job(context,"seller_snapshot","",{"include_exchange":include_exchange})
+
+func submit_item_initialization(context: Dictionary) -> Dictionary:
+	return _session_job(context,"item_initialize","",{})
+
+func submit_ground_claim(context: Dictionary, uid: String, drop: Dictionary) -> Dictionary:
+	if not ItemInstance.valid_uid(uid): return {"queued":false,"error":"request"}
+	return _session_job(context,"ground_claim",uid,{"drop":drop.duplicate(true)})
+
+func submit_ground_receipt(context: Dictionary, uid: String) -> Dictionary:
+	if not ItemInstance.valid_uid(uid): return {"queued":false,"error":"request"}
+	return _session_job(context,"ground_receipt",uid,{})
+
+func submit_storage(context: Dictionary, operation_id: String, body: Dictionary) -> Dictionary:
+	if not StorageSession.valid_body(body): return {"queued":false,"error":"request"}
+	return _session_job(context,"storage_execute",operation_id,{"body":body.duplicate(true)})
+
+func submit_storage_receipt(context: Dictionary, operation_id: String) -> Dictionary:
+	return _session_job(context,"storage_receipt",operation_id,{})
+
+func submit_wallet_snapshot(context: Dictionary) -> Dictionary:
+	return _session_job(context,"wallet_snapshot","",{})
+
+func submit_wallet_batch(context: Dictionary, issuer: int, operation_id: String, income: int, cost: int) -> Dictionary:
+	if issuer<=0 or income<0 or income>9000000000000000 or cost<0 or cost>9000000000000000 or (income==0 and cost==0): return {"queued":false,"error":"request"}
+	return _session_job(context,"wallet_batch",operation_id,{"issuer":issuer,"income":income,"cost":cost})
+
+func submit_npc(context: Dictionary, kind: String, operation_id: String, body: Dictionary, income: int, token: String) -> Dictionary:
+	if kind not in ["buy","upgrade"] or income<0 or income>9000000000000000 or token.length()!=32: return {"queued":false,"error":"request"}
+	return _session_job(context,"npc_execute",operation_id,{"npc_kind":kind,"body":body.duplicate(true),"income":income,"income_token":token})
+
+func submit_npc_receipt(context: Dictionary, issuer: int, kind: String, operation_id: String) -> Dictionary:
+	if issuer<=0 or kind not in ["buy","upgrade"]: return {"queued":false,"error":"request"}
+	return _session_job(context,"npc_receipt",operation_id,{"issuer":issuer,"npc_kind":kind})
 
 func _session_job(context: Dictionary, mode: String, operation_id: String, fields: Dictionary) -> Dictionary:
 	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return {"queued":false,"error":"request"}
 	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
-	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_snapshot"]}
+	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume","wallet_batch","npc_execute","storage_execute","item_initialize","ground_claim","seller_execute"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_pending","session_snapshot","wallet_snapshot","item_initialize","seller_snapshot","seller_visit","auction_search"]}
 	job.merge(fields)
 	return _submit(job)
 
@@ -211,6 +323,7 @@ func _submit(job: Dictionary) -> Dictionary:
 	if selected<0: return {"queued":false,"error":"busy"}
 	_next_ticket+=1
 	job.ticket=_next_ticket
+	if profiling_enabled: job.queued_us=Time.get_ticks_usec()
 	_pending[_next_ticket]={"slot":selected,"ticket":_next_ticket,"character":job.character,"operation_id":job.operation_id,"lookup":job.lookup,"intent":job.get("intent",""),"session":job.get("session",{})}
 	_slots[selected].load+=1
 	_slots[selected].owner.enqueue(job)
@@ -260,6 +373,10 @@ func _consume(slot: Dictionary, completed: Array) -> void:
 		else:
 			_pending.erase(event.ticket)
 			slot.load-=1
+			if event.has("metrics"):
+				var timing: Dictionary=event.metrics
+				observation.emit({"intent":event.intent,"queue_us":int(timing.started_us)-int(timing.queued_us),"worker_us":int(timing.finished_us)-int(timing.started_us),"delivery_us":Time.get_ticks_usec()-int(timing.finished_us),"pending":_pending.size(),"ok":event.result.get("ok",false),"committed":event.committed,"replay":event.receipt_replay})
+				event.erase("metrics")
 			event.erase("kind")
 			completed.append(event)
 

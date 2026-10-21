@@ -4,7 +4,8 @@ param(
     [ValidateSet('all','game','world','gateway')][string]$Target = 'all',
     [string]$DashboardToken = $env:MANDATE_DASHBOARD_TOKEN,
     [switch]$DevCombat,
-    [switch]$DisableDevCombat
+    [switch]$DisableDevCombat,
+    [string]$PgBin = 'Y:/Software/PostgreSQL/bin'
 )
 $ErrorActionPreference = 'Stop'
 $taskRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
@@ -71,6 +72,11 @@ if ($Action -in @('stop','restart')) {
     foreach ($taskRole in @('world','gateway','master')) { if ($taskRole -in $taskRoles) { Stop-Role $taskRole } }
 }
 if ($Action -in @('start','restart')) {
+    & python (Join-Path $taskRoot 'tools/postgres/dev_realm.py') --pg-bin $PgBin
+    if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL setup failed; game servers were not started.' }
+    $taskPgConfig = Get-Content -LiteralPath (Join-Path $taskRoot '.godot/runtime/postgres-local/connection.json') -Raw | ConvertFrom-Json
+    $env:MANDATE_ECONOMY_CONNECTION = $taskPgConfig.connection
+    $env:MANDATE_ECONOMY_AUTHORITY_ID = $taskPgConfig.authority_id
     foreach ($taskRole in @('master','gateway','world')) { if ($taskRole -in $taskRoles) { Start-Role $taskRole } }
 }
 foreach ($taskRole in $taskRoles) {

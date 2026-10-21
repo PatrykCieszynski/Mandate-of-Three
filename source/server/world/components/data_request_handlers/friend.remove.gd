@@ -23,8 +23,11 @@ func data_request_handler(
 	if idx < 0:
 		return {"error": 0, "ok": true, "msg": "Not a friend."}
 
+	var mutation:=RealmProfileMutation.new(world_server.database.store,[from_player])
+	if not mutation.started: return mutation.failure()
 	friends.remove_at(idx)
 	from_player.friends = friends
-	world_server.database.save_player(from_player)
+	if not mutation.save_player(from_player): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	return {"error": 0, "ok": true, "msg": "Removed friend."}

@@ -1,5 +1,12 @@
 # Prototype testing policy
 
+Full-state PostgreSQL acceptance:
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite full-state`.
+This owns disposable data and real Gateway/Master/World/client processes,
+backup/restore and restart. See [full-state setup](postgres-full-state.md).
+Older parity/hybrid milestone descriptions below are historical regression
+references; they do not select the current normal deployment backend.
+
 Accepted 2026-10-09: keep a small set of stable regression contracts during rapid
 prototyping. A tiny UI/style or balance change should not require repairing a
 browser screenshot, a specific DOM tree or a combat animation timeline.
@@ -549,3 +556,233 @@ acceptance with separate headless client processes, current Master tickets and
 World runtime on owned fixtures. It uses ports 18098/18099 sequentially. See
 [scope and failure/recovery behavior](postgres-inventory-endpoint.md). No CEF
 rendering or production bootstrap/cutover is claimed.
+
+P3g extends the existing PG runtime/endpoint suites with committed cache
+invalidations, post-command and delayed-ACK freshness, ACK COMMIT uncertainty,
+bounded repair and RAM-only combat input gating. No new default suite. See
+[cache fence contract and limits](postgres-inventory-cache-fence.md).
+
+P3h uses the same four PG intent/session/runtime/endpoint suites to verify
+pending-only recovery, transactional v1-to-v2 index migration with data, retained
+history/receipt lookup, int64 cursors and the partial-index plan against 10,033
+terminal records. It adds no default suite; see [pending recovery](postgres-pending-recovery.md).
+
+## PostgreSQL wallet runtime (P3i, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite wallet-runtime`
+uses a fresh owned SCRAM cluster. It covers RAM-only ground currency, captured
+income prefixes, independent-account progress under SQL locks, pending-funded
+spend, reservations, successful COMMIT with lost completion, native failed COMMIT,
+same-ID scheduled retry, alt/relogin, offline dirty retention after revocation,
+forced worker drain and wallet recreation. The existing `inventory-endpoint`
+suite additionally checks actual client currency RPCs/snapshots and process relog,
+with unchanged SQLite wallet rows. These are optional suites, not added to smoke.
+See [wallet runtime](postgres-wallet-runtime.md) for the supplied fixture boundaries
+and remaining production/multi-World adoption work.
+
+## PostgreSQL NPC runtime (P3j, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite npc-runtime`
+uses owned disposable PG workers to check pending-income/item/material atomicity,
+receipt replay with later income, full native capacity, independent accounts,
+lost successful completion, native failed COMMIT, projection ACK repair, alt
+takeover and graceful drain. The extended `inventory-endpoint` suite additionally
+uses four actual client processes and the production Web UI bridge/adapters for
+NPC range checks, Shop retry, Upgrade reload and purchase process-relogin recovery.
+No default CI expansion or physical CEF validation is implied. See
+[NPC runtime](postgres-npc-runtime.md) and its evidence for the precise boundaries.
+
+## PostgreSQL account Storage runtime (P3k, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite storage-runtime`
+checks session-qualified account Storage, full footprints, independent progress,
+queue refusal, native COMMIT/ACK failures, replay and original-issuer/alt recovery.
+It uses real native workers/World and fixture session maps. `--suite storage`
+retains the existing independent-session transaction/custody concurrency checks.
+
+`--suite inventory-endpoint` now includes Storage RPC/bridge/journal lost reply,
+`ui.ready`, client-process relog and private account snapshots, alongside prior
+Inventory, wallet and NPC contracts (five real headless client processes). Run
+sequentially with other suites using ports 18098/18099. `run-web-inventory.ps1
+-Scene storage_recovery` preserves the existing SQLite client recovery contract.
+See [Storage runtime](postgres-storage-runtime.md) for verified/deferred boundaries.
+
+## PostgreSQL starter / ground items (P3l, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite ground-runtime`
+uses real native workers, current World cache and controlled actor maps to verify
+starter marker recovery, pickup rights/reach/liveness, bounded queue/refusal,
+full bag, competing UID, native failed COMMIT and original-issuer recovery.
+`--suite inventory` and `--suite inventory-concurrency` retain existing backend
+parity and independent-session initialization/claim races. `--suite inventory-endpoint`
+now includes the UID-only pickup RPC and a sixth actual client restoring the
+saved drop after process relog; run sequentially with other 18098/18099 suites.
+The economic network map suppresses combat simulation/rendering; `run-combat.ps1`
+remains the existing server/two-client combat/pickup regression on SQLite.
+See [ground-item runtime](postgres-ground-items.md) for explicit scope limits.
+
+## PostgreSQL seller / item claims (P3m, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite seller-runtime`
+checks all five seller-local operations, session fences, capacity/independent
+progress, native mutation/ACK COMMIT failures, account-scoped receipt replay,
+alt recovery, cross-domain snapshot freshness and graceful drain. Existing
+`--suite shop-seller` and `--suite account-claims` preserve transaction acceptance.
+
+`--suite inventory-endpoint` now runs seven actual headless clients, adding seller
+lost-reply retry, UI recreation, claim process-relog and saved-but-unsent explicit
+retry through production RPC/bridge/adapters. Run sequentially with 18098/18099
+suites. `run-web-inventory.ps1 -Scene market_network` checks the existing SQLite
+path. No physical CEF, full Gateway/bootstrap or P4 cutover acceptance is implied.
+See [seller runtime](postgres-seller-runtime.md) and its evidence.
+
+
+## PostgreSQL Marketplace settlement (P3n, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite settlement-runtime`
+checks pending-funded purchases, session fencing, current wallet reconciliation,
+old receipt/new income, alt recovery, partial/full proceeds, native COMMIT failure,
+independent account/physics progress and monetary uncertainty during drain.
+`--suite shop-settlement` and `--suite wallet-concurrency` retain backend acceptance.
+
+`--suite inventory-endpoint` now runs eight actual headless clients, adding public
+visit, purchase lost reply/process relog, seller proceeds refresh and collection
+lost reply/UI recreation through production bridge/journals. Run sequentially
+with other 18098/18099 suites. Web contracts check restored purchase retry after
+an offer disappears; `run-web-inventory.ps1 -Scene market_network` retains SQLite.
+See [settlement runtime](postgres-market-settlement-runtime.md) for scope limits.
+
+
+## PostgreSQL Exchange ledger runtime (P3o, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite exchange-runtime`
+checks bag/Storage stack conversion, current shared projections, ownership/replay,
+native COMMIT failure, independent progress, conservation and original-issuer/alt
+receipt recovery. Existing `exchange-ledger` and `exchange-orders` suites retain
+backend parity, rollback, capacity, races and the composed read-model regression.
+
+`inventory-endpoint` now runs nine actual headless clients: Exchange Storage
+transfer/deposit lost reply, `ui.ready` retry, withdrawal to claims, withdrawal
+lost reply/process relog and saved-but-unsent explicit retry, retaining earlier
+Inventory/wallet/NPC/Storage/ground/Marketplace contracts. Run sequentially with
+other suites on 18098/18099. A Web contract checks Retry without a source stack
+and the ledger-only trading gate. See [runtime](postgres-exchange-ledger-runtime.md)
+for the deferred matching, platform and production boundaries.
+
+
+## PostgreSQL Exchange matching runtime (P3p, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite matching-runtime`
+checks participant capture/revalidation, price-time partial/multiple fills, cancel
+refunds, pending Yang tokens/replay, native COMMIT failure, independent physics,
+offline settlement/late login fencing, conservation and uncertain-outcome drain.
+Existing `exchange-orders`, `wallet-runtime` and `settlement-runtime` cover shared
+transaction and wallet regression boundaries.
+
+`inventory-endpoint` now runs ten actual headless clients, retaining prior phases
+and adding matched order lost reply/process relog, online maker refresh, cancel
+lost reply/UI reload and reserve/refund. Run sequentially with other 18098/18099
+suites. `run-web-inventory.ps1 -Scene market_network` retains the normal SQLite
+path. See [runtime](postgres-exchange-matching-runtime.md) for explicit limits.
+
+
+## PostgreSQL public Auction reads (P3q, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite auction-runtime`
+checks the global/single-active queue, account limits, timeout slot retention,
+backend error recovery, current-session authorization, independent native seller
+mutation and World physics with 10,000 legal offers. Its synthetic 65-source bound
+is not a connected-client capacity claim. `auction-search` retains full SQLite
+filter/cursor parity; `matching-runtime` retains the shared executor regression.
+
+`inventory-endpoint` retains ten real headless clients and adds public catalog,
+search, `ui.ready` snapshot recovery and duplicate/malformed/rate-limited request
+IDs before an actual purchase. Run shared 18098/18099 network suites sequentially.
+`run-web-inventory.ps1 -Scene market_network` retains SQLite RPC behavior. See
+[runtime](postgres-auction-runtime.md) and [evidence](../evidence/postgres-p3q/README.md).
+No physical CEF, combat soak, production PG bootstrap or cutover is implied.
+
+
+## PostgreSQL bootstrap ownership (P3r, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite bootstrap`
+checks missing/invalid configuration, read-only refusal of missing/incompatible
+schemas, expected authority, missing profile store, partial connection exhaustion,
+offline provisioning CLI, complete Master/World composition, profile/XP persistence
+without SQLite currency initialization, and lost-settlement shutdown recovery.
+
+`inventory-endpoint` uses the same bootstrap and explicit native shutdown for all
+ten real headless clients. Its owned cluster has 14 connections to accommodate
+World 8 + Master 1 + fixture control 1 and reserved PostgreSQL slots; other suites
+retain 12, including the deliberate exhaustion case. `inventory-session-bridge`
+and normal SQLite `market_network` retain admission/default-path regressions.
+Run shared 18098/18099 suites sequentially. See [bootstrap](postgres-bootstrap.md)
+and its evidence for normal process/identity/production gates that remain open.
+
+
+## PostgreSQL normal process startup (P3s, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite process-startup`
+starts ordinary Gateway/Master/World role scenes on private random ports and
+owned account/profile paths. A real client covers identity conflict refusal,
+same-profile recovery, session grants, equip, relog and full server restart.
+Wallet initialization is idempotent; foreign ownership and another profile ID
+are refused. All native pools stop before process exit; SQLite wallet rows are
+absent and its legacy item table remains empty. Child logs must be script-error
+free. The temporary wrapper only controls shutdown/diagnostics, not application
+startup, grant or economic behavior. See [startup](postgres-process-startup.md).
+`bootstrap`, `inventory-session-bridge` and SQLite `market_network` retain focused
+composition/session/default-path regressions. Shared 18098/18099 suites remain
+sequential. This is not PG production cutover, combat soak, Linux or physical CEF
+acceptance.
+
+
+## PostgreSQL operator maintenance (P3t, opt-in)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite maintenance`
+extends the ordinary three-process/client startup scenario with authenticated
+operator status/quiesce, active-session dirty Yang/XP, frozen account checkpoint,
+operator retry, full restart and closed native workers. A real PG lock forces
+BLOCKED without premature Master drain or discarded RAM income; only this failed
+disposable simulation is forcibly cleaned up. Injected control faults cover
+missing/late/foreign/malformed ACK, timeout, World loss and account save failure.
+The suite uses private random ports and owned stores. Shared 18098/18099 suites
+must still run sequentially. See [maintenance](postgres-maintenance.md).
+
+## PostgreSQL realm backup/restore (P3u)
+
+Opt-in disposable fixture only: `python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite backup`. Runs normal processes, acknowledged maintenance/exit, capture, restore into a second DB/profile/account set and normal login again. Includes committed WAL, identity/checksum/refusal and nonempty reservation/revenue/fill checks. No real player data or installed service. See [operator procedure](postgres-backup-restore.md).
+
+## PostgreSQL controlled World replacement (P3v)
+
+`python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite world-replacement` starts only disposable normal processes/private stores. Exercises real dashboard shutdown with held wallet SQL, immediate routing closure, dirty profile/Yang persistence, old-worker exit/grant retirement and fresh login under the same live Master/Gateway. Includes old consumed-ticket refusal. Pair with isolated `run-account-identity.ps1` (delayed grant/handoff tests) and smoke. The unrelated opt-in SQLite `-WithSession` still requires separately configured normal local roles; do not point it at player data. See [procedure](postgres-world-replacement.md).
+
+## PostgreSQL mixed World load baseline (P4a)
+
+`python tools/postgres/run_mixed_load.py --pg-bin Y:/Software/PostgreSQL/bin --seconds 8 --runs 3` runs fresh disposable clusters sequentially, with real World movement/AI and native economic runtimes but synthetic sessions/no connected clients. Reports no-traffic baseline and offered 10/30/100 write attempts/s plus independent reads; assert accounting, UID/footprints, custody, money/reservation and receipt conservation. Keep other performance tests stopped during measurement. Not default CI, not MMO capacity or completed soak/cutover. See [method](postgres-mixed-load.md) and [evidence](../evidence/postgres-p4a/README.md).
+
+P4b opt-in recovery under the same mixed traffic: append `--load-faults` to the
+`run_readiness.py --suite mixed-load` invocation (15 seconds/cohort recommended).
+Requires actual deferred COMMIT failure and original-ID recovery of a dropped
+successful purchase reply in each write cohort; no process/socket-crash claim.
+
+P4c: add `--load-backend-loss` to the mixed fault invocation for actual owned PG
+backend termination. Use `--load-rates 100` for a targeted pressure run; omitted
+rates retain the baseline/10/30/100 schedule. Settlement runtime now covers a
+committed collection whose follow-up projection cannot acquire a queue slot.
+See [P4c evidence and outstanding soak gate](../evidence/postgres-p4c/README.md).
+
+
+## P4 Representative Economy Soak
+
+`python tools/postgres/run_realm_workload.py --pg-bin Y:/Software/PostgreSQL/bin --profile representative`
+runs the separate P4 Representative Economy profile: 300 economic accounts,
+40 requested active synthetic buyer/browser bindings, offline shops, read-heavy
+dispersed purchases and controlled peaks over 30 minutes. Do not run concurrently
+with Stress & Recovery or any other benchmark. No production limits are raised.
+Both soak profiles are required before import/cutover acceptance; exposing this
+command does not certify a completed run. See [profile](representative-economy.md).
+
+## Representative MMO Integration & Load
+
+`python tools/postgres/run_realm_workload.py --pg-bin Y:/Software/PostgreSQL/bin` runs the opt-in 24-account/180-second seeded player-story case, separate from adversarial P4a-P4c. Shared bootstrap/profiling/audits do not share scenario policy. Performance is observational, integrity and accepted-operation recovery remain required. Report requested/admitted/economically active players honestly; current production runtime has 64 bindings. Large/long profiles are manual, not implied verified by options. Add performance-relevant mechanics to the corresponding story and bump the scenario version when behavior changes. See [coverage, commands and comparison policy](realm-workload.md).

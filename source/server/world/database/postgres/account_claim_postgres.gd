@@ -8,6 +8,10 @@ var rejected: MarketRejectedCommands
 var _transaction: RefCounted
 var committed: bool:
 	get: return _transaction.committed
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+
+func authorize_session(context: Dictionary) -> void: _transaction.economic_context=context.duplicate(true)
 
 func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -> void:
 	db=database
