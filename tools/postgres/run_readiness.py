@@ -6,6 +6,7 @@ this runner. Retain logs/audits, remove only the verified owned cluster on exit.
 """
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -57,9 +58,18 @@ def main():
     parser.add_argument("--realm-players", type=int, default=24)
     parser.add_argument("--realm-seconds", type=int, default=180)
     parser.add_argument("--realm-seed", type=int, default=1729)
+    parser.add_argument("--realm-case", choices=("stories", "representative"), default="stories")
+    parser.add_argument("--economy-accounts", type=int, default=300)
+    parser.add_argument("--economy-peak-every", type=int, default=450)
+    parser.add_argument("--economy-peak-seconds", type=int, default=45)
+    parser.add_argument("--economy-peak-multiplier", type=float, default=3.0)
     args = parser.parse_args()
     if args.realm_players < 1 or args.realm_seconds < 1:
         parser.error("realm players and seconds must be positive")
+    if args.realm_case == "representative" and (args.economy_accounts <= args.realm_players or
+            not 0 < args.economy_peak_seconds < args.economy_peak_every or
+            not math.isfinite(args.economy_peak_multiplier) or args.economy_peak_multiplier <= 1):
+        parser.error("representative needs offline sellers, positive non-overlapping peaks and a finite multiplier > 1")
     if args.load_backend_loss and not args.load_faults:
         parser.error("--load-backend-loss requires --load-faults")
     if args.load_faults and args.suite != "mixed-load":
@@ -118,6 +128,10 @@ def main():
             env["MANDATE_REALM_PLAYERS"] = str(args.realm_players)
             env["MANDATE_REALM_SECONDS"] = str(args.realm_seconds)
             env["MANDATE_REALM_SEED"] = str(args.realm_seed)
+            env["MANDATE_ECONOMY_ACCOUNTS"] = str(args.economy_accounts)
+            env["MANDATE_ECONOMY_PEAK_EVERY"] = str(args.economy_peak_every)
+            env["MANDATE_ECONOMY_PEAK_SECONDS"] = str(args.economy_peak_seconds)
+            env["MANDATE_ECONOMY_PEAK_MULTIPLIER"] = str(args.economy_peak_multiplier)
         if args.suite == "mixed-load":
             env["MANDATE_PG_LOAD_RATES"] = ",".join(map(str,args.load_rates))
             env["MANDATE_PG_LOAD_BACKEND_LOSS"] = "1" if args.load_backend_loss else "0"
@@ -177,7 +191,7 @@ def main():
             "maintenance": ("postgres_maintenance", "POSTGRES_MAINTENANCE_OK"),
             "backup": ("postgres_backup", "POSTGRES_BACKUP_OK"),
             "world-replacement": ("postgres_world_replacement", "POSTGRES_WORLD_REPLACEMENT_OK"),
-            "realm-workload": ("postgres_realm_workload", "POSTGRES_REALM_WORKLOAD_OK"),
+            "realm-workload": ("postgres_economy_representative" if args.realm_case == "representative" else "postgres_realm_workload", "POSTGRES_REALM_WORKLOAD_OK"),
             "mixed-load": ("postgres_mixed_load", "POSTGRES_MIXED_LOAD_OK"),
             "inventory-session-bridge": ("postgres_inventory_session_bridge", "POSTGRES_INVENTORY_SESSION_BRIDGE_OK"),
             "inventory-endpoint": ("postgres_inventory_endpoint", "POSTGRES_INVENTORY_ENDPOINT_OK"),

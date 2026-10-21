@@ -45,7 +45,7 @@ var refused_actors: Array=[]
 var connections: Dictionary={}
 var native_jobs: Dictionary={}
 var action_successes: Dictionary={}
-var stats: Dictionary={"searches":0,"searches_ok":0,"attempts":0,"admitted":0,"completed":0,"conflicts":0,"admission_rejected":0,"admission_retries":0,"recoveries":0,"income_events":0,"income_deferred":0,"pending_income_buy_successes":0,"pending_income_applied_by_buys":0,"income":0,"ground_pickups":0,"rebinds":0,"stories_started":0,"stories_completed":0,"stories_failed":0,"physics_ticks":0,"max_native_pending":0}
+var stats: Dictionary={"searches_admitted":0,"terminal_admission_refused":0,"searches":0,"searches_ok":0,"attempts":0,"admitted":0,"completed":0,"conflicts":0,"admission_rejected":0,"admission_retries":0,"recoveries":0,"income_events":0,"income_deferred":0,"pending_income_buy_successes":0,"pending_income_applied_by_buys":0,"income":0,"ground_pickups":0,"rebinds":0,"stories_started":0,"stories_completed":0,"stories_failed":0,"physics_ticks":0,"max_native_pending":0}
 var directory: String
 var duration:=180
 var requested:=24
@@ -112,6 +112,12 @@ func enqueue(actor: Dictionary, action: String, payload: Dictionary, id: String,
 	if action=="visit": return world.seller_runtime.visit(actor.peer,int(payload.shop_id))
 	return world.seller_runtime.submit(actor.peer,action,payload)
 
+# Test-only observation hooks. They do not admit, retry or execute any work.
+func request_started(_peer: int, _action: String, _at_us: int) -> void: pass
+func request_admitted(_peer: int, _action: String) -> void: pass
+func request_finished(_peer: int, _action: String, _result: Dictionary, _at_us: int, _admitted: bool) -> void: pass
+func request_sample(_peer: int, key: String, us: int, _at_us: int) -> void: sample(key,us)
+
 func command(actor: Dictionary, action: String, body: Dictionary = {}, domain: String = "market") -> Dictionary:
 	await until(func()->bool:return ready(actor.peer),"actor readiness")
 	serial+=1
@@ -120,6 +126,7 @@ func command(actor: Dictionary, action: String, body: Dictionary = {}, domain: S
 	var job: Dictionary={"id":"" if action=="visit" else id,"answer":{}}
 	jobs[actor.peer]=job
 	var started:=Time.get_ticks_usec()
+	request_started(actor.peer,action,started)
 	stats.attempts+=1;actor.actions+=1
 	if window_open: actor.window_actions+=1
 	event(actor,action,{"id":id})
@@ -132,9 +139,12 @@ func command(actor: Dictionary, action: String, body: Dictionary = {}, domain: S
 		queued=enqueue(actor,action,payload,id,domain) # SAME intent/UID, no accepted work is re-executed.
 	if not queued.get("queued",false):
 		jobs.erase(actor.peer);stats.admission_rejected+=1;error(action,str(queued.get("error","unknown")))
+		stats["terminal_admission_refused"]=int(stats.get("terminal_admission_refused",0))+1
+		request_finished(actor.peer,action,{"ok":false,"error":queued.get("error","unknown")},Time.get_ticks_usec(),false)
 		if str(queued.get("error","unknown")) not in TRANSIENT+CONFLICTS: die("unexpected admission "+str(queued))
 		return {"ok":false,"error":queued.get("error","unknown")}
 	stats.admitted+=1
+	request_admitted(actor.peer,action)
 	var deadline:=Time.get_ticks_msec()+90000
 	while Time.get_ticks_msec()<deadline and not failed:
 		if job.answer.is_empty(): await get_tree().process_frame;continue
@@ -149,40 +159,58 @@ func command(actor: Dictionary, action: String, body: Dictionary = {}, domain: S
 				world.seller_runtime.visit(actor.peer,int(body.shop_id))
 			else: world.seller_runtime.receipt(actor.peer,id)
 			continue
-		jobs.erase(actor.peer);sample("action:"+action,received_us-started)
+		jobs.erase(actor.peer);request_sample(actor.peer,"action:"+action,received_us-started,received_us)
 		if result.get("ok",false):
 			if action=="buy":
 				for state: Dictionary in result.get("wallet_states",[]):
 					if int(state.account_id)==int(actor.context.account_id) and int(state.get("pending_applied",0))>0:
 						stats.pending_income_buy_successes+=1;stats.pending_income_applied_by_buys+=int(state.pending_applied)
-			sample("action_ok:"+action,received_us-started)
+			request_sample(actor.peer,"action_ok:"+action,received_us-started,received_us)
 			stats.completed+=1;action_successes[action]=int(action_successes.get(action,0))+1
 			if domain=="ground":
 				picked[id]=actor.character;expected_uids.append(id);stats.ground_pickups+=1
 			elif action!="visit": successful_ids[id]=action
 		else:
-			sample("action_conflict:"+action,received_us-started)
+			request_sample(actor.peer,"action_conflict:"+action,received_us-started,received_us)
 			error(action,reason)
 			if reason not in CONFLICTS: die("unexpected "+action+" result "+str(result))
 			stats.conflicts+=1
+		request_finished(actor.peer,action,result,received_us,true)
 		return result
 	die("accepted operation unresolved: "+action+" / "+id)
 	return {"ok":false,"error":"unresolved"}
 
 func search(actor: Dictionary, cursor: String = "", filtered: bool = false) -> Dictionary:
 	serial+=1
-	var payload:=SEARCH.duplicate(true);payload.cursor=cursor
+	var payload:=search_payload(actor);payload.cursor=cursor
 	if filtered: payload.affix_filters=[{"stat_id":"monster_damage","minimum":5}]
 	var box: Dictionary={};var started:=Time.get_ticks_usec()
+	request_started(actor.peer,"search",started)
 	actor.actions+=1;stats.searches+=1
 	if window_open: actor.window_actions+=1
 	event(actor,"search",{"cursor":cursor,"filtered":filtered})
-	world.seller_runtime.auction.submit(actor.peer,"realm-query-"+str(serial),payload,func(result: Dictionary)->void:box.result=result;box.received_us=Time.get_ticks_usec(),func()->bool:return world.inventory_runtime.mutations_allowed(actor.peer))
+	var request_key: String="realm-query-"+str(serial)
+	world.seller_runtime.auction.submit(actor.peer,request_key,payload,func(result: Dictionary)->void:box.result=result;box.received_us=Time.get_ticks_usec(),func()->bool:return world.inventory_runtime.mutations_allowed(actor.peer))
+	var admitted: bool=world.seller_runtime.auction.has_pending(request_key)
+	if admitted:
+		stats["searches_admitted"]=int(stats.get("searches_admitted",0))+1
+		request_admitted(actor.peer,"search")
 	await until(func()->bool:return box.has("result"),"Auction response")
-	sample("action:search",int(box.received_us)-started)
-	if box.result.get("ok",false): stats.searches_ok+=1
-	else: error("search",str(box.result.get("error","unknown")))
+	request_sample(actor.peer,"action:search",int(box.received_us)-started,int(box.received_us))
+	if box.result.get("ok",false):
+		stats.searches_ok+=1;request_sample(actor.peer,"action_ok:search",int(box.received_us)-started,int(box.received_us))
+	else:
+		error("search",str(box.result.get("error","unknown")));request_sample(actor.peer,"action_rejected:search",int(box.received_us)-started,int(box.received_us))
+	request_finished(actor.peer,"search",box.result,int(box.received_us),admitted)
 	return box.result
+
+func search_payload(_actor: Dictionary) -> Dictionary: return SEARCH.duplicate(true)
+
+func seed_catalogue() -> void:
+	var catalogue:=Catalogue.new();catalogue.pg=pg;catalogue.benchmark();catalogue.free()
+
+func begin_window() -> void: pass
+func extend_report(_report: Dictionary) -> void: pass
 
 func shopping(actor: Dictionary, bulk: bool) -> bool:
 	var first: Dictionary=await search(actor)
@@ -314,7 +342,8 @@ func _ready() -> void:
 func run() -> void:
 	pg=ClassDB.instantiate("GodotSociDatabase")
 	if not pg.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) or not Schema.ensure_schema(pg): die("database setup");return
-	var catalogue:=Catalogue.new();catalogue.pg=pg;catalogue.benchmark();catalogue.free()
+	seed_catalogue()
+	if failed: return
 	world.database=WorldDatabase.new();add_child(world);world.add_child(world.database)
 	if not world.database.start_profile_database(directory+"/profiles.db"): die("profiles");return
 	var authority: String=pg.query("SELECT value FROM economy.meta WHERE key='economy_authority_id';").rows[0].value
@@ -369,6 +398,7 @@ func run() -> void:
 	await get_tree().create_timer(1).timeout
 	var started:=Time.get_ticks_usec();var next_memory:=started
 	measuring=true;window_open=true;running=true
+	begin_window()
 	for actor: Dictionary in actors: actor_loop(actor)
 	while Time.get_ticks_usec()-started<duration*1000000 and not failed:
 		var pending:=0
@@ -407,5 +437,8 @@ func run() -> void:
 	var timings: Dictionary={}
 	for key: String in histograms: timings[key]=histograms[key].summary()
 	var report: Dictionary={"case":"MMO Integration & Load","schema":1,"metrics_version":3,"scenario_version":3,"environment":{"os":OS.get_name(),"processors":OS.get_processor_count(),"godot":Engine.get_version_info().string},"seed":workload_seed,"requested_players":requested,"admitted_players":actors.size(),"admission_rejected_players":rejected,"connected_clients":0,"requested_roles":requested_roles,"refused_actors":refused_actors,"roles":role_counts,"mobs":simulation.mob_system.mobs.size(),"workers":Bootstrap.WORLD_POOLS,"queue_capacity_per_worker":2,"active_economic_accounts":actors.filter(func(a: Dictionary)->bool:return a.actions>0).size(),"actor_activity":actors.map(func(a: Dictionary)->Dictionary:return {"index":a.index,"role":a.role,"actions":a.actions,"window_action_attempts":a.window_actions,"window_action_hz":a.window_actions/float(duration),"income_events":a.income_events,"window_income_events":a.window_income,"window_income_hz":a.window_income/float(duration),"stories":a.stories,"completed":a.completed}),"duration_seconds":duration,"tail_seconds":tail_seconds,"successful_actions_in_window":window_successes,"stats":stats,"action_successes":action_successes,"native_jobs":native_jobs,"errors":errors,"timings":timings,"memory_samples":memory_samples,"connections":connections,"audit":audit,"exchange_outcomes":exchange_outcomes,"workers_stopped":bootstrap.status().stopped,"invariants":"PASS","limits":{"synthetic_sessions":true,"connected_clients":0,"combat_damage":false,"scripted_rewards":true,"network_relogin":false,"allocator_memory_not_rss":true},"mechanisms":["movement","passive_mob_ai","scripted_grind_income","ground_pickup","auction_filters_pages","shop_visit","single_bulk_purchase","seller_list_edit_collect","exchange_place_cancel","runtime_rebind"]}
+	extend_report(report)
 	FileAccess.open(directory+"/realm-workload.json",FileAccess.WRITE).store_string(JSON.stringify(report,"  "))
-	pg.close();print("POSTGRES_REALM_WORKLOAD_OK");get_tree().quit()
+	pg.close()
+	if failed: return
+	print("POSTGRES_REALM_WORKLOAD_OK");get_tree().quit()

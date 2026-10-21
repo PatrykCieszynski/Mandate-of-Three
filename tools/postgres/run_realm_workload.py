@@ -1,6 +1,7 @@
 """Player-paced MMO integration/load case; shares the owned PG runner, not stress scenarios."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -9,12 +10,12 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-PRESETS = {"integration": (24, 180), "load": (100, 600), "soak": (100, 1800)}
+PRESETS = {"integration": (24, 180), "load": (100, 600), "soak": (100, 1800), "representative": (40, 1800)}
 
 
 def compare(previous, current):
     """Observations only: no arbitrary performance gate or silent baseline update."""
-    keys = ("schema", "metrics_version", "scenario_version", "seed", "requested_players", "admitted_players", "duration_seconds", "environment")
+    keys = ("case", "schema", "metrics_version", "scenario_version", "seed", "requested_players", "admitted_players", "duration_seconds", "environment", "workload_configuration")
     mismatch = [key for key in keys if previous.get(key) != current.get(key)]
     changes = {}
     tails = {}
@@ -45,18 +46,31 @@ def main():
     parser.add_argument("--players", type=int)
     parser.add_argument("--seconds", type=int)
     parser.add_argument("--seed", type=int, default=1729)
+    parser.add_argument("--accounts", type=int, default=300, help="Total economic accounts, including offline sellers (representative only)")
+    parser.add_argument("--peak-every", type=int, default=450)
+    parser.add_argument("--peak-seconds", type=int, default=45)
+    parser.add_argument("--peak-multiplier", type=float, default=3.0)
     parser.add_argument("--compare", type=Path, help="Previous realm-workload.json; read only")
     args = parser.parse_args()
     players = args.players if args.players is not None else PRESETS[args.profile][0]
     seconds = args.seconds if args.seconds is not None else PRESETS[args.profile][1]
     if players < 1 or seconds < 1:
         parser.error("players and seconds must be positive; there is no harness population/performance cap")
+    representative = args.profile == "representative"
+    if representative and (args.accounts <= players or not 0 < args.peak_seconds < args.peak_every or
+                           not math.isfinite(args.peak_multiplier) or args.peak_multiplier <= 1):
+        parser.error("representative requires offline sellers, non-overlapping positive peaks and finite multiplier > 1")
     # The owner bounds native work and always stops its cluster in finally.
     # Do not kill that owner via an outer timeout.
     result = subprocess.run([sys.executable, str(ROOT / "tools/postgres/run_readiness.py"),
                              "--pg-bin", str(args.pg_bin), "--godot", str(args.godot),
                              "--suite", "realm-workload", "--realm-players", str(players),
-                             "--realm-seconds", str(seconds), "--realm-seed", str(args.seed)],
+                             "--realm-seconds", str(seconds), "--realm-seed", str(args.seed),
+                             "--realm-case", "representative" if representative else "stories",
+                             "--economy-accounts", str(args.accounts),
+                             "--economy-peak-every", str(args.peak_every),
+                             "--economy-peak-seconds", str(args.peak_seconds),
+                             "--economy-peak-multiplier", str(args.peak_multiplier)],
                             cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
     print(result.stdout, end="", flush=True)

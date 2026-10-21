@@ -1,6 +1,6 @@
 # PostgreSQL migration and concurrent Economy — implementation roadmap
 
-**Status (2026-10-20):** P1 domain ports and P2 concurrency acceptance are
+**Status (2026-10-21):** P1 domain ports and P2 concurrency acceptance are
 delivered. P3 now includes all existing economic domains, bounded asynchronous
 execution/recovery, normal opt-in Master/World startup, identity manifests,
 operator maintenance, coherent stopped-writer backup/restore and sequential
@@ -37,15 +37,44 @@ in the Economy backend port.
    COMMIT rollback and lost successful application delivery under mixed traffic.
    [P4c investigation](../evidence/postgres-p4c/README.md) adds real backend-process
    loss and a paused-projection recovery correction. The sustained attempt failed
-   receipt cardinality; clean soak after the correction remains mandatory.
-   Acceptance now has two separate cases sharing test infrastructure:
+   receipt cardinality. The [clean sustained repeat](../evidence/postgres-p4c/README.md)
+   now passes (2026-10-21): 31,247 exact observed/durable successful IDs, no
+   missing/extra IDs, invariants/drain and owned-cluster shutdown PASS.
+   Test infrastructure has two separate cases:
    Database/Economy Stress & Soak and [MMO Integration & Load](../development/realm-workload.md).
    The latter has a [24-account/180-second story baseline](../evidence/realm-workload-foundation/README.md),
    not a large-network or complete-combat capacity result. Current production
    binding limits are reported as admission refusals, not bypassed by the test.
    The prior stress-soak repeat was stopped on user request and is not silently
    resumed inside the new player-story case.
-   Continue with sustained soak/cluster or World faults and broader network/combat/domain traffic;
+   **Accepted P4 correction (2026-10-21): two mandatory soak profiles before
+   import/cutover acceptance.** First complete the unchanged 30-minute
+   Stress & Recovery sustained schedule and its separate fault/recovery probes.
+   Then add a distinct 30-minute Representative Economy Soak using the existing
+   infrastructure, without replacing the adversarial scheduler or raising
+   production session/binding limits. Both are required; neither proves
+   production readiness or simultaneous-client capacity.
+
+   The representative profile is a focused follow-up change; acceptance evidence
+   remains required (see [profile and reporting](../development/representative-economy.md)).
+   Start with approximately 300 economic accounts and 30–50 active buyers;
+   remaining accounts supply offline shops and a broad existing catalogue.
+   Distinguish economic population, admitted sessions and economically active
+   buyers. Disperse visits/purchases, include read-only shoppers and a small
+   heavy-trader cohort, leave most listings unsold, and report rare offer
+   conflicts separately. Include controlled 30–60-second activity peaks above
+   normal search/visit/purchase demand. Record the seed, offered rates and
+   behaviour mix, so the profile cannot silently become a nearly idle test.
+
+   Report normal and peak windows separately: offered/admitted/completed work,
+   refusals, conflicts/retries/recovery, active buyers/shops, read/write mix,
+   shop-open and purchase latency distributions, queue behaviour and World tick
+   tails. Waiting/retrying in stories must not be presented as maximum server
+   throughput. Agree responsiveness criteria before acceptance; the existing
+   24-account story baseline does not satisfy this new soak gate. Keep immutable
+   economic audits and accepted-operation recovery mandatory in both profiles.
+
+   Continue with cluster or World faults and broader network/combat/domain traffic;
    record admission, transaction/pool/lock behavior and World tick tails. Use
    repeated comparable runs and the planned sustained soak. A short correctness
    fixture is not a capacity result.

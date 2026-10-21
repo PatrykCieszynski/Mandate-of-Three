@@ -766,6 +766,16 @@ committed collection whose follow-up projection cannot acquire a queue slot.
 See [P4c evidence and outstanding soak gate](../evidence/postgres-p4c/README.md).
 
 
+## P4 Representative Economy Soak
+
+`python tools/postgres/run_realm_workload.py --pg-bin Y:/Software/PostgreSQL/bin --profile representative`
+runs the separate P4 Representative Economy profile: 300 economic accounts,
+40 requested active synthetic buyer/browser bindings, offline shops, read-heavy
+dispersed purchases and controlled peaks over 30 minutes. Do not run concurrently
+with Stress & Recovery or any other benchmark. No production limits are raised.
+Both soak profiles are required before import/cutover acceptance; exposing this
+command does not certify a completed run. See [profile](representative-economy.md).
+
 ## Representative MMO Integration & Load
 
 `python tools/postgres/run_realm_workload.py --pg-bin Y:/Software/PostgreSQL/bin` runs the opt-in 24-account/180-second seeded player-story case, separate from adversarial P4a-P4c. Shared bootstrap/profiling/audits do not share scenario policy. Performance is observational, integrity and accepted-operation recovery remain required. Report requested/admitted/economically active players honestly; current production runtime has 64 bindings. Large/long profiles are manual, not implied verified by options. Add performance-relevant mechanics to the corresponding story and bump the scenario version when behavior changes. See [coverage, commands and comparison policy](realm-workload.md).
