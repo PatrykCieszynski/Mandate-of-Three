@@ -54,6 +54,14 @@ Its client then relogs/restarts successfully with the same account.
 - Accepted unused ticket reserves the last place; max+1 is refused before a
   Gateway ticket result. Duplicate delivery preserves expiry, same-account
   replacement reuses its reservation, and expiration releases the unused place.
+- ACK-to-attach regression: with one session/Inventory/Wallet slot, Master
+  receives A's acceptance ACK while neither runtime is attached. Competing B
+  receives `ERR_BUSY`; A's ticket remains unexpired. A then authenticates over a
+  real player WebSocket. Production `_on_peer_connected()` reaches post-attach
+  publication, and both runtime owners expose A's native peer and the original
+  grant context. The unused/pending reservation becomes a live session. Only
+  SQL grant issuance and post-auth presentation are controlled; runtime polling
+  is disabled because this fixture proves admission/attach, not SQL hydration.
 - Acknowledgement waits are bounded. A replacement retires its own old wait;
   older continuation cleanup cannot revoke the newer accepted marker.
 - Lost/late ACK never becomes success. Deadline is checked **at RPC receipt**,
@@ -77,6 +85,11 @@ Ignored local logs: `.godot/verification/runtime-budget-identity.log`,
 `runtime-capacity.log`, `runtime-invalid-startup.log`, `runtime-budget-smoke.log`,
 `runtime-budget-full-state.log`, `runtime-budget-session-bridge.log` and
 `runtime-budget-wallet.log`.
+
+Review follow-up: `runtime-capacity.log` passes the ACK-to-native-attach case;
+`runtime-capacity-review-identity.log` passes all six account/session cases.
+`runtime-capacity-review-smoke.log` records the default smoke rerun. No production
+runtime changes or additional PostgreSQL cluster/soak runs were needed.
 
 Final full-state cluster evidence: `.godot/verification/postgres-readiness/run-u9lk58bv/`;
 its `capacity-proof` records rejection by actual configured PG runtime owners.

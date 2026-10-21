@@ -22,8 +22,35 @@ class Master extends WorldManagerServer:
 			expire_at_ack=false
 		super.handoff_accepted(token,accepted)
 class World extends WorldServer:
+	var published: Array[int]=[]
 	func inventory_master_available() -> bool: return true # Fixture-only control trust.
 	func _notify_master_disconnected(_account: String, _token: String = "") -> void: pass
+	func _publish_authenticated_state(peer_id: int, _player: PlayerResource) -> void:
+		published.append(peer_id)
+class WireClient extends BaseMultiplayerEndpoint:
+	var token: String
+	var connected:=false
+	var ended:=false
+	func _connect_multiplayer_api_signals(api: SceneMultiplayer) -> void:
+		api.auth_callback=func(_id: int, _data: PackedByteArray)->void:
+			api.send_auth(1,var_to_bytes(token))
+			api.complete_auth(1)
+		api.connected_to_server.connect(func()->void:connected=true)
+		api.peer_authentication_failed.connect(func(_id: int)->void:ended=true)
+		api.connection_failed.connect(func()->void:ended=true)
+		api.server_disconnected.connect(func()->void:ended=true)
+# Only durable grant issuance is controlled; production Master/World RPC,
+# native authentication and both runtime attach methods execute unchanged.
+class GrantedContext extends RefCounted:
+	var master: WorldManagerServer
+	func _init(owner: WorldManagerServer) -> void: master=owner
+	func poll() -> void: pass
+	func retire(_username: String, _token: String) -> void: pass
+	func request_grant(world_id: int, username: String, token: String) -> Dictionary:
+		var context:=master.verified_inventory_ticket(world_id,username,token)
+		assert(not context.is_empty())
+		context.epoch=1
+		return {"queued":false,"done":true,"result":{"ok":true,"context":context}}
 class Link extends WorldManagerClient:
 	var connected:=false
 	var drop_ack:=false
@@ -177,7 +204,36 @@ func run() -> void:
 	account.pending=0;account.stage="ready"
 	world.wallet_runtime.poll(0)
 	assert(world.has_entry_capacity("beta",22),"clean acknowledgement releases capacity")
+	# ACK -> competing refusal -> actual native auth must preserve both owner slots.
+	world.handoff_ttl_ms=30000
+	world.name="GameSession";add_child(world)
+	# No SQL execution in this admission fixture. Native transport still polls;
+	# attach must install the real owners before post-auth publication is reached.
+	world.set_process(false)
+	assert(world.create(BaseMultiplayerEndpoint.Role.SERVER,"127.0.0.1",18098)==OK)
+	master.inventory_session_issuer=GrantedContext.new(master)
+	var accepted_a: Dictionary=await master._prepare_world_ticket(world_id,"alpha","native-a",characters[0],21)
+	assert(accepted_a.ok and world.token_list.has("native-a"),"A receives ACK with a reserved place")
+	assert(world.inventory_runtime.binding(21).is_empty() and world.wallet_runtime.binding(21).is_empty(),"ACK precedes actual attach")
+	var rejected_b: Dictionary=await master._prepare_world_ticket(world_id,"beta","native-b",characters[1],22)
+	assert(not rejected_b.ok and rejected_b.error==ERR_BUSY and not world.token_list.has("native-b"),"B cannot steal A's reservation")
+	assert(world.token_list.has("native-a") and world.token_list["native-a"].expires_at>Time.get_ticks_msec(),"A remains valid after B's refusal")
+	var client:=WireClient.new();client.name="PlayerA";client.token="native-a";add_child(client)
+	assert(client.create(BaseMultiplayerEndpoint.Role.CLIENT,"127.0.0.1",18098)==OK)
+	await wait_until(func()->bool:return client.connected and not world.published.is_empty())
+	var native_peer: int=client.multiplayer_api.get_unique_id()
+	assert(not client.ended and world.published.has(native_peer),"A reaches post-attach publication through native auth")
+	assert(world.inventory_runtime.binding(21).get("peer",0)==native_peer,"Inventory attaches A despite competing B")
+	assert(world.wallet_runtime.binding(21).get("peer",0)==native_peer,"Wallet attaches the same A")
+	assert(Sessions.same_context(world.inventory_runtime.context_for_peer(native_peer),accepted_a.context))
+	assert(Sessions.same_context(world.wallet_runtime.context_for_peer(native_peer),accepted_a.context))
+	assert(not world.token_list.has("native-a") and world._pending_admissions.is_empty(),"reservation becomes a live session")
+	client.multiplayer_api.multiplayer_peer.close()
+	await wait_until(func()->bool:return world.connected_players.is_empty())
+	client.multiplayer_api.auth_callback=Callable()
+	world.multiplayer_api.multiplayer_peer.close()
+	master.inventory_session_issuer=null
 	master.multiplayer_api.multiplayer_peer.close();link.multiplayer_api.multiplayer_peer.close()
 	db.close_db();world.free();database.free();accounts.free()
-	print("RUNTIME_CAPACITY_OK: validation, bounded ACK, reservation/replacement/expiry, dirty ownership and clean release")
+	print("RUNTIME_CAPACITY_OK: validation, bounded ACK, reservation/replacement/expiry, competing refusal then native auth + both owner attaches, dirty ownership and clean release")
 	get_tree().quit()
