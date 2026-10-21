@@ -1,6 +1,6 @@
 # World Server optimization — staged execution plan
 
-**Status:** W0 audit/baseline and session/control/cache capacity integrated (PRs #114–115), 2026-10-21. W1 test-only profiling is the current review package; see [profiling contract](../development/world-profiling.md). Later implementation packages remain proposed and require review. This document is **not authorization to implement** a physics rewrite or merge experimental PR #18 into `main`.
+**Status:** W0, session/control/cache capacity and W1 profiling integrated (PRs #114–116), 2026-10-21; see [profiling contract](../development/world-profiling.md). The user approved a separate [W4a lightweight mob experiment](../development/lightweight-mob-movement.md) before W2/W3. Native movement remains default; this exception does not approve other W-packages or promotion. This document is **not authorization to implement** a general physics rewrite or merge experimental PR #18 into `main`.
 
 Current W0 deliverables: [limit ownership audit](world-w0-limit-audit.md) and
 [measurement contract/runner](../development/world-baseline.md). Configuration

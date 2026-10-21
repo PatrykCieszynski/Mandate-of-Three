@@ -53,8 +53,12 @@ def main():
     parser.add_argument("--profile", choices=("off", "on", "compare"), default="off",
                         help="compare interleaves native control and test-only subtimers on the same commit")
     parser.add_argument("--displacement", action="store_true", help="separate diagnostic: periodic advance/knockback, no damage")
+    parser.add_argument("--mob-movement", choices=("native", "light", "compare"), default="native",
+                        help="W4a server-only experiment; compare uses unprofiled paired movement policies")
     args = parser.parse_args()
-    if args.cohort == "bindings" and (args.profile != "off" or args.displacement):
+    if args.mob_movement == "compare" and args.profile != "off":
+        parser.error("Movement A/B holds profiling off; use a separate profiled diagnostic")
+    if args.cohort == "bindings" and (args.profile != "off" or args.displacement or args.mob_movement != "native"):
         parser.error("Binding probe has its own poll/copy metrics; profiling/displacement is simulation-only")
     if os.name == "nt" and "_console" in args.godot.name:
         parser.error("Use the actual win64.exe engine; the console launcher measures a wrapper process")
@@ -83,9 +87,11 @@ def main():
             modes = [False, True] if args.profile == "compare" else [args.profile == "on"]
             if repeat % 2 == 0:
                 modes.reverse()
-            jobs.extend((layout, players, mobs, repeat, mode) for mode in modes)
-    for layout, players, mobs, repeat, profiled in jobs:
-        name = f"{layout}-{players}-{mobs}-{repeat}-{'profile' if profiled else 'control'}"
+            policies = ["native", "light"] if args.mob_movement == "compare" else [args.mob_movement]
+            if repeat % 2 == 0: policies.reverse()
+            jobs.extend((layout, players, mobs, repeat, mode, policy) for policy in policies for mode in modes)
+    for layout, players, mobs, repeat, profiled, policy in jobs:
+        name = f"{layout}-{players}-{mobs}-{repeat}-{'profile' if profiled else 'control'}-{policy}"
         command = [str(args.godot.resolve()), "--headless", "--path", str(ROOT),
                    "--mode=world-server", "res://tests/world_load_bench.tscn",
                    f"--bench-cohort={args.cohort}", f"--bench-players={players}",
@@ -93,6 +99,7 @@ def main():
                    f"--bench-profile={int(profiled)}", f"--bench-profile-dir={profile_uri}",
                    f"--bench-displacement={int(args.displacement)}",
                    f"--bench-warmup={args.warmup}", f"--bench-seconds={args.seconds}"]
+        if policy == "light": command.append("--dev-light-mob-movement")
         with (directory / f"{name}.out.log").open("w", encoding="utf-8") as out, (directory / f"{name}.err.log").open("w", encoding="utf-8") as err:
             started = time.monotonic()
             child = subprocess.Popen(command, cwd=ROOT, env=environment, stdout=out, stderr=err,
@@ -117,6 +124,8 @@ def main():
         if code or re.search(r"SCRIPT ERROR|Parse Error|Assertion failed", text + errors) or len(rows) != 1:
             raise RuntimeError(f"Benchmark failed: {directory / name}")
         record = json.loads(rows[0])
+        if args.cohort == "simulation" and record["mob_movement"] != policy:
+            raise RuntimeError(f"Movement selector mismatch: {directory / name}")
         if args.cohort == "simulation" and (record["players"] != players or record["mobs"] != mobs or record["physics_work"]["samples"] < 5):
             raise RuntimeError(f"Invalid actor/sample counts: {directory / name}")
         if args.cohort == "simulation" and profiled:
@@ -124,7 +133,7 @@ def main():
             if players:
                 required |= {"player_simulate", "player_slide", "player_intersect_shape", "player_exception_add", "player_exception_remove", "player_advance_curve", "player_knockback_damping", "player_advance_probe"}
             if mobs:
-                required |= {"mob_ai_inclusive", "mob_motion", "mob_slide"}
+                required |= {"mob_ai_inclusive", "mob_motion", "mob_grounding" if policy == "light" else "mob_slide"}
             if not required <= record["profile"].keys():
                 raise RuntimeError(f"Missing profiling coverage {required - record['profile'].keys()}: {directory / name}")
         record.update(name=name, repeat=repeat, native_usage=usage, whole_process_wall_seconds=time.monotonic() - started)
@@ -142,14 +151,21 @@ def main():
             rows = [row for row in records if row['name'].startswith(f'{layout}-{p}-{m}-')]
             medians = {mode: {metric: statistics.median(row[metric]['p95_ms'] for row in rows if row['profiled'] == flag) for metric in ('physics_work', 'tick_interval', 'frame_interval')} for mode, flag in [('control', False), ('profile', True)]}
             comparisons[f'{layout}-{p}-{m}'] = {**medians, 'physics_p95_overhead_percent': (medians['profile']['physics_work'] / medians['control']['physics_work'] - 1) * 100}
-    report = {"schema": 2, "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+    movement_comparisons = {}
+    if args.mob_movement == "compare":
+        for layout, p, m in cases:
+            rows = [row for row in records if row['name'].startswith(f'{layout}-{p}-{m}-')]
+            medians = {policy: {metric: statistics.median(row[metric]['p95_ms'] for row in rows if row['mob_movement'] == policy) for metric in ('physics_work', 'tick_interval', 'frame_interval')} for policy in ('native', 'light')}
+            movement_comparisons[f'{layout}-{p}-{m}'] = {**medians, 'physics_p95_change_percent': (medians['light']['physics_work'] / medians['native']['physics_work'] - 1) * 100}
+    report = {"schema": 3, "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
               "git_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
               "source_sha256": fingerprint.hexdigest(), "host": {"platform": platform.platform(), "processor": platform.processor(), "logical_cpus": os.cpu_count()},
               "engine_version": subprocess.check_output([str(args.godot.resolve()), "--version"], text=True).strip(),
               "engine_sha256": hashlib.sha256(args.godot.read_bytes()).hexdigest(),
               "settings": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()}, "cases": records,
               "profile_source_sha256": profile_sources, "instrumentation_comparison": comparisons,
-              "median_simulation": {f"{layout}-{p}-{m}-{'profile' if flag else 'control'}": {metric: statistics.median(row[metric]["p95_ms"] for row in records if row["name"].startswith(f"{layout}-{p}-{m}-") and row["profiled"] == flag) for metric in ("physics_work", "tick_interval")} for layout, p, m in cases for flag in set(row['profiled'] for row in records)} if args.cohort == "simulation" else {}}
+              "movement_comparison": movement_comparisons,
+              "median_simulation": {f"{layout}-{p}-{m}-{'profile' if flag else 'control'}-{policy}": {metric: statistics.median(row[metric]["p95_ms"] for row in records if row["name"].startswith(f"{layout}-{p}-{m}-") and row["profiled"] == flag and row['mob_movement'] == policy) for metric in ("physics_work", "tick_interval")} for layout, p, m in cases for flag in set(row['profiled'] for row in records) for policy in set(row['mob_movement'] for row in records)} if args.cohort == "simulation" else {}}
     (directory / "results.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print("WORLD_BASELINE_REPORT", directory.relative_to(ROOT), flush=True)
 

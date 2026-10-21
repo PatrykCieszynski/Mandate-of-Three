@@ -67,6 +67,7 @@ def build(directory):
     motion = method(mob_path, "simulate_mob")
     motion = replace_once(motion, "func simulate_mob(", "func _profile_motion(")
     motion = span(motion, "\tmove_and_slide()", "mob_slide")
+    motion = span(motion, "\t\tvar grounded:=_grounding.resolve(self,next)", "mob_grounding")
     sources["mob.gd"] = ('extends MobActor3D\n' +
         wrapper("simulate_mob", "delta: float, direction: Vector2, now: int", "delta,direction,now", "mob_motion", "self").replace("self.simulate_mob(", "self._profile_motion(") + motion)
     spawn = method("source/common/gameplay/mobs/mob_system.gd", "spawn_mob")

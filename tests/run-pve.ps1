@@ -1,3 +1,4 @@
+param([switch]$LightMobMovement)
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
@@ -14,6 +15,7 @@ try {
         $taskIndex = if ($taskRole -eq 'client1') { 1 } else { 2 }
         $taskScene = if ($taskRole -eq 'ground') { 'ground_items' } else { 'pve_network' }
         $taskArgs = '--headless --path "' + $taskRoot + '" --mode=' + $taskMode + ' res://tests/' + $taskScene + '.tscn --test-client=' + $taskIndex
+        if ($LightMobMovement -and $taskRole -eq 'server') { $taskArgs += ' --dev-light-mob-movement' }
         $taskProcess = Start-Process -FilePath $taskExe -ArgumentList $taskArgs -WorkingDirectory $taskRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $taskLogs "pve-test-$taskRole.out.log") -RedirectStandardError (Join-Path $taskLogs "pve-test-$taskRole.err.log")
         $taskProcesses += [pscustomobject]@{ Role = $taskRole; Process = $taskProcess }
         if ($taskRole -eq 'server') { Start-Sleep -Seconds 1 }
@@ -24,8 +26,9 @@ try {
         }
         $taskEntry.Process.Refresh()
         $taskOutput = Get-Content -LiteralPath (Join-Path $taskLogs "pve-test-$($taskEntry.Role).out.log") -Raw
+        $taskErrors = Get-Content -LiteralPath (Join-Path $taskLogs "pve-test-$($taskEntry.Role).err.log") -Raw
         $taskMarker = switch ($taskEntry.Role) { 'ground' { 'GROUND_ITEMS_OK' } 'server' { 'PVE_SERVER_OK' } default { 'PVE_CLIENT_OK' } }
-        if ($taskEntry.Process.ExitCode -ne 0 -or $taskOutput -notmatch $taskMarker) {
+        if ($taskEntry.Process.ExitCode -ne 0 -or $taskOutput -notmatch $taskMarker -or ($taskOutput + $taskErrors) -match 'SCRIPT ERROR|Parse Error|Assertion failed') {
             throw "Failed: $($taskEntry.Role). Logs: $taskLogs"
         }
         Write-Output "$($taskEntry.Role): PASS"

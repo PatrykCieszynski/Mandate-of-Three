@@ -44,8 +44,15 @@ static var _bar_texture: Texture2D
 var name_label: Label3D
 var presentation: DogVisual3D
 var movement_collider: CollisionShape3D
+const Grounding = preload("res://source/common/gameplay/mobs/mob_grounding_3d.gd")
+var lightweight_movement:=false
+var _grounding:=Grounding.new()
+var light_grounded_ticks:=0
+var light_native_ticks:=0
 
 func setup_mob(id: int, spawn: Vector3) -> void:
+	# Process-local experiment; never selected by a client RPC or presentation.
+	lightweight_movement=GameMode.is_world_server() and "--dev-light-mob-movement" in (OS.get_cmdline_args()+OS.get_cmdline_user_args())
 	hp = max_hp
 	mob_id = id
 	home = spawn
@@ -104,6 +111,18 @@ func simulate_mob(delta: float, direction: Vector2, now: int) -> void:
 	velocity.z = direction.y * move_speed + displacement_velocity.z
 	velocity.y = -0.5 if is_on_floor() else velocity.y - GRAVITY * delta
 	if direction.length_squared() > 0.001: rotation.y = atan2(-direction.x, -direction.y)
+	if lightweight_movement and GameMode.is_world_server() and not displaced:
+		var next:=global_position+Vector3(velocity.x,0,velocity.z)*delta
+		var grounded:=_grounding.resolve(self,next)
+		if not grounded.is_empty():
+			light_grounded_ticks+=1
+			global_position=grounded.position
+			velocity.y=0
+			return
+		# Point support is narrower than a capsule (holes/edges/steep ground).
+		# Keep native recovery/gravity there, rather than inventing support or
+		# discarding a legitimate chase intention. Displacements always use it too.
+	if lightweight_movement: light_native_ticks+=1
 	var regular_mask := collision_mask
 	if displaced: collision_mask |= 1 # Impulses respect scenery; normal pack AI stays unchanged.
 	move_and_slide()

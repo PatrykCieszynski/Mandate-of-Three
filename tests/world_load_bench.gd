@@ -88,6 +88,8 @@ func _ready() -> void:
 	var end:=Probe.new();end.process_physics_priority=1000;end.callback=end_tick;add_child(end)
 	await get_tree().create_timer(float(args.get("bench-warmup","3"))).timeout
 	world.snapshots=0;work.clear();intervals.clear();frames.clear();previous=0;previous_frame=0
+	for body: MobActor3D in world.mob_system.mobs.values():
+		body.light_grounded_ticks=0;body.light_native_ticks=0
 	Profile.reset();Profile.enabled=profiled;measuring=true
 	var started:=Time.get_ticks_usec()
 	await get_tree().create_timer(float(args.get("bench-seconds","12"))).timeout
@@ -97,7 +99,13 @@ func _ready() -> void:
 	var over:=0
 	for us: int in work:
 		if us>16667: over+=1
-	print("WORLD_BASELINE_RESULT "+JSON.stringify({"cohort":"synthetic_movement_no_clients_no_sql","profiled":profiled,"displacement":displacement,"profile":Profile.report(),"frame_interval":summary(frames),"players":players,"mobs":world.mob_system.mobs.size(),"packs":world.mob_system.packs.size(),"wide":wide,"seed":1729,"seconds":elapsed,"physics_work":summary(work),"tick_interval":summary(intervals),"observed_hz":work.size()/elapsed,"over_budget_ticks":over,"static_memory_bytes":OS.get_static_memory_usage(),"player_snapshot_bytes":world.snapshot_bytes,"mob_snapshot_bytes":var_to_bytes(world.mob_system.snapshot()).size(),"snapshot_count":world.snapshots,"actual_network_bytes":0,"debug_build":OS.is_debug_build(),"editor_binary":OS.has_feature("editor")}))
+	var result: Dictionary={"cohort":"synthetic_movement_no_clients_no_sql","profiled":profiled,"displacement":displacement,"profile":Profile.report(),"frame_interval":summary(frames),"players":players,"mobs":world.mob_system.mobs.size(),"packs":world.mob_system.packs.size(),"wide":wide,"seed":1729,"seconds":elapsed,"physics_work":summary(work),"tick_interval":summary(intervals),"observed_hz":work.size()/elapsed,"over_budget_ticks":over,"static_memory_bytes":OS.get_static_memory_usage(),"player_snapshot_bytes":world.snapshot_bytes,"mob_snapshot_bytes":var_to_bytes(world.mob_system.snapshot()).size(),"snapshot_count":world.snapshots,"actual_network_bytes":0,"debug_build":OS.is_debug_build(),"editor_binary":OS.has_feature("editor")}
+	result.mob_movement="light" if "--dev-light-mob-movement" in (OS.get_cmdline_args()+OS.get_cmdline_user_args()) else "native"
+	result.light_grounded_ticks=0;result.light_native_ticks=0
+	for body: MobActor3D in world.mob_system.mobs.values():
+		result.light_grounded_ticks+=body.light_grounded_ticks
+		result.light_native_ticks+=body.light_native_ticks
+	print("WORLD_BASELINE_RESULT "+JSON.stringify(result))
 	world.queue_free()
 	await get_tree().process_frame
 	get_tree().quit()
