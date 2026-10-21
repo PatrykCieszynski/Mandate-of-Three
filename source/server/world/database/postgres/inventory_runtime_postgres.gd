@@ -24,6 +24,13 @@ var _storage_enabled:=false
 var _initialization_enabled:=false
 var _draining:=false
 var _identity_jobs: Dictionary={}
+var _capacity: int=MAX_BINDINGS
+
+func has_account_capacity(required: Array) -> bool:
+	var accounts: Dictionary={}
+	for id: int in _bindings: accounts[id]=true
+	for id: int in required: accounts[id]=true
+	return accounts.size()<=_capacity
 
 ## Internal process lifecycle only. Share the existing bounded Inventory pool;
 ## SQL completions still have exactly one poll owner, no extra native worker.
@@ -56,9 +63,10 @@ func context_for_peer(peer: int) -> Dictionary:
 	var current:=_for_peer(peer)
 	return {} if current.is_empty() else current.context.duplicate(true)
 
-func _init(world: WorldServer, executor: RefCounted) -> void:
+func _init(world: WorldServer, executor: RefCounted, capacity: int = MAX_BINDINGS) -> void:
 	_world=world
 	_executor=executor
+	_capacity=capacity
 
 ## The context must already be installed by the privileged verified-grant owner.
 ## Native World authentication proves the peer/ticket; PostgreSQL proves the
@@ -67,7 +75,7 @@ func attach(peer_id: int, context: Dictionary) -> bool:
 	if _draining: return false
 	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return false
 	if _world.session_ticket_fingerprint(peer_id,int(context.character))!=context.session_fingerprint: return false
-	if not _bindings.has(context.account_id) and _bindings.size()>=MAX_BINDINGS: return false
+	if not _bindings.has(context.account_id) and _bindings.size()>=_capacity: return false
 	var previous: Dictionary=_bindings.get(context.account_id,{})
 	# Repeated lifecycle delivery is not a new session. Preserve the original
 	# command/body, outstanding ticket and paused/unknown recovery state.

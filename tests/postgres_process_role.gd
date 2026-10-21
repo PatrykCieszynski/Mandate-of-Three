@@ -2,6 +2,7 @@ extends Node
 var main: Node
 var stopping:=false
 var seeded:=false
+var capacity_verified:=false
 var directory: String
 func _ready() -> void:
 	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster")
@@ -12,6 +13,16 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if main==null or not main.is_inside_tree() or stopping: return
 	var role: String=GameMode.mode().trim_suffix("-server")
+	if role=="world" and not capacity_verified and FileAccess.file_exists(directory+"/probe-capacity"):
+		var world: WorldServer=main.get_node("WorldServer")
+		if world.connected_players.size()==1:
+			var player: PlayerResource=world.connected_players.values()[0]
+			var account: int=world.resolve_account_id(player.player_id)
+			assert(world.runtime_settings.value("world_sessions")==1)
+			assert(not world.inventory_runtime.has_account_capacity([account,999999]))
+			assert(not world.wallet_runtime.has_account_capacity([account,999999]))
+			FileAccess.open(directory+"/capacity-proof",FileAccess.WRITE).store_string("configured native owners refuse second account")
+			capacity_verified=true
 	if role=="world" and not seeded and FileAccess.file_exists(directory+"/seed-maintenance"):
 		var world: WorldServer=main.get_node("WorldServer")
 		if world.connected_players.size()==1:

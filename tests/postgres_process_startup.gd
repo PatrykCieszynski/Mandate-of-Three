@@ -79,6 +79,10 @@ func run() -> void:
 	if full_state: economy+='realm_state=true\n'
 	write("master.cfg",'[gateway-manager-server]\nport='+str(ports[0])+'\nbind_address="127.0.0.1"\n[world-manager-server]\nport='+str(ports[1])+'\nbind_address="127.0.0.1"\n[authentication]\naccount_collection_path="'+directory+'/accounts.tres"\n'+economy)
 	write("world.cfg",'[world-server]\nport='+str(ports[2])+'\nbind_address="127.0.0.1"\nname="PG Process Fixture"\n[world-manager-client]\naddress="127.0.0.1"\nport='+str(ports[1])+economy+'profile_path="'+directory+'/profiles.db"\n')
+	if full_state:
+		write("master.cfg",FileAccess.get_file_as_string(directory+"/master.cfg")+'\n[runtime]\nmaster_grants=1\n')
+		write("world.cfg",FileAccess.get_file_as_string(directory+"/world.cfg").replace('[world-server]\n','[world-server]\nmax_players=1\n')+'\n[runtime]\ninventory_bindings=1\nwallet_accounts=1\n')
+		write("probe-capacity","ok")
 	write("gateway.cfg",'[gateway-server]\nport='+str(ports[3])+'\nbind_address="127.0.0.1"\n[gateway-manager-client]\naddress="127.0.0.1"\nport='+str(ports[0])+'\n')
 	write("dashboard.cfg",'[server]\nport='+str(ports[4])+'\nbind="127.0.0.1"\n[auth]\ntoken="fixture-only"\n')
 	var master:=start("master")
@@ -102,6 +106,7 @@ func run() -> void:
 	write("identity-conflict-cleared","ok")
 	if full_state: write("seed-maintenance","ok")
 	await wait_exit(client)
+	if full_state: await wait_marker("capacity-proof")
 	assert("POSTGRES_PROCESS_CLIENT_OK" in FileAccess.get_file_as_string(directory+"/client.log"))
 	var report: Dictionary=JSON.parse_string(FileAccess.get_file_as_string(directory+"/client-report.json"))
 	var durable: Dictionary=pg.query("SELECT account_id FROM economy.characters WHERE character_id=:character;",{"character":int(report.character)})

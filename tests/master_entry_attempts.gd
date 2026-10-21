@@ -2,8 +2,8 @@ extends Node
 ## Concrete regression: World replies reordered across login/enter/create must
 ## pass through the real Master callbacks without issuing a stale usable ticket.
 class Accounts extends AuthenticationManager:
-	func save_account_collection() -> void:
-		pass
+	func save_account_collection() -> bool:
+		return true
 	func validate_credentials(username: String, _password: String) -> AccountResource:
 		return account_collection.collection.get(username)
 
@@ -19,6 +19,7 @@ class Master extends WorldManagerServer:
 
 class World extends WorldManagerClient:
 	var ready_for_test := false
+	var hold_ack:=false
 	var requests: Dictionary[int, Dictionary] = {}
 	var tickets: Array[String] = []
 	var usable: Array[String] = []
@@ -36,6 +37,7 @@ class World extends WorldManagerClient:
 	func fetch_token(token: String, _username: String, _character: int, _account: int, _inventory_context: Dictionary = {}) -> void:
 		tickets.append(token)
 		usable.append(token)
+		if not hold_ack: handoff_accepted.rpc_id(1,token,true)
 	@rpc("authority")
 	func master_kick(_character: int) -> void:
 		pass # No combat actors in the controlled worker.
@@ -87,6 +89,7 @@ func run() -> void:
 	accounts.account_collection = AccountResourceCollection.new()
 	accounts.account_collection.collection["alpha"] = identity
 	master.authentication_manager = accounts
+	master.runtime_settings=preload("res://source/server/runtime/runtime_capacity_settings.gd").resolve({}).settings
 	gateway.authentication_manager = accounts
 	gateway.world_manager = master
 	master.name = "Master"
@@ -107,7 +110,7 @@ func run() -> void:
 	assert(world.tickets.is_empty() and not master.responses.has(100) and identity.peer_id == 0)
 
 	# B wins; A's late success/error and a duplicate B must issue no extra ticket
-	# and must not reject B while its normal 0.5-second handoff delay is running.
+	# and must not reject B while its acceptance acknowledgement is in flight.
 	await enter(101)
 	assert(not gateway.login_request("alpha", "fixture").has("error"))
 	await enter(102)
@@ -174,7 +177,8 @@ func run() -> void:
 	assert(master.responses[112].has("error") and world.tickets.size()==6)
 	master.inventory_session_issuer=null
 	master.connected_worlds[world_id]["draining"]=false
-	# Likewise fence the existing post-ticket 0.5s handoff continuation.
+	# Likewise fence a handoff whose World acceptance ACK has not arrived.
+	world.hold_ack=true
 	await enter(113);world.reply(113)
 	await wait_for(func()->bool:return world.tickets.size()==7)
 	master.connected_worlds[world_id]["draining"]=true

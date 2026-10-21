@@ -30,6 +30,22 @@ var npc_runtime: RefCounted
 var storage_runtime: RefCounted
 var ground_item_runtime: RefCounted
 var seller_runtime: RefCounted
+var runtime_settings: RefCounted
+
+## Tickets and native auth reserve the same account slots as active sessions.
+## Wallet capacity includes detached dirty/unknown accounts; never evict them.
+func has_entry_capacity(username: String, account_id: int) -> bool:
+	var names: Dictionary={};names[username]=true
+	var accounts: Dictionary={};accounts[account_id]=true
+	for player: PlayerResource in connected_players.values(): names[player.account_name]=true
+	for collection: Dictionary in [token_list,_pending_admissions]:
+		for ticket: Dictionary in collection.values():
+			names[ticket.account]=true
+			if int(ticket.get("account_id",0))>0: accounts[int(ticket.account_id)]=true
+	var maximum: int=runtime_settings.value("world_sessions") if runtime_settings!=null else 64
+	if names.size()>maximum: return false
+	var required: Array=accounts.keys()
+	return (inventory_runtime==null or inventory_runtime.has_account_capacity(required)) and (wallet_runtime==null or wallet_runtime.has_account_capacity(required))
 
 func _process(_delta: float) -> void:
 	if economy_bootstrap!=null: economy_bootstrap.check_health()
@@ -158,6 +174,18 @@ func accept_master_handoff(auth_token: String, username: String, character_id: i
 	if not database.wallet_ready: return false
 	var player: PlayerResource = database.get_player_resource(character_id)
 	if auth_token.is_empty() or player == null or player.account_name != username: return false
+	prune_handoff_tickets()
+	if token_list.has(auth_token):
+		var existing: Dictionary=token_list[auth_token]
+		return existing.account==username and existing.character_id==character_id and existing.get("account_id",0)==account_id and existing.inventory_context==inventory_context
+	for existing: Dictionary in _pending_admissions.values():
+		if existing.token==auth_token:
+			return int(existing.expires_at)>Time.get_ticks_msec() and existing.account==username and existing.character_id==character_id and existing.get("account_id",0)==account_id and existing.inventory_context==inventory_context
+	for peer_id: int in _session_tokens:
+		if _session_tokens[peer_id]==auth_token:
+			var current: PlayerResource=connected_players.get(peer_id)
+			return current!=null and current.account_name==username and current.player_id==character_id
+	if not has_entry_capacity(username,account_id): return false
 	if not database.store.bind_account_identity(username,account_id):
 		push_warning("Rejected Master account identity mapping for world character %d." % character_id)
 		return false
@@ -168,7 +196,7 @@ func accept_master_handoff(auth_token: String, username: String, character_id: i
 		_notify_master_disconnected(username, auth_token)
 		return false
 	token_list[auth_token] = {
-		"account": username, "character_id": character_id,
+		"account": username, "account_id":account_id, "character_id": character_id,
 		"expires_at": Time.get_ticks_msec() + maxi(1, handoff_ttl_ms),
 		"inventory_context":inventory_context.duplicate(true),
 	}
@@ -212,8 +240,6 @@ func resolve_peer_account_id(peer_id: int) -> int:
 
 
 func start_world_server() -> void:
-	world_manager.token_received.connect(accept_master_handoff)
-
 	var configuration: Dictionary = ConfigFileUtils.load_section(
 		"world-server",
 		CmdlineUtils.get_parsed_args().get("config", "res://data/config/world_config.cfg")

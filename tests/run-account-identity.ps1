@@ -3,13 +3,14 @@ $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskLogs = Join-Path $taskRoot '.godot/verification'
 New-Item -ItemType Directory -Force $taskLogs | Out-Null
-$taskCases = @('account_identity', 'gateway_lifecycle', 'gateway_menu_lifecycle', 'world_session_admission', 'master_entry_attempts')
+$taskCases = @('account_identity', 'gateway_lifecycle', 'gateway_menu_lifecycle', 'world_session_admission', 'master_entry_attempts', 'runtime_capacity')
 if ($WithSession) { $taskCases += 'account_identity_session' }
 foreach ($taskCase in $taskCases) {
     $taskMode = if ($taskCase -notin @('account_identity_session','gateway_menu_lifecycle')) { 'world-server' } else { 'client' }
     $taskMarker = if ($taskCase -eq 'gateway_menu_lifecycle') { 'GATEWAY_MENU_LIFECYCLE_OK' } elseif ($taskCase -eq 'gateway_lifecycle') { 'GATEWAY_LIFECYCLE_OK' } elseif ($taskCase -eq 'account_identity') { 'ACCOUNT_IDENTITY_OK' } else { 'ACCOUNT_IDENTITY_SESSION_OK' }
     if ($taskCase -eq 'world_session_admission') { $taskMarker = 'WORLD_SESSION_ADMISSION_OK' }
     if ($taskCase -eq 'master_entry_attempts') { $taskMarker = 'MASTER_ENTRY_ATTEMPTS_OK' }
+    if ($taskCase -eq 'runtime_capacity') { $taskMarker = 'RUNTIME_CAPACITY_OK' }
     $taskLog = Join-Path $taskLogs "$taskCase.log"
     $taskAppData = $env:APPDATA
     $taskLocalAppData = $env:LOCALAPPDATA
