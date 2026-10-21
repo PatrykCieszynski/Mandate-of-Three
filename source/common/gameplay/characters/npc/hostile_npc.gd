@@ -340,7 +340,7 @@ func _apply_ally_bar_tint() -> void:
 		progress_bar.show()
 
 
-## Server-set: while this timestamp is in the future the body holds position — a
+## Server-set: while this timestamp is in the future the body holds position —
 ## an external controller commits it to a telegraphed cast instead of leaving its
 ## own danger ring. Generic, like the lunge windup's root but driven from outside
 ## the state machine.
