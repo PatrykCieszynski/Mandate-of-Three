@@ -94,9 +94,8 @@ Inspect:
 - repeated offer selections and error reasons (offer conflicts are distinct from
   capacity, queue refusal and receipt recovery);
 - per-action and successful/conflicting action p50/p95/p99/max, including
-  `phase:normal:*`, `phase:peak:*`, `phase:tail:*`; phase is assigned when the
-  coroutine observes completion (latency itself ends at the callback timestamp),
-  so cross-boundary operations must be interpreted using the time series;
+  `phase:normal:*`, `phase:peak:*`, `phase:tail:*` by request start, with separate
+  `completion_phase:*` cohorts using the terminal callback timestamp;
 - read/write action counts, actual per-account activity, World physics/poll tails,
   native queue/worker/delivery timings, memory accounting, connections and drain.
 
@@ -107,3 +106,65 @@ near-idle or inventory-saturated run is not an acceptable normal-traffic baselin
 Only a successful runner exit, invariant audit and confirmed worker/owned cluster
 shutdown certify a completed correctness run. Full-duration acceptance remains
 explicitly pending until evidence is recorded and responsiveness is assessed.
+
+## Coverage sanity and request cohorts (metrics v4)
+
+`profile_sanity` checks that search, successful shop visit, purchase and visits to
+at least two different shops actually occurred. Eligibility uses configured
+duration, peak overlap, admitted roles and their unchanged arrival probabilities.
+A scenario is required only when its model predicts at least eight opportunities;
+this is a conservative coverage heuristic, **not a throughput, latency, story
+completion or success-rate threshold**. Below that expectation, a missed random
+action is `DIAGNOSTIC_NOT_OBSERVED`; a role/configuration that cannot generate it
+is `NOT_APPLICABLE`. A single-offline-shop setup cannot demonstrate dispersion.
+Bulk purchase is never required. These diagnostic statuses are not full soak
+acceptance. Required coverage missing makes the runner fail after retaining its
+report and completing the normal drain/audits.
+
+`planned_peaks` includes every positive overlap of a configured peak with the
+arrival window (including partial final peaks). Each row records scheduled and
+started stories and requests actually started in that peak. With enough modeled
+opportunities, all three must be observed. Tiny partial peaks remain diagnostic;
+peaks outside the configured duration are not required.
+
+Action histogram `phase:normal:*` / `phase:peak:*` now means **request start**,
+captured at the same point as the existing latency stopwatch after command
+readiness. Retry/recovery retains that original cohort. `completion_phase:*`
+uses the existing terminal callback timestamp. `outcomes_by_start_phase` includes
+offered, admitted and terminal results per action; `request_phase_transitions`
+retains start → completion transitions, including completion in the drain tail.
+No extra frame wait or playback/scheduler change is introduced. Physics and
+uncorrelated native-pool `phase:*` observations retain observation-time cohorts.
+`outcomes_by_phase`/the time series retain event-time reporting (terminal requests
+use their callback timestamp; recovery/error notifications use observation time).
+`metrics_version=4` makes v3 completion-cohort reports non-comparable by default;
+arrival policy remains scenario v1.
+
+Accounting relationships after drain:
+
+- Sum of `demand.scheduled` = `started + account_busy + runtime_not_ready`.
+  Skips are opportunities, not queued operations or failed transactions.
+- Sum of `demand.started` = `stats.stories_started` = completed + failed stories.
+  One story may emit zero, one or several requests; stories are not SQL/TPS units.
+- Market `stats.attempts` = `admitted + terminal_admission_refused`.
+  `admission_rejected` counts rejected scheduling attempts including retries;
+  `admission_retries` counts retries, not distinct rejected operations.
+- Market `admitted` = successful `completed` + known terminal `conflicts`.
+  The legacy name `conflicts` includes all accepted terminal non-success results;
+  use `errors`/phase error reasons to separate offer conflicts, capacity and
+  definitively absent receipts. `recoveries` counts intermediate uncertainty
+  notifications, not failures or additional mutations.
+  Admission means volatile runtime scheduling, not a durable economic COMMIT;
+  exact successful intent IDs are audited against durable receipts separately.
+- Auction `searches` counts offered requests, `searches_admitted` counts actual
+  queue acceptance (`has_pending` immediately after submit), and `searches_ok`
+  counts successes. Per-start-cohort `admission_refused` and `terminal_rejected`
+  distinguish immediate refusal from failure after acceptance. These counters
+  are separate from market attempts/admitted, so do not sum them twice.
+
+The focused non-SQL contract scene covers missing required scenarios, short/
+role-restricted diagnostics, absent/partial peaks and boundary-crossing requests:
+
+```powershell
+& ./.godot/Godot_v4.7.2-stable_win64_console.exe --headless --path . --mode=world-server res://tests/representative_profile_contract.tscn --quit-after 120
+```

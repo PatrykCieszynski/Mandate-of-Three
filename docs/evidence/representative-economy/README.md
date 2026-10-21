@@ -71,3 +71,84 @@ Python AST/CLI invalid-peak rejection and cross-case/configuration comparison
 checks PASS. Default `run-smoke.ps1` PASS: architecture guards, 14 Godot behavior
 cases, TypeScript build and 88 Web UI contracts. `git diff --check` PASS.
 Raw artifacts remain ignored under `.godot/verification/postgres-readiness/`.
+
+## PR #110 follow-up: coverage and start cohorts (metrics v4)
+
+The arrival policy remains scenario v1; metrics v4 now classify requests by
+original start and separately by terminal callback phase. Earlier v3 phase
+numbers above are historical completion-observation cohorts and must not be
+silently compared as if they measured the new start cohorts.
+
+- Representative verification `run-5p0dbyhz`: 90 seconds, 40 admitted
+  bindings, 300 economic accounts, peaks at 30/60 seconds lasting 5 seconds.
+  All required sanity checks PASS: 395 searches, 297 visits across 182 shops,
+  64 purchases, exact audited 64 durable successes. Each peak scheduled/started
+  81 stories; 89/107 requests actually started in those respective peaks.
+  Zero refusals/conflicts; money/UID/custody audits and worker/owned-cluster
+  shutdown PASS. Maximum native pending 5.
+- Start-cohort search p95: normal 51.1 ms (289 requests), peak 82.4 ms (106).
+  Callback-completion cohorts contain 294 normal and 101 peak searches: **five
+  peak-started searches completed after the peak** and remain in their original
+  peak-start cohort. Three normal-start visits completed in peak; one normal-start
+  visit completed in the drain tail. Callback durations are unchanged.
+- Diagnostic `run-lrx1t_1b`: 2 seconds, one read-only browser, no stories/requests
+  randomly scheduled. PASS as a diagnostic: purchase NOT_APPLICABLE; search,
+  visit and dispersion DIAGNOSTIC_NOT_OBSERVED. No peak overlaps its window;
+  no rare bulk purchase is required. It certifies no capacity or full coverage.
+- MMO regression `run-tjecw4in`: 24 admitted accounts, 45-second arrivals plus
+  tail; PASS with 100 successful/admitted searches, 32 purchases, 17 pickups,
+  16 rebinds, two Exchange fills and one partial-then-cancelled order. Eleven
+  purchases applied 170 pending Yang. All economic/receipt/drain audits PASS;
+  owned cluster stopped.
+- Original stress/fault compatibility `run-il4w3lec`: unchanged four 15-second
+  cohorts with `--load-faults --load-backend-loss`, PASS. Successful operations
+  148 / 370 / 468, exact **986 observed = 986 durable success IDs**, no extras/
+  missing. In each write cohort one deferred COMMIT failure, one actual backend
+  exit and one lost successful application response recovered. Work/cluster
+  closure PASS. No scheduler or shared-audit change; **no new 30-minute stress
+  repeat** was run.
+- Non-SQL `representative_profile_contract`: PASS for missing required search/
+  visit/purchase/dispersion/peak, legitimate short/role-restricted/partial/no-peak
+  diagnostics and normal → peak, peak → normal, normal → tail request cohorts.
+  It also checks that the synthetic callback-derived durations are unchanged.
+
+Development probe `run-7zmc5t3k` also passed before completion-event classification
+was tightened to use the exact callback timestamp; a small contract check ran
+alongside that probe. It is not the final sequential performance observation.
+The 90-second run, diagnostic, MMO and stress cases ran sequentially.
+
+Final-code confirmation `run-4yyzskhy`: 60-second arrivals with 5-second peaks at
+20/40 seconds, unchanged generator clock policy. All six required scenario/peak
+checks PASS. **433 opportunities = 432 started stories + 1 account-busy skip**,
+zero runtime-not-ready skips. 282 searches were offered/admitted/successful;
+258 market requests = 210 visits + 48 purchases, all admitted/successful and zero
+terminal admission refusals. Both new counters are present even when zero.
+Exact 48 successful receipts, UID/custody/money audits and worker/cluster closure
+PASS. Each accounting identity documented in the profile was verified. This
+also observes a real skipped opportunity rather than inferring one from actions.
+
+Default smoke PASS: architecture guards, 14 Godot behavior suites, TypeScript
+build and 88 Web UI contracts. `git diff --check` PASS. Final contract scene PASS.
+
+Clean import used a fresh copy of the current source tree with no `.godot`
+cache, local assets or player stores, the installed pinned Terrain3D dependency,
+isolated APPDATA/LOCALAPPDATA and the same two-pass protocol as CI. Final copy
+`pr110-clean-import-0_tke11c`: both processes exit 0; the second import has zero
+SCRIPT ERROR / Parse Error / Failed loading resource diagnostics. The first cold
+pass has 12 such diagnostics from generated translations/theme and Terrain3D
+DoubleSlider initialization. A separate fresh archive of the published pre-follow-up
+HEAD `f9aba8c9` (`pr110-baseline-import-dbd26e2k`) reproduces the exact same 12
+messages and then a zero-error second import. They are baseline cold-import
+behaviour, not introduced by this follow-up; no production/UI/plugin fix is
+included. Original development imports/cache remained intact.
+
+Native fixtures/contract still emit the existing small ObjectDB/resource teardown
+warnings. This does not substitute for closure evidence: every one of the six
+owned PG fixture summaries reports PASS and stopped=true, and economic workers
+drain before shutdown. No 30-minute stress rerun was needed or performed.
+
+Coverage eligibility is based on configured/admitted-role expected opportunities,
+not measured TPS, latency, completed-story counts or success percentages. Missing
+required coverage fails separately from invariant evidence; tiny diagnostics
+retain explicit non-coverage statuses. The full 30-minute Representative Economy
+Soak and responsiveness assessment remain pending.
