@@ -4,6 +4,9 @@ User-approved experiment after W1, before the player-controller W2/W3 work.
 **Native movement remains the default.** This does not promote a new controller
 or complete the wider Terrain3D/gameplay parity gates.
 
+Executed contracts, matched measurements and limitations are in the
+[W4a evidence](../evidence/world-w4a-mob-movement/README.md).
+
 ## Selection and rollback
 
 Add `--dev-light-mob-movement` to the **World process** command line. Only a
