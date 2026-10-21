@@ -8,6 +8,6 @@ Plans are **not** evidence that functionality exists or a standing instruction t
 - [Season-to-Classic transfer](season-close-transfer.md) — deferred feature.
 - [Architecture hardening](architecture-hardening.md) and [PostgreSQL migration](postgresql-migration.md) — **historical execution plans** for largely completed work, not fresh tasks. Current behavior: [full-state cutover](../development/postgres-full-state.md).
 
-The [2026-10-14 file audit](documentation-file-audit.md) concerns the old 97-file state, not the present document set. It is retained for provenance, not a cleanup checklist.
+The October 14 file audit covered the old 97-file state and is retained in Git history (prior to this cleanup), not as a current plan.
 
 Do not add a new plan for every implementation slice. Prefer updating an existing accepted plan or the PR description.
