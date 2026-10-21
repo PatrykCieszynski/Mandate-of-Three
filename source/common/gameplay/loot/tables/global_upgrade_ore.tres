@@ -1,13 +1,14 @@
-[gd_resource type="Resource" script_class="LootTable" load_steps=5 format=3]
-[ext_resource type="Script" path="res://source/common/gameplay/loot/loot_table.gd" id="table"]
-[ext_resource type="Script" path="res://source/common/gameplay/loot/loot_entry.gd" id="entry"]
+[gd_resource type="Resource" script_class="LootTable" format=3 uid="uid://dujx0ncn3jnil"]
+
+[ext_resource type="Script" uid="uid://c8bm2uu764wv8" path="res://source/common/gameplay/loot/loot_entry.gd" id="entry"]
 [ext_resource type="Resource" path="res://source/common/gameplay/items/domain/upgrade_ore.tres" id="item"]
+[ext_resource type="Script" uid="uid://dee2rgap4y3m1" path="res://source/common/gameplay/loot/loot_table.gd" id="table"]
+
 [sub_resource type="Resource" id="drop"]
 script = ExtResource("entry")
 item = ExtResource("item")
 chance_bp = 50
-min_amount = 1
-max_amount = 1
+
 [resource]
 script = ExtResource("table")
 entries = Array[ExtResource("entry")]([SubResource("drop")])

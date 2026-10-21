@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://dkgemek443o1n"]
+
+[ext_resource type="Terrain3DMaterial" uid="uid://ce1n10j480eag" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_material.tres" id="1"]
+[ext_resource type="Terrain3DAssets" uid="uid://d37dp6oyad86y" path="res://source/common/gameplay/maps/terrain3d_spike/terrain_assets.tres" id="2"]
+
+[node name="SavedTerrainRepro" type="Node3D" unique_id=10626331]
+
+[node name="Terrain" type="Terrain3D" parent="." unique_id=1030360751]
+data_directory = "res://source/common/gameplay/maps/terrain3d_spike/data"
+material = ExtResource("1")
+assets = ExtResource("2")
+top_level = true
+metadata/_edit_lock_ = true
+
+[node name="Camera3D" type="Camera3D" parent="Terrain" unique_id=896515950]
+transform = Transform3D(1, 0, 0, 0, 0.8244467, 0.56593966, 0, -0.56593966, 0.8244467, 20.962591, 12.95822, 63.088318)
