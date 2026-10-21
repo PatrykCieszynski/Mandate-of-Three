@@ -17,6 +17,12 @@ including accounts/profiles. SQLite remains a reference/legacy fixture backend.
 See docs/development/postgres-full-state.md. This does not imply a distributed
 Economy Service or multi-World hosting.
 
+## Documentation policy for Codex
+
+Start at `docs/README.md` and read only the **current** domain documentation required for the task. Do not recursively read all of `docs/` or treat historical plans, granular P1–P4 evidence, spike branches or old TODOs as pending work. Verify contradictory status claims against current source and the canonical document.
+
+**Do not create a summary/report Markdown file after each commit or PR.** Routine changes belong in the PR body (scope, verification commands/results, caveats) and a small update to an existing canonical document only when its contract changed. At the **end of a meaningful milestone**, one concise consolidated summary/evidence report may capture accepted behavior, reproducible tests, limitations and source SHAs. Never create evidence directories for routine commits. Ask for a reason before introducing another documentation file. Keep future roadmap ownership with the maintainer.
+
 ## Development workflow
 
 - Work on a separate `codex/<short-topic>` branch for each coherent change.

@@ -1,7 +1,7 @@
-# History
+# Historical documentation
 
-Superseded plans, one-off spike notes and older validation reports are available in **Git history**, not maintained as a second active documentation set.
+Superseded plans, old review notes and spike decisions are available via Git history. The old [documentation audit](../plans/documentation-file-audit.md) is a dated record of the October 14 cleanup and is **not** a current list of files.
 
-Use [documentation index](../README.md), [project direction](../decisions/project-direction.md), [testing](../development/testing.md) and [CEF integration](../ui/cef-addon-integration.md) for current guidance.
+Detailed PostgreSQL P1–P3 notes retained under [Development](../development/README.md) and [Evidence](../evidence/README.md) are historical implementation context despite their original folder names. Prefer current runbooks when answering what runs now.
 
-Retain concrete current measurement results under [evidence](../evidence/README.md), and add a dated citation to the commit whenever a past result materially supports a current decision.
+Do not copy entire completed milestones into fresh active plans. Summarize at milestone boundaries only, and cite relevant commit/PR for details.

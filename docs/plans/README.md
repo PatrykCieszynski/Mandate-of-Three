@@ -1,21 +1,13 @@
-# Active plans and work packages
+# Plans — proposed work, not current guarantees
 
-**Deferred season lifecycle:** [Seasonal-to-Classic transfer](season-close-transfer.md)
-retains the source PDF's offline manifest/conservation requirements. No migrator
-or Classic deployment is implemented or authorized by that document.
+Plans are **not** evidence that functionality exists or a standing instruction to implement old TODOs. The owner maintains the roadmap independently. Confirm active scope before starting work.
 
-**Documentation cleanup:** [File-by-file audit of `main` and `shop`](documentation-file-audit.md) — separate approved deletion/consolidation pass after review. This is not an automatic deletion instruction.
+- [World W0–W7 optimization](world-server-optimization.md) — stages are conditional and require measured justification; W0/W1 and admission have already been completed, later packages are not an automatic execution queue.
+- [World capacity / configuration background](world-runtime-configuration.md), [W0 limit audit](world-w0-limit-audit.md).
+- [World technical candidates](world-technical-candidates.md) — ideas to evaluate, not decisions.
+- [Season-to-Classic transfer](season-close-transfer.md) — deferred feature.
+- [Architecture hardening](architecture-hardening.md) and [PostgreSQL migration](postgresql-migration.md) — **historical execution plans** for largely completed work, not fresh tasks. Current behavior: [full-state cutover](../development/postgres-full-state.md).
 
-**Current technical priority:** [Pre-alpha architecture hardening and Auction integration](architecture-hardening.md) — ordered, testable PRs for authentication, RPC boundaries, Marketplace, persistence and World synchronization.
+The [2026-10-14 file audit](documentation-file-audit.md) concerns the old 97-file state, not the present document set. It is retained for provenance, not a cleanup checklist.
 
-**Deferred performance:** [World Server optimization plan W0–W7](world-server-optimization.md) — post-Economy/post-SoC packages for player movement, terrain/combat parity, AOI and real-client capacity. Proposal only; no runtime changes authorized.
-
-**Deferred technical candidates:** [World extension/infrastructure backlog](world-technical-candidates.md) — plugin contracts, optional Redis for multi-World, AOI comparison after physics, and packet codec generation later. The physics plan remains W0–W7.
-
-**Planned persistence implementation:** [PostgreSQL migration and concurrent Economy P1–P4](postgresql-migration.md) — adapter/schema parity, safe row-level concurrent transactions, nonblocking World integration and real PostgreSQL load/recovery/cutover tests. Schedule after local MapInstance/CH and current SoC hardening, **before** two World Processes share a realm economy; not a prerequisite for local CH and not implemented yet.
-
-**Gameplay / visuals:** [Project direction](../decisions/project-direction.md), [first region](../world/first-region-graybox.md), [Visual V4 Terrain3D](../world/visuals/visual-upgrade-v4-terrain3d.md), [Warrior feel](../gameplay/combat/warrior-action-polish.md).
-
-**Completed spike plans** were removed from the active documentation tree; use Git history only if implementation provenance is needed. Do not restore their old TODO lists.
-
-Treat accepted Economy/World ADRs as target behavior, not as a reason to extract a distributed service before a measurable need. New changes require a concrete contract and relevant regression checks.
+Do not add a new plan for every implementation slice. Prefer updating an existing accepted plan or the PR description.
