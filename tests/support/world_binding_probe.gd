@@ -44,6 +44,16 @@ static func run() -> Array:
 				inventory.poll();wallet.poll(0)
 			var poll_us: float=(Time.get_ticks_usec()-started)/200.0
 			started=Time.get_ticks_usec()
+			for iteration: int in 200: inventory.poll()
+			var inventory_poll_us: float=(Time.get_ticks_usec()-started)/200.0
+			started=Time.get_ticks_usec()
+			for iteration: int in 200: wallet.poll(0)
+			var wallet_poll_us: float=(Time.get_ticks_usec()-started)/200.0
+			started=Time.get_ticks_usec()
+			for iteration: int in 10:
+				for id: int in admitted: inventory.context_for_peer(id+2)
+			var lookup_us: float=(Time.get_ticks_usec()-started)/float(maxi(admitted*10,1))
+			started=Time.get_ticks_usec()
 			for iteration: int in 10:
 				for id: int in admitted: inventory.snapshot_for_peer(id+2)
 			var copy_us: float=(Time.get_ticks_usec()-started)/float(maxi(admitted*10,1))
@@ -52,6 +62,6 @@ static func run() -> Array:
 				inventory.detach(id+2);wallet.detach(id+2)
 			wallet.poll(0)
 			assert(inventory._bindings.is_empty() and wallet._accounts.is_empty())
-			results.append({"requested":requested,"admitted":admitted,"items_per_inventory":item_count,"retained_static_bytes":retained,"idle_inventory_wallet_poll_mean_us":poll_us,"snapshot_copy_mean_us":copy_us,"one_snapshot_serialized_bytes":var_to_bytes(payload).size(),"clean_detach":true})
+			results.append({"requested":requested,"admitted":admitted,"items_per_inventory":item_count,"retained_static_bytes":retained,"idle_inventory_wallet_poll_mean_us":poll_us,"inventory_poll_mean_us":inventory_poll_us,"wallet_poll_mean_us":wallet_poll_us,"inventory_context_lookup_mean_us":lookup_us,"snapshot_copy_mean_us":copy_us,"one_snapshot_serialized_bytes":var_to_bytes(payload).size(),"clean_detach":true})
 			world.free()
 	return results

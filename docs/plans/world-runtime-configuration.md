@@ -1,6 +1,6 @@
 # World runtime configuration and capacity budgets — W0/W6 addendum
 
-**Status:** W0 merged. The session/control/cache capacity slice is implemented on its review branch; see [actual supported settings and ACK admission](../development/runtime-capacity.md). Worker/operation-budget configuration remains proposed. PostgreSQL local cutover is complete. The [W0 audit](world-w0-limit-audit.md) records the pre-change limits. This document is **not** authorization to raise defaults, refactor World or enable a second live World process.
+**Status:** W0 and session/control/cache capacity merged (PR #115); see [actual supported settings and ACK admission](../development/runtime-capacity.md). Worker/operation-budget configuration remains proposed. PostgreSQL local cutover is complete. The [W0 audit](world-w0-limit-audit.md) records the pre-change limits. This document is **not** authorization to raise defaults, refactor World or enable a second live World process.
 
 **Parent roadmap:** [World Server optimization — W0–W7](world-server-optimization.md). This is a focused supplement, **not a replacement roadmap**. Follow the parent plan's review, measurement, parity and rollback rules.
 

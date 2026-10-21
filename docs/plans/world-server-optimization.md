@@ -1,10 +1,10 @@
 # World Server optimization — staged execution plan
 
-**Status:** W0 audit/baseline authorized, 2026-10-21, after PostgreSQL full-state cutover and PR #88 cleanup. Later implementation packages remain proposed and require review. This document is **not authorization to implement** a physics rewrite or merge experimental PR #18 into `main`.
+**Status:** W0 audit/baseline and session/control/cache capacity integrated (PRs #114–115), 2026-10-21. W1 test-only profiling is the current review package; see [profiling contract](../development/world-profiling.md). Later implementation packages remain proposed and require review. This document is **not authorization to implement** a physics rewrite or merge experimental PR #18 into `main`.
 
 Current W0 deliverables: [limit ownership audit](world-w0-limit-audit.md) and
 [measurement contract/runner](../development/world-baseline.md). Configuration
-implementation is a separate next slice; no limits are raised in W0.
+implementation for workers/operation budgets remains separate; no limits are raised in W1.
 
 **Target:** Keep Godot 4.7.2 as both client and authoritative World Server. Reduce unnecessary physics and per-viewer replication work while keeping the Metin-like gameplay contract, existing Economy ownership, RPC/session security and instance architecture intact.
 
