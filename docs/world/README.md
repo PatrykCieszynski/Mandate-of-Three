@@ -2,6 +2,7 @@
 
 - [First Region map](first-region-graybox.md)
 - [Terrain3D authoring guide and proposed geographic map boundaries](terrain3d-authoring-guide.md)
+- [Local walking playtest from the editor](map-playtest.md)
 - [Visual milestones](visuals/README.md), including Terrain3D compatibility and map authoring
 - [World Process / dynamic CH architectural decisions](../architecture/world-instance-architecture.md)
 - [Mobs and Metins](../gameplay/README.md) live under gameplay rather than visual map implementation.
