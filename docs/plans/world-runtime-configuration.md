@@ -1,6 +1,6 @@
 # World runtime configuration and capacity budgets — W0/W6 addendum
 
-**Status:** Proposal / docs-only, 2026-10-20. **Execution gate:** finish PostgreSQL Economy P4/cutover acceptance and reconcile against current `main` at W0. This document is **not** authorization to raise runtime limits, refactor World or enable a second live World process.
+**Status:** W0 audit authorized 2026-10-21; configuration implementation remains proposed. PostgreSQL local cutover is complete. See the [current limit audit](world-w0-limit-audit.md) for actual ownership and admission gaps. This document is **not** authorization to raise runtime limits, refactor World or enable a second live World process.
 
 **Parent roadmap:** [World Server optimization — W0–W7](world-server-optimization.md). This is a focused supplement, **not a replacement roadmap**. Follow the parent plan's review, measurement, parity and rollback rules.
 
