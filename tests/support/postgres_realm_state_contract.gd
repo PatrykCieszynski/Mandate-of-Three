@@ -63,6 +63,7 @@ static func run(db: Object) -> void:
 	assert(mail.unread_count(id)==0)
 	mail.soft_delete(id,mail_id)
 	assert(mail.inbox_for(id).is_empty())
+	preload("res://tests/support/postgres_profile_failure_contract.gd").run(db,store.get_player(id))
 	# A failed credential checkpoint must not authenticate an uncommitted RAM hash.
 	var auth:=AuthenticationManager.new()
 	auth.account_collection=accounts.load_accounts()

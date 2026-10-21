@@ -35,11 +35,12 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	if guild.treasury < cost:
 		return {"error": 1, "ok": false, "message": "Not enough Guild Funds (need %d)." % cost}
 
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,[])
+	if not mutation.started: return mutation.failure()
 	guild.treasury -= cost
 	guild.owned_logos.append(logo_id)
-	store.save_guild(guild)
-	store.commit()
+	if not mutation.save_guild(guild): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	store.add_guild_log(guild_id, "logo", player.display_name, "", {"cost": cost})
 

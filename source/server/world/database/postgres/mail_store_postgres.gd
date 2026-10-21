@@ -13,6 +13,7 @@ extends RefCounted
 const BROADCAST_TTL_MS: int = 10 * 24 * 60 * 60 * 1000 # 10 days
 
 var db: Object
+var last_write_error: String="storage"
 
 
 func _init(_db: Object) -> void:
@@ -66,18 +67,16 @@ func unread_count(player_id: int) -> int:
 
 
 ## Marks a mail read (first read only — preserves the original read time).
-func mark_read(player_id: int, mail_id: int) -> void:
-	_ensure_state(player_id, mail_id)
-	_query(
+func mark_read(player_id: int, mail_id: int) -> bool:
+	return _write_state(player_id,mail_id,
 		"UPDATE mail_state SET read_at_ms = :p0 WHERE player_id = :p1 AND mail_id = :p2 AND read_at_ms IS NULL;",
 		[_now_ms(), player_id, mail_id]
 	)
 
 
 ## Soft-deletes a mail for one player (a broadcast stays for everyone else).
-func soft_delete(player_id: int, mail_id: int) -> void:
-	_ensure_state(player_id, mail_id)
-	_query(
+func soft_delete(player_id: int, mail_id: int) -> bool:
+	return _write_state(player_id,mail_id,
 		"UPDATE mail_state SET deleted_at_ms = :p0 WHERE player_id = :p1 AND mail_id = :p2;",
 		[_now_ms(), player_id, mail_id]
 	)
@@ -111,20 +110,36 @@ func get_claimable(player_id: int, mail_id: int) -> Dictionary:
 
 ## Marks a mail claimed for a player (idempotent — only the first claim sticks,
 ## which also guards a broadcast's reward to one claim per player).
-func mark_claimed(player_id: int, mail_id: int) -> void:
-	_ensure_state(player_id, mail_id)
-	_query(
+func mark_claimed(player_id: int, mail_id: int) -> bool:
+	return _write_state(player_id,mail_id,
 		"UPDATE mail_state SET claimed_at_ms = :p0 WHERE player_id = :p1 AND mail_id = :p2 AND claimed_at_ms IS NULL;",
 		[_now_ms(), player_id, mail_id]
 	)
 
 
 ## Ensures a (player_id, mail_id) state row exists so per-player flags can be set.
-func _ensure_state(player_id: int, mail_id: int) -> void:
-	_query(
+func _ensure_state(player_id: int, mail_id: int) -> bool:
+	return _query(
 		"INSERT INTO mail_state(player_id, mail_id) VALUES(:p0, :p1) ON CONFLICT DO NOTHING;",
 		[player_id, mail_id]
 	)
+
+func lock_claim(mail_id: int) -> bool:
+	return db.in_transaction() and _query("SELECT mail_id FROM mail WHERE mail_id=:p0 FOR UPDATE;",[mail_id]) and _rows.size()==1
+
+func _write_state(player_id: int, mail_id: int, sql: String, values: Array) -> bool:
+	last_write_error="storage"
+	var own: bool=not db.in_transaction()
+	if own and not db.begin(): return false
+	var ok: bool=_ensure_state(player_id,mail_id) and _query(sql,values)
+	if not own: return ok
+	if not ok:
+		if not db.rollback(): db.close()
+		return false
+	if db.commit(): return true
+	last_write_error="outcome_unknown"
+	db.close()
+	return false
 
 
 # This store's native PostgreSQL queries only; no SQL dialect translation.

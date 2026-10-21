@@ -27,8 +27,11 @@ func data_request_handler(
 	if from_player.friends.has(target_id):
 		return {"error": 1, "ok": false, "msg": "Already friend."}
 
+	var mutation:=RealmProfileMutation.new(world_server.database.store,[from_player])
+	if not mutation.started: return mutation.failure()
 	from_player.friends.append(target_id)
-	world_server.database.save_player(from_player)
+	if not mutation.save_player(from_player): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	var target_peer_id: int = int(world_server.player_id_to_peer_id.get(target_id, 0))
 	if target_peer_id > 0:

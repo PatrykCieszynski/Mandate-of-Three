@@ -37,14 +37,15 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	if target == null:
 		return {"error": 1, "ok": false, "message": "Member not found."}
 
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,[target])
+	if not mutation.started: return mutation.failure()
 	if target.active_guild_id == guild_id:
 		target.active_guild_id = 0
 	target.joined_guild_ids.erase(guild_id)
 	guild.remove_member(target_id)
-	store.save_guild(guild)
-	store.save_player(target)
-	store.commit()
+	if not mutation.save_guild(guild): return mutation.abort()
+	if not mutation.save_player(target): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	store.add_guild_log(guild_id, "kicked", actor.display_name, target.display_name)
 

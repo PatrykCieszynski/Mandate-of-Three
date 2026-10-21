@@ -20,7 +20,8 @@ func data_request_handler(
 	if not BlockList.is_blocked(from_player.player_id, target_id):
 		return {"error": 0, "ok": true, "msg": "Not blocked.", "id": target_id}
 
-	BlockList.remove(from_player.player_id, target_id)
+	var mutation:=RealmProfileMutation.new(world_server.database.store,[from_player])
+	if not mutation.started: return mutation.failure()
 
 	var ids: PackedInt64Array = from_player.blocked_ids.duplicate()
 	var idx: int = ids.find(target_id)
@@ -28,6 +29,8 @@ func data_request_handler(
 		ids.remove_at(idx)
 		from_player.blocked_ids = ids
 
-	world_server.database.save_player(from_player)
+	if not mutation.save_player(from_player): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
+	BlockList.remove(from_player.player_id, target_id)
 
 	return {"error": 0, "ok": true, "msg": "Unblocked.", "id": target_id}

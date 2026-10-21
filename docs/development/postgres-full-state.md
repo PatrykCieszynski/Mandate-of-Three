@@ -24,6 +24,25 @@ Yang checkpoint and immediate economic transaction policies are preserved.
 The legacy admin resource-renaming action is rejected for PG accounts; changing
 an authenticated handle needs its own session/profile migration flow.
 
+Guild/social profile mutations check BEGIN, each write and COMMIT. Failed writes
+restore the affected live resources in place; block-cache changes, tag cooldowns,
+trophy announcements and client pushes follow confirmed commit. Guild writes are
+atomic even when called without an outer transaction. A failed SQL statement
+taints the transaction: a later COMMIT cannot report success merely because PG
+accepted it as a rollback of an aborted transaction.
+
+Mail claims lock the mail row and commit the staged profile grant and claim flag
+together. Level signals/grants do not touch the live character before commit.
+Read/delete acknowledgements also check persistence results.
+
+COMMIT failure returns `outcome_unknown`, marks the result non-retryable and
+closes/blocks the profile writer. There is no automatic reconnect or replay.
+Restored pre-command RAM is not proof of a database rollback: a replacement
+owner must load committed state from PG before resuming this profile's writes.
+This patch does not add durable guild-command receipts or in-process recovery of
+an uncertain profile writer. Do not force a stale full-profile checkpoint during
+operator recovery.
+
 This port preserves the existing profile payload. It does **not** introduce
 persistent 3D position/instance restoration or change the current map spawn flow.
 Assets, configuration and local client preferences remain files.

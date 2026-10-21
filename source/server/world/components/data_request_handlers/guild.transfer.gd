@@ -43,15 +43,16 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	if target.led_guild_id > 0:
 		return {"error": 1, "ok": false, "message": "%s already leads another guild." % target.display_name}
 
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,[actor,target])
+	if not mutation.started: return mutation.failure()
 	guild.leader_id = target_id
 	guild.members[target_id] = 0
 	actor.led_guild_id = 0
 	target.led_guild_id = guild_id
-	store.save_guild(guild)
-	store.save_player(actor)
-	store.save_player(target)
-	store.commit()
+	if not mutation.save_guild(guild): return mutation.abort()
+	if not mutation.save_player(actor): return mutation.abort()
+	if not mutation.save_player(target): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	store.add_guild_log(guild_id, "transfer", actor.display_name, target.display_name)
 

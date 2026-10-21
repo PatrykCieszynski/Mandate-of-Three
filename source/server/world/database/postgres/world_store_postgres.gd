@@ -6,22 +6,37 @@ const STARTING_YANG: int = 1500
 
 var economic_initialization: bool=false # Economy is owned by the existing PG domain stores.
 var db: Object
+var last_write_error: String="storage"
+var _transaction_failed:=false
 
 
 func _init(_db: Object) -> void:
 	db = _db
 
 
-func begin() -> void:
-	db.begin()
+func begin() -> bool:
+	if last_write_error=="outcome_unknown" or db.in_transaction(): return false
+	_transaction_failed=false
+	last_write_error="storage"
+	return db.begin()
 
 
-func commit() -> void:
-	if not db.commit(): db.close()
+func commit() -> bool:
+	if _transaction_failed:
+		rollback()
+		return false
+	if db.commit(): return true
+	# A failed COMMIT is not proof of rollback. Do not reopen/replay this session.
+	last_write_error="outcome_unknown"
+	db.close()
+	return false
 
 
-func rollback() -> void:
-	if not db.rollback(): db.close()
+func rollback() -> bool:
+	var ok: bool=db.rollback()
+	_transaction_failed=false
+	if not ok: db.close()
+	return ok
 
 
 #region Players
@@ -63,14 +78,14 @@ func get_player(player_id: int) -> PlayerResource:
 
 func save_progression(players: Array[PlayerResource]) -> bool:
 	if players.is_empty(): return true
-	if not db.begin(): return false
+	if not begin(): return false
 	for player: PlayerResource in players:
 		if not _query("UPDATE players SET level=:p0,experience=:p1,available_attributes_points=:p2 WHERE player_id=:p3 RETURNING player_id;",
 			[player.level, player.experience, player.available_attributes_points, player.player_id]) \
 			or _rows.size() != 1:
-			db.rollback()
+			rollback()
 			return false
-	if not db.commit():
+	if not commit():
 		db.close()
 		return false
 	return true
@@ -107,7 +122,7 @@ func save_player(player: PlayerResource) -> bool:
 
 	var joined_guild_ids_json: String = JSON.stringify(player.joined_guild_ids)
 
-	return _query(
+	var saved: bool=_query(
 		"INSERT INTO players("
 		+ "player_id, account_name, display_name, skin_id, level, experience, available_attributes_points, "
 		+ "profile_status, profile_animation, "
@@ -148,6 +163,8 @@ func save_player(player: PlayerResource) -> bool:
 			player.led_guild_id
 		]
 	) and _rows.size()==1
+	if not saved and db.in_transaction(): _transaction_failed=true
+	return saved
 
 
 func create_player_character(account_name: String, character_data: Dictionary) -> int:
@@ -172,13 +189,13 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 	player.titles_unlocked = PackedStringArray(["Alpha tester"])
 	player.display_title = "Alpha tester"
 	# Leave defaults to PlayerResource where possible.
-	if not db.begin(): return -1
+	if not begin(): return -1
 	if not save_player(player):
-		db.rollback();return -1
+		rollback();return -1
 	if not _query("SELECT master_account_id FROM accounts WHERE account_name=:p0 AND master_account_id IS NOT NULL;",[account_name]) or _rows.is_empty():
-		db.rollback()
+		rollback()
 		return -1
-	if not db.commit():
+	if not commit():
 		db.close()
 		return -1
 	return next_id
@@ -346,7 +363,17 @@ func get_guild(guild_id: int) -> Guild:
 	return guild
 
 
-func save_guild(guild: Guild) -> void:
+func save_guild(guild: Guild) -> bool:
+	var own: bool=not db.in_transaction()
+	if own and not begin(): return false
+	var ok: bool=_save_guild(guild)
+	if own:
+		if not ok:
+			rollback();return false
+		return commit()
+	return ok
+
+func _save_guild(guild: Guild) -> bool:
 	var data_json: String = JSON.stringify({
 		"motd": guild.motd,
 		"description": guild.description,
@@ -369,17 +396,18 @@ func save_guild(guild: Guild) -> void:
 		"banner_color": guild.banner_color,
 	})
 
-	_query(
+	if not _query(
 		"INSERT INTO guilds(guild_id, guild_name, leader_id, data_json) VALUES(:p0, :p1, :p2, :p3) ON CONFLICT(guild_id) DO UPDATE SET guild_name=EXCLUDED.guild_name,leader_id=EXCLUDED.leader_id,data_json=EXCLUDED.data_json;",
 		[guild.guild_id, guild.guild_name, guild.leader_id, data_json]
-	)
+	): return false
 
-	_query("DELETE FROM guild_members WHERE guild_id=:p0;", [guild.guild_id])
+	if not _query("DELETE FROM guild_members WHERE guild_id=:p0;", [guild.guild_id]): return false
 	for pid in guild.members.keys():
-		_query(
+		if not _query(
 			"INSERT INTO guild_members(guild_id, player_id, rank) VALUES(:p0, :p1, :p2);",
 			[guild.guild_id, int(pid), int(guild.members[pid])]
-		)
+		): return false
+	return true
 
 
 ## Returns new guild_id or -1 if name exists
@@ -526,9 +554,13 @@ func get_guild_log(guild_id: int, limit: int = 100) -> Array:
 # This store's native PostgreSQL queries only; no SQL dialect translation.
 var _rows: Array=[]
 func _query(sql: String, values: Array=[]) -> bool:
+	if _transaction_failed:
+		_rows=[];return false
 	var bindings: Dictionary={}
 	for index: int in values.size(): bindings["p"+str(index)]=values[index]
 	var returns_rows: bool=sql.begins_with("SELECT ") or sql.contains(" RETURNING ")
 	var result: Dictionary=db.query(sql,bindings,100000) if returns_rows else db.execute(sql,bindings)
 	_rows=result.get("rows",[]) if result.ok else []
-	return result.ok and not result.get("truncated",false)
+	var ok: bool=result.ok and not result.get("truncated",false)
+	if not ok and db.in_transaction(): _transaction_failed=true
+	return ok

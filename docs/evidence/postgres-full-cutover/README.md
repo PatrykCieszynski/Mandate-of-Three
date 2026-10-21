@@ -92,6 +92,30 @@ checked SQL script errors, process exits, native drain and owned-cluster stop.
 
 ## Boundaries
 
+### PR #112 P1 follow-up: acknowledged profile transactions
+
+`run-07kw33yi`: full-state suite PASS, exit 0, owned cluster stopped. Production
+guild-create, block and mail handlers run against PostgreSQL; no menu/scene-path
+assertions. Added `POSTGRES_PROFILE_FAILURE_OK` verifies:
+
+- Refused BEGIN performs no RAM change or COMMIT.
+- A profile-update trigger fails after guild rows and player gold changed:
+  every SQL write rolls back, original live inventory/membership is restored.
+- An ignored failed SQL write still prevents commit success.
+- Failed block persistence changes neither live blocked IDs nor BlockList cache.
+- Failed mail claim-state write rolls back the already-written staged grant;
+  read failure returns failure; successful claim survives and cannot be claimed twice.
+- A real deferred constraint trigger fails the actual COMMIT: no guild persists,
+  RAM is restored, and the result is conservatively unknown/non-retryable.
+- A proxy loses delivery **after a real successful COMMIT**: the handler returns
+  unknown, performs no second commit, and a fresh reader observes exactly one
+  guild and one gold deduction. RAM restoration is not mistaken for DB rollback.
+
+Default smoke also passes: 14 Godot cases / 88 Web UI contracts. No sustained
+Economy soak was repeated for this legacy profile transaction correction.
+Clean source-copy import `full-state-clean-import-fo03znrs`: cold exit 0 with
+the same 12 baseline load messages, second import exit 0 / zero load errors.
+
 This closes the clean **development persistence cutover**, not production or
 multi-World acceptance. SQLite reference/legacy fixtures remain checked in.
 Credentials/profile APIs retain synchronous, SQL-budgeted calls outside combat;

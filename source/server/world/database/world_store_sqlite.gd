@@ -12,16 +12,16 @@ func _init(_db: SQLite) -> void:
 	db = _db
 
 
-func begin() -> void:
-	db.query("BEGIN;")
+func begin() -> bool:
+	return db.query("BEGIN;")
 
 
-func commit() -> void:
-	db.query("COMMIT;")
+func commit() -> bool:
+	return db.query("COMMIT;")
 
 
-func rollback() -> void:
-	db.query("ROLLBACK;")
+func rollback() -> bool:
+	return db.query("ROLLBACK;")
 
 
 #region Players
@@ -372,7 +372,7 @@ func get_guild(guild_id: int) -> Guild:
 	return guild
 
 
-func save_guild(guild: Guild) -> void:
+func save_guild(guild: Guild) -> bool:
 	var data_json: String = JSON.stringify({
 		"motd": guild.motd,
 		"description": guild.description,
@@ -395,17 +395,18 @@ func save_guild(guild: Guild) -> void:
 		"banner_color": guild.banner_color,
 	})
 
-	db.query_with_bindings(
+	if not db.query_with_bindings(
 		"INSERT OR REPLACE INTO guilds(guild_id, guild_name, leader_id, data_json) VALUES(?, ?, ?, ?);",
 		[guild.guild_id, guild.guild_name, guild.leader_id, data_json]
-	)
+	): return false
 
-	db.query_with_bindings("DELETE FROM guild_members WHERE guild_id=?;", [guild.guild_id])
+	if not db.query_with_bindings("DELETE FROM guild_members WHERE guild_id=?;", [guild.guild_id]): return false
 	for pid in guild.members.keys():
-		db.query_with_bindings(
+		if not db.query_with_bindings(
 			"INSERT INTO guild_members(guild_id, player_id, rank) VALUES(?, ?, ?);",
 			[guild.guild_id, int(pid), int(guild.members[pid])]
-		)
+		): return false
+	return true
 
 
 ## Returns new guild_id or -1 if name exists

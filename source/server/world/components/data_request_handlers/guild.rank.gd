@@ -41,7 +41,10 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 			return {"error": 1, "ok": false, "message": "You can't promote to your own rank or higher."}
 
 	guild.members[target_id] = rank_id
-	store.save_guild(guild)
+	var mutation:=RealmProfileMutation.new(store)
+	if not mutation.started: return mutation.failure()
+	if not mutation.save_guild(guild): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	store.add_guild_log(
 		guild_id, "rank", actor.display_name,
