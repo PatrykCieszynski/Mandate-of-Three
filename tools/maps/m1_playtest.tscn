@@ -1,10 +1,11 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://cmlbgt0l1bgfi"]
 
-[ext_resource type="PackedScene" path="res://tools/maps/m1.tscn" id="1_map"]
+[ext_resource type="PackedScene" uid="uid://dkgemek443o1n" path="res://tools/maps/m1.tscn" id="1_map"]
 [ext_resource type="PackedScene" path="res://tools/map_playtest/map_playtest.tscn" id="2_preview"]
 
-[node name="M1Playtest" type="Node3D"]
+[node name="M1Playtest" type="Node3D" unique_id=2086697900]
 
-[node name="Map" parent="." instance=ExtResource("1_map")]
+[node name="Map" parent="." unique_id=1438961270 instance=ExtResource("1_map")]
 
-[node name="MapPlaytest" parent="." instance=ExtResource("2_preview")]
+[node name="MapPlaytest" parent="." unique_id=116190541 instance=ExtResource("2_preview")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 4, 30)
