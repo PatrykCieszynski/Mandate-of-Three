@@ -8,7 +8,7 @@ Architecture references:
 - `docs/architecture/world-instance-architecture.md` — World Processes, MapInstances, dynamic channels and dungeon hosting.
 - `docs/architecture/economy/README.md` — accepted Economy V2 contracts C1–C5.
 - `docs/architecture/persistence-policy.md` — current runtime persistence behavior.
-- `docs/plans/architecture-hardening.md` — staged infrastructure refactoring priorities.
+- `docs/history/postgresql-migration.md` — completed PostgreSQL milestone provenance.
 - `docs/development/testing.md` — verification and regression-testing policy.
 
 Distinguish **accepted future architecture** from **currently implemented behavior**.

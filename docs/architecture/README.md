@@ -14,4 +14,4 @@ These documents intentionally distinguish **one logical authority** from **one p
 - [Items and identity](item-instances.md) and [Yang wallet](yang-wallet.md).
 - [Current test contracts](../development/testing.md).
 
-**Authority rule:** where target contracts differ from the running prototype, the current persistence policy describes reality; accepted Economy/World ADRs describe future desired behavior. The [implementation plan](../plans/architecture-hardening.md) bridges them in testable packages.
+**Authority rule:** where target contracts differ from the running prototype, the current persistence policy describes reality; accepted Economy/World ADRs describe future desired behavior. Historical implementation plans are retained in Git history; current code and accepted contracts determine behavior.

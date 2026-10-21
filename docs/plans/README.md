@@ -6,7 +6,7 @@ Plans are **not** evidence that functionality exists or a standing instruction t
 - [World capacity / configuration background](world-runtime-configuration.md), [W0 limit audit](world-w0-limit-audit.md).
 - [World technical candidates](world-technical-candidates.md) — ideas to evaluate, not decisions.
 - [Season-to-Classic transfer](season-close-transfer.md) — deferred feature.
-- [Architecture hardening](architecture-hardening.md) and [PostgreSQL migration](postgresql-migration.md) — **historical execution plans** for largely completed work, not fresh tasks. Current behavior: [full-state cutover](../development/postgres-full-state.md).
+- Historical architecture hardening and PostgreSQL cutover plans are retained in Git history; read [PostgreSQL milestone history](../history/postgresql-migration.md) and [current full-state runbook](../development/postgres-full-state.md), not an obsolete execution checklist.
 
 The October 14 file audit covered the old 97-file state and is retained in Git history (prior to this cleanup), not as a current plan.
 
