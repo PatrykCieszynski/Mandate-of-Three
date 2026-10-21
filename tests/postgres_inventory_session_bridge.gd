@@ -145,7 +145,6 @@ func run() -> void:
 	link.name="ControlLink"
 	link.database=database
 	link.world_server=world
-	link.token_received.connect(world.accept_master_handoff)
 	add_child(link)
 	assert(link.create(BaseMultiplayerEndpoint.Role.CLIENT,"127.0.0.1",18099)==OK)
 	await wait_for(func() -> bool: return master.connected_worlds.size()==1)

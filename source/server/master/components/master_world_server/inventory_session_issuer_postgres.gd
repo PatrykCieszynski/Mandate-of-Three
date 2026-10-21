@@ -10,17 +10,19 @@ var _accounts: Dictionary={}
 var _jobs: Dictionary={}
 var _generation: int=0
 var _draining:=false
+var _capacity: int=MAX_ACCOUNTS
 
-func _init(master: WorldManagerServer, executor: RefCounted) -> void:
+func _init(master: WorldManagerServer, executor: RefCounted, capacity: int = MAX_ACCOUNTS) -> void:
 	_master=master
 	_executor=executor
+	_capacity=capacity
 
 func request_grant(world_id: int, username: String, token: String) -> Dictionary:
 	if _draining: return {"queued":false,"done":true,"result":{"ok":false,"error":"unavailable"}}
 	var identity: Dictionary=_master.verified_inventory_ticket(world_id,username,token)
 	if identity.is_empty(): return {"queued":false,"done":true,"result":{"ok":false,"error":"stale_session"}}
 	if not _executor.is_ready(): return {"queued":false,"done":true,"result":{"ok":false,"error":"unavailable"}}
-	if not _accounts.has(username) and _accounts.size()>=MAX_ACCOUNTS: return {"queued":false,"done":true,"result":{"ok":false,"error":"busy"}}
+	if not _accounts.has(username) and _accounts.size()>=_capacity: return {"queued":false,"done":true,"result":{"ok":false,"error":"busy"}}
 	var entry: Dictionary=_accounts.get(username,{})
 	if not entry.is_empty() and entry.mode=="grant" and entry.token==token and entry.world_id==world_id and entry.identity==identity and entry.stage!="paused": return entry.request
 	if not entry.is_empty(): _supersede(entry)

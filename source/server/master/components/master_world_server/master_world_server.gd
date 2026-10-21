@@ -13,6 +13,8 @@ var economy_bootstrap: RefCounted
 var inventory_session_issuer: RefCounted
 var maintenance: RefCounted
 var _startup_pending:=false
+var runtime_settings: RefCounted
+var _handoff_waiters: Dictionary={}
 
 func admissions_open() -> bool:
 	return not _startup_pending and maintenance==null and (authentication_manager==null or authentication_manager.storage_ready) and (economy_bootstrap==null or economy_bootstrap.ready())
@@ -68,6 +70,11 @@ const MAX_ENTRY_ATTEMPTS: int = 1024
 
 func _ready() -> void:
 	_startup_pending=true
+	var budgets: Dictionary=preload("res://source/server/runtime/runtime_capacity_settings.gd").load_config(CmdlineUtils.get_parsed_args().get("config","res://data/config/master_config.cfg"),"master")
+	if not budgets.ok:
+		push_error("Master startup refused: "+str(budgets.error));get_tree().quit(1);return
+	runtime_settings=budgets.settings
+	ServerLog.info("Master startup budgets: grants=%d handoff_waits=%d ack_timeout_ms=%d" % [runtime_settings.value("master_grants"),runtime_settings.value("handoff_tickets"),runtime_settings.value("handoff_ack_timeout_ms")])
 	var configuration: Dictionary = ConfigFileUtils.load_section(
 		"world-manager-server",
 		CmdlineUtils.get_parsed_args().get("config", "res://data/config/master_config.cfg")
@@ -115,6 +122,15 @@ func fetch_server_info(info: Dictionary) -> void:
 	if not admissions_open(): return
 	var game_server_id: int = multiplayer_api.get_remote_sender_id()
 	if connected_worlds.get(game_server_id,{}).get("draining",false): return
+	var metadata: Variant=info.get("info",{})
+	if not metadata is Dictionary: return
+	if runtime_settings!=null:
+		var declared: Variant=metadata.get("max_players",64)
+		if not declared is int or declared<1 or declared>runtime_settings.value("master_grants"):
+			push_error("World registration refused: session capacity exceeds Master grant budget");return
+		var lifetime: Variant=metadata.get("handoff_ttl_ms",30000)
+		if not lifetime is int or lifetime<=runtime_settings.value("handoff_ack_timeout_ms"):
+			push_error("World registration refused: ticket expires before Master ACK deadline");return
 	var expected: String="postgresql" if economy_bootstrap!=null else "sqlite"
 	if str(info.get("economy_backend","sqlite"))!=expected: return
 	if economy_bootstrap!=null and not connected_worlds.is_empty() and not connected_worlds.has(game_server_id): return # One profile/character-ID owner in P3.
@@ -321,6 +337,12 @@ func tell_world_to_revoke_role(world_id: int, player_id: int, role: String) -> b
 func fetch_token(_auth_token: String, _username: String, _character_id: int, _account_id: int, _inventory_context: Dictionary = {}) -> void:
 	pass
 
+@rpc("any_peer","call_remote","reliable")
+func handoff_accepted(token: String, accepted: bool) -> void:
+	var waiting: Dictionary=_handoff_waiters.get(token,{})
+	if waiting.is_empty() or waiting.done or waiting.world!=multiplayer_api.get_remote_sender_id() or Time.get_ticks_msec()>=int(waiting.deadline): return
+	waiting.done=true;waiting.accepted=accepted
+
 
 ## Login and character creation share one attempt slot. A random attempt identity
 ## is echoed by World; request IDs alone can be reused after a Gateway restart.
@@ -369,17 +391,38 @@ func verified_inventory_ticket(world_id: int, username: String, token: String) -
 
 func _prepare_world_ticket(world_id: int, username: String, token: String, character_id: int, account_id: int) -> Dictionary:
 	if not world_ready(world_id): return {"ok":false,"error":ERR_UNAVAILABLE}
+	# Replacing this account retires its old wait without consuming a second slot.
+	for previous: String in _handoff_waiters.keys():
+		if _handoff_waiters[previous].account==username:
+			_handoff_waiters[previous].done=true
+			_handoff_waiters.erase(previous)
+	if runtime_settings!=null and _handoff_waiters.size()>=runtime_settings.value("handoff_tickets"): return {"ok":false,"error":ERR_BUSY}
 	register_world_session(world_id,username,token,character_id,account_id)
-	if inventory_session_issuer==null: return {"ok":true,"context":{}}
-	var request: Dictionary=inventory_session_issuer.request_grant(world_id,username,token)
+	var request: Dictionary={"queued":false,"done":true,"result":{"ok":true,"context":{}}} if inventory_session_issuer==null else inventory_session_issuer.request_grant(world_id,username,token)
 	var deadline: int=Time.get_ticks_msec()+ENTRY_ATTEMPT_TTL_MS
 	while request.queued and not request.done and Time.get_ticks_msec()<deadline:
 		await get_tree().process_frame
-	if not world_ready(world_id): return {"ok":false,"error":ERR_UNAVAILABLE}
+	if not world_ready(world_id):
+		if _world_sessions.get(username,{}).get("token","")==token: revoke_world_session(username)
+		return {"ok":false,"error":ERR_UNAVAILABLE}
 	var current:=not verified_inventory_ticket(world_id,username,token).is_empty()
 	if not request.done or not current or not request.result.get("ok",false):
 		if current: revoke_world_session(username)
-		return {"ok":false,"error":ERR_UNAUTHORIZED}
+		return {"ok":false,"error":ERR_BUSY if request.result.get("error","")=="busy" else ERR_UNAUTHORIZED}
+	# Capacity may have changed while the native grant was awaited.
+	if runtime_settings!=null and _handoff_waiters.size()>=runtime_settings.value("handoff_tickets"):
+		revoke_world_session(username)
+		return {"ok":false,"error":ERR_BUSY}
+	var waiting: Dictionary={"world":world_id,"account":username,"done":false,"accepted":false,"deadline":Time.get_ticks_msec()+(runtime_settings.value("handoff_ack_timeout_ms") if runtime_settings!=null else 5000)}
+	if runtime_settings!=null: _handoff_waiters[token]=waiting
+	fetch_token.rpc_id(world_id,token,username,character_id,account_id,request.result.context)
+	if runtime_settings!=null:
+		while not waiting.done and world_ready(world_id) and _world_sessions.get(username,{}).get("token","")==token and Time.get_ticks_msec()<int(waiting.deadline):
+			await get_tree().process_frame
+		_handoff_waiters.erase(token)
+		if not waiting.done or not waiting.accepted or not world_ready(world_id) or _world_sessions.get(username,{}).get("token","")!=token:
+			if _world_sessions.get(username,{}).get("token","")==token: revoke_world_session(username)
+			return {"ok":false,"error":ERR_BUSY if waiting.done and not waiting.accepted else ERR_UNAVAILABLE}
 	return request.result.duplicate(true)
 
 
@@ -432,7 +475,6 @@ func player_character_creation_result(gateway_id: int, peer_id: int, username: S
 			return
 		account.last_world_name = connected_worlds[world_id].get("info", {}).get("name", "")
 		account.last_character_id = result_code
-		account.peer_id = peer_id # mark connected so a second login is refused
 		# Persist account metadata (last world/character) on every login — must run in
 		# production too, not just debug, or "continue on last world" breaks in a
 		# release build. (Was gated on "debug", which masked this on the debug server.)
@@ -440,9 +482,9 @@ func player_character_creation_result(gateway_id: int, peer_id: int, username: S
 		var auth_token: String = authentication_manager.generate_random_token()
 		var ticket: Dictionary=await _prepare_world_ticket(world_id,username,auth_token,result_code,account.id)
 		if not ticket.ok:
-			_entry_response(gateway_id,peer_id,{"error":ERR_UNAUTHORIZED})
+			_entry_response(gateway_id,peer_id,{"error":ticket.error})
 			return
-		fetch_token.rpc_id(world_id,auth_token,username,result_code,account.id,ticket.context)
+		account.peer_id = peer_id
 		
 		_entry_response(
 			gateway_id,
@@ -479,14 +521,12 @@ func result_login(result_code: int, gateway_id: int, peer_id: int, username: Str
 		# Last-login-wins; only the matching ticket may later clear this status.
 		var account: AccountResource = authentication_manager.account_collection.collection.get(username)
 		if account == null: return
-		account.peer_id = peer_id
 		var auth_token: String = authentication_manager.generate_random_token()
 		var ticket: Dictionary=await _prepare_world_ticket(world_id,username,auth_token,character_id,account.id)
 		if not ticket.ok:
-			_entry_response(gateway_id,peer_id,{"error":ERR_UNAUTHORIZED})
+			_entry_response(gateway_id,peer_id,{"error":ticket.error})
 			return
-		fetch_token.rpc_id(world_id,auth_token,username,character_id,account.id,ticket.context)
-		await get_tree().create_timer(0.5).timeout
+		account.peer_id = peer_id
 		# A newer login or world disconnect may have retired this attempt.
 		if _world_sessions.get(username, {}).get("token", "") != auth_token or not world_ready(world_id):
 			_entry_response(gateway_id, peer_id, {"error": ERR_UNAUTHORIZED})

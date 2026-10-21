@@ -44,6 +44,8 @@ static func humanize(response: Dictionary) -> String:
 				return TranslationServer.translate("ERR_OUTDATED")
 			Error.ERR_TIMEOUT, Error.ERR_CONNECTION_ERROR:
 				return TranslationServer.translate("ERR_CONNECTION")
+			Error.ERR_BUSY:
+				return TranslationServer.translate("World is currently at capacity. Please try again shortly.")
 			_:
 				return TranslationServer.translate("ERR_GENERIC")
 

@@ -16,16 +16,24 @@ var _exchange_holds: Dictionary={}
 var _jobs: Dictionary={}
 var _elapsed: float=0.0
 var _draining:=false
+var _capacity: int=MAX_ACCOUNTS
 
-func _init(world: WorldServer, executor: RefCounted) -> void:
+func has_account_capacity(required: Array) -> bool:
+	var accounts: Dictionary={}
+	for id: int in _accounts: accounts[id]=true
+	for id: int in required: accounts[id]=true
+	return accounts.size()<=_capacity
+
+func _init(world: WorldServer, executor: RefCounted, capacity: int = MAX_ACCOUNTS) -> void:
 	_world=world
 	_executor=executor
+	_capacity=capacity
 
 func attach(peer: int, context: Dictionary) -> bool:
 	if _draining or not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return false
 	if _world.session_ticket_fingerprint(peer,context.character)!=context.session_fingerprint: return false
 	if not _accounts.has(context.account_id):
-		if _accounts.size()>=MAX_ACCOUNTS: return false
+		if _accounts.size()>=_capacity: return false
 		_accounts[context.account_id]={"peer":peer,"context":context.duplicate(true),"state":{},"pending":0,"work":{},"external":{},"ticket":0,"stage":"load","flush":false,"force":false,"error":"","notify":{}}
 	else:
 		var account: Dictionary=_accounts[context.account_id]

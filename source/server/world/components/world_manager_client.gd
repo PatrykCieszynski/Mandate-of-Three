@@ -2,8 +2,6 @@ class_name WorldManagerClient
 extends BaseMultiplayerEndpoint
 
 
-signal token_received(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary)
-
 @export var database: WorldDatabase
 @export var world_server: WorldServer
 
@@ -427,7 +425,13 @@ func fetch_server_info(_info: Dictionary) -> void:
 
 @rpc("authority")
 func fetch_token(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> void:
-	token_received.emit(auth_token,username,character_id,account_id,inventory_context)
+	# Trusted World acceptance reserves session + Economy capacity before Master
+	# publishes the ticket to Gateway. Never treat fire-and-forget delivery as ACK.
+	var accepted: bool=world_server.accept_master_handoff(auth_token,username,character_id,account_id,inventory_context)
+	handoff_accepted.rpc_id(1,auth_token,accepted)
+
+@rpc("any_peer","call_remote","reliable")
+func handoff_accepted(_token: String, _accepted: bool) -> void: pass
 
 
 @rpc("authority")

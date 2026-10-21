@@ -6,6 +6,13 @@ var world_info: Dictionary
 
 
 func _ready() -> void:
+	var budgets: Dictionary=preload("res://source/server/runtime/runtime_capacity_settings.gd").load_config(CmdlineUtils.get_parsed_args().get("config","res://data/config/world_config.cfg"),"world")
+	if not budgets.ok:
+		push_error("World startup refused: "+str(budgets.error));get_tree().quit(1);return
+	$WorldServer.runtime_settings=budgets.settings
+	$WorldServer.handoff_ttl_ms=budgets.settings.value("handoff_ttl_ms")
+	$WorldServer.max_handoff_tickets=budgets.settings.value("handoff_tickets")
+	ServerLog.info("World startup budgets: sessions=%d inventory=%d retained_wallets=%d tickets=%d" % [budgets.settings.value("world_sessions"),budgets.settings.value("inventory_bindings"),budgets.settings.value("wallet_accounts"),budgets.settings.value("handoff_tickets")])
 	# Server tick rate
 	# For comparaison:
 	# Eve Online - 1 tick par second.
@@ -30,7 +37,7 @@ func _ready() -> void:
 		CmdlineUtils.get_parsed_args().get("config", "res://data/config/world_config.cfg"),
 		{
 			"name": "NoName",
-			"max_players": 200,
+			"max_players": 64,
 			"hardcore": false,
 			"motd": "Welcome!",
 			"bonus_xp": 0.0,
@@ -39,6 +46,7 @@ func _ready() -> void:
 		}
 		
 	)
+	world_info["handoff_ttl_ms"]=$WorldServer.handoff_ttl_ms
 	await get_tree().create_timer(0.5).timeout
 	if world_info.has("error"):
 		printerr("World server loading configuration failed.")

@@ -57,9 +57,9 @@ func start_world(world: WorldServer, settings: Dictionary) -> bool:
 		if name!="inventory" and not _start_pool(name,WORLD_POOLS[name]): return await _failed("workers")
 	if not await _wait_ready(): return await _failed("workers")
 	if not world.database.profile_store_ready(): return await _failed("profiles")
-	world.inventory_runtime=preload("res://source/server/world/database/postgres/inventory_runtime_postgres.gd").new(world,_pools.inventory)
+	world.inventory_runtime=preload("res://source/server/world/database/postgres/inventory_runtime_postgres.gd").new(world,_pools.inventory,world.runtime_settings.value("inventory_bindings") if world.runtime_settings!=null else 64)
 	world.inventory_runtime.enable_initialization()
-	world.wallet_runtime=preload("res://source/server/world/database/postgres/wallet_runtime_postgres.gd").new(world,_pools.wallet)
+	world.wallet_runtime=preload("res://source/server/world/database/postgres/wallet_runtime_postgres.gd").new(world,_pools.wallet,world.runtime_settings.value("wallet_accounts") if world.runtime_settings!=null else 64)
 	world.npc_runtime=preload("res://source/server/world/database/postgres/npc_runtime_postgres.gd").new(world.wallet_runtime,world.inventory_runtime,_pools.npc)
 	world.storage_runtime=preload("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,_pools.storage)
 	world.ground_item_runtime=preload("res://source/server/world/database/postgres/ground_item_runtime_postgres.gd").new(world.inventory_runtime,_pools.ground)
@@ -73,7 +73,7 @@ func start_master(master: WorldManagerServer, settings: Dictionary) -> bool:
 	_master=master
 	master.economy_bootstrap=self
 	if not await _prepare(settings,"control",1): return false
-	master.inventory_session_issuer=preload("res://source/server/master/components/master_world_server/inventory_session_issuer_postgres.gd").new(master,_pools.control)
+	master.inventory_session_issuer=preload("res://source/server/master/components/master_world_server/inventory_session_issuer_postgres.gd").new(master,_pools.control,master.runtime_settings.value("master_grants") if master.runtime_settings!=null else 64)
 	state=State.READY
 	return true
 
