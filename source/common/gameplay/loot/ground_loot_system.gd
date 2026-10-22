@@ -43,6 +43,18 @@ func spawn_resolved_item(position: Vector3, owner_id: int, owner_name: String, n
 		"protected_until": now + PROTECTION_MS, "expires": now + LOOT_LIFETIME_MS}
 	return uid
 
+func protect_party_item(uid: String, decision: Dictionary, party_id: int) -> void:
+	if not drops.has(uid): return
+	drops[uid].allowed_owners=decision.allowed.duplicate()
+	drops[uid].party_id=party_id if int(decision.owner)==0 else 0
+	if int(decision.owner)==0: drops[uid].owner_name="Party"
+func protection_allows(drop: Dictionary, owner: int, now: int) -> bool:
+	if now>=int(drop.protected_until): return true
+	if not drop.has("allowed_owners"): return owner==int(drop.owner)
+	if owner not in drop.allowed_owners: return false
+	var pid: int=int(drop.get("party_id",0))
+	return pid==0 or (_services.party()!=null and _services.party().membership.get(owner,0)==pid)
+
 static func valid_affixes(definition: ItemDefinition, affixes: Array) -> bool:
 	if affixes.size() > MAX_AFFIXES:
 		return false
@@ -104,7 +116,7 @@ func snapshot_for_peer(peer_id: int, now: int) -> Dictionary:
 			"item_name": definition.item_name, "amount": int(drop.amount),
 			"weapon_attack": attack_for_drop(definition, drop),
 			"reserved_for": drop.owner_name if now < int(drop.protected_until) else "",
-			"allowed": now >= int(drop.protected_until) or _services.owner_id_for_peer(peer_id) == int(drop.owner)}
+			"allowed": protection_allows(drop,_services.owner_id_for_peer(peer_id),now)}
 	return snapshot
 
 func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
@@ -125,7 +137,7 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 		drops.erase(uid)
 		return {"ok": false, "error": "gone"}
 	var owner_id: int = _services.owner_id_for_peer(peer_id)
-	if now < int(drop.protected_until) and owner_id != int(drop.owner):
+	if not protection_allows(drop,owner_id,now):
 		return {"ok": false, "error": "reserved"}
 	var body: Node3D = _world.characters[peer_id]
 	if body.position.distance_to(drop.position) > PICKUP_REACH or not _world.has_line_of_sight(body.position, drop.position):
@@ -154,7 +166,7 @@ func claim_candidate(peer_id: int, uid: String, now: int) -> Dictionary:
 	if not drops.has(uid): return {"ok":false,"error":"gone"}
 	var drop: Dictionary=drops[uid]
 	if now>=int(drop.expires): return {"ok":false,"error":"gone"}
-	if now<int(drop.protected_until) and _services.owner_id_for_peer(peer_id)!=int(drop.owner): return {"ok":false,"error":"reserved"}
+	if not protection_allows(drop,_services.owner_id_for_peer(peer_id),now): return {"ok":false,"error":"reserved"}
 	var body: Node3D=_world.characters[peer_id]
 	if body.position.distance_to(drop.position)>PICKUP_REACH or not _world.has_line_of_sight(body.position,drop.position): return {"ok":false,"error":"distance"}
 	return {"ok":true,"drop":drop.duplicate(true)}

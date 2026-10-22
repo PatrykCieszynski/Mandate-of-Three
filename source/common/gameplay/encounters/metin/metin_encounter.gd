@@ -4,6 +4,7 @@ var services: MandateWorldServices
 @export var definition: MetinDefinition = preload("res://source/common/gameplay/encounters/metin/first_metin.tres")
 var runtime := MetinRuntime.new()
 var stone: MetinStone3D
+var reward_claims: Dictionary = {}
 var _world: GameWorld3D
 func _ready() -> void:
 	_world = get_parent()
@@ -17,6 +18,7 @@ func _ready() -> void:
 func active() -> bool:
 	return runtime.state in ["SPAWNED","ACTIVE"]
 func _spawn() -> void:
+	reward_claims.clear()
 	runtime.spawn(randi_range(0,FirstRegionGraybox.METIN_POINTS.size()-1))
 	stone.position = FirstRegionGraybox.METIN_POINTS[runtime.site_index]
 	stone.present(definition.display_name,runtime.hp,definition.max_hp,true)
@@ -24,9 +26,12 @@ func apply_damage(peer_id: int, amount: int, now: int) -> bool:
 	if not GameMode.is_world_server() or not _world.combat_endpoint.is_player_alive(peer_id): return false
 	var result: Dictionary = runtime.damage(services.player_for_peer(peer_id).player_id,amount,now)
 	if result.is_empty(): return false
+	if services.party()!=null: services.party().record(reward_claims,services.owner_id_for_peer(peer_id),int(result.damage))
 	for index: int in result.waves: _spawn_wave(definition.waves[index],now,peer_id)
 	if int(result.reward_owner) > 0:
-		_world.kill_rewards.spawn_reward(stone.position,int(result.reward_owner),now,definition.reward_yang)
+		if services.party()!=null and not reward_claims.is_empty():
+			_world.kill_rewards.party_rewards.encounter(reward_claims,stone.position,now,definition.reward_yang)
+		else: _world.kill_rewards.spawn_reward(stone.position,int(result.reward_owner),now,definition.reward_yang)
 	stone.present(definition.display_name,runtime.hp,definition.max_hp,active())
 	return true
 func _spawn_wave(wave: MetinWaveDefinition, now: int, attacker: int) -> void:
