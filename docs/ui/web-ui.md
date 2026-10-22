@@ -340,7 +340,7 @@ other characters load the current shared state on entry. Foreign peers never
 receive account contents.
 
 Command input/results retain the existing 16 KiB boundary. Snapshot/domain
-updates have a separate bounded 128 KiB output limit: the full 180 + 270 cell
+updates have a separate bounded 512 KiB output limit (including the bounded Chat V1 history): the full 180 + 270 cell
 presentation measured about 91 KiB with representative native display fields.
 CEF still loads static local assets under the existing CSP; no preview controller
 or fixture code is injected in Godot.
@@ -409,3 +409,48 @@ failure and teardown cancel unresolved waits; the first terminal result wins.
 generation before awaiting a handler and suppresses its reply if navigation has
 replaced the page. Thus a new page can reuse a browser command ID without receiving
 an old page's result. The session has no browser generation dependency.
+
+
+## Chat V1 composition
+
+The production entry mounts `screens/chat/chat-view.ts` alongside the existing
+windows, with one bottom-left main chat and one private-message window with
+character-keyed conversation tabs. It reuses UiWindow/WindowManager placement,
+clamping, global scale and the existing `data-ui-text` focus lease. Enter is an
+explicit presentation shortcut from Godot when gameplay owns the keyboard;
+Escape in a composer releases that lease before other window-close shortcuts.
+The shared PW window and a right-edge envelope participate in interactive-region
+reporting. Inactive tabs retain their own drafts and reading positions while the
+view is mounted. The session history keeps exactly one conversation open; other
+tabs are minimized. Incoming background/new/closed conversations accumulate
+unread messages without switching tabs, opening the window or requesting focus.
+Selecting a tab or envelope uses the existing conversation command to mark that
+conversation read. The envelope counts unread conversations; its tooltip lists
+senders/message counts. Tabs remain in one scrollable row, with a selector for
+all cached conversations (including closed ones). The × beside each tab closes that conversation; closing the active conversation
+selects the next retained tab, while closing a background tab preserves selection.
+Minimizing PW preserves tabs. There is no separate visible window title; empty
+space in the tab rail reuses the shell drag handle.
+CEF reload restores session histories, selection, minimized state and unread
+counts; unsent drafts and per-tab scroll positions are view-local and reset.
+
+`chat_ui_adapter.gd` owns explicit send/lookup/local-window/mute commands and
+correlation. `chat_history.gd` is client-session RAM, not an authoritative server
+or history store. Its `chat` domain supplies reload snapshots without registering
+new event handlers per message. Full/domain state output has a 512 KiB envelope
+ceiling to accommodate the bounded 128 KiB chat cache with inventory/storage;
+command input/results remain capped at 16 KiB. All player content is rendered as
+text. Server policies and limitations: [Chat V1](../gameplay/README.md#chat-v1--live-world-communication).
+
+
+Chat V1 retry follow-up: the server resolves retained request IDs after current
+session validation, before counting a new request against flood/channel limits.
+The client history tracks per-message serialized cost incrementally; pruning and
+conversation eviction subtract cached costs without copying/serializing the full
+history in a loop. A 96 KiB message budget plus 32 KiB conservative metadata
+reserve retains the 128 KiB cache ceiling. Accepted changes still publish a full
+bounded `chat` domain; a delta protocol is intentionally deferred. Incoming first
+whispers publish once after insertion, rather than publishing an empty window
+and then publishing the message again. The fallback DOM Enter shortcut only
+focuses main chat outside registered CEF windows; input fields and controls in
+whisper/Inventory/other windows retain their normal key handling.

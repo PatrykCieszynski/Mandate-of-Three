@@ -1,3 +1,4 @@
+import {isChatSnapshot} from './screens/chat/chat-view.js';
 import {isParty} from './screens/party/party-view.js';
 import {isExchangeSnapshot} from './screens/market/exchange-model.js';
 import {isBrowserSnapshot} from './screens/market/browser-model.js';
@@ -12,7 +13,7 @@ import type {Viewport} from './core/window/window-types.js';
 export const VERSION = 1;
 export const MAX_BYTES = 16384;
 // Bounded snapshots for the real 180 + 270 cell screens. Commands stay 16 KiB.
-export const MAX_STATE_BYTES = 131072;
+export const MAX_STATE_BYTES = 524288;
 const bytes = (value: string) => new TextEncoder().encode(value).length;
 export function isObject(value: unknown): value is RawObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -46,10 +47,10 @@ export function isCommandResult(result: unknown): result is CommandResult {
     (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message: Envelope): message is StateMessage {
-  return !message.id && ['ui.snapshot','party.updated','exchange.updated','market_browser.updated','market.updated','upgrade.updated','npc_targets.updated','shop.updated','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
+  return !message.id && ['ui.snapshot','chat.updated','party.updated','exchange.updated','market_browser.updated','market.updated','upgrade.updated','npc_targets.updated','shop.updated','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
 }
 export function isDomainName(value: string): value is DomainName {
-  return ['party','exchange','market_browser','market','upgrade','npc_targets','shop','npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
+  return ['chat','party','exchange','market_browser','market','upgrade','npc_targets','shop','npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
 }
 export function isRawDomainState(value: unknown): value is RawDomainState {
   return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -111,7 +112,8 @@ function isHud(value: unknown): value is HudSnapshot {
   return isObject(value) && (value.storage_open !== true || value.inventory_open === true) && (!('storage_open' in value) || typeof value.storage_open === 'boolean') && (!('inventory_open' in value) || typeof value.inventory_open === 'boolean') &&
     (!('equipment_open' in value) || typeof value.equipment_open === 'boolean') &&
     (!('ui_scale' in value) || (finiteRange(value.ui_scale, 0.8, 1.5) && UI_SCALES.includes(value.ui_scale))) &&
-    (!('viewport' in value) || isViewport(value.viewport));
+    (!('viewport' in value) || isViewport(value.viewport)) &&
+    (!('quick_slots' in value) || (Array.isArray(value.quick_slots) && value.quick_slots.length<=8 && value.quick_slots.every(slot=>isObject(slot) && Object.keys(slot).every(key=>key==='label') && (!('label' in slot) || (typeof slot.label==='string' && slot.label.length<=64)))));
 }
 function isUpgrade(value: unknown): boolean {
   if (!isObject(value) || typeof value.active !== 'boolean') return false;
@@ -160,6 +162,7 @@ function isNpc(value: unknown): value is NpcInteractionSnapshot {
 export function isValidDomainValue(domain: DomainName, value: unknown): value is RawObject {
   if (!isObject(value)) return false;
   switch (domain) {
+    case 'chat': return isChatSnapshot(value);
     case 'party': return isParty(value);
     case 'exchange': return isExchangeSnapshot(value);
     case 'market_browser': return isBrowserSnapshot(value);

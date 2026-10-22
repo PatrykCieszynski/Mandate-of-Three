@@ -4,9 +4,6 @@ export function mountBottomHud(root) {
         throw Error('Missing bottom HUD root');
     const panel = document.createElement('div');
     panel.className = 'bottom-hud-panel';
-    const title = document.createElement('div');
-    title.className = 'bottom-hud-label';
-    title.textContent = 'Quick slots';
     const slots = document.createElement('div');
     slots.className = 'bottom-hud-slots';
     const buttons = [];
@@ -21,7 +18,7 @@ export function mountBottomHud(root) {
         buttons.push(slot);
         slots.append(slot);
     }
-    panel.append(title, slots);
+    panel.append(slots);
     root.append(panel);
     return {
         setScale(scale) {

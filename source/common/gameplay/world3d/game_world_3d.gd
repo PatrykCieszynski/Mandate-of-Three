@@ -37,6 +37,7 @@ var npc_endpoint: NpcInteraction3D
 var metin_encounter: MetinEncounter
 var region: FirstRegionGraybox
 var currency_endpoint: CurrencyEndpoint3D
+var chat_endpoint: Node
 var party_endpoint: Node
 var world_time: WorldTimeSync3D
 
@@ -47,6 +48,9 @@ func _ready() -> void:
 	world_time.name = "WorldTime"
 	world_time.services = services
 	add_child(world_time)
+	chat_endpoint = preload("res://source/common/gameplay/chat/chat_endpoint.gd").new()
+	chat_endpoint.name = "Chat"
+	add_child(chat_endpoint)
 	party_endpoint = preload("res://source/common/gameplay/party/party_endpoint.gd").new()
 	party_endpoint.name = "Party"
 	add_child(party_endpoint)

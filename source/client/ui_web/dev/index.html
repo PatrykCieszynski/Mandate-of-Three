@@ -51,6 +51,28 @@
         Storage has two 15×9 pages. Item clicks are logged; transfers are not
         connected.
       </p>
+      <div>
+        <button disabled data-action="chat-message">Incoming chat</button
+        ><button disabled data-action="whisper-message">
+          Incoming whisper
+        </button>
+      </div>
+      <div>
+        <button disabled data-action="hotbar" data-value="true">
+          Sample hotbar</button
+        ><button disabled data-action="hotbar" data-value="false">
+          Empty hotbar
+        </button>
+      </div>
+      <p>
+        Hotbar is a passive presentation fixture: labels only, no item or skill
+        execution.
+      </p>
+      <p>
+        Chat and whispers use local sample players Yuna and Baek. Send, lookup,
+        close, minimize and mute work without a server. Incoming buttons update
+        fixtures only.
+      </p>
       <label
         >UI scale
         <select disabled id="scale">

@@ -3,7 +3,7 @@ extends Node
 ## Protocol/transport only. Application handlers and state belong to the dispatcher.
 const VERSION: int = 1
 const MAX_BYTES: int = 16384
-const MAX_STATE_BYTES: int = 131072
+const MAX_STATE_BYTES: int = 524288
 signal outgoing(message: String)
 signal ui_ready
 signal command_received(type: String, id: String, payload: Dictionary)
@@ -84,7 +84,7 @@ func send(type: String, payload: Dictionary, id: String = "") -> void:
 	var envelope: Dictionary = {"v": VERSION, "type": type, "payload": payload}
 	if not id.is_empty(): envelope.id = id
 	var encoded: String = JSON.stringify(envelope)
-	var limit: int = MAX_STATE_BYTES if type == "ui.snapshot" or type in ["exchange.updated", "market_browser.updated", "market.updated","shop.updated","npc.updated","inventory.updated","storage.updated","equipment.updated","wallet.updated","player.updated","hud.updated"] else MAX_BYTES
+	var limit: int = MAX_STATE_BYTES if type == "ui.snapshot" or type in ["chat.updated", "party.updated", "exchange.updated", "market_browser.updated", "market.updated","shop.updated","npc.updated","inventory.updated","storage.updated","equipment.updated","wallet.updated","player.updated","hud.updated"] else MAX_BYTES
 	if encoded.to_utf8_buffer().size() > limit:
 		rejected.emit("outgoing_size")
 		return

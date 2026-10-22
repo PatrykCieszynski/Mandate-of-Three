@@ -159,3 +159,27 @@ html,body {
   transform:scale(var(--tooltip-scale,1));
   transform-origin:0 0}
 .ui-tooltip[popover]::backdrop {display:none}
+
+/* Compact content windows; slot and equipment artwork retain their logical size. */
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) {
+  --window-inset:8px;
+  padding-bottom:8px;
+}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) > .window-header {
+  margin-bottom:4px;
+}
+
+/* Legacy edge PNGs include 32 px of paint; expose only the outer 8 px so the
+   decorative layer cannot cover compact content. Source PNGs stay unscaled. */
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .corner.tl {clip-path:inset(0 24px 24px 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .corner.tr {clip-path:inset(0 0 24px 24px)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .corner.bl {clip-path:inset(24px 24px 0 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .corner.br {clip-path:inset(24px 0 0 24px)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .edge.top,
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .edge.bottom {left:7px;right:7px}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .edge.top {clip-path:inset(0 0 24px 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .edge.bottom {clip-path:inset(24px 0 0 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .edge.left,
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .edge.right {top:7px;bottom:7px}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .edge.left {clip-path:inset(0 24px 0 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window) .edge.right {clip-path:inset(0 0 0 24px)}

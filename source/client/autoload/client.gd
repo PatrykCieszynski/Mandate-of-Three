@@ -42,6 +42,7 @@ func connect_to_server(
 
 
 func close_connection() -> void:
+	ClientState.chat_history.clear()
 	multiplayer.set_multiplayer_peer(null)
 	peer.close()
 	is_connected_to_server = false

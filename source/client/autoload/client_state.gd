@@ -37,6 +37,7 @@ var viewed_trade_table: int
 signal input_changed(input_type: InputComponent.InputType)
 
 var local_player: LocalPlayer
+var chat_history = preload("res://source/client/ui_web/chat_history.gd").new()
 var player_id: int
 ## Fires when the wardstone mirror updates (login sync or a fresh grant) —
 ## sealed portals listen so they unseal live, without a map reload.

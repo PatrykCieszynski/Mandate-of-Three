@@ -164,3 +164,21 @@ routes Shop and Upgrade to their feature windows. Upgrade selects Inventory
 items without relocation and executes the atomic +0 → +1 server transaction.
 See [NPC services](../../../docs/gameplay/npc/npc-services.md). Edit TypeScript, then rebuild
 committed static modules; CEF never loads development dependencies.
+
+
+The offline preview also supplies Chat V1: sample public/local/party/system
+messages, an active Yuna tab and a background Baek conversation. Sending,
+name lookup (`Yuna` / `Baek`), minimize/close/reopen and session mute mutate local
+fixtures only, independently of the generic Accept checkbox. Incoming chat /
+whisper buttons test wrapping, scroll position and unread badges. Guild remains
+unavailable, as in the game. These controls do not contact Godot or a database.
+Hotbar sample/empty controls populate the existing passive eight-slot renderer
+through `hud.quick_slots`; labels are presentation fixtures, not executable
+Inventory/skill bindings. Icons, cooldowns and authenticated hotbar use are not
+introduced by the preview.
+
+Public chat uses a transparent HUD log above compact channel/composer controls.
+Whisper name lookup opens from the Whisper button. Private conversations share
+one draggable window with tabs, per-conversation drafts/scroll position and a
+right-edge unread-conversation envelope. The passive hotbar uses a compact 4+4
+slot rail without a heading. These presentation changes do not add hotbar actions.

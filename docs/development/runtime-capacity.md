@@ -42,6 +42,11 @@ metadata against its ACK deadline; independently edited configs cannot silently
 promise a longer acknowledgement window than the World ticket allows.
 Settings for an unused role do not create that role's runtime in a process.
 
+Chat V1 uses the same immutable `[runtime]` settings for `chat_general_ms`,
+`chat_trade_ms`, `chat_light_count`, `chat_light_window_ms`, `chat_flood_count`,
+`chat_flood_window_ms` and `chat_local_radius` (positive integers, 1..65,536).
+Defaults and channel behavior are documented in [Chat V1](../gameplay/README.md#chat-v1--live-world-communication).
+
 The former World `max_players=200` was metadata without an enforcing consumer.
 The shipped value is now **64**, aligned with existing effective PG owner limits,
 not a benchmark-backed increase/decrease of measured hardware capacity. Runtime

@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 import type { Browser, BrowserType } from 'playwright-core';
 import { createPreviewServer } from '../scripts/preview-server.mjs';
-const [playwrightModule, browserExecutable] = process.argv.slice(2);
+const [playwrightModule, browserExecutable, screenshot] = process.argv.slice(2);
 if (!playwrightModule || !browserExecutable)
   throw Error('Supply installed Playwright and browser');
 const { chromium }: { chromium: BrowserType } = createRequire(import.meta.url)(
@@ -37,6 +37,11 @@ try {
     .getByText('Ready — production UI with fixture IPC', { exact: true })
     .waitFor();
   const ui = page.frameLocator('iframe');
+  for (const close of await ui
+    .locator('#private-chat:visible button')
+    .filter({ hasText: /^Minimize$/ })
+    .all())
+    await close.click();
   await ui.locator('#inventory .inventory-item').first().waitFor();
   assert.equal(await ui.locator('#inventory .inventory-item').count(), 3);
   assert.equal(await ui.locator('.wallet strong').textContent(), '12,345');
@@ -370,6 +375,141 @@ try {
   await ui.locator('#inventory .window-close').click();
   await ui.locator('#inventory-window').waitFor({ state: 'hidden' });
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });
+  await page
+    .getByRole('button', { name: 'Reset fixtures', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Hide Inventory', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Hide Equipment', exact: true })
+    .click();
+  await ui.locator('#private-chat-window').waitFor({ state: 'visible' });
+  assert.equal(await ui.locator('.chat-whisper').count(), 1);
+  const chatInput = ui.getByRole('textbox', {
+    name: 'Chat message',
+    exact: true,
+  });
+  await chatInput.fill('Hello from offline preview');
+  await chatInput.press('Enter');
+  await ui
+    .locator('#chat .chat-line')
+    .filter({ hasText: 'Hello from offline preview' })
+    .waitFor();
+  await ui
+    .locator('#private-chat')
+    .getByRole('button', { name: 'Minimize', exact: true })
+    .click();
+  await ui.locator('.whisper-envelope').waitFor({ state: 'visible' });
+  await page
+    .getByRole('button', { name: 'Incoming whisper', exact: true })
+    .click();
+  await ui.locator('.whisper-envelope[title="Baek: 2"]').waitFor();
+  await ui.locator('.whisper-envelope').click();
+  const whisper = ui.getByRole('textbox', {
+    name: 'Message Baek',
+    exact: true,
+  });
+  await whisper.fill('Private preview reply');
+  await whisper.press('Enter');
+  await ui
+    .locator('#whisper-3 .chat-line')
+    .filter({ hasText: 'Private preview reply' })
+    .waitFor();
+  await whisper.press('Escape');
+  assert.equal(
+    await whisper.evaluate((el) => document.activeElement === el),
+    false,
+  );
+  await ui
+    .getByRole('button', { name: 'Find whisper player', exact: true })
+    .click();
+  const name = ui.getByRole('textbox', {
+    name: 'Whisper player name',
+    exact: true,
+  });
+  await name.fill('Yuna');
+  await name.press('Enter');
+  await ui.locator('#private-chat-window').waitFor({ state: 'visible' });
+  assert.equal(await ui.locator('#whisper-2').count(), 1);
+  const yunaDraft = ui.getByRole('textbox', {
+    name: 'Message Yuna',
+    exact: true,
+  });
+  await yunaDraft.fill('Draft for Yuna');
+  const privateWindow = ui.locator('#private-chat-window');
+  const beforeDrag = await privateWindow.boundingBox();
+  const dragSpace = await ui
+    .locator('#private-chat .whisper-tabs')
+    .boundingBox();
+  assert.ok(beforeDrag && dragSpace);
+  await page.mouse.move(
+    dragSpace.x + dragSpace.width - 8,
+    dragSpace.y + dragSpace.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(dragSpace.x + dragSpace.width + 32, dragSpace.y - 25, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  const afterDrag = await privateWindow.boundingBox();
+  assert.ok(
+    afterDrag && afterDrag.x > beforeDrag.x && afterDrag.y < beforeDrag.y,
+    'empty tab rail drags the private window',
+  );
+
+  await ui.getByRole('tab', { name: 'Baek', exact: true }).click();
+  await whisper.waitFor({ state: 'visible' });
+  await whisper.fill('Draft for Baek');
+  await ui.getByRole('tab', { name: 'Yuna', exact: true }).click();
+  await yunaDraft.waitFor({ state: 'visible' });
+  assert.equal(await yunaDraft.inputValue(), 'Draft for Yuna');
+  await yunaDraft.focus();
+  await page
+    .getByRole('button', { name: 'Incoming whisper', exact: true })
+    .click();
+  await ui.getByRole('tab', { name: 'Baek · 1', exact: true }).waitFor();
+  assert.equal(
+    await ui
+      .getByRole('tab', { name: 'Yuna', exact: true })
+      .getAttribute('aria-selected'),
+    'true',
+  );
+  await ui.getByRole('tab', { name: 'Baek · 1', exact: true }).click();
+  await whisper.waitFor({ state: 'visible' });
+  assert.equal(await whisper.inputValue(), 'Draft for Baek');
+  await ui.getByRole('tab', { name: 'Yuna', exact: true }).click();
+
+  await page
+    .getByRole('button', { name: 'Incoming chat', exact: true })
+    .click();
+  await ui
+    .locator('#chat .chat-line')
+    .filter({ hasText: 'A new public message' })
+    .waitFor();
+  await ui.locator('#bottom-hud .bottom-hud-slot').first().waitFor();
+  assert.equal(await ui.locator('#bottom-hud .bottom-hud-slot').count(), 8);
+  await page
+    .getByRole('button', { name: 'Sample hotbar', exact: true })
+    .click();
+  await ui
+    .locator('#bottom-hud .assigned')
+    .filter({ hasText: 'Potion' })
+    .waitFor();
+  await page.getByRole('button', { name: 'Empty hotbar', exact: true }).click();
+  await ui
+    .locator('#bottom-hud .assigned')
+    .first()
+    .waitFor({ state: 'hidden' });
+  assert.equal(await ui.locator('#bottom-hud .assigned').count(), 0);
+  await page
+    .getByRole('button', { name: 'Sample hotbar', exact: true })
+    .click();
+  await ui
+    .locator('#bottom-hud .assigned')
+    .filter({ hasText: 'Potion' })
+    .waitFor();
+  if (screenshot) await page.screenshot({ path: screenshot, fullPage: true });
   await ui.locator('#bottom-hud').waitFor({ state: 'visible' });
   assert.deepEqual(errors, []);
   console.log(

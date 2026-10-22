@@ -1,4 +1,9 @@
 import {
+  chatFixture,
+  chatCommand,
+  receiveChatFixture,
+} from './chat-fixture.js';
+import {
   STORAGE_COLUMNS,
   STORAGE_ROWS,
   STORAGE_PAGES,
@@ -16,6 +21,16 @@ import type { DomainSnapshot, StateType } from '../web/protocol/contracts.js';
 import type { PreviewAction } from './contracts.js';
 const receivers: ((raw: unknown) => void)[] = [];
 let accept = false;
+const hotbarFixture = () => [
+  { label: 'Potion' },
+  { label: 'Sword' },
+  {},
+  { label: 'Aura' },
+  {},
+  {},
+  {},
+  {},
+];
 function storageFixture(): StorageSnapshot {
   return {
     columns: STORAGE_COLUMNS,
@@ -86,12 +101,14 @@ function storageFixture(): StorageSnapshot {
 
 function fixture(): DomainSnapshot {
   return {
+    chat: chatFixture(),
     storage: storageFixture(),
     hud: {
       storage_open: true,
       inventory_open: true,
       equipment_open: true,
       ui_scale: 1,
+      quick_slots: hotbarFixture(),
     },
     wallet: { balance: 12345, ready: true },
     inventory: {
@@ -223,6 +240,12 @@ window.sendIpcMessage = (raw) => {
   }
   if (!message.id) return;
   queueMicrotask(() => {
+    if (message.type.startsWith('chat.') && state.chat) {
+      const result = chatCommand(state.chat, message.type, message.payload);
+      emit('chat.updated', state.chat);
+      emit('command.result', result, message.id);
+      return;
+    }
     if (
       message.type === 'inventory.move_item' &&
       state.hud?.storage_open &&
@@ -361,12 +384,19 @@ export function decodePreviewAction(value: unknown): PreviewAction | null {
   if (value === null || typeof value !== 'object' || !('action' in value))
     return null;
   const name = value.action;
-  if (name === 'reset' || name === 'empty' || name === 'escape')
+  if (
+    name === 'reset' ||
+    name === 'empty' ||
+    name === 'escape' ||
+    name === 'chat-message' ||
+    name === 'whisper-message'
+  )
     return { action: name };
   if (!('value' in value)) return null;
   if (
     (name === 'inventory' ||
       name === 'equipment' ||
+      name === 'hotbar' ||
       name === 'storage' ||
       name === 'accept' ||
       name === 'tooltip-details') &&
@@ -394,6 +424,13 @@ window.addEventListener('message', (event) => {
   const request = decodePreviewAction(event.data);
   if (!request) return;
   switch (request.action) {
+    case 'chat-message':
+    case 'whisper-message':
+      if (state.chat) {
+        receiveChatFixture(state.chat, request.action === 'whisper-message');
+        emit('chat.updated', state.chat);
+      }
+      break;
     case 'reset':
       state = fixture();
       snapshot();
@@ -422,6 +459,13 @@ window.addEventListener('message', (event) => {
       break;
     case 'equipment':
       state.hud = { ...state.hud, equipment_open: request.value };
+      emit('hud.updated', state.hud);
+      break;
+    case 'hotbar':
+      state.hud = {
+        ...state.hud,
+        quick_slots: request.value ? hotbarFixture() : [],
+      };
       emit('hud.updated', state.hud);
       break;
     case 'scale':

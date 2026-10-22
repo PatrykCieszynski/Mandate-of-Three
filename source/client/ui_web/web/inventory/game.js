@@ -1,3 +1,4 @@
+import { mountChat } from '../screens/chat/chat-view.js';
 import { mountBottomHud } from './bottom-hud.js';
 import { mountParty } from '../screens/party/party-view.js';
 import { mountExchange } from '../screens/market/exchange-view.js';
@@ -39,7 +40,13 @@ const root = findElement(document, '#inventory', 'main'), storageRoot = findElem
 let regions;
 const bridge = new WebBridge({
     onTooltipDetails: (alt) => setItemTooltipDetails(document, alt, 'native'),
-    onShortcut: () => {
+    onShortcut: (key) => {
+        if (key === 'Enter') {
+            chat.focus();
+            return;
+        }
+        if (chat.escape())
+            return;
         if (drag.cancel())
             return;
         if (exchange.closeIfActive() ||
@@ -106,11 +113,16 @@ const bridge = new WebBridge({
             viewport: () => ({ width: innerWidth, height: innerHeight }),
             onRegionsChanged: () => regions?.refresh(),
         });
-        if (message.type === 'ui.snapshot' || message.type === 'hud.updated')
+        if (message.type === 'ui.snapshot' || message.type === 'hud.updated') {
             bottomHud.setScale(manager.scale);
+            bottomHud.render(state.hud?.quick_slots ?? []);
+        }
         if ((message.type === 'ui.snapshot' || message.type === 'party.updated') &&
             state.party)
             party.setState(state.party);
+        if ((message.type === 'ui.snapshot' || message.type === 'chat.updated') &&
+            state.chat)
+            chat.setState(state.chat);
         if (message.type === 'ui.snapshot' || message.type === 'npc.updated') {
             npc.setState(state.npc ?? { active: false });
             upgrade.setNpcState(state.npc ?? { active: false });
@@ -248,6 +260,11 @@ const party = mountParty(findElement(document, '#party', 'main'), {
     },
     regions: () => regions?.refresh(),
 });
+const chat = mountChat(findElement(document, '#chat', 'main'), {
+    manager,
+    command: (type, p) => bridge.request(type, p),
+    regions: () => regions?.refresh(),
+});
 const textFocus = reportTextFocus(bridge);
 const upgrade = mountUpgrade(upgradeRoot, {
     select: (payload) => bridge.request('upgrade.select', payload),
@@ -303,8 +320,9 @@ regions = reportInteractiveRegions(bridge, [
     ...equipment.regions,
     ...storage.regions,
     ...drag.regions,
-]);
+], () => chat.regions);
 window.addEventListener('pagehide', () => {
+    chat.dispose();
     bottomHud.dispose();
     party.dispose();
     worldDrop.dispose();

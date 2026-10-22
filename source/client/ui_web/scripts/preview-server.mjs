@@ -9,6 +9,7 @@ const devFiles = new Map([
   ['preview.css', path.join(uiRoot, 'dev/preview.css')],
   ['controls.js', path.join(uiRoot, '.dev/controls.js')],
   ['runtime.js', path.join(uiRoot, '.dev/runtime.js')],
+  ['chat-fixture.js', path.join(uiRoot, '.dev/chat-fixture.js')],
 ]);
 const mime = {
   '.html': 'text/html; charset=utf-8',

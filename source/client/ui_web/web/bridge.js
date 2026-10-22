@@ -85,8 +85,8 @@ export class WebBridge {
                 this.onTooltipDetails(message.payload.alt);
         }
         else if (message.type === 'ui.shortcut') {
-            if (!message.id && Object.keys(message.payload).length === 1 && message.payload.key === 'Escape')
-                this.onShortcut('Escape');
+            if (!message.id && Object.keys(message.payload).length === 1 && ['Escape', 'Enter'].includes(String(message.payload.key)))
+                this.onShortcut(message.payload.key);
         }
         else if (message.type === 'command.result') {
             const result = message.payload;
@@ -112,13 +112,13 @@ export class WebBridge {
         }
     }
 }
-export function reportInteractiveRegions(bridge, elements) {
+export function reportInteractiveRegions(bridge, elements, extra = () => []) {
     let frame = 0, disposed = false;
     const report = () => {
         frame = 0;
         if (disposed)
             return;
-        const regions = elements.filter(element => element.getClientRects().length).map(element => {
+        const regions = [...elements, ...extra()].filter(element => element.getClientRects().length).map(element => {
             const rect = element.getBoundingClientRect();
             const x = Math.max(0, Math.min(innerWidth, rect.left));
             const y = Math.max(0, Math.min(innerHeight, rect.top));

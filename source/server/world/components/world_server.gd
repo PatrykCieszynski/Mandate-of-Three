@@ -31,6 +31,7 @@ var storage_runtime: RefCounted
 var ground_item_runtime: RefCounted
 var seller_runtime: RefCounted
 var party_service = preload("res://source/common/gameplay/party/party_service.gd").new(self)
+var world_chat = preload("res://source/common/gameplay/chat/world_chat.gd").new(self)
 var runtime_settings: RefCounted
 
 ## Tickets and native auth reserve the same account slots as active sessions.
@@ -50,6 +51,7 @@ func has_entry_capacity(username: String, account_id: int) -> bool:
 
 func _process(_delta: float) -> void:
 	party_service.sweep()
+	world_chat.prune()
 	if economy_bootstrap!=null: economy_bootstrap.check_health()
 	if inventory_runtime!=null: inventory_runtime.poll()
 	if wallet_runtime!=null: wallet_runtime.poll(_delta)
@@ -536,12 +538,6 @@ const DATA_REQUEST_TYPES: Array[StringName] = [
 	"attribute.reset",
 	"attribute.spend",
 	"channel.cancel",
-	"chat.bootstrap",
-	"chat.command.exec",
-	"chat.dm.history",
-	"chat.guild.history",
-	"chat.message.send",
-	"chat.typing.set",
 	"dungeon.info",
 	"dungeon.leave",
 	"dungeon.queue",

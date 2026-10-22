@@ -180,11 +180,13 @@ func run_client() -> void:
 		assert(result.get("level") == expected_level, "new session lost RPC authority after old disconnect")
 	# 3D requests require actual map actor membership, not just connected_peers.
 	await change_context("3d_missing_actor")
-	result = await query(&"chat.typing.set")
+	result = await query(&"progression.get")
 	assert(result.get("error") == ERR_UNAUTHORIZED)
 	await change_context("3d_joined")
-	result = await query(&"chat.typing.set")
-	assert(result.is_empty(), "valid 3D member should reach the real world-scoped handler")
+	result = await query(&"progression.get")
+	assert(result.get("level")==expected_level, "valid 3D member should reach the real world-scoped handler")
+	result = await query(&"chat.message.send")
+	assert(result.get("error")==ERR_INVALID_PARAMETER,"retired persistent chat cannot bypass Chat V1 admission")
 	# Legacy entry RPC must not spawn into a different replicated instance.
 	var other := manager.get_instance_server_by_id("Two" if own_instance == "One" else "One")
 	other.ready_to_enter_instance.rpc_id(1)

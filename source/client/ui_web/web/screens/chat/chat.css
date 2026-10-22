@@ -1,0 +1,422 @@
+/* Public chat belongs to the HUD; private conversations keep the shared window skin. */
+.chat-window {
+  --window-width: 480px;
+  --window-inset: 0px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font:
+    12px/16px Tahoma,
+    Arial,
+    sans-serif;
+}
+.chat-window > .chrome {
+  display: none;
+}
+.chat-window > .window-header {
+  height: 8px;
+  margin: 0 0 3px;
+  border: 0;
+  border-top: 1px solid #9e927344;
+  background: linear-gradient(90deg, #81745266, transparent);
+  opacity: 0.35;
+}
+.chat-window:hover > .window-header,
+.chat-window:focus-within > .window-header {
+  opacity: 1;
+}
+.chat-window > .window-header h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.chat-window > .window-header .window-close {
+  width: 13px;
+  height: 13px;
+  top: -3px;
+  right: 0;
+  font: 11px/12px Arial;
+  opacity: 0;
+}
+.chat-window:hover > .window-header .window-close {
+  opacity: 1;
+}
+#chat .chat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0;
+}
+.chat-content > .chat-log {
+  order: 0;
+}
+.chat-content > nav {
+  order: 1;
+}
+.chat-content > form {
+  order: 2;
+}
+.chat-content > .chat-find {
+  order: 3;
+}
+.chat-content > p[role='status'] {
+  order: 4;
+}
+.chat-log {
+  height: 112px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  user-select: text;
+  scrollbar-width: thin;
+  scrollbar-color: #746447 transparent;
+  padding: 2px 4px;
+  font:
+    12px/16px Tahoma,
+    Arial,
+    sans-serif;
+}
+.chat-content > .chat-log {
+  background: linear-gradient(transparent, rgba(8, 9, 7, 0.28));
+}
+.chat-expanded .chat-content > .chat-log {
+  height: 260px;
+  background: rgba(8, 9, 7, 0.5);
+}
+.chat-line {
+  margin: 0 0 1px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  text-shadow:
+    1px 1px 1px #000,
+    -1px 0 1px #000;
+}
+.chat-line button {
+  border: 0 !important;
+  background: none !important;
+  padding: 0 !important;
+  color: inherit !important;
+  font: inherit;
+  cursor: pointer;
+}
+.channel-general {
+  color: #ece6db;
+}
+.channel-trade {
+  color: #e6bb73;
+}
+.channel-local {
+  color: #efede7;
+}
+.channel-party {
+  color: #8bc8eb;
+}
+.channel-guild {
+  color: #9cd18c;
+}
+.channel-system {
+  color: #e3c877;
+}
+.channel-whisper {
+  color: #e4c5e5;
+}
+.chat-content nav {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+.chat-content button,
+.chat-content select,
+.chat-whisper button {
+  font:
+    11px/15px Tahoma,
+    Arial,
+    sans-serif;
+  background: linear-gradient(#3a392e, #191b16);
+  color: #ded8c5;
+  border: 1px solid #6c6652;
+  box-shadow: inset 0 0 0 1px #12130f;
+  padding: 1px 5px;
+}
+.chat-content button:hover,
+.chat-content button[aria-pressed='true'] {
+  color: #fff1c3;
+  border-color: #a39266;
+  background: linear-gradient(#514b36, #26261d);
+}
+.chat-content button:focus-visible,
+.chat-content select:focus-visible,
+.chat-content input:focus-visible {
+  outline: 1px solid #cfb575;
+  outline-offset: 1px;
+}
+.chat-content nav button {
+  padding: 0 5px;
+  height: 18px;
+}
+.chat-content nav button:last-child {
+  margin-left: auto;
+}
+.chat-content form,
+.chat-content .chat-find,
+.chat-whisper form {
+  display: flex;
+  gap: 3px;
+}
+.chat-content .chat-find[hidden] {
+  display: none;
+}
+.chat-content select {
+  width: 65px;
+  padding: 0 2px;
+}
+.chat-content input,
+.chat-whisper input {
+  min-width: 0;
+  flex: 1;
+  height: 21px;
+  padding: 1px 4px;
+  font:
+    12px/17px Tahoma,
+    Arial,
+    sans-serif;
+  color: #eee7d4;
+  background: rgba(6, 8, 6, 0.56);
+  border: 1px solid #b3b09b;
+  box-shadow: inset 0 1px 3px #0009;
+}
+.chat-content input:focus {
+  background: rgba(8, 10, 7, 0.82);
+}
+.chat-content p[role='status'] {
+  margin: 0;
+  color: #e7ad79;
+  font-size: 11px;
+}
+.chat-content p[role='status']:empty {
+  display: none;
+}
+.chat-window > .window-header .window-close:focus-visible {
+  opacity: 1;
+}
+.chat-line button {
+  font: inherit !important;
+}
+
+/* Private messages: transparent compact chrome, tab rail and independent panes. */
+.whisper-window {
+  --window-width: 410px;
+  --window-inset: 6px;
+  padding: 5px var(--window-inset) 6px;
+  background: rgba(9, 13, 10, 0.42);
+  border: 1px solid #9b927266;
+  box-shadow: 0 1px 4px #0005;
+  font:
+    12px/16px Tahoma,
+    Arial,
+    sans-serif;
+}
+.whisper-window:hover,
+.whisper-window:focus-within {
+  background: rgba(9, 13, 10, 0.62);
+  border-color: #a99a7388;
+}
+.whisper-window > .chrome {
+  display: none;
+}
+.whisper-window > .window-header {
+  height: 20px;
+  margin: -2px 0 4px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #9b927244;
+}
+.whisper-window > .window-header h1 {
+  text-align: left;
+  font:
+    12px/19px Tahoma,
+    Arial,
+    sans-serif;
+  color: #d4ccb8;
+}
+.whisper-window .window-close {
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  background: none;
+  color: #d4ccb8;
+  font:
+    16px/18px Arial,
+    sans-serif;
+}
+.whisper-window .window-close:hover {
+  background: #e0d1a522;
+  color: #fff0c7;
+}
+.chat-whisper .window-content {
+  display: block;
+  padding: 0;
+}
+.chat-whisper button {
+  background: #171b1599;
+  border-color: #93896a66;
+  box-shadow: none;
+  padding: 1px 4px;
+}
+.chat-whisper button:hover {
+  color: #fff0c7;
+  border-color: #b5a275;
+}
+.chat-whisper button:focus-visible,
+.whisper-conversations:focus-visible {
+  outline: 1px solid #cfb575;
+  outline-offset: 1px;
+}
+.whisper-tab-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  border-bottom: 1px solid #796b4d;
+  padding-bottom: 4px;
+}
+.whisper-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #796b4d #181811;
+  gap: 2px;
+}
+.whisper-tabs button {
+  flex: none;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.whisper-tabs button[aria-selected='true'] {
+  color: #fff0ba;
+  border-color: #b39a62;
+  background: linear-gradient(#53472c, #282419);
+}
+.whisper-tabs button.unread {
+  color: #edc568;
+}
+.whisper-conversations {
+  width: 30px;
+  height: 20px;
+  background: #141a1299;
+  color: #ddd3b9;
+  border: 1px solid #796b4d;
+}
+.whisper-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 0;
+}
+.whisper-recipient {
+  flex: 1;
+  min-width: 80px;
+  font:
+    12px Tahoma,
+    Arial,
+    sans-serif;
+  color: #e4c98e;
+  overflow-wrap: anywhere;
+}
+.chat-whisper .chat-log {
+  height: 185px;
+  padding: 3px 1px;
+  background: transparent;
+  border-top: 1px solid #93896a33;
+}
+.chat-whisper form {
+  margin-top: 5px;
+}
+.chat-whisper section[hidden],
+.whisper-tabs button[hidden] {
+  display: none;
+}
+.chat-whisper input {
+  height: 23px;
+  background: #060a0666;
+  border-color: #b3b09b88;
+  box-shadow: none;
+}
+.chat-whisper button {
+  cursor: pointer;
+}
+.whisper-dock {
+  --window-width: 62px;
+  --window-inset: 0px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.whisper-dock > .chrome,
+.whisper-dock > .window-header {
+  display: none;
+}
+.whisper-dock > .window-content {
+  padding: 0;
+  display: block;
+}
+.whisper-envelope {
+  width: 60px;
+  min-height: 34px;
+  padding: 3px;
+  background: linear-gradient(#373425e6, #17170fe6);
+  border: 1px solid #a18b56;
+  color: #f4dfaa;
+  box-shadow: 0 1px 4px #0008;
+  font:
+    19px Georgia,
+    serif;
+  cursor: pointer;
+}
+.whisper-envelope:focus-visible {
+  outline: 1px solid #f4dfaa;
+  outline-offset: 2px;
+}
+
+/* The tab rail is also the shell's drag handle; controls keep their own clicks. */
+.whisper-window > .window-header.whisper-tab-row {
+  height: auto;
+  min-height: 24px;
+  display: flex;
+  margin: 0 0 3px;
+  padding: 0 0 3px;
+  gap: 6px;
+}
+.whisper-tab {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.whisper-tabs .whisper-tab-close {
+  width: 17px;
+  padding: 0;
+  visibility: hidden;
+  border-left: 0;
+  font:
+    14px/17px Arial,
+    sans-serif;
+}
+.whisper-tab.active .whisper-tab-close,
+.whisper-tab:hover .whisper-tab-close,
+.whisper-tab:focus-within .whisper-tab-close {
+  visibility: visible;
+}
+.whisper-tabs .whisper-tab-close:focus-visible {
+  visibility: visible;
+}
+.whisper-tabs button[role='tab'] {
+  max-width: 112px;
+}

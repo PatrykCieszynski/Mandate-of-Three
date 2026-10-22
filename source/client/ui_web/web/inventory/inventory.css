@@ -1,4 +1,5 @@
 /* All geometry below is in logical pixels. Legacy PNGs remain native-sized. */
+#inventory-window {--window-width:calc(var(--slot-size) * 5 + var(--window-inset) * 2 + 2px)}
 
 .inventory-tabs {
   display:flex;
