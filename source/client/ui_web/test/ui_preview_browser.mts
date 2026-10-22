@@ -99,6 +99,24 @@ try {
         ?.contentDocument?.querySelector<HTMLElement>('#inventory')
         ?.style.getPropertyValue('--ui-scale') === '1.25',
   );
+  // The persistent HUD shares the snapshot scale without becoming an input region.
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('iframe')
+        ?.contentDocument?.querySelector<HTMLElement>('#bottom-hud')
+        ?.style.getPropertyValue('--ui-scale') === '1.25',
+  );
+  assert.equal(
+    await ui.locator('#bottom-hud').evaluate((root) => {
+      const style = getComputedStyle(root);
+      return (
+        style.pointerEvents === 'none' &&
+        new DOMMatrixReadOnly(style.transform).a === 1.25
+      );
+    }),
+    true,
+  );
   await ui.locator('.inventory-item').first().click({ button: 'right' });
   await ui
     .locator('#inventory .inventory-status')
@@ -352,6 +370,7 @@ try {
   await ui.locator('#inventory .window-close').click();
   await ui.locator('#inventory-window').waitFor({ state: 'hidden' });
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });
+  await ui.locator('#bottom-hud').waitFor({ state: 'visible' });
   assert.deepEqual(errors, []);
   console.log(
     'Browser development preview: PASS (CSP, fixtures, selective updates, commands, reload)',
