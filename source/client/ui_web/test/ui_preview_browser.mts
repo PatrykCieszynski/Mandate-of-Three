@@ -426,6 +426,9 @@ try {
     await whisper.evaluate((el) => document.activeElement === el),
     false,
   );
+  await ui
+    .getByRole('button', { name: 'Find whisper player', exact: true })
+    .click();
   const name = ui.getByRole('textbox', {
     name: 'Whisper player name',
     exact: true,

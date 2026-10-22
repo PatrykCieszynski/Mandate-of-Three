@@ -60,7 +60,7 @@ export function mountChat(root, options) {
         placement: {
             kind: 'viewport',
             anchor: 'bottom-left',
-            offset: { x: 12, y: 12 },
+            offset: { x: 12, y: -56 },
         },
         onClose: () => {
             expanded = false;
@@ -108,11 +108,8 @@ export function mountChat(root, options) {
         for (const m of messages) {
             const row = document.createElement('p');
             row.className = `chat-line channel-${m.channel}`;
-            const name = button(privateLog
-                ? m.sender === state.self
-                    ? 'You'
-                    : m.name
-                : `[${m.channel}] ${m.name}`, () => open(m.sender, m.name));
+            const name = button(privateLog ? (m.sender === state.self ? 'You' : m.name) : m.name, () => open(m.sender, m.name));
+            name.title = m.channel;
             if (m.channel === 'system')
                 name.disabled = true;
             const text = document.createElement('span');
@@ -127,25 +124,41 @@ export function mountChat(root, options) {
     }
     function refreshMain() {
         root.classList.toggle('chat-expanded', expanded);
+        for (const tab of tabs.querySelectorAll('[data-channel]'))
+            tab.setAttribute('aria-pressed', String(tab.dataset.channel === filter));
+        historyButton?.setAttribute('aria-expanded', String(expanded));
         paintLog(log, state.messages
             .filter((m) => filter === 'all' || m.channel === filter)
             .slice(expanded ? 0 : -5));
         shell.refresh();
         options.regions();
     }
-    for (const name of ['all', ...channels])
-        tabs.append(button(name, () => {
+    const labels = {
+        all: 'All',
+        general: 'General',
+        trade: 'Trade',
+        local: 'Local',
+        party: 'Party',
+        guild: 'Guild',
+    };
+    for (const name of ['all', ...channels]) {
+        const tab = button(labels[name] ?? name, () => {
             filter = name;
             refreshMain();
-        }));
-    tabs.append(button('History', () => {
+        });
+        tab.dataset.channel = name;
+        tabs.append(tab);
+    }
+    const historyButton = button('History', () => {
         expanded = !expanded;
         refreshMain();
-    }));
+    });
+    historyButton.title = 'Expand or collapse chat history';
+    tabs.append(historyButton);
     for (const name of channels) {
         const o = document.createElement('option');
         o.value = name;
-        o.textContent = name;
+        o.textContent = labels[name] ?? name;
         channel.append(o);
     }
     form.append(channel, input);
@@ -155,10 +168,25 @@ export function mountChat(root, options) {
     find.maxLength = 64;
     find.setAttribute('aria-label', 'Whisper player name');
     find.placeholder = 'Whisper player name';
-    const findButton = button('Whisper', () => {
+    const findButton = button('Open', () => {
         void command('chat.send', { action: 'lookup', name: find.value.trim() });
     });
-    content.append(find, findButton);
+    const finder = document.createElement('div');
+    finder.className = 'chat-find';
+    finder.hidden = true;
+    finder.append(find, findButton);
+    content.append(finder);
+    const toggleFind = button('Whisper', () => {
+        finder.hidden = !finder.hidden;
+        if (finder.hidden)
+            find.blur();
+        else
+            find.focus();
+        shell.refresh();
+        options.regions();
+    });
+    toggleFind.setAttribute('aria-label', 'Find whisper player');
+    form.append(toggleFind);
     form.onsubmit = (e) => {
         e.preventDefault();
         const text = input.value.trim();

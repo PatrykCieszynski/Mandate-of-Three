@@ -176,3 +176,8 @@ Hotbar sample/empty controls populate the existing passive eight-slot renderer
 through `hud.quick_slots`; labels are presentation fixtures, not executable
 Inventory/skill bindings. Icons, cooldowns and authenticated hotbar use are not
 introduced by the preview.
+
+Public chat uses a transparent HUD log above compact channel/composer controls.
+Whisper name lookup opens from the Whisper button; private conversations retain
+the reusable draggable window chrome. The passive hotbar uses a compact 4+4
+slot rail without a heading. These presentation changes do not add hotbar actions.
