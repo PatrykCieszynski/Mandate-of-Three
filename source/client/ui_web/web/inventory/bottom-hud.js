@@ -24,6 +24,11 @@ export function mountBottomHud(root) {
     panel.append(title, slots);
     root.append(panel);
     return {
+        setScale(scale) {
+            if (!Number.isFinite(scale) || scale <= 0)
+                throw Error('Invalid UI scale');
+            root.style.setProperty('--ui-scale', String(scale));
+        },
         // Presentation-only until authenticated item/skill execution is available.
         render(bindings = []) {
             buttons.forEach((slot, i) => {
@@ -43,6 +48,8 @@ export function mountBottomHud(root) {
                 }
             });
         },
-        dispose() { panel.remove(); },
+        dispose() {
+            panel.remove();
+        },
     };
 }

@@ -30,9 +30,10 @@ const itemIcons = new ItemIconResolver({
     upgrade_ore: new URL('../content/upgrade_ore.svg', import.meta.url).href,
 });
 export const resolveItemIcon = (id) => itemIcons.resolve(id);
-const bottomHud = mountBottomHud(findElement(document, '#bottom-hud', 'aside'));
 export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
+const bottomHud = mountBottomHud(findElement(document, '#bottom-hud', 'aside'));
+bottomHud.setScale(manager.scale);
 const root = findElement(document, '#inventory', 'main'), storageRoot = findElement(document, '#storage', 'main'), equipmentRoot = findElement(document, '#equipment', 'main'), shopRoot = findElement(document, '#shop', 'main'), exchangeRoot = findElement(document, '#exchange', 'main'), marketBrowserRoot = findElement(document, '#market-browser', 'main'), marketVisitorRoot = findElement(document, '#market-visitor', 'main'), marketRoot = findElement(document, '#market', 'main'), upgradeRoot = findElement(document, '#upgrade', 'main'), npcRoot = findElement(document, '#npc-menu', 'main'), npcServiceRoot = findElement(document, '#npc-service', 'main'), store = new DomainStore();
 let regions;
 const bridge = new WebBridge({
@@ -104,6 +105,8 @@ const bridge = new WebBridge({
             viewport: () => ({ width: innerWidth, height: innerHeight }),
             onRegionsChanged: () => regions?.refresh(),
         });
+        if (message.type === 'ui.snapshot' || message.type === 'hud.updated')
+            bottomHud.setScale(manager.scale);
         if (message.type === 'ui.snapshot' || message.type === 'npc.updated') {
             npc.setState(state.npc ?? { active: false });
             upgrade.setNpcState(state.npc ?? { active: false });

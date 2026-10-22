@@ -1,7 +1,7 @@
 extends Node
 ## Slot preferences never mint items or grant skills.
 func _ready() -> void:
-	var bindings := HotbarBindings.new()
+	var bindings := preload("res://source/common/gameplay/hotbar/hotbar_bindings.gd").new()
 	assert(bindings.snapshot().size() == 8)
 	assert(not bindings.assign_item(-1, "bad"))
 	assert(not bindings.assign_skill(8, &"slash"))

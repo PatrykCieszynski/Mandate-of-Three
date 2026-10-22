@@ -1,3 +1,4 @@
+import { mountBottomHud } from './bottom-hud.js';
 import { mountExchange } from '../screens/market/exchange-view.js';
 import { mountMarketBrowser } from '../screens/market/browser-view.js';
 import { mountMarket } from '../screens/market/market-view.js';
@@ -36,6 +37,8 @@ const itemIcons = new ItemIconResolver({
 export const resolveItemIcon = (id: ItemIconId) => itemIcons.resolve(id);
 export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
+const bottomHud = mountBottomHud(findElement(document, '#bottom-hud', 'aside'));
+bottomHud.setScale(manager.scale);
 const root = findElement(document, '#inventory', 'main'),
   storageRoot = findElement(document, '#storage', 'main'),
   equipmentRoot = findElement(document, '#equipment', 'main'),
@@ -125,6 +128,8 @@ const bridge = new WebBridge({
       viewport: () => ({ width: innerWidth, height: innerHeight }),
       onRegionsChanged: () => regions?.refresh(),
     });
+    if (message.type === 'ui.snapshot' || message.type === 'hud.updated')
+      bottomHud.setScale(manager.scale);
     if (message.type === 'ui.snapshot' || message.type === 'npc.updated') {
       npc.setState(state.npc ?? { active: false });
       upgrade.setNpcState(state.npc ?? { active: false });
@@ -326,6 +331,7 @@ regions = reportInteractiveRegions(bridge, [
   ...drag.regions,
 ]);
 window.addEventListener('pagehide', () => {
+  bottomHud.dispose();
   worldDrop.dispose();
   upgrade.dispose();
   shop.dispose();
