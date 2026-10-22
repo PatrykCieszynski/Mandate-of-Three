@@ -1,4 +1,4 @@
-.storage-window {--window-width:666px;max-width:calc(100vw / var(--ui-scale))}
+.storage-window {--window-width:calc(var(--slot-size) * 15 + var(--window-inset) * 2 + 2px);max-width:calc(100vw / var(--ui-scale))}
 .storage-tabs {display:flex;height:25px;gap:2px;margin-bottom:4px}
 .storage-capacity {margin:4px 0 0;height:13px;font:10px/13px Arial;color:var(--muted)}
 
