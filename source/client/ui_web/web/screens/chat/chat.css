@@ -205,14 +205,75 @@
   font: inherit !important;
 }
 
-/* Private messages: one classic frame, a bounded tab rail and independent panes. */
+/* Private messages: transparent compact chrome, tab rail and independent panes. */
 .whisper-window {
   --window-width: 410px;
-  --window-inset: 28px;
+  --window-inset: 6px;
+  padding: 5px var(--window-inset) 6px;
+  background: rgba(9, 13, 10, 0.42);
+  border: 1px solid #9b927266;
+  box-shadow: 0 1px 4px #0005;
+  font:
+    12px/16px Tahoma,
+    Arial,
+    sans-serif;
+}
+.whisper-window:hover,
+.whisper-window:focus-within {
+  background: rgba(9, 13, 10, 0.62);
+  border-color: #a99a7388;
+}
+.whisper-window > .chrome {
+  display: none;
+}
+.whisper-window > .window-header {
+  height: 20px;
+  margin: -2px 0 4px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #9b927244;
+}
+.whisper-window > .window-header h1 {
+  text-align: left;
+  font:
+    12px/19px Tahoma,
+    Arial,
+    sans-serif;
+  color: #d4ccb8;
+}
+.whisper-window .window-close {
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  background: none;
+  color: #d4ccb8;
+  font:
+    16px/18px Arial,
+    sans-serif;
+}
+.whisper-window .window-close:hover {
+  background: #e0d1a522;
+  color: #fff0c7;
 }
 .chat-whisper .window-content {
   display: block;
-  padding: 20px 0 12px;
+  padding: 0;
+}
+.chat-whisper .window-content button {
+  background: #171b1599;
+  border-color: #93896a66;
+  box-shadow: none;
+  padding: 1px 4px;
+}
+.chat-whisper .window-content button:hover {
+  color: #fff0c7;
+  border-color: #b5a275;
+}
+.chat-whisper button:focus-visible,
+.whisper-conversations:focus-visible {
+  outline: 1px solid #cfb575;
+  outline-offset: 1px;
 }
 .whisper-tab-row {
   display: flex;
@@ -247,8 +308,8 @@
 }
 .whisper-conversations {
   width: 30px;
-  height: 23px;
-  background: #201e15;
+  height: 20px;
+  background: #141a1299;
   color: #ddd3b9;
   border: 1px solid #796b4d;
 }
@@ -257,7 +318,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin: 5px 0;
+  margin: 3px 0;
 }
 .whisper-recipient {
   flex: 1;
@@ -271,9 +332,9 @@
 }
 .chat-whisper .chat-log {
   height: 185px;
-  padding: 5px 3px;
-  background: #07090466;
-  border-top: 1px solid #73634266;
+  padding: 3px 1px;
+  background: transparent;
+  border-top: 1px solid #93896a33;
 }
 .chat-whisper form {
   margin-top: 5px;
@@ -283,7 +344,10 @@
   display: none;
 }
 .chat-whisper input {
-  height: 25px;
+  height: 23px;
+  background: #060a0666;
+  border-color: #b3b09b88;
+  box-shadow: none;
 }
 .chat-whisper button {
   cursor: pointer;
