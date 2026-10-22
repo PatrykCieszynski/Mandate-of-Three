@@ -124,8 +124,10 @@ No legacy history is imported into the new chat.
 
 Server policy in `[runtime]` of `data/config/world_config.cfg` defaults to General
 3 s, Trade 20 s, five accepted light-channel messages per 5 s shared by Local /
-Party / Whisper, and twelve request attempts per second including invalid payloads
-and retries. Messages trim edge whitespace, reject control/bidi-format characters,
+Party / Whisper, and twelve new request attempts per second including invalid
+payloads. Cached IDs are resolved after current-session validation and before
+rate limiting; identical retries return the stored result without consuming
+limits, and changed payloads return `command_conflict`. Messages trim edge whitespace, reject control/bidi-format characters,
 and allow at most 256 Unicode code points, with a separate 2048-byte raw text
 and 4096-byte structured payload bound. Requests cannot specify sender metadata
 or send System. Trusted code can use `WorldServer.curr.world_chat.system(text,
@@ -146,7 +148,10 @@ uses text nodes, never HTML. Client history survives CEF reload and local CH
 handoff, but clears when the World connection closes or character identity changes.
 Public history retains up to 200 entries and each private conversation up to 100.
 A 16-conversation cache prefers closed conversations for eviction, otherwise its
-oldest conversation; a 128 KiB combined history budget may trim earlier messages
+oldest conversation. Incremental accounting measures each new message once and
+subtracts its cached cost on removal; 96 KiB is available for message JSON with
+a conservative 32 KiB reserve for bounded conversation/mute metadata. This
+128 KiB combined history budget may trim earlier messages
 so Unicode-heavy traffic cannot grow memory/reload snapshots without bounds.
 No offline mail, database history, bubbles, item links or inter-World routing.
 

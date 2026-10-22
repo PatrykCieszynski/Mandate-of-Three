@@ -74,8 +74,14 @@ func _ready() -> void:
 	assert(chat.execute(101,"same",retry,80000).ok)
 	assert(chat.execute(101,"same",retry,80001).ok and delivered.size()==3)
 	assert(chat.execute(101,"same",{"action":"send","channel":"general","text":"conflict"},80002).error=="command_conflict")
+	for i: int in 50: assert(chat.execute(101,"same",retry,90000).ok)
 	for i: int in 12: assert(chat.execute(101,"bad%d"%i,{"junk":true},90000).error=="payload")
 	assert(chat.execute(101,"blocked",retry,90000).error=="rate_limited")
+	assert(chat.execute(101,"same",retry,90000).ok and delivered.size()==3)
+	assert(chat.execute(101,"same",{"junk":true},90000).error=="command_conflict")
+	server.connected_players[101].current_peer_id=0
+	assert(chat.execute(101,"same",retry,90000).error=="session")
+	server.connected_players[101].current_peer_id=101
 	var history=History.new();history.identify(1)
 	var msg: Dictionary={"id":1,"channel":"whisper","sender":3,"name":"Player3","target":1,"text":"private"}
 	history.accept(msg);history.accept(msg);assert(history.conversations[3].messages.size()==1)
@@ -88,6 +94,13 @@ func _ready() -> void:
 	assert(history.messages.size()<=200 and JSON.stringify(history.snapshot()).to_utf8_buffer().size()<=131072)
 	for i: int in 20: history.open(1000+i,"Conversation%d"%i)
 	assert(history.conversations.size()==16)
+	# Mixed Unicode histories exercise count, byte and whole-conversation eviction.
+	for i: int in 2000:
+		history.accept({"id":i+1000,"channel":"whisper","sender":1000+i%20,"name":"Whisper","target":2,"text":"😀\\\"".repeat(64)})
+	assert(JSON.stringify(history.snapshot()).to_utf8_buffer().size()<=131072)
+	history.clear();history.identify(2)
+	for i: int in 200: history.accept({"id":i+5000,"channel":"general","sender":3,"name":"After clear","target":0,"text":"hello"})
+	assert(history.messages.size()==200)
 	for host: Node in hosts: host.free()
 	server.free()
 	print("CHAT_V1_OK authoritative channels, limits, identity, offline and session history")

@@ -429,3 +429,16 @@ new event handlers per message. Full/domain state output has a 512 KiB envelope
 ceiling to accommodate the bounded 128 KiB chat cache with inventory/storage;
 command input/results remain capped at 16 KiB. All player content is rendered as
 text. Server policies and limitations: [Chat V1](../gameplay/README.md#chat-v1--live-world-communication).
+
+
+Chat V1 retry follow-up: the server resolves retained request IDs after current
+session validation, before counting a new request against flood/channel limits.
+The client history tracks per-message serialized cost incrementally; pruning and
+conversation eviction subtract cached costs without copying/serializing the full
+history in a loop. A 96 KiB message budget plus 32 KiB conservative metadata
+reserve retains the 128 KiB cache ceiling. Accepted changes still publish a full
+bounded `chat` domain; a delta protocol is intentionally deferred. Incoming first
+whispers publish once after insertion, rather than publishing an empty window
+and then publishing the message again. The fallback DOM Enter shortcut only
+focuses main chat outside registered CEF windows; input fields and controls in
+whisper/Inventory/other windows retain their normal key handling.

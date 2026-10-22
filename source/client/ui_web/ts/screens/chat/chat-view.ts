@@ -268,7 +268,8 @@ export function mountChat(root: HTMLElement, options: Options) {
       e.key === 'Enter' &&
       !e.repeat &&
       e.target instanceof HTMLElement &&
-      !e.target.matches('input,textarea,select,[contenteditable]')
+      !e.target.matches('input,textarea,select,[contenteditable]') &&
+      !e.target.closest('[data-ui-window]')
     ) {
       e.preventDefault();
       input.focus();

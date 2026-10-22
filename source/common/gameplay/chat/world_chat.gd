@@ -51,11 +51,13 @@ func prune() -> void:
 	for owner: int in _rates.keys():
 		if not _server.player_id_to_peer_id.has(owner): _rates.erase(owner);_recent.erase(owner)
 func execute(peer: int, id: String, payload: Dictionary, now: int = Time.get_ticks_msec()) -> Dictionary:
-	if not attempt(peer,now): return {"ok":false,"error":"rate_limited"}
-	if not valid(payload): return {"ok":false,"error":"payload"}
-	var owner: int=_server.connected_players[peer].player_id
+	var current: Dictionary=context(peer)
+	if current.is_empty(): return {"ok":false,"error":"session"}
+	var owner: int=current.player.player_id
 	var history: Dictionary=_recent.get(owner,{})
 	if history.has(id): return history[id].result if history[id].payload==payload else {"ok":false,"error":"command_conflict"}
+	if not attempt(peer,now): return {"ok":false,"error":"rate_limited"}
+	if not valid(payload): return {"ok":false,"error":"payload"}
 	var result: Dictionary=handle(peer,payload,now)
 	if history.size()>=32: history.erase(history.keys()[0])
 	history[id]={"payload":payload.duplicate(true),"result":result};_recent[owner]=history

@@ -1283,6 +1283,39 @@ test('chat focus, filters, text safety, whisper identity, minimize and remount',
     ],
   });
   assert.equal(log.scrollTop, 1000, 'near-bottom readers follow new messages');
+  const inventory = document.createElement('main');
+  inventory.dataset.uiWindow = 'inventory';
+  const inventoryButton = document.createElement('button');
+  inventoryButton.textContent = 'Inventory action';
+  inventory.append(inventoryButton);
+  doc.body.append(inventory);
+  inventoryButton.focus();
+  inventoryButton.dispatchEvent(
+    new host.KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  assert.equal(
+    doc.activeElement,
+    inventoryButton,
+    'Enter on another window control does not focus main chat',
+  );
+  whisper.focus();
+  whisper.dispatchEvent(
+    new host.KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  assert.equal(
+    doc.activeElement,
+    whisper,
+    'Enter in a whisper keeps that composer',
+  );
+  inventory.remove();
   const before = actions.length;
   view.dispose();
   view = mountChat(root, opts);
