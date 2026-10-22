@@ -20,6 +20,7 @@ $taskCases = [ordered]@{
     exchange_ledger = 'EXCHANGE_LEDGER_OK'
     market_search = 'MARKET_SEARCH_OK'
     loot_resolver = 'LOOT_RESOLVER_OK'
+    hotbar_bindings = 'HOTBAR_BINDINGS_OK'
     world_event_drops = 'WORLD_EVENT_DROPS_OK'
     mob_packs = 'MOB_PACKS_OK'
     horn_taunt = 'HORN_TAUNT_OK'

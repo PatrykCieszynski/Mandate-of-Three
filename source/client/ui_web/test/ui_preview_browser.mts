@@ -103,6 +103,24 @@ try {
         ?.contentDocument?.querySelector<HTMLElement>('#inventory')
         ?.style.getPropertyValue('--ui-scale') === '1.25',
   );
+  // The persistent HUD shares the snapshot scale without becoming an input region.
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('iframe')
+        ?.contentDocument?.querySelector<HTMLElement>('#bottom-hud')
+        ?.style.getPropertyValue('--ui-scale') === '1.25',
+  );
+  assert.equal(
+    await ui.locator('#bottom-hud').evaluate((root) => {
+      const style = getComputedStyle(root);
+      return (
+        style.pointerEvents === 'none' &&
+        new DOMMatrixReadOnly(style.transform).a === 1.25
+      );
+    }),
+    true,
+  );
   await ui.locator('.inventory-item').first().click({ button: 'right' });
   await ui
     .locator('#inventory .inventory-status')
@@ -433,11 +451,20 @@ try {
     .filter({ hasText: 'Potion' })
     .waitFor();
   await page.getByRole('button', { name: 'Empty hotbar', exact: true }).click();
+  await ui
+    .locator('#bottom-hud .assigned')
+    .first()
+    .waitFor({ state: 'hidden' });
   assert.equal(await ui.locator('#bottom-hud .assigned').count(), 0);
   await page
     .getByRole('button', { name: 'Sample hotbar', exact: true })
     .click();
+  await ui
+    .locator('#bottom-hud .assigned')
+    .filter({ hasText: 'Potion' })
+    .waitFor();
   if (screenshot) await page.screenshot({ path: screenshot, fullPage: true });
+  await ui.locator('#bottom-hud').waitFor({ state: 'visible' });
   assert.deepEqual(errors, []);
   console.log(
     'Browser development preview: PASS (CSP, fixtures, selective updates, commands, reload)',
