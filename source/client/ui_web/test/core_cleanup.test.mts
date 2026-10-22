@@ -1,3 +1,4 @@
+import { mountParty } from '../web/screens/party/party-view.js';
 import { mountExchange } from '../web/screens/market/exchange-view.js';
 import { MAX_STATE_BYTES, MAX_BYTES } from '../web/protocol.js';
 import { transfer } from '../web/screens/storage/transfer.js';
@@ -1027,4 +1028,88 @@ test('Exchange ledger mode keeps native Retry available without a source stack a
   drag.dispose();
   manager.dispose();
   host.close();
+});
+
+test('party HP updates preserve mode selection; commands use explicit targets and reload state', async () => {
+  const { doc, manager } = environment(),
+    root = target();
+  doc.body.append(root);
+  const actions: unknown[] = [];
+  const view = mountParty(root, {
+    manager,
+    command: async (p) => {
+      actions.push(p);
+      return { ok: true };
+    },
+    close: () => {},
+    regions: () => {},
+  });
+  const state = {
+    id: 1,
+    leader: 1,
+    self: 1,
+    xp_mode: 'equal',
+    drop_mode: 'round_robin',
+    invite: {},
+    candidates: [],
+    members: [
+      {
+        id: 1,
+        name: 'Leader',
+        level: 10,
+        hp: 100,
+        max_hp: 100,
+        online: true,
+        same_instance: true,
+      },
+      {
+        id: 2,
+        name: 'Member',
+        level: 12,
+        hp: 80,
+        max_hp: 100,
+        online: true,
+        same_instance: true,
+      },
+    ],
+  };
+  view.setState(state);
+  const select = root.querySelector<HTMLSelectElement>(
+    '[aria-label="EXP mode"]',
+  )!;
+  select.value = 'carry';
+  select.dispatchEvent(new window.Event('change'));
+  view.setState({
+    ...state,
+    members: state.members.map((m) => ({ ...m, hp: m.hp - 1 })),
+  });
+  assert.equal(
+    root.querySelector<HTMLSelectElement>('[aria-label="EXP mode"]')!.value,
+    'carry',
+  );
+  Array.from(root.querySelectorAll('button'))
+    .find((b) => b.textContent === 'Apply modes')!
+    .click();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(actions, [
+    { action: 'modes', xp_mode: 'carry', drop_mode: 'round_robin' },
+  ]);
+  view.setState({ ...state, self: 2 });
+  assert.equal(root.querySelector('[aria-label="EXP mode"]'), null);
+  view.setState({
+    ...state,
+    id: 0,
+    leader: 0,
+    members: [],
+    invite: { from: 3, name: 'Inviter' },
+  });
+  Array.from(root.querySelectorAll('button'))
+    .find((b) => b.textContent === 'Accept')!
+    .click();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(actions.at(-1), { action: 'accept' });
+  view.dispose();
+  manager.dispose();
 });

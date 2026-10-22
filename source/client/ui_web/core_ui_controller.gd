@@ -12,6 +12,7 @@ var session := UiCommandSession.new()
 var items := ItemUiAdapter.new()
 const StorageAdapter = preload("res://source/client/ui_web/storage_ui_adapter.gd")
 var storage = StorageAdapter.new()
+var party = preload("res://source/client/ui_web/party_ui_adapter.gd").new()
 var npcs := NpcUiAdapter.new()
 var upgrades := UpgradeUiAdapter.new()
 var shop := ShopUiAdapter.new()
@@ -53,6 +54,7 @@ func setup(game_world: GameWorld3D) -> void:
 	bridge.interactive_regions_received.connect(host.update_interactive_regions)
 	bridge.text_focus_received.connect(_text_focus)
 	dispatcher.attach(bridge)
+	party.attach(world.party_endpoint,dispatcher,session,get_tree())
 	npcs.context_updated.connect(_npc_state)
 	npcs.attach(world.npc_endpoint, dispatcher, session, get_tree())
 	upgrades.attach(world.upgrade_endpoint, dispatcher, session, get_tree())
@@ -195,7 +197,10 @@ func _notification(what: int) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if ClientState.menu_open or not world.input_enabled: return
 	if not event is InputEventKey or not event.pressed or event.echo: return
-	if event.physical_keycode == KEY_I:
+	if event.physical_keycode == KEY_P:
+		party.toggle()
+		get_viewport().set_input_as_handled()
+	elif event.physical_keycode == KEY_I:
 		set_open(not (opened or equipment_opened))
 		get_viewport().set_input_as_handled()
 	elif event.physical_keycode == KEY_B:
@@ -256,6 +261,7 @@ func _stop(reason: String) -> void:
 	if is_instance_valid(dispatcher): dispatcher.dispose()
 	items.dispose()
 	storage.dispose()
+	party.dispose()
 	npcs.dispose()
 	upgrades.dispose()
 	shop.dispose()

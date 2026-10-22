@@ -49,17 +49,28 @@ not a mobile dog with extra HP. Melee can hit the stone and nearby dogs in the s
 swing. LMB selection and F autoattack can assist against the stone; Space remains
 untargeted directional melee. No target/damage list is accepted from clients.
 
-Contributions count actual damage capped to remaining HP. Highest total damage
-wins the reward; ties use the smaller persistent character ID. This is the existing
-solo rule, not a party policy. Disconnected contributors retain their ownership
-until reservation expires; reconnect uses their persistent character ID.
+Contributions count actual damage capped to remaining HP. Party V1 captures solo
+or party ownership at hit time; joining/leaving never retroactively transfers
+previous damage. The party roster/modes freeze at the first hit for that party.
+World keeps one shared encounter pool, not one valuable item per participant.
 
-Death claims the reward once in RAM before delivery: one existing ground sword
-and a 300 Yang pile, with normal reservation, expiry and pickup validation. There
-is no direct inventory grant and no stone XP reward in this version. Wave dogs
-retain ordinary dog loot/XP. Item pickup creates the persistent ItemInstance in
-an immediate transaction; Yang pickup updates the existing RAM wallet/pending delta.
-No persistent encounter/kill receipt or new economy batching is introduced.
+The initial, explicitly reviewable policy qualifies present competitors with at
+least **10% of total encounter damage**, falling back to the highest eligible
+competitor if none meets that threshold. Same-instance/range qualification follows
+[Party V1](README.md#party-v1--open-world-runtime). Yang divides proportionally
+between qualified competitors, then equally within each party. The single sword
+chooses one qualified competitor by server-side damage-weighted RNG and applies
+that party's frozen item mode. An independent significant solo and a party can
+therefore both earn Yang from one stone; valuable swords are never multiplied.
+The same shared-pool rule applies to authored mobs classified `rank=boss`.
+
+Death still claims once in RAM before delivery: exactly one existing ground sword
+and the existing 300 Yang **total**, with normal reservation, expiry and pickup.
+There is still no stone XP reward or direct Inventory grant. Wave dogs retain
+ordinary mob entitlement/loot/XP. Party allocations do not add durable kill
+receipts or alter item transactions / wallet checkpoint guarantees. The 10%
+threshold, proportional Yang and weighted item selection are initial balance
+choices to review in this PR; they are not a generic boss reward framework.
 
 ## Checks and manual playtest
 

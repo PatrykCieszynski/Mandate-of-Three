@@ -5,8 +5,9 @@ level-up, HUD and persistence across relog. Combat and item parameters are uncha
 
 ## Rewards and levels
 
-A Wild Dog awards 20 XP. The full reward goes to the character with the highest
-actual damage contribution, as with loot reservation. Overkill does not increase
+A Wild Dog awards 20 XP. For solo-only fights the full reward goes to the character with the highest
+actual damage contribution, as with loot reservation. Party fights aggregate
+competitors and split one conserved EXP pool through the [Party V1 rules](README.md#party-v1--open-world-runtime). Overkill does not increase
 contribution; ties use the lower persistent character ID. The last hit does not
 automatically take the reward. XP is granted on mob death regardless of item
 pickup; hits and pickup alone do not award experience.

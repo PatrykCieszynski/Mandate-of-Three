@@ -1,3 +1,4 @@
+import type {PartySnapshot,PartyCommand} from '../screens/party/party-view.js';
 import type {ExchangeSnapshot,ExchangeDeposit,ExchangeWithdraw,ExchangePlace,ExchangeCancel} from '../screens/market/exchange-model.js';
 import type {MarketBrowserSnapshot,MarketSearch} from '../screens/market/browser-model.js';
 import type {MarketSnapshot,MarketCommand} from '../screens/market/market-model.js';
@@ -16,9 +17,10 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
+  party?: PartySnapshot;
   exchange?: ExchangeSnapshot;
   market?: MarketSnapshot;
   market_browser?: MarketBrowserSnapshot;
@@ -37,6 +39,8 @@ export interface MoveItemCommand extends ItemCommand { x: number; y: number; pag
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'party.command': PartyCommand;
+  'party.close': Record<string,never>;
   'exchange.deposit': ExchangeDeposit;
   'exchange.withdraw': ExchangeWithdraw;
   'exchange.order': ExchangePlace;
