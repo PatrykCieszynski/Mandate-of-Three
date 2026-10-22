@@ -38,7 +38,8 @@ try {
     .waitFor();
   const ui = page.frameLocator('iframe');
   for (const close of await ui
-    .locator('#private-chat:visible .window-close')
+    .locator('#private-chat:visible button')
+    .filter({ hasText: /^Minimize$/ })
     .all())
     await close.click();
   await ui.locator('#inventory .inventory-item').first().waitFor();
@@ -436,6 +437,27 @@ try {
     exact: true,
   });
   await yunaDraft.fill('Draft for Yuna');
+  const privateWindow = ui.locator('#private-chat-window');
+  const beforeDrag = await privateWindow.boundingBox();
+  const dragSpace = await ui
+    .locator('#private-chat .whisper-tabs')
+    .boundingBox();
+  assert.ok(beforeDrag && dragSpace);
+  await page.mouse.move(
+    dragSpace.x + dragSpace.width - 8,
+    dragSpace.y + dragSpace.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(dragSpace.x + dragSpace.width + 32, dragSpace.y - 25, {
+    steps: 5,
+  });
+  await page.mouse.up();
+  const afterDrag = await privateWindow.boundingBox();
+  assert.ok(
+    afterDrag && afterDrag.x > beforeDrag.x && afterDrag.y < beforeDrag.y,
+    'empty tab rail drags the private window',
+  );
+
   await ui.getByRole('tab', { name: 'Baek', exact: true }).click();
   await whisper.waitFor({ state: 'visible' });
   await whisper.fill('Draft for Baek');

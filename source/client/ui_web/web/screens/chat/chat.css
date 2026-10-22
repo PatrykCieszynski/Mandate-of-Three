@@ -129,7 +129,7 @@
 }
 .chat-content button,
 .chat-content select,
-.chat-whisper .window-content button {
+.chat-whisper button {
   font:
     11px/15px Tahoma,
     Arial,
@@ -260,13 +260,13 @@
   display: block;
   padding: 0;
 }
-.chat-whisper .window-content button {
+.chat-whisper button {
   background: #171b1599;
   border-color: #93896a66;
   box-shadow: none;
   padding: 1px 4px;
 }
-.chat-whisper .window-content button:hover {
+.chat-whisper button:hover {
   color: #fff0c7;
   border-color: #b5a275;
 }
@@ -384,4 +384,39 @@
 .whisper-envelope:focus-visible {
   outline: 1px solid #f4dfaa;
   outline-offset: 2px;
+}
+
+/* The tab rail is also the shell's drag handle; controls keep their own clicks. */
+.whisper-window > .window-header.whisper-tab-row {
+  height: auto;
+  min-height: 24px;
+  display: flex;
+  margin: 0 0 3px;
+  padding: 0 0 3px;
+  gap: 6px;
+}
+.whisper-tab {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.whisper-tabs .whisper-tab-close {
+  width: 17px;
+  padding: 0;
+  visibility: hidden;
+  border-left: 0;
+  font:
+    14px/17px Arial,
+    sans-serif;
+}
+.whisper-tab.active .whisper-tab-close,
+.whisper-tab:hover .whisper-tab-close,
+.whisper-tab:focus-within .whisper-tab-close {
+  visibility: visible;
+}
+.whisper-tabs .whisper-tab-close:focus-visible {
+  visibility: visible;
+}
+.whisper-tabs button[role='tab'] {
+  max-width: 112px;
 }

@@ -72,8 +72,12 @@ export function mountWhispers(options, command) {
         if (overflow.value)
             select(Number(overflow.value));
     };
-    const row = document.createElement('div');
-    row.className = 'whisper-tab-row';
+    // Reuse the shell's captured drag handle; only its empty space starts a drag.
+    const row = shell.panel.querySelector('.window-header');
+    row.classList.add('whisper-tab-row');
+    row.querySelector('h1').hidden = true;
+    row.querySelector('.window-close').hidden = true;
+    overflow.addEventListener('pointerdown', (e) => e.stopPropagation());
     row.append(tabs, overflow);
     const controls = document.createElement('div');
     controls.className = 'whisper-controls';
@@ -87,19 +91,20 @@ export function mountWhispers(options, command) {
                 muted: !state.muted.includes(c.id),
             });
     });
-    const close = action('Close conversation', () => {
-        const c = current();
+    const closeConversation = (id) => {
+        const c = state?.conversations.find((c) => c.id === id);
         if (!c)
             return;
+        const wasActive = current()?.id === id;
         panes.get(c.id)?.field.blur();
         const next = state.conversations.find((other) => other.id !== c.id && other.mode !== 'closed');
         void command('chat.conversation', { target: c.id, mode: 'closed' }).then((ok) => {
-            if (ok && next && !disposed && !current())
+            if (ok && wasActive && next && !disposed && !current())
                 select(next.id);
         });
-    });
-    controls.append(recipient, mute, close, action('Minimize', minimize));
-    shell.contentRoot.append(row, controls);
+    };
+    controls.append(recipient, mute, action('Minimize', minimize));
+    shell.contentRoot.append(controls);
     const envelope = action('', () => {
         const choices = state?.conversations ?? [];
         const c = choices.find((c) => c.unread > 0) ??
@@ -121,7 +126,15 @@ export function mountWhispers(options, command) {
         tab.setAttribute('role', 'tab');
         tab.setAttribute('aria-controls', pane.id);
         pane.setAttribute('aria-labelledby', tab.id);
-        tabs.append(tab);
+        const group = document.createElement('div');
+        group.className = 'whisper-tab';
+        group.setAttribute('role', 'presentation');
+        const close = action('×', () => closeConversation(c.id));
+        close.className = 'whisper-tab-close';
+        close.setAttribute('aria-label', `Close conversation with ${c.name}`);
+        close.title = `Close ${c.name}`;
+        group.append(tab, close);
+        tabs.append(group);
         const log = document.createElement('div');
         log.className = 'chat-log';
         log.setAttribute('role', 'log');
@@ -151,7 +164,7 @@ export function mountWhispers(options, command) {
                     field.value = '';
             });
         };
-        const entry = { root: pane, tab, log, field, last: '' };
+        const entry = { root: pane, tab, group, close, log, field, last: '' };
         panes.set(c.id, entry);
         return entry;
     }
@@ -183,7 +196,7 @@ export function mountWhispers(options, command) {
                 if (!value.conversations.some((c) => c.id === id)) {
                     p.field.blur();
                     p.root.remove();
-                    p.tab.remove();
+                    p.group.remove();
                     panes.delete(id);
                 }
             overflow.replaceChildren(option('⋯', ''));
@@ -191,7 +204,9 @@ export function mountWhispers(options, command) {
                 const p = panes.get(c.id) ?? create(c);
                 const selected = c.id === active?.id;
                 p.root.hidden = !selected;
-                p.tab.hidden = c.mode === 'closed';
+                p.group.hidden = c.mode === 'closed';
+                p.group.classList.toggle('active', selected);
+                p.close.setAttribute('aria-label', `Close conversation with ${c.name}`);
                 p.tab.textContent = c.name + (c.unread ? ` · ${c.unread}` : '');
                 p.tab.setAttribute('aria-selected', String(selected));
                 p.tab.classList.toggle('unread', c.unread > 0);

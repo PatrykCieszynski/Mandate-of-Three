@@ -427,8 +427,10 @@ unread messages without switching tabs, opening the window or requesting focus.
 Selecting a tab or envelope uses the existing conversation command to mark that
 conversation read. The envelope counts unread conversations; its tooltip lists
 senders/message counts. Tabs remain in one scrollable row, with a selector for
-all cached conversations (including closed ones). Closing a conversation selects
-the next retained tab; minimizing or closing the whole PW window preserves tabs.
+all cached conversations (including closed ones). The × beside each tab closes that conversation; closing the active conversation
+selects the next retained tab, while closing a background tab preserves selection.
+Minimizing PW preserves tabs. There is no separate visible window title; empty
+space in the tab rail reuses the shell drag handle.
 CEF reload restores session histories, selection, minimized state and unread
 counts; unsent drafts and per-tab scroll positions are view-local and reset.
 
