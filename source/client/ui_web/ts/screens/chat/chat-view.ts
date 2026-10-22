@@ -295,7 +295,7 @@ export function mountChat(root: HTMLElement, options: Options) {
       placement: {
         kind: 'viewport',
         anchor: 'bottom-left',
-        offset: { x: 510 + whispers.size * 24, y: 30 + whispers.size * 24 },
+        offset: { x: 510 + whispers.size * 24, y: -110 - whispers.size * 24 },
       },
       onClose: () => {
         field.blur();
