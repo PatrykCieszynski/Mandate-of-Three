@@ -35,4 +35,4 @@ from SCRIPT ERROR; passing runs contain no script error.
 No binary, password, connection string, database, native log or installed PostgreSQL
 data is committed. This is persistence parity, not multi-writer correctness, World
 latency, PostgreSQL network client recovery, full P1 completion or a cutover gate.
-See [scope and commands](../../development/postgres-npc-shop-parity.md).
+See [scope and commands (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-npc-shop-parity.md).

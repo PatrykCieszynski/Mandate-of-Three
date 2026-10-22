@@ -1,6 +1,6 @@
 # World Server optimization — staged execution plan
 
-**Status:** W0 audit/baseline and session/control/cache capacity integrated (PRs #114–115), 2026-10-21. W1 test-only profiling is the current review package; see [profiling contract](../development/world-profiling.md). Later implementation packages remain proposed and require review. This document is **not authorization to implement** a physics rewrite or merge experimental PR #18 into `main`.
+**Status (2026-10-22): deferred by the maintainer.** W0/W1 and session/control/cache capacity are integrated (PRs #114–116). Further profiling/controller experiments are paused pending representative map scale, mob/player populations and a separately agreed AOI plan. Retain the [profiling tools](../development/world-profiling.md) for later use; do not run this roadmap as an automatic queue. This document does not authorize a physics rewrite or merging experimental branches.
 
 Current W0 deliverables: [limit ownership audit](world-w0-limit-audit.md) and
 [measurement contract/runner](../development/world-baseline.md). Configuration

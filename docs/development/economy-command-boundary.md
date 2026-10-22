@@ -1,7 +1,14 @@
-# Economy boundary — Stage 2 local slices
+# Economy commands, client intentions and recovery
 
-These are narrow parts of the local Economy architecture work. They harden
-the existing WorldDatabase entry points through `WorldEconomyService`, which
+**Backend scope:** the store/orchestration details below record the original
+SQLite reference path and the stable client intention/recovery contracts. Normal
+development now uses PostgreSQL domain runtimes/workers; see
+[full-state setup](postgres-full-state.md) and [persistence](../architecture/persistence-policy.md).
+Do not infer normal PostgreSQL dispatch or distributed ownership from the
+synchronous SQLite examples.
+
+The original local application slices hardened
+WorldDatabase entry points through `WorldEconomyService`, which
 composes MarketplaceService for Shop/Exchange and handles upgrade/NPC purchase
 orchestration, Inventory activation/equipment/bag-move commands, and item
 pickup/account Storage transfers.

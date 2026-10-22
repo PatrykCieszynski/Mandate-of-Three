@@ -57,4 +57,4 @@ capture limit. No schema/protocol change, production backend selector, distribut
 invalidation, public PG Auction search or complete R6 pagination is delivered.
 Physical CEF, Linux, full Gateway/bootstrap, whole-World crash/failover and P4
 load/soak/import/restore/cutover are NOT VERIFIED. See
-[runtime contract](../../development/postgres-exchange-matching-runtime.md).
+[runtime contract (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-exchange-matching-runtime.md).

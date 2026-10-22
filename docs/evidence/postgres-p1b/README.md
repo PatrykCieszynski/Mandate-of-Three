@@ -17,7 +17,7 @@ directory, player database or Windows service was used or modified.
 | Linux, multi-connection economic races, response-loss recovery, World latency | NOT VERIFIED |
 
 Commands, ownership rules and scope are in
-[wallet parity](../../development/postgres-wallet-parity.md). The failure is a
+[wallet parity (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-wallet-parity.md). The failure is a
 real failed gate, not an expected-pass assertion or a green adoption result.
 
 The native-only probe emits:

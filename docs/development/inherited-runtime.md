@@ -25,3 +25,14 @@ References/content are evaluated individually. New First Region features should
 use the graduated runtime and CEF UI; old definitions/VFX may be reused when a
 concrete gameplay need establishes their contract. Skills, graphics and later
 replacement work determine subsequent removals.
+
+## Resource removal boundary
+
+Headless startup still reaches inherited global classes and preloads such as
+`characters/components/hand/hand.gd`, `items/item.gd` and the configured Gateway
+theme. Their raster dependencies can therefore break smoke before a 3D test
+starts, even when the corresponding 2D screen is never shown. Detach or replace
+the actual preload/resource references before removing their source assets.
+Reimport can rebuild a missing cache only while the source resource still exists;
+it cannot repair a missing PNG. Preserve imports/editor cache during disposable
+artifact cleanup, and report missing-source setup failures explicitly.

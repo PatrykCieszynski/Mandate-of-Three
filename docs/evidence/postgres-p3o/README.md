@@ -71,4 +71,4 @@ matching runtime, distributed publication, public PostgreSQL Auction search,
 complete R6 pagination or backend selector/cutover is delivered. Gateway/map/peer
 construction is controlled. Physical CEF, Linux, whole-World crash/failover and
 P4 load/soak/import/restore are NOT VERIFIED. See
-[runtime contract](../../development/postgres-exchange-ledger-runtime.md).
+[runtime contract (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-exchange-ledger-runtime.md).

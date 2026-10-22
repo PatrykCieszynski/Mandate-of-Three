@@ -1,5 +1,13 @@
 # PostgreSQL readiness (P1a)
 
+**Historical fixture scope:** stage-level backend/default statements below refer
+to the original measured implementation, not today's deployment. Normal roles
+now use PostgreSQL; migration/adoption is complete. Retained commands, failure
+analysis and retry/concurrency contracts remain reference material. Start with
+[current full-state setup](postgres-full-state.md),
+[persistence](../architecture/persistence-policy.md) and
+[migration history](../history/postgresql-migration.md) for current status.
+
 The original P1a evidence below used SOCI v0.4.1. The current dependency is
 [v0.4.3](soci-dependency.md), with the readiness fixture rerun on that installed
 payload. Historical evidence is retained with its original version labels.

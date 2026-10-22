@@ -35,4 +35,4 @@ subsequent runtime fixtures and smoke passed. No Terrain3D change is included.
 No credentials, binaries, native logs, runtime databases or player files are
 committed. Linux, physical CEF, PostgreSQL-backed clients, independent writer
 races, async World execution, automatic discovery/fencing and cutover are outside
-this evidence. See [scope and commands](../../development/postgres-inventory-parity.md).
+this evidence. See [scope and commands (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-inventory-parity.md).

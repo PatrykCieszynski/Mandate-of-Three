@@ -12,10 +12,10 @@ The original PDFs are design provenance, not a second active roadmap:
 | Source requirement | Current reference |
 | --- | --- |
 | Trusted account identity, realm wallet, exclusive UID custody, receipts and unknown outcomes | [Economy C1–C5](../architecture/economy/README.md), [runtime persistence](../architecture/persistence-policy.md) |
-| Base-definition catalog, upgrade range, rolled-affix AND filters, opening the whole Shop | [Search](../marketplace-e3a-search.md), [browser](../marketplace-e3b-browser.md) |
-| Fungible deposits, integer ratios, maker price, partial fills and conservation | [Ledger](../marketplace-e4-ledger.md), [Exchange](../marketplace-e5-exchange.md) |
+| Base-definition catalog, upgrade range, rolled-affix AND filters, opening the whole Shop | [Marketplace decisions](marketplace-v2-gaps.md), [current command/recovery boundary](../development/economy-command-boundary.md) |
+| Fungible deposits, integer ratios, maker price, partial fills and conservation | [Economy transaction contract](../architecture/economy/C3-transactions.md), [PostgreSQL milestone](../history/postgresql-migration.md) |
 | Gesture-only runtime, advisory preview, exact/automatic placement and atomic capacity | [Item drag runtime](../ui/item-drag-runtime.md) |
-| WAL backup/restore and deliberate durability policy | [Testing](../development/testing.md), [PostgreSQL gates](../plans/postgresql-migration.md) |
+| WAL backup/restore and deliberate durability policy | [Testing](../development/testing.md), [current PostgreSQL verification](../development/postgres-full-state.md) |
 
 ## Superseded assumptions
 
@@ -26,8 +26,9 @@ The original PDFs are design provenance, not a second active roadmap:
 - The source's durable "World" namespace is now called a **realm**. World Process
   and MapInstance are hosting/simulation identities, not economic ownership scopes.
 - "No PostgreSQL now" and the E0–E5 branch checklist describe an older baseline.
-  World still uses SQLite; the separately approved [P1–P4 plan](../plans/postgresql-migration.md)
-  includes opt-in PostgreSQL work, without authorizing a runtime switch.
+  Normal development now uses PostgreSQL for accounts, profiles and Economy.
+  See [completed migration history](../history/postgresql-migration.md); the
+  original PDF checklist does not imply another backend cutover.
 - The drag PDF's Inventory/Storage/Equipment-only initial migration is historical.
   NPC offer policies now exist; Trade examples remain future cases. The sample
   subject union does not require feature routing inside the generic runtime:

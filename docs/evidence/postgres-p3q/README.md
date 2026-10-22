@@ -73,4 +73,4 @@ passing runtime test. Its untracked generated UID sidecars were removed.
 No public wire/schema change, production backend switch, distributed invalidation
 or new pool model is delivered. Physical CEF, Linux, combat capacity, full Gateway
 bootstrap, whole-World crash/failover and P4 import/restore/cutover are NOT VERIFIED.
-See [runtime](../../development/postgres-auction-runtime.md).
+See [runtime (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-auction-runtime.md).

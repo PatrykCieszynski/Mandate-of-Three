@@ -68,4 +68,4 @@ cutover, Linux/physical CEF or cross-host/concurrent-World handoff claim. SQLite
 remains default. Supervisor-confirmed old-process exit is a precondition: no
 distributed ownership lease or automatic failover was introduced. See the
 [operator procedure](../../development/postgres-world-replacement.md) and current
-[remaining migration gates](../../plans/postgresql-migration.md#remaining-gates).
+[remaining migration gates (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/88b448a4fcf2476e43a7cce504df4987e5371d2b/docs/plans/postgresql-migration.md#remaining-gates).

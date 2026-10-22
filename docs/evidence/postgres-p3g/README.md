@@ -71,7 +71,7 @@ successful native logs have no SCRIPT/parse or unjoined-worker errors.
 
 ## Limits
 
-See [implementation contract](../../development/postgres-inventory-cache-fence.md).
+See [implementation contract (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-inventory-cache-fence.md).
 The local API requires trusted application-side committed notices; no new client
 RPC, domain publisher or durable/distributed notification transport is installed.
 ACK proves freshness at its transaction boundary, not perpetual freshness after

@@ -58,7 +58,7 @@ remain; successful native logs have no SCRIPT/parse or unjoined-worker errors.
 
 ## Limits and remaining migration
 
-See [runtime adoption status](../../plans/postgresql-migration.md#runtime-adoption-status).
+See [runtime adoption status (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/88b448a4fcf2476e43a7cce504df4987e5371d2b/docs/plans/postgresql-migration.md#runtime-adoption-status).
 Normal startup still owns SQLite. This PR does not activate other economic
 domains, wallet checkpoints, bootstrap/handoff/shutdown, distributed publishers,
 load/soak or cutover. The native runtime's peer maps are seeded; the endpoint

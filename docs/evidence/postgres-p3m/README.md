@@ -54,4 +54,4 @@ Normal runtime remains SQLite. No schema/RPC-signature change, buyer settlement,
 proceeds collection, Exchange/public PG Auction, complete claims pagination,
 cross-process publication or backend selector is delivered. Physical CEF, Linux,
 full Gateway-to-PG gameplay, whole-World crash/failover and P4 operational/load
-acceptance are NOT VERIFIED. See [contract and limitations](../../development/postgres-seller-runtime.md).
+acceptance are NOT VERIFIED. See [contract and limitations (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-seller-runtime.md).

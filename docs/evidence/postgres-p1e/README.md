@@ -41,4 +41,4 @@ Native runs contain deliberate SQL fault diagnostics and known teardown/resource
 warnings, but no SCRIPT ERROR/Parse Error. No credentials, DSNs, databases, native
 logs or binaries are committed. Linux, physical CEF, PostgreSQL-backed clients,
 broader P2/load evidence, distributed discovery/fencing and cutover remain outside
-this result. See [scope and commands](../../development/postgres-storage-parity.md).
+this result. See [scope and commands (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-storage-parity.md).

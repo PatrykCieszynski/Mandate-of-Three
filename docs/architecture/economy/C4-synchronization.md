@@ -12,7 +12,7 @@ World combat reads equipment stats from a local view; never call Economy or SQL 
 - A change to an equipped item's upgrade/affixes/placement can **invalidate dependent state** without requiring players to unequip it. World uses an explicit equipment/combat **dirty/invalidation marker** and recalculates the relevant derived stats from its updated authoritative snapshot at a **safe simulation boundary**. An update indicates what changed; a dirty marker indicates what must be recomputed.
 - Coalesce multiple invalidations into one recomputation when possible. Do not call Economy or SQL per combat hit and do not introduce a global event bus solely for cache invalidation.
 - **Dirty alone is insufficient across processes.** Reject older revisions, detect gaps/missing facts, and obtain a fresh authoritative snapshot when needed (including session transfers). An item that is no longer validly equipped must not continue affecting combat; reconcile/invalidate before applying subsequent combat steps that depend on it.
-- Keep the current local SQLite and `WorldServer.runtime_equipment` behavior until the service boundary is deliberately implemented. Event transport, revision granularity, recovery watermark and exact resync protocol remain open; **architectural acceptance is not implementation approval**.
+- Keep the current PostgreSQL runtime owners and `WorldServer.runtime_equipment` behavior until a distributed service boundary is deliberately implemented. Event transport, revision granularity, recovery watermark and exact resync protocol remain open; **architectural acceptance is not implementation approval**.
 
 ## Accepted synchronization principles — implementation choices deferred
 
@@ -42,4 +42,4 @@ Equip followed by sale, concurrent alt purchase, delayed event after newer revis
 
 ## Current code / migration
 
-Today `WorldServer.runtime_equipment` caches committed equipment-derived combat stats; WorldDatabase and inventory/currency endpoints refresh after local SQLite commit. Keep this safe current behavior until a deliberate asynchronous boundary is implemented.
+Today `WorldServer.runtime_equipment` caches committed equipment-derived combat stats. PostgreSQL runtime/application owners reconcile committed snapshots and publish through the existing endpoints; SQLite reference fixtures retain their local path. Keep these guarantees when introducing a distributed service boundary. See the [current persistence policy](../persistence-policy.md).

@@ -1,6 +1,6 @@
 # Documentation — start here
 
-This index classifies the documentation on the `cleanup` branch. **Folder names within Current describe domains, not additional documentation statuses.** Documentation is not a backlog inferred from file count.
+This index classifies the project documentation. **Folder names within Current describe domains, not additional documentation statuses.** Documentation is not a backlog inferred from file count.
 
 ## Current — source of truth
 - [Current project direction](decisions/project-direction.md) — active baseline and short-term priorities.
@@ -10,7 +10,7 @@ This index classifies the documentation on the `cleanup` branch. **Folder names 
 - [Gameplay](gameplay/README.md), [World and maps](world/README.md), [UI](ui/README.md).
 
 ## Plans — proposals, not implemented behavior
-- [Active/deferred plans](plans/README.md). Never interpret an old TODO as a new assignment; check code and the project direction.
+- [Deferred plans and candidates](plans/README.md). Never interpret an old TODO as a new assignment; check code and the project direction.
 
 ## Evidence — measurements and test history
 - [Evidence index](evidence/README.md). P1–P4 PostgreSQL per-package records are **historical evidence**, not a required reading set.

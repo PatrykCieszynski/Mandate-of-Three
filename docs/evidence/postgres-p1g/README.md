@@ -42,4 +42,4 @@ known teardown/resource warnings are not reported as new functional failures.
 No fake claims/revenue API, economic settlement, data import or production worker
 is included. Negative cache is owner/thread-local, not durable distributed C2
 admission. PostgreSQL clients, physical CEF, Linux, broad P2/load, P3 fencing and
-cutover remain unverified/deferred. See [scope and commands](../../development/postgres-shop-seller-parity.md).
+cutover remain unverified/deferred. See [scope and commands (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-shop-seller-parity.md).

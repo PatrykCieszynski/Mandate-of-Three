@@ -37,4 +37,4 @@ No credentials, DSNs, native logs, databases or binaries are committed. Storage
 has no mutation in this port; future Shop/Exchange ports must retain its account
 lock and complete-footprint contract. PostgreSQL clients, physical CEF, Linux,
 broad concurrency/load, automatic outcome discovery/fencing and cutover remain
-unverified/deferred. See [scope and commands](../../development/postgres-upgrade-parity.md).
+unverified/deferred. See [scope and commands (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-upgrade-parity.md).

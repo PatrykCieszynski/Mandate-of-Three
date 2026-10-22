@@ -1,5 +1,13 @@
 # PostgreSQL P2 — backend concurrency acceptance
 
+**Historical fixture scope:** stage-level backend/default statements below refer
+to the original measured implementation, not today's deployment. Normal roles
+now use PostgreSQL; migration/adoption is complete. Retained commands, failure
+analysis and retry/concurrency contracts remain reference material. Start with
+[current full-state setup](postgres-full-state.md),
+[persistence](../architecture/persistence-policy.md) and
+[migration history](../history/postgresql-migration.md) for current status.
+
 This gate covers the opt-in PostgreSQL stores and current economic operations.
 It does not enable PostgreSQL in World, implement a worker pool or authorize two
 World Processes to own the same pending runtime income. Production stays SQLite.

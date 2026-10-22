@@ -1,5 +1,13 @@
 # Account projection reads under marketplace load
 
+**Historical fixture scope:** stage-level backend/default statements below refer
+to the original measured implementation, not today's deployment. Normal roles
+now use PostgreSQL; migration/adoption is complete. Retained commands, failure
+analysis and retry/concurrency contracts remain reference material. Start with
+[current full-state setup](postgres-full-state.md),
+[persistence](../architecture/persistence-policy.md) and
+[migration history](../history/postgresql-migration.md) for current status.
+
 This pass measures the current single-World SQLite implementation. It preserves
 command admission, custody, receipts, immediate critical writes, synchronous
 wallet/equipment reconciliation and current response ordering. It introduces no

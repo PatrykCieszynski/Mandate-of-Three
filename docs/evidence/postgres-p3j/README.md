@@ -67,4 +67,4 @@ existing durable client intent journal. Internal volatile scheduling is not a
 durable acceptance ACK. RAM-only income can be lost on a World crash before
 checkpoint/critical COMMIT. Distributed wallet/item publishers, shared Storage,
 remaining Marketplace/Exchange/Auction flows, item pickup/initialization,
-bootstrap/handoff and P4 remain open. See [the behavior contract](../../development/postgres-npc-runtime.md).
+bootstrap/handoff and P4 remain open. See [the behavior contract (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-npc-runtime.md).

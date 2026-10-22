@@ -65,4 +65,4 @@ handoff, and does not retire profile/progression SQLite. Synchronous local trans
 fails closed until its async wallet checkpoint settles; transparent transfer is
 not claimed. Revoked dirty state remains in RAM until authorized recovery, and
 unresolved state refuses graceful shutdown. A crash can still lose uncheckpointed
-soft income. See [behavior and remaining adoption](../../development/postgres-wallet-runtime.md).
+soft income. See [behavior and remaining adoption (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-wallet-runtime.md).

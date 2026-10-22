@@ -1,5 +1,13 @@
 # PostgreSQL P2c–P2k — receipt-backed transaction retry
 
+**Historical fixture scope:** stage-level backend/default statements below refer
+to the original measured implementation, not today's deployment. Normal roles
+now use PostgreSQL; migration/adoption is complete. Retained commands, failure
+analysis and retry/concurrency contracts remain reference material. Start with
+[current full-state setup](postgres-full-state.md),
+[persistence](../architecture/persistence-policy.md) and
+[migration history](../history/postgresql-migration.md) for current status.
+
 These opt-in slices use official SOCI v0.4.3 and enable bounded whole-use-case
 retry for **Shop purchase/revenue collection, Exchange order placement/cancellation,
 Exchange stack conversion, Upgrade, NPC purchases and receipted Inventory/Storage/

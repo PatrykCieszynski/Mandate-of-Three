@@ -69,4 +69,4 @@ Normal startup remains SQLite. No schema/RPC signature change, Exchange/Auction
 search adoption, complete R6 claims pagination, cross-process publication,
 production bootstrap or cutover is delivered. Full Gateway-to-PG gameplay,
 physical CEF, Linux, whole-World crash/failover and P4 load/soak/import/restore are
-NOT VERIFIED. See [implementation contract](../../development/postgres-market-settlement-runtime.md).
+NOT VERIFIED. See [implementation contract (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/d9c7ecb42c166106aab24e772c0afad1de6908a8/docs/development/postgres-market-settlement-runtime.md).

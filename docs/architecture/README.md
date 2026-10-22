@@ -1,11 +1,11 @@
 # Architecture — ownership and constraints
 
-## Accepted target architecture (not yet implemented)
+## Accepted target contracts
 
 - [Economy V2 — contracts C1–C5](economy/README.md): account Yang, ItemInstance custody, idempotent transactions, snapshots, session fencing and CH handoff.
 - [World instance topology and dynamic channels](world-instance-architecture.md): MapInstance lifecycle, pooling, public/party dungeons, visible channels and optional overflow layers.
 
-These documents intentionally distinguish **one logical authority** from **one physical process**. In the near term we can enforce good internal module boundaries inside the current World without introducing a distributed Economy process or splitting processes.
+Some local transaction/session/instance guarantees are implemented; distributed Economy and cross-host World placement remain future work. These documents intentionally distinguish **one logical authority** from **one physical process**. In the near term we can enforce good internal module boundaries inside the current World without introducing a distributed Economy process or splitting processes.
 
 ## Running prototype contracts
 

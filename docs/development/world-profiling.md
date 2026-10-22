@@ -1,5 +1,7 @@
 # W1 — current-code World profiling
 
+**Work status (2026-10-22): deferred by the maintainer.** The implemented opt-in tools remain available; no further load/profiling runs are currently requested. Choose representative map/population/AOI scope before resuming. Existing results are historical synthetic observations, not hosting capacity.
+
 Opt-in extension of the [W0 baseline](world-baseline.md), not a controller change.
 Production source, physics, AI, snapshots, session limits, workers and Economy
 transactions are unchanged. No experimental movement implementation is imported.

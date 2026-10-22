@@ -2,7 +2,7 @@
 
 Plans are **not** evidence that functionality exists or a standing instruction to implement old TODOs. The owner maintains the roadmap independently. Confirm active scope before starting work.
 
-- [World W0–W7 optimization](world-server-optimization.md) — stages are conditional and require measured justification; W0/W1 and admission have already been completed, later packages are not an automatic execution queue.
+- [World W0–W7 optimization](world-server-optimization.md) — **deferred by the maintainer on 2026-10-22**. W0/W1 and admission are implemented; further profiling/controller experiments wait for representative map, mob/player density and AOI scope. Existing stages are not an execution queue.
 - [World capacity / configuration background](world-runtime-configuration.md), [W0 limit audit](world-w0-limit-audit.md).
 - [World technical candidates](world-technical-candidates.md) — ideas to evaluate, not decisions.
 - [Season-to-Classic transfer](season-close-transfer.md) — deferred feature.

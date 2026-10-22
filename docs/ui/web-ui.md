@@ -6,7 +6,7 @@ retains client state and the server retains gameplay/economy authority.
 
 The client has a small Web UI boundary. The first integrated screen is the
 [3D Inventory](inventory-ui-prototype.md), available in the root
-Vulkan Forward+ gameplay client. Other gameplay screens retain native Godot UI. The production source contains no mock inventory or diagnostic
+Vulkan Forward+ gameplay client. Core UI also composes Equipment, Storage, NPC Shop/Upgrade, Marketplace/Exchange and settings windows; native Godot remains responsible for the 3D scene and other client views. The production source contains no mock inventory or diagnostic
 commands. The addon is installed locally in `addons/godot_cef`. Exported servers omit it.
 Local headless runs load the extension but never instantiate a browser.
 
@@ -21,7 +21,7 @@ for setup and generated asset ownership. Native IPC remains runtime validated.
 ## Official renderer target
 
 Decision accepted 2026-10-12: **CEF Web UI officially targets Vulkan Forward+**
-after the [Visual V0 native feasibility pass](../world/visuals/visual-upgrade-v0.md). Mobile also
+after the [Visual V0 native feasibility pass](../world/visuals/visual-stack.md). Mobile also
 passed the same fixture and remains an explicit launcher comparison option.
 Compatibility/OpenGL is **unsupported / best-effort**. Its failed drag test stays
 as historical evidence, but Compatibility parity is not a production adoption
@@ -217,7 +217,7 @@ CEF is a standard GDExtension installed into `addons/godot_cef` by
 `tools/cef_client/setup.py`, using the pinned v2.0.0 release and SHA-256 checksum.
 The release payload stays ignored; the installer/version/hash are committed.
 `.godot/cef-client/cache` stores the archive. The root project uses Vulkan Forward+,
-a 1920×1080 design baseline, 1280×720 initial window and disabled canvas stretch.
+a 1920Ă—1080 design baseline, 1280Ă—720 initial window and disabled canvas stretch.
 No copied project or config is generated.
 
 `ServerUbuntu` and `ServerWindows` exclude `addons/godot_cef/*` and bundled Web UI.
@@ -256,7 +256,7 @@ The renderer/input/lifecycle adoption evidence from the retired fixture is
 preserved in historical validation records in Git history.
 
 Recommendation remains **ADOPT WITH CAVEATS** for Windows Vulkan Forward+.
-The [V0 pass](../world/visuals/visual-upgrade-v0.md) now covers native CEF lifecycle, synthetic
+The [V0 pass](../world/visuals/visual-stack.md) now covers native CEF lifecycle, synthetic
 input/drag/camera orbit and real Shop/Upgrade/combat RPCs on First Region.
 Full non-debug client packaging/launch, physical input/IME/DPI/alt-tab, helper
 crash handling, long soak and target-device budgets remain release gates.
@@ -278,7 +278,7 @@ and Upgrade have their own adapters. See [native composition ownership](core-ui.
 Results await correlated World Server replies; results do not replace snapshots.
 The dispatcher supports synchronous or awaited registered handlers.
 
-I opens a right-anchored, draggable 5×9 inventory with four pages. A single
+I opens a right-anchored, draggable 5Ă—9 inventory with four pages. A single
 root `ui_scale` controls logical geometry independently of physical resolution.
 The screen uses region-based ownership, with temporary full-screen pointer
 ownership only while click-carrying. Closing releases focus and removes its
