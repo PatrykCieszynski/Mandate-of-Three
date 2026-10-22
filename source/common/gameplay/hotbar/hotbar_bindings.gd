@@ -56,8 +56,9 @@ func load_bindings(values: Array) -> bool:
 			return false
 		if value.kind == ITEM and value.id is String and ItemInstance.valid_uid(value.id):
 			next.append({"kind": ITEM, "id": value.id})
-		elif value.kind == SKILL and value.id is StringName and not value.id.is_empty():
-			next.append({"kind": SKILL, "id": value.id})
+		# JSON restores identifiers as String; keep the internal skill ID canonical.
+		elif value.kind == SKILL and (value.id is StringName or value.id is String) and not value.id.is_empty():
+			next.append({"kind": SKILL, "id": StringName(value.id)})
 		else:
 			return false
 	slots = next

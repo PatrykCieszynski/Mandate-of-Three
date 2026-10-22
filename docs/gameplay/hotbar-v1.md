@@ -1,8 +1,8 @@
-# Hotbar V1 — foundational bindings
+# Hotbar foundation — bindings and passive CEF preview
 
 This PR introduces only **eight quick-slot bindings**. Slots point to an item UID or a skill ID, never own item instances or skill state. Missing inventory items and unlearned skills resolve to an unusable binding. The CEF page renders an empty, noninteractive bar. Connecting these bindings to its presentation, activation and saved preferences remains deferred.
 
-The current horn PR (#54) still exposes its provisional H key, default/basic tier, and server cooldown. Before integrating with the hotbar, implement an authoritative item USE path checking equipped/owned horn UID and tier on each invocation. Never trust a client's claimed tier, inventory slot or cooldown. Do not ship a hotbar that calls a free/unowned horn skill as an item shortcut.
+The merged horn taunt exposes its provisional H key, default/basic tier, and server cooldown. Before integrating with the hotbar, implement an authoritative item USE path checking equipped/owned horn UID and tier on each invocation. Never trust a client's claimed tier, inventory slot or cooldown. Do not ship a hotbar that calls a free/unowned horn skill as an item shortcut.
 
 Also deferred: drag/drop UX, action feedback and cooldown overlays, HP/MP projection and layout, binding save/load via account settings and reconnect, keyboard focus rules.
 
@@ -29,3 +29,22 @@ The passive bar adds no CEF interactive region or keyboard handler.
 Verification uses the existing binding smoke test and browser preview case:
 initial mount, a HUD scale update, pointer transparency, persistence when windows
 close, and UI reload. These checks do not validate native CEF input or final art.
+
+## Binding serialization and ownership
+
+The model and web presentation are still disconnected: no
+`HotbarBindings -> client state -> CEF -> render` flow is implemented. This is a
+foundation, not a complete playable Hotbar V1. The label, keys and optional text
+names remain placeholders; icons, stack counts, active skills and cooldowns are
+not projected yet.
+
+`load_bindings()` accepts non-empty skill IDs as `StringName` or JSON `String`,
+normalizing them to `StringName` internally. Numeric and empty IDs are rejected;
+a failed load preserves all previous slots. A snapshot can round-trip directly
+or through JSON without changing its canonical contents. This is format support,
+not implemented preference persistence.
+
+`resolve()` consults the supplied owned UID / known skill lookup; its caller
+must provide the current state. Removing an item makes its reference unusable; loading a valid preference
+does not grant ownership or teach a skill. The existing binding smoke covers
+these cases alongside successful item assignment and both round-trip formats.
