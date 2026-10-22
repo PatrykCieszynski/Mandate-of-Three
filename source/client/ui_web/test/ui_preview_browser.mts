@@ -38,7 +38,7 @@ try {
     .waitFor();
   const ui = page.frameLocator('iframe');
   for (const close of await ui
-    .locator('.chat-whisper:visible .window-close')
+    .locator('#private-chat:visible .window-close')
     .all())
     await close.click();
   await ui.locator('#inventory .inventory-item').first().waitFor();
@@ -383,8 +383,8 @@ try {
   await page
     .getByRole('button', { name: 'Hide Equipment', exact: true })
     .click();
-  await ui.locator('#whisper-2-window').waitFor({ state: 'visible' });
-  assert.equal(await ui.locator('.chat-whisper').count(), 2);
+  await ui.locator('#private-chat-window').waitFor({ state: 'visible' });
+  assert.equal(await ui.locator('.chat-whisper').count(), 1);
   const chatInput = ui.getByRole('textbox', {
     name: 'Chat message',
     exact: true,
@@ -396,21 +396,15 @@ try {
     .filter({ hasText: 'Hello from offline preview' })
     .waitFor();
   await ui
-    .locator('#whisper-2')
+    .locator('#private-chat')
     .getByRole('button', { name: 'Minimize', exact: true })
     .click();
-  await ui
-    .locator('#whisper-2 .chat-whisper-badge')
-    .waitFor({ state: 'visible' });
-  await ui.locator('#whisper-2 .window-close').click();
+  await ui.locator('.whisper-envelope').waitFor({ state: 'visible' });
   await page
     .getByRole('button', { name: 'Incoming whisper', exact: true })
     .click();
-  await ui
-    .locator('#whisper-3 .chat-whisper-badge')
-    .filter({ hasText: '2 unread' })
-    .waitFor();
-  await ui.locator('#whisper-3 .chat-whisper-badge').click();
+  await ui.locator('.whisper-envelope[title="Baek: 2"]').waitFor();
+  await ui.locator('.whisper-envelope').click();
   const whisper = ui.getByRole('textbox', {
     name: 'Message Baek',
     exact: true,
@@ -435,8 +429,35 @@ try {
   });
   await name.fill('Yuna');
   await name.press('Enter');
-  await ui.locator('#whisper-2-window').waitFor({ state: 'visible' });
+  await ui.locator('#private-chat-window').waitFor({ state: 'visible' });
   assert.equal(await ui.locator('#whisper-2').count(), 1);
+  const yunaDraft = ui.getByRole('textbox', {
+    name: 'Message Yuna',
+    exact: true,
+  });
+  await yunaDraft.fill('Draft for Yuna');
+  await ui.getByRole('tab', { name: 'Baek', exact: true }).click();
+  await whisper.waitFor({ state: 'visible' });
+  await whisper.fill('Draft for Baek');
+  await ui.getByRole('tab', { name: 'Yuna', exact: true }).click();
+  await yunaDraft.waitFor({ state: 'visible' });
+  assert.equal(await yunaDraft.inputValue(), 'Draft for Yuna');
+  await yunaDraft.focus();
+  await page
+    .getByRole('button', { name: 'Incoming whisper', exact: true })
+    .click();
+  await ui.getByRole('tab', { name: 'Baek · 1', exact: true }).waitFor();
+  assert.equal(
+    await ui
+      .getByRole('tab', { name: 'Yuna', exact: true })
+      .getAttribute('aria-selected'),
+    'true',
+  );
+  await ui.getByRole('tab', { name: 'Baek · 1', exact: true }).click();
+  await whisper.waitFor({ state: 'visible' });
+  assert.equal(await whisper.inputValue(), 'Draft for Baek');
+  await ui.getByRole('tab', { name: 'Yuna', exact: true }).click();
+
   await page
     .getByRole('button', { name: 'Incoming chat', exact: true })
     .click();

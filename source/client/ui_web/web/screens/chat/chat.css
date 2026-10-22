@@ -198,35 +198,126 @@
 .chat-content p[role='status']:empty {
   display: none;
 }
-.whisper-window {
-  --window-width: 320px;
-  --window-inset: 32px;
-}
-.chat-whisper .window-content {
-  display: block;
-  padding: 22px 0 20px;
-}
-.chat-whisper .chat-log {
-  height: 170px;
-  padding: 6px 0;
-}
-.chat-whisper .window-content > button {
-  margin: 0 3px 3px 0;
-}
-.chat-minimized .chat-log,
-.chat-minimized form {
-  display: none;
-}
-.chat-whisper-badge {
-  display: block;
-}
-.chat-whisper-badge[hidden] {
-  display: none;
-}
-
 .chat-window > .window-header .window-close:focus-visible {
   opacity: 1;
 }
 .chat-line button {
   font: inherit !important;
+}
+
+/* Private messages: one classic frame, a bounded tab rail and independent panes. */
+.whisper-window {
+  --window-width: 410px;
+  --window-inset: 28px;
+}
+.chat-whisper .window-content {
+  display: block;
+  padding: 20px 0 12px;
+}
+.whisper-tab-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  border-bottom: 1px solid #796b4d;
+  padding-bottom: 4px;
+}
+.whisper-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #796b4d #181811;
+  gap: 2px;
+}
+.whisper-tabs button {
+  flex: none;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.whisper-tabs button[aria-selected='true'] {
+  color: #fff0ba;
+  border-color: #b39a62;
+  background: linear-gradient(#53472c, #282419);
+}
+.whisper-tabs button.unread {
+  color: #edc568;
+}
+.whisper-conversations {
+  width: 30px;
+  height: 23px;
+  background: #201e15;
+  color: #ddd3b9;
+  border: 1px solid #796b4d;
+}
+.whisper-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 5px 0;
+}
+.whisper-recipient {
+  flex: 1;
+  min-width: 80px;
+  font:
+    12px Tahoma,
+    Arial,
+    sans-serif;
+  color: #e4c98e;
+  overflow-wrap: anywhere;
+}
+.chat-whisper .chat-log {
+  height: 185px;
+  padding: 5px 3px;
+  background: #07090466;
+  border-top: 1px solid #73634266;
+}
+.chat-whisper form {
+  margin-top: 5px;
+}
+.chat-whisper section[hidden],
+.whisper-tabs button[hidden] {
+  display: none;
+}
+.chat-whisper input {
+  height: 25px;
+}
+.chat-whisper button {
+  cursor: pointer;
+}
+.whisper-dock {
+  --window-width: 62px;
+  --window-inset: 0px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.whisper-dock > .chrome,
+.whisper-dock > .window-header {
+  display: none;
+}
+.whisper-dock > .window-content {
+  padding: 0;
+  display: block;
+}
+.whisper-envelope {
+  width: 60px;
+  min-height: 34px;
+  padding: 3px;
+  background: linear-gradient(#373425e6, #17170fe6);
+  border: 1px solid #a18b56;
+  color: #f4dfaa;
+  box-shadow: 0 1px 4px #0008;
+  font:
+    19px Georgia,
+    serif;
+  cursor: pointer;
+}
+.whisper-envelope:focus-visible {
+  outline: 1px solid #f4dfaa;
+  outline-offset: 2px;
 }

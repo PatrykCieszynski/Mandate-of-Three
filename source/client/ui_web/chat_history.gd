@@ -18,7 +18,7 @@ func identify(id: int) -> void:
 func clear() -> void:
 	owner=0;messages.clear();conversations.clear();muted.clear();_seen.clear()
 	_message_sizes.clear();_message_bytes=0;changed.emit()
-func open(id: int, display_name: String, notify: bool = true) -> bool:
+func _ensure_conversation(id: int, display_name: String) -> bool:
 	if id<=0 or id==owner: return false
 	if not conversations.has(id):
 		if conversations.size()>=16:
@@ -29,8 +29,21 @@ func open(id: int, display_name: String, notify: bool = true) -> bool:
 				if conversations[other].mode=="closed": break
 			while not conversations[evict].messages.is_empty(): _remove_first(conversations[evict].messages)
 			conversations.erase(evict)
-		conversations[id]={"id":id,"name":display_name,"mode":"open","unread":0,"messages":[]}
-	conversations[id].name=display_name;conversations[id].mode="open";conversations[id].unread=0
+		conversations[id]={"id":id,"name":display_name,"mode":"minimized","unread":0,"messages":[]}
+	conversations[id].name=display_name
+	return true
+func open(id: int, display_name: String, notify: bool = true) -> bool:
+	if not _ensure_conversation(id,display_name): return false
+	set_mode(id,"open",false)
+	if notify: changed.emit()
+	return true
+func set_mode(id: int, mode: String, notify: bool=true) -> bool:
+	if not conversations.has(id): return false
+	if mode=="open":
+		for other: int in conversations:
+			if other!=id and conversations[other].mode=="open": conversations[other].mode="minimized"
+		conversations[id].unread=0
+	conversations[id].mode=mode
 	if notify: changed.emit()
 	return true
 func _remove_first(list: Array) -> void:
@@ -48,12 +61,12 @@ func accept(message: Dictionary) -> void:
 	if _seen.size()>2000: _seen.erase(_seen.keys()[0])
 	if message.channel=="whisper":
 		var other: int=int(message.target) if int(message.sender)==owner else int(message.sender)
-		if not conversations.has(other): open(other,str(message.get("target_name","Player")) if int(message.sender)==owner else str(message.name),false)
+		if not conversations.has(other): _ensure_conversation(other,str(message.get("target_name","Player")) if int(message.sender)==owner else str(message.name))
 		if not conversations.has(other): return
 		var convo: Dictionary=conversations[other]
 		_append(convo.messages,message,100)
-		if convo.mode=="closed": convo.mode="open"
-		if convo.mode=="minimized": convo.unread+=1
+		if convo.mode=="closed": convo.mode="minimized"
+		if convo.mode!="open" and int(message.sender)!=owner: convo.unread+=1
 	else:
 		_append(messages,message,200)
 	# The remaining 32 KiB of the 128 KiB cache budget covers conversation/mute metadata.

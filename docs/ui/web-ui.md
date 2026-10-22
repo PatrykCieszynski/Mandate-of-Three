@@ -414,13 +414,23 @@ an old page's result. The session has no browser generation dependency.
 ## Chat V1 composition
 
 The production entry mounts `screens/chat/chat-view.ts` alongside the existing
-windows, with one bottom-left main chat and independently registered whisper
-windows keyed by character ID. It reuses UiWindow/WindowManager placement,
+windows, with one bottom-left main chat and one private-message window with
+character-keyed conversation tabs. It reuses UiWindow/WindowManager placement,
 clamping, global scale and the existing `data-ui-text` focus lease. Enter is an
 explicit presentation shortcut from Godot when gameplay owns the keyboard;
 Escape in a composer releases that lease before other window-close shortcuts.
-Dynamic whisper panels are included in interactive-region reporting; closed
-panels release pointer ownership and minimized panels retain their unread badge.
+The shared PW window and a right-edge envelope participate in interactive-region
+reporting. Inactive tabs retain their own drafts and reading positions while the
+view is mounted. The session history keeps exactly one conversation open; other
+tabs are minimized. Incoming background/new/closed conversations accumulate
+unread messages without switching tabs, opening the window or requesting focus.
+Selecting a tab or envelope uses the existing conversation command to mark that
+conversation read. The envelope counts unread conversations; its tooltip lists
+senders/message counts. Tabs remain in one scrollable row, with a selector for
+all cached conversations (including closed ones). Closing a conversation selects
+the next retained tab; minimizing or closing the whole PW window preserves tabs.
+CEF reload restores session histories, selection, minimized state and unread
+counts; unsent drafts and per-tab scroll positions are view-local and reset.
 
 `chat_ui_adapter.gd` owns explicit send/lookup/local-window/mute commands and
 correlation. `chat_history.gd` is client-session RAM, not an authoritative server

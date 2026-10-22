@@ -23,13 +23,17 @@ func chat_finish() -> void:
 		ui.host.message_received.connect(func(raw: String)->void:
 			var value=JSON.parse_string(raw)
 			if value is Dictionary and value.get("fixture")=="chat": _native_dom=value)
+		# Actual CEF command opens the background conversation in the shared tabbed window.
+		var conversation: Dictionary=ClientState.chat_history.conversations.values()[0]
+		ui.host.browser.call("eval","document.querySelector('.whisper-envelope').click();")
+		await wait_until(func()->bool:return conversation.mode=="open")
 		world.input_enabled=true
 		var enter:=InputEventKey.new();enter.keycode=KEY_ENTER;enter.physical_keycode=KEY_ENTER;enter.pressed=true
 		Input.parse_input_event(enter)
 		await wait_until(func()->bool:return ClientState.menu_open)
-		ui.host.browser.call("eval","window.sendIpcMessage(JSON.stringify({fixture:'chat',focused:document.activeElement?.getAttribute('aria-label'),logs:document.querySelector('#chat').textContent,whispers:document.querySelectorAll('.chat-whisper').length}));")
+		ui.host.browser.call("eval","window.sendIpcMessage(JSON.stringify({fixture:'chat',focused:document.activeElement?.getAttribute('aria-label'),logs:document.querySelector('#chat').textContent,whispers:document.querySelectorAll('.chat-whisper').length,selected:document.querySelectorAll('#private-chat [role=tab][aria-selected=true]').length}));")
 		await wait_until(func()->bool:return not _native_dom.is_empty())
-		check(_native_dom.focused=="Chat message" and str(_native_dom.logs).contains("party after transfer") and int(_native_dom.whispers)==1,"native Enter focuses main chat and real messages/whisper render")
+		check(_native_dom.focused=="Chat message" and str(_native_dom.logs).contains("party after transfer") and int(_native_dom.whispers)==1 and int(_native_dom.selected)==1,"native Enter focuses main chat and real messages/whisper render: "+JSON.stringify(_native_dom))
 		ui.host.browser.call("eval","const field=document.querySelector('#chat [aria-label=\"Chat message\"]');field.value='native CEF send';field.form.requestSubmit();")
 		await wait_until(func()->bool:return received.any(func(m: Dictionary)->bool:return m.text=="native CEF send"))
 		var escape:=InputEventKey.new();escape.keycode=KEY_ESCAPE;escape.physical_keycode=KEY_ESCAPE;escape.pressed=true
@@ -38,9 +42,9 @@ func chat_finish() -> void:
 		_native_dom.clear();ui.host.reload_ui()
 		await wait_until(func()->bool:return ui.bridge.is_ready)
 		await get_tree().create_timer(0.5).timeout
-		ui.host.browser.call("eval","window.sendIpcMessage(JSON.stringify({fixture:'chat',logs:document.querySelector('#chat').textContent,whispers:document.querySelectorAll('.chat-whisper').length}));")
+		ui.host.browser.call("eval","window.sendIpcMessage(JSON.stringify({fixture:'chat',logs:document.querySelector('#chat').textContent,whispers:document.querySelectorAll('.chat-whisper').length,selected:document.querySelectorAll('#private-chat [role=tab][aria-selected=true]').length}));")
 		await wait_until(func()->bool:return not _native_dom.is_empty())
-		check(str(_native_dom.logs).contains("party after transfer") and int(_native_dom.whispers)==1,"native reload restores session history and one whisper window")
+		check(str(_native_dom.logs).contains("party after transfer") and int(_native_dom.whispers)==1 and int(_native_dom.selected)==1,"native reload restores session history and one whisper window")
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("res://.godot/verification/chat-native.png")
 		print("CHAT_NATIVE_OK native Enter/Escape focus, messages, whisper and reload; synthetic native key input")

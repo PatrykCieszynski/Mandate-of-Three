@@ -106,6 +106,8 @@ function open(state: ChatSnapshot, id: number, name: string): Conversation {
     convo = { id, name, mode: 'open', unread: 0, messages: [] };
     state.conversations.push(convo);
   }
+  for (const other of state.conversations)
+    if (other.id !== id && other.mode === 'open') other.mode = 'minimized';
   convo.mode = 'open';
   convo.unread = 0;
   return convo;
@@ -125,8 +127,17 @@ export function receiveChatFixture(state: ChatSnapshot, whisper = false) {
   };
   if (whisper) {
     let convo = state.conversations.find((c) => c.id === sender);
-    if (!convo) convo = open(state, sender, message.name);
-    if (convo.mode === 'closed') convo.mode = 'open';
+    if (!convo) {
+      convo = {
+        id: sender,
+        name: message.name,
+        mode: 'minimized',
+        unread: 0,
+        messages: [],
+      };
+      state.conversations.push(convo);
+    }
+    if (convo.mode === 'closed') convo.mode = 'minimized';
     if (convo.mode === 'minimized') convo.unread++;
     convo.messages.push(message);
     convo.messages = convo.messages.slice(-100);
@@ -164,8 +175,8 @@ export function chatCommand(
     convo &&
     ['open', 'closed', 'minimized'].includes(String(p.mode))
   ) {
-    convo.mode = p.mode as Conversation['mode'];
-    if (p.mode === 'open') convo.unread = 0;
+    if (p.mode === 'open') open(state, convo.id, convo.name);
+    else convo.mode = p.mode as Conversation['mode'];
     return { ok: true };
   }
   if (type === 'chat.mute' && convo && typeof p.muted === 'boolean') {

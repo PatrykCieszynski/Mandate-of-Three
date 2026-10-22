@@ -86,8 +86,16 @@ func _ready() -> void:
 	var msg: Dictionary={"id":1,"channel":"whisper","sender":3,"name":"Player3","target":1,"text":"private"}
 	history.accept(msg);history.accept(msg);assert(history.conversations[3].messages.size()==1)
 	history.conversations[3].mode="minimized";msg.id=2;history.accept(msg)
+	assert(history.conversations[3].mode=="minimized" and history.conversations[3].unread==2)
+	# One selected conversation; incoming PMs cannot change the selected tab.
+	history.open(4,"Fourth");assert(history.conversations[3].mode=="minimized")
+	msg.id=3;history.accept(msg)
+	assert(history.conversations[4].mode=="open" and history.conversations[3].unread==3)
+	history.set_mode(3,"open")
+	assert(history.conversations[3].unread==0 and history.conversations[4].mode=="minimized")
+	history.set_mode(3,"closed");msg.id=4;history.accept(msg)
 	assert(history.conversations[3].mode=="minimized" and history.conversations[3].unread==1)
-	history.identify(1);assert(history.conversations.size()==1)
+	history.identify(1);assert(history.conversations.size()==2)
 	history.identify(2);assert(history.conversations.is_empty())
 	for i: int in 400:
 		history.accept({"id":i+10,"channel":"general","sender":3,"name":"Unicode","target":0,"text":"😀".repeat(256)})

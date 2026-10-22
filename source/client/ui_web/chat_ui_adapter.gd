@@ -36,9 +36,7 @@ func _valid_conversation(p: Dictionary) -> bool:
 func _conversation(p: Dictionary) -> Dictionary:
 	var convo: Dictionary=_history.conversations.get(int(p.target),{})
 	if convo.is_empty(): return {"ok":false,"error":"conversation"}
-	convo.mode=p.mode
-	if p.mode=="open": convo.unread=0
-	_history.changed.emit();return {"ok":true}
+	_history.set_mode(int(p.target),p.mode);return {"ok":true}
 func _mute(p: Dictionary) -> Dictionary:
 	if p.muted and not _history.muted.has(int(p.target)) and _history.muted.size()>=1024: return {"ok":false,"error":"mute_limit"}
 	if p.muted: _history.muted[int(p.target)]=true

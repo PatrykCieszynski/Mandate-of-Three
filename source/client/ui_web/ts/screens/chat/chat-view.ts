@@ -1,3 +1,4 @@
+import { mountWhispers } from './whispers-view.js';
 import { UiWindow } from '../../core/window/ui-window.js';
 import type { WindowManager } from '../../core/window/window-manager.js';
 import type {
@@ -100,17 +101,6 @@ export function mountChat(root: HTMLElement, options: Options) {
     expanded = false,
     filter = 'all',
     disposed = false;
-  const whispers = new Map<
-    number,
-    {
-      root: HTMLElement;
-      shell: UiWindow;
-      log: HTMLElement;
-      input: HTMLInputElement;
-      badge: HTMLButtonElement;
-      last: string;
-    }
-  >();
   const shell = new UiWindow(root, {
     id: 'chat',
     className: 'chat-window',
@@ -306,79 +296,10 @@ export function mountChat(root: HTMLElement, options: Options) {
       findButton.click();
     }
   });
-  function createWhisper(c: Conversation) {
-    const r = document.createElement('main');
-    r.className = 'chat-whisper';
-    r.id = `whisper-${c.id}`;
-    document.body.append(r);
-    const w = new UiWindow(r, {
-      id: r.id,
-      className: 'whisper-window',
-      title: `Whisper · ${c.name}`,
-      manager: options.manager,
-      placement: {
-        kind: 'viewport',
-        anchor: 'bottom-left',
-        offset: { x: 510 + whispers.size * 24, y: -110 - whispers.size * 24 },
-      },
-      onClose: () => {
-        field.blur();
-        void command('chat.conversation', { target: c.id, mode: 'closed' });
-      },
-      onRegionsChanged: options.regions,
-    });
-    const history = document.createElement('div');
-    history.className = 'chat-log';
-    history.setAttribute('role', 'log');
-    const field = document.createElement('input');
-    field.dataset.uiText = '';
-    field.maxLength = 512;
-    field.setAttribute('aria-label', `Message ${c.name}`);
-    const f = document.createElement('form');
-    f.append(field);
-    f.onsubmit = (e) => {
-      e.preventDefault();
-      const text = field.value.trim();
-      if (text)
-        void command('chat.send', {
-          action: 'send',
-          channel: 'whisper',
-          target: c.id,
-          text,
-        }).then((ok) => {
-          if (ok && field.value.trim() === text) field.value = '';
-        });
-    };
-    const minimize = button('Minimize', () => {
-      field.blur();
-      void command('chat.conversation', { target: c.id, mode: 'minimized' });
-    });
-    const mute = button('Mute / unmute', () => {
-      void command('chat.mute', {
-        target: c.id,
-        muted: !state.muted.includes(c.id),
-      });
-    });
-    w.contentRoot.append(minimize, mute, history, f);
-    const badge = button('', () => {
-      void command('chat.conversation', { target: c.id, mode: 'open' });
-    });
-    badge.className = 'chat-whisper-badge';
-    w.contentRoot.append(badge);
-    const entry = {
-      root: r,
-      shell: w,
-      log: history,
-      input: field,
-      badge,
-      last: '',
-    };
-    whispers.set(c.id, entry);
-    return entry;
-  }
+  const whispers = mountWhispers(options, command);
   return {
     get regions() {
-      return [shell.panel, ...[...whispers.values()].map((w) => w.shell.panel)];
+      return [shell.panel, ...whispers.regions];
     },
     focus() {
       input.focus();
@@ -404,26 +325,7 @@ export function mountChat(root: HTMLElement, options: Options) {
           : 'guild (unavailable)';
       }
       refreshMain();
-      for (const [id, w] of whispers)
-        if (!state.conversations.some((c) => c.id === id)) {
-          w.shell.dispose();
-          w.root.remove();
-          whispers.delete(id);
-        }
-      for (const c of state.conversations) {
-        const w = whispers.get(c.id) ?? createWhisper(c);
-        w.root.hidden = c.mode === 'closed';
-        w.root.classList.toggle('chat-minimized', c.mode === 'minimized');
-        w.badge.textContent = `${c.name} (${c.unread} unread) · Open`;
-        w.badge.hidden = c.mode !== 'minimized';
-        if (c.mode !== 'open') w.input.blur();
-        const next = JSON.stringify(c.messages);
-        if (w.last !== next) {
-          paintLog(w.log, c.messages, true);
-          w.last = next;
-        }
-        w.shell.refresh();
-      }
+      whispers.setState(state);
       options.regions();
     },
     dispose() {
@@ -432,12 +334,7 @@ export function mountChat(root: HTMLElement, options: Options) {
       input.blur();
       find.blur();
       shell.dispose();
-      for (const w of whispers.values()) {
-        w.input.blur();
-        w.shell.dispose();
-        w.root.remove();
-      }
-      whispers.clear();
+      whispers.dispose();
     },
   };
 }

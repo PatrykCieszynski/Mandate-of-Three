@@ -167,7 +167,7 @@ committed static modules; CEF never loads development dependencies.
 
 
 The offline preview also supplies Chat V1: sample public/local/party/system
-messages, an open Yuna whisper and a minimized Baek conversation. Sending,
+messages, an active Yuna tab and a background Baek conversation. Sending,
 name lookup (`Yuna` / `Baek`), minimize/close/reopen and session mute mutate local
 fixtures only, independently of the generic Accept checkbox. Incoming chat /
 whisper buttons test wrapping, scroll position and unread badges. Guild remains
@@ -178,6 +178,7 @@ Inventory/skill bindings. Icons, cooldowns and authenticated hotbar use are not
 introduced by the preview.
 
 Public chat uses a transparent HUD log above compact channel/composer controls.
-Whisper name lookup opens from the Whisper button; private conversations retain
-the reusable draggable window chrome. The passive hotbar uses a compact 4+4
+Whisper name lookup opens from the Whisper button. Private conversations share
+one draggable window with tabs, per-conversation drafts/scroll position and a
+right-edge unread-conversation envelope. The passive hotbar uses a compact 4+4
 slot rail without a heading. These presentation changes do not add hotbar actions.

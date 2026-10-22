@@ -1117,7 +1117,7 @@ test('party HP updates preserve mode selection; commands use explicit targets an
   manager.dispose();
 });
 
-test('chat focus, filters, text safety, whisper identity, minimize and remount', async () => {
+test('chat focus, text safety, shared whisper tabs, drafts, minimize and remount', async () => {
   const { doc, host, manager } = environment();
   Object.assign(globalThis, { HTMLElement: host.HTMLElement });
   const root = doc.createElement('main');
@@ -1232,7 +1232,51 @@ test('chat focus, filters, text safety, whisper identity, minimize and remount',
     type: 'chat.send',
     p: { action: 'send', channel: 'whisper', target: 2, text: 'reply' },
   });
-  Array.from(doc.querySelectorAll<HTMLButtonElement>('#whisper-2 button'))
+  whisper.value = 'unfinished for Other';
+  const privateLog = doc.querySelector<HTMLElement>('#whisper-2 .chat-log')!;
+  privateLog.scrollTop = 37;
+  doc.querySelector<HTMLButtonElement>('#whisper-tab-3')!.click();
+  await Promise.resolve();
+  assert.deepEqual(actions.at(-1), {
+    type: 'chat.conversation',
+    p: { target: 3, mode: 'open' },
+  });
+  const thirdActive: ChatSnapshot = {
+    ...state,
+    conversations: state.conversations.map((c) => ({
+      ...c,
+      mode: c.id === 3 ? 'open' : 'minimized',
+      unread: 0,
+    })),
+  };
+  view.setState(thirdActive);
+  const third = doc.querySelector<HTMLInputElement>('#whisper-3 input')!;
+  third.value = 'unfinished for Third';
+  third.focus();
+  view.setState({
+    ...thirdActive,
+    conversations: thirdActive.conversations.map((c) =>
+      c.id === 2 ? { ...c, unread: 2 } : c,
+    ),
+  });
+  assert.equal(
+    doc.activeElement,
+    third,
+    'incoming background update never steals focus',
+  );
+  assert.equal(
+    doc.querySelector('#whisper-tab-2')!.getAttribute('aria-selected'),
+    'false',
+  );
+  view.setState(state);
+  assert.equal(whisper.value, 'unfinished for Other');
+  assert.equal(third.value, 'unfinished for Third');
+  assert.equal(
+    privateLog.scrollTop,
+    37,
+    'tab switches retain reading position',
+  );
+  Array.from(doc.querySelectorAll<HTMLButtonElement>('#private-chat button'))
     .find((b) => b.textContent === 'Minimize')!
     .click();
   await Promise.resolve();
@@ -1248,9 +1292,7 @@ test('chat focus, filters, text safety, whisper identity, minimize and remount',
     ),
   };
   view.setState(minimized);
-  doc
-    .querySelector<HTMLButtonElement>('#whisper-2 .chat-whisper-badge')!
-    .click();
+  doc.querySelector<HTMLButtonElement>('.whisper-envelope')!.click();
   await Promise.resolve();
   assert.deepEqual(actions.at(-1), {
     type: 'chat.conversation',
