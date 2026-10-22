@@ -4,6 +4,7 @@ var services := MandateWorldServices.new()
 var mob_system := MobSystem.new()
 var ground_loot := GroundLootSystem.new()
 var kill_rewards := KillRewardResolver.new()
+var horn_taunt := HornTaunt.new()
 ## Shared RPC endpoint under the authenticated world instance path.
 ## Position never comes from a client: only a bounded movement intention does.
 
@@ -242,6 +243,10 @@ func _input(event: InputEvent) -> void:
 		_npc_approach.cancel()
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	if not _server and input_enabled and not ClientState.menu_open and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_H:
+		use_horn.rpc_id(1)
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(_options) and _options.visible and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		_options.hide()
 		get_viewport().set_input_as_handled()
@@ -321,6 +326,7 @@ func join_world() -> void:
 	print("SPIKE3D_JOIN: ", peer_id)
 
 func remove_peer(peer_id: int, checkpoint_already_saved: bool = false) -> void:
+	horn_taunt.clear_peer(peer_id)
 	var host: ServerInstance = get_parent() as ServerInstance
 	if _server and not characters.has(peer_id) and (host==null or not host.awaiting_peers.has(peer_id)): return
 	if _server and not checkpoint_already_saved:
@@ -380,6 +386,16 @@ func _add_character(peer_id: int, display_name: String) -> PlayerActor3D:
 	if inventory_endpoint != null and inventory_endpoint.public_weapons.has(peer_id):
 		body.set_weapon(inventory_endpoint.public_weapons[peer_id])
 	return body
+
+## The client requests an action, never the tier, range or target IDs.
+@rpc("any_peer", "call_remote", "reliable", 0)
+func use_horn() -> void:
+	if not _server:
+		return
+	var peer_id: int = multiplayer.get_remote_sender_id()
+	var result: Dictionary = horn_taunt.try_use(peer_id, Time.get_ticks_msec(), mob_system, services)
+	if result.ok:
+		print("HORN_TAUNT peer=%d count=%d" % [peer_id, result.attracted])
 
 @rpc("any_peer", "call_remote", "unreliable_ordered", 2)
 func submit_input(sequence: int, direction: Vector2) -> void:
