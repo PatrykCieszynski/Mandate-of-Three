@@ -6,6 +6,7 @@ var mobs: Dictionary[int, MobActor3D] = {}
 var packs: Dictionary[int, MobPackRuntime] = {}
 var _next_mob_id: int = 0
 var _next_pack_id: int = 0
+var _replicated_records: Dictionary[int, Array] = {}
 var _warned_unknown_mob_keys: Dictionary[StringName, bool] = {}
 var _world: GameWorld3D
 var _endpoint: Node
@@ -186,16 +187,33 @@ func snapshot(now: int = Time.get_ticks_msec()) -> Array:
 
 func apply_snapshot(records: Array) -> void:
 	var present: Dictionary[int, bool] = {}
+	for record: Array in records: present[int(record[MobSnapshot.Field.ID])] = true
+	_apply_records(present, records)
+
+func apply_interest_snapshot(ids: Array, records: Array) -> Array:
+	var present: Dictionary[int, bool] = {}
+	for id: int in ids: present[id] = true
+	_apply_records(present, records)
+	return _replicated_records.values()
+
+func _apply_records(present: Dictionary[int, bool], records: Array) -> void:
 	for record: Array in records:
 		var id: int = record[MobSnapshot.Field.ID]
+		if not present.has(id): continue
+		if record[MobSnapshot.Field.POSITION] == null:
+			if not _replicated_records.has(id): continue # Entrants require a full record.
+			record = record.duplicate()
+			record[MobSnapshot.Field.POSITION] = _replicated_records[id][MobSnapshot.Field.POSITION]
+			record[MobSnapshot.Field.YAW] = _replicated_records[id][MobSnapshot.Field.YAW]
 		var key := StringName(record[MobSnapshot.Field.MOB_KEY])
 		var definition := MobDefinitions.resolve(key)
 		if definition == null:
 			if not _warned_unknown_mob_keys.has(key):
 				_warned_unknown_mob_keys[key] = true
 				push_warning("Unknown replicated mob definition: %s" % key)
+			present.erase(id)
 			continue
-		present[id] = true
+		_replicated_records[id] = record
 		if not mobs.has(id):
 			var mob := MobActor3D.new()
 			mob.name = "Mob_%d" % id
@@ -209,11 +227,12 @@ func apply_snapshot(records: Array) -> void:
 			_world.add_child(mob)
 			mobs[id] = mob
 		mobs[id].present_snapshot(record)
-	# An empty full snapshot removes all actors just like any other snapshot.
+	# Full membership, not the sparse update list, owns actor lifetime.
 	for id: int in mobs.keys():
 		if not present.has(id):
 			mobs[id].queue_free()
 			mobs.erase(id)
+			_replicated_records.erase(id)
 
 func apply_hit(dog: MobActor3D, peer_id: int, result: CombatHitResult, direction: Vector3, now: int) -> void:
 	aggro_pack(dog.pack_instance_id,peer_id)

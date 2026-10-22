@@ -18,6 +18,12 @@ func progression() -> WorldDatabase:
 func world_time() -> WorldTime:
 	return null if _server() == null else _server().world_time
 
+func startup_limits() -> RefCounted:
+	if _server() != null and _server().runtime_settings != null:
+		return _server().runtime_settings
+	# Disposable World fixtures use the same validated defaults as normal startup.
+	return preload("res://source/server/runtime/runtime_capacity_settings.gd").resolve({}).settings
+
 func item_store() -> ItemStoreSqlite:
 	var server := _server()
 	return null if not available() or server.inventory_runtime != null or server.wallet_runtime != null or server.database == null else server.database.item_store

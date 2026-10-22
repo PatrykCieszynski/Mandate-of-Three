@@ -12,7 +12,8 @@ commented examples. Private deployment configs can still be selected with
 `--config=...`. Startup parses one immutable server-only settings value and
 passes the relevant limits to each owner. No hot reload or mutable singleton.
 Credentials remain in the existing environment variables, not this object.
-Startup logs report the effective role-specific numeric budgets, without tokens,
+Startup logs report session/control budgets; mob interest/motion settings are
+documented in [mob replication](../gameplay/mob-packs-v1.md#mob-interest-and-sparse-reliable-updates). Logs exclude tokens,
 connection strings, account identities or a raw config dump.
 
 | Key | Default | Accepted range | Owner / meaning |
@@ -25,6 +26,10 @@ connection strings, account identities or a raw config dump.
 | `handoff_tickets` | 1,024 | integer 1..65,536 | World unused + native-pending tickets; Master separately bounds in-flight acceptance ACKs by this value |
 | `handoff_ttl_ms` | 30,000 | integer 1,000..300,000 | World ticket lifetime; Master uses it to validate the ACK deadline configuration |
 | `handoff_ack_timeout_ms` | 2,000 | integer 100..30,000, < ticket TTL | Master wait for trusted World acceptance before replying to Gateway |
+| `mob_aoi_enter_radius` | 60 | integer 1..65,536, <= exit | World mob visibility entry radius in XZ metres |
+| `mob_aoi_exit_radius` | 72 | integer 1..65,536, >= entry | Retention radius for already visible mobs |
+| `mob_aoi_cell_size` | 32 | integer 1..65,536 | World mob interest grid cell width in metres |
+| `mob_position_interval_ms` | 200 | integer 50..2,000 | Minimum interval for changed mob transforms; HP/state do not wait |
 
 No `[runtime]` section uses these explicit defaults, including disposable legacy
 fixtures. Unknown runtime keys, floats/bools in integer fields, invalid ranges,
