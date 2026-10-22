@@ -11,7 +11,13 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
 )) {
   button.addEventListener('click', () => {
     const action = button.dataset.action;
-    if (action === 'reset' || action === 'empty' || action === 'escape') {
+    if (
+      action === 'reset' ||
+      action === 'empty' ||
+      action === 'escape' ||
+      action === 'chat-message' ||
+      action === 'whisper-message'
+    ) {
       if (action === 'reset') {
         const scale = document.querySelector<HTMLSelectElement>('#scale');
         if (scale) scale.value = '1';
@@ -20,6 +26,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
     } else if (
       action === 'inventory' ||
       action === 'equipment' ||
+      action === 'hotbar' ||
       action === 'storage'
     )
       send({ action, value: button.dataset.value === 'true' });

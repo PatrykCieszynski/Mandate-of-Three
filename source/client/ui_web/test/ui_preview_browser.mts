@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 import type { Browser, BrowserType } from 'playwright-core';
 import { createPreviewServer } from '../scripts/preview-server.mjs';
-const [playwrightModule, browserExecutable] = process.argv.slice(2);
+const [playwrightModule, browserExecutable, screenshot] = process.argv.slice(2);
 if (!playwrightModule || !browserExecutable)
   throw Error('Supply installed Playwright and browser');
 const { chromium }: { chromium: BrowserType } = createRequire(import.meta.url)(
@@ -37,6 +37,10 @@ try {
     .getByText('Ready — production UI with fixture IPC', { exact: true })
     .waitFor();
   const ui = page.frameLocator('iframe');
+  for (const close of await ui
+    .locator('.chat-whisper:visible .window-close')
+    .all())
+    await close.click();
   await ui.locator('#inventory .inventory-item').first().waitFor();
   assert.equal(await ui.locator('#inventory .inventory-item').count(), 3);
   assert.equal(await ui.locator('.wallet strong').textContent(), '12,345');
@@ -352,6 +356,88 @@ try {
   await ui.locator('#inventory .window-close').click();
   await ui.locator('#inventory-window').waitFor({ state: 'hidden' });
   await ui.locator('#storage-window').waitFor({ state: 'hidden' });
+  await page
+    .getByRole('button', { name: 'Reset fixtures', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Hide Inventory', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Hide Equipment', exact: true })
+    .click();
+  await ui.locator('#whisper-2-window').waitFor({ state: 'visible' });
+  assert.equal(await ui.locator('.chat-whisper').count(), 2);
+  const chatInput = ui.getByRole('textbox', {
+    name: 'Chat message',
+    exact: true,
+  });
+  await chatInput.fill('Hello from offline preview');
+  await chatInput.press('Enter');
+  await ui
+    .locator('#chat .chat-line')
+    .filter({ hasText: 'Hello from offline preview' })
+    .waitFor();
+  await ui
+    .locator('#whisper-2')
+    .getByRole('button', { name: 'Minimize', exact: true })
+    .click();
+  await ui
+    .locator('#whisper-2 .chat-whisper-badge')
+    .waitFor({ state: 'visible' });
+  await ui.locator('#whisper-2 .window-close').click();
+  await page
+    .getByRole('button', { name: 'Incoming whisper', exact: true })
+    .click();
+  await ui
+    .locator('#whisper-3 .chat-whisper-badge')
+    .filter({ hasText: '2 unread' })
+    .waitFor();
+  await ui.locator('#whisper-3 .chat-whisper-badge').click();
+  const whisper = ui.getByRole('textbox', {
+    name: 'Message Baek',
+    exact: true,
+  });
+  await whisper.fill('Private preview reply');
+  await whisper.press('Enter');
+  await ui
+    .locator('#whisper-3 .chat-line')
+    .filter({ hasText: 'Private preview reply' })
+    .waitFor();
+  await whisper.press('Escape');
+  assert.equal(
+    await whisper.evaluate((el) => document.activeElement === el),
+    false,
+  );
+  const name = ui.getByRole('textbox', {
+    name: 'Whisper player name',
+    exact: true,
+  });
+  await name.fill('Yuna');
+  await name.press('Enter');
+  await ui.locator('#whisper-2-window').waitFor({ state: 'visible' });
+  assert.equal(await ui.locator('#whisper-2').count(), 1);
+  await page
+    .getByRole('button', { name: 'Incoming chat', exact: true })
+    .click();
+  await ui
+    .locator('#chat .chat-line')
+    .filter({ hasText: 'A new public message' })
+    .waitFor();
+  await ui.locator('#bottom-hud .bottom-hud-slot').first().waitFor();
+  assert.equal(await ui.locator('#bottom-hud .bottom-hud-slot').count(), 8);
+  await page
+    .getByRole('button', { name: 'Sample hotbar', exact: true })
+    .click();
+  await ui
+    .locator('#bottom-hud .assigned')
+    .filter({ hasText: 'Potion' })
+    .waitFor();
+  await page.getByRole('button', { name: 'Empty hotbar', exact: true }).click();
+  assert.equal(await ui.locator('#bottom-hud .assigned').count(), 0);
+  await page
+    .getByRole('button', { name: 'Sample hotbar', exact: true })
+    .click();
+  if (screenshot) await page.screenshot({ path: screenshot, fullPage: true });
   assert.deepEqual(errors, []);
   console.log(
     'Browser development preview: PASS (CSP, fixtures, selective updates, commands, reload)',

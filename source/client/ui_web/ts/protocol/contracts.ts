@@ -16,7 +16,7 @@ export interface InventorySnapshot { recoveryPending?: boolean; columns: number;
 export interface StorageSnapshot { recoveryPending?: boolean; columns:typeof STORAGE_COLUMNS; rows:typeof STORAGE_ROWS; pages:typeof STORAGE_PAGES; items:InventoryItem[] }
 export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?: number } }
 export interface WalletSnapshot { balance?: number; ready?: boolean }
-export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
+export interface HudSnapshot { quick_slots?: Readonly<{label?:string}>[]; inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
 export type DomainName = 'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;

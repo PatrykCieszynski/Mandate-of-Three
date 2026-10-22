@@ -112,7 +112,8 @@ function isHud(value: unknown): value is HudSnapshot {
   return isObject(value) && (value.storage_open !== true || value.inventory_open === true) && (!('storage_open' in value) || typeof value.storage_open === 'boolean') && (!('inventory_open' in value) || typeof value.inventory_open === 'boolean') &&
     (!('equipment_open' in value) || typeof value.equipment_open === 'boolean') &&
     (!('ui_scale' in value) || (finiteRange(value.ui_scale, 0.8, 1.5) && UI_SCALES.includes(value.ui_scale))) &&
-    (!('viewport' in value) || isViewport(value.viewport));
+    (!('viewport' in value) || isViewport(value.viewport)) &&
+    (!('quick_slots' in value) || (Array.isArray(value.quick_slots) && value.quick_slots.length<=8 && value.quick_slots.every(slot=>isObject(slot) && Object.keys(slot).every(key=>key==='label') && (!('label' in slot) || (typeof slot.label==='string' && slot.label.length<=64)))));
 }
 function isUpgrade(value: unknown): boolean {
   if (!isObject(value) || typeof value.active !== 'boolean') return false;
