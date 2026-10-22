@@ -5,6 +5,7 @@ var services: MandateWorldServices
 
 const MOB_HP: int = 120
 const HOME: Vector3 = Vector3(-4, 0, 0)
+const MobReplication = preload("res://source/common/gameplay/mobs/mob_replication.gd")
 
 signal swing_received(peer_id: int, animation_key: StringName, step_index: int)
 signal feedback_received(result: Dictionary)
@@ -13,6 +14,7 @@ var attacks := BasicAttackService.new()
 var client_combat := ClientCombatController.new()
 var _pickup_ms: Dictionary[int, int] = {}
 var _snapshot_accum: float = 0
+var _mob_replication: MobReplication
 var _world: GameWorld3D
 var _hud: Label
 var _notice: String = ""
@@ -40,6 +42,8 @@ func _ready() -> void:
 	if dev_god_mode: print("DEV_GOD_MODE enabled for local World players")
 	_build_navigation() # Shared geometry also guides client NPC approach intentions.
 	if GameMode.is_world_server():
+		var limits := services.startup_limits()
+		_mob_replication = MobReplication.new(limits.value("mob_aoi_enter_radius"), limits.value("mob_aoi_exit_radius"), limits.value("mob_position_interval_ms"), limits.value("mob_aoi_cell_size"))
 		if _world.region != null:
 			for point: MobSpawnPoint3D in _world.region.find_children("*","MobSpawnPoint3D",true,false):
 				assert(point.valid(),"Invalid mob spawn point: " + str(point.name))
@@ -103,6 +107,7 @@ func _build_navigation() -> void:
 	_world.add_child(navigation_region)
 
 func initialize_peer(peer_id: int, carried: Dictionary = {}) -> void:
+	if _mob_replication != null: _mob_replication.remove_peer(peer_id)
 	var body: PlayerActor3D = _world.characters[peer_id]
 	body.hp = body.max_hp
 	body.set_alive(true)
@@ -122,6 +127,7 @@ func initialize_peer(peer_id: int, carried: Dictionary = {}) -> void:
 	_send_snapshot()
 
 func remove_peer(peer_id: int) -> void:
+	if _mob_replication != null: _mob_replication.remove_peer(peer_id)
 	last_combat_ms.erase(peer_id)
 	client_combat.remove_peer(peer_id)
 	attacks.remove_peer(peer_id)
@@ -289,7 +295,7 @@ func receive_hurt(peer_id: int, result: Dictionary) -> void:
 func _send_snapshot() -> void:
 	if not services.item_domain_ready(): return
 	var now: int = Time.get_ticks_msec()
-	var mob_snapshots: Array = _world.mob_system.snapshot(now)
+	_mob_replication.begin_frame(_world.mob_system.mobs, now)
 	var combos: Dictionary = attacks.combo_snapshot()
 	var health: Dictionary = {}
 	var respawns: Dictionary = {}
@@ -301,24 +307,29 @@ func _send_snapshot() -> void:
 		levels[id] = services.player_for_peer(id).level
 		hit_locks[id] = _world.characters[id].hit_reaction.snapshot(now)
 	for peer_id: int in _world.characters:
+		var mobs := _mob_replication.packet_for(peer_id, _world.characters[peer_id].position, now)
 		var drops: Dictionary = _world.ground_loot.snapshot_for_peer(peer_id,now)
 		var player: PlayerResource = services.player_for_peer(peer_id)
-		receive_state.rpc_id(peer_id, {"mobs": mob_snapshots, "health": health.duplicate(), "drops": drops,
+		var delivery: Error = rpc_id(peer_id, &"receive_state", {"mobs": mobs.mobs, "mob_ids": mobs.mob_ids, "health": health.duplicate(), "drops": drops,
 			"combo_options":{"enabled":combo_state(peer_id).combo_enabled,"skill_level":combo_state(peer_id).combo_skill_level,"length":combo_state(peer_id).definition().steps.size()},
 			"combos": combos, "respawns": respawns, "levels": levels, "hit_locks":hit_locks,
 			"metin": {} if _world.metin_encounter == null else _world.metin_encounter.snapshot(now),
 			"progression": {"level": player.level, "experience": player.experience, "next": player.level_xp_to_next()}})
+		if delivery != OK: _mob_replication.remove_peer(peer_id)
 
 @rpc("authority", "call_remote", "reliable", 0)
 func receive_state(snapshot: Dictionary) -> void:
 	if GameMode.is_world_server(): return
+	if snapshot.has("mob_ids"):
+		snapshot.mobs = _world.mob_system.apply_interest_snapshot(snapshot.mob_ids, snapshot.mobs)
+	else:
+		_world.mob_system.apply_snapshot(snapshot.mobs)
 	state = snapshot
 	state_changed.emit(snapshot)
 	for peer_id: int in snapshot.levels:
 		var player: PlayerActor3D = _world.characters.get(peer_id)
 		if player != null: player.set_level(int(snapshot.levels[peer_id]))
 	if _world.metin_encounter != null and not snapshot.get("metin",{}).is_empty(): _world.metin_encounter.receive_snapshot(snapshot.metin)
-	_world.mob_system.apply_snapshot(snapshot.mobs)
 	for peer_id: int in snapshot.health:
 		var body: PlayerActor3D = _world.characters.get(peer_id)
 		if body != null:

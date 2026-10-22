@@ -1,6 +1,7 @@
 class_name MobSnapshot
 extends RefCounted
-## Full-snapshot wire contract; no server AI/persistence metadata.
+## Complete mob record; no server AI/persistence metadata. Reliable interest
+## updates may use null POSITION/YAW to retain the client's existing transform.
 ## Keep values stable on both peers when extending this record.
 enum Field { ID = 0, POSITION = 1, YAW = 2, HP = 3, STATE = 4, MOB_KEY = 5, SOURCE_METIN = 6, DOWN_REMAINING = 7, GET_UP_REMAINING = 8, COUNT = 9 }
 static func capture(mob: MobActor3D, now: int = Time.get_ticks_msec()) -> Array:

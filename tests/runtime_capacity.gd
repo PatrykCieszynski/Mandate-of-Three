@@ -95,6 +95,9 @@ func run() -> void:
 	for invalid: Dictionary in [{"version":2},{"inventory_bindings":0},{"wallet_accounts":true},{"unknown":1},{"handoff_ack_timeout_ms":30000},{"master_grants":1.5}]:
 		assert(not Settings.resolve(invalid).ok,"invalid startup budget refused")
 	assert(not Settings.resolve({},65).ok,"session cap must fit owner budgets")
+	assert(not Settings.resolve({"mob_aoi_enter_radius":40,"mob_aoi_exit_radius":39}).ok)
+	assert(not Settings.resolve({"mob_position_interval_ms":49}).ok)
+	assert(not Settings.resolve({"mob_aoi_cell_size":0}).ok)
 	var one: Dictionary=Settings.resolve({"inventory_bindings":1,"wallet_accounts":1,"master_grants":1,"handoff_ack_timeout_ms":500,"handoff_tickets":1},1)
 	assert(one.ok and one.settings.value("world_sessions")==1)
 	db.path="res://.godot/verification/runtime-capacity.db"

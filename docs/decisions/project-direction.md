@@ -23,7 +23,7 @@ The **Marketplace/Auction/Exchange** vertical slice is integrated, with bounded 
 
 ## Current focus and ownership
 
-The maintainer owns the roadmap. Avoid treating old P1–P4 and W0–W7 checklists as automatic new work. PostgreSQL full-state, W0/W1 profiling and validated session admission are integrated. Profiling/controller experiments are deferred until representative map scale and mob/player populations are defined. Current work is documentation/repository cleanup; the maintainer will provide AOI scope separately. Authored maps, actual game assets, real-client gameplay and visual polish remain important unfinished work. Do not extrapolate synthetic load tests to hosting capacity.
+The maintainer owns the roadmap. Avoid treating old P1–P4 and W0–W7 checklists as automatic new work. PostgreSQL full-state, W0/W1 profiling and validated session admission are integrated. Profiling/controller experiments are deferred until representative map scale and mob/player populations are defined. The current mob AOI slice filters per-instance replication and rate-limits changed transforms; broader entity/event interest remains separate scope. Authored maps, actual game assets, real-client gameplay and visual polish remain important unfinished work. Do not extrapolate synthetic load tests to hosting capacity.
 
 Use [documentation index](../README.md) to distinguish current contracts, plans, historical notes and evidence. Legacy TinyMMO systems must be audited for live RPC reachability before deletion.
 
