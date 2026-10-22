@@ -108,6 +108,14 @@ func set_context(mode: String) -> void:
 	if mode in ["relogin_shared", "relogin_distinct"]:
 		# Mirror the completed authentication boundary: the new peer owns the
 		# character before an old peer's queued disconnect is delivered.
+		# Keep a runtime party seat across last-login-wins and a delayed old disconnect.
+		if not session.party_service.membership.has(player.player_id):
+			var target:=PlayerResource.new();target.player_id=9000000000+peer;target.current_peer_id=900001;target.level=player.level
+			while session.connected_players.has(target.current_peer_id): target.current_peer_id+=1
+			session.connected_players[target.current_peer_id]=target;session.player_id_to_peer_id[target.player_id]=target.current_peer_id
+			assert(session.party_service.command(player.player_id,{"action":"invite","target":target.player_id}).ok)
+			session.connected_players.erase(target.current_peer_id);session.player_id_to_peer_id.erase(target.player_id)
+		var party_id: int=session.party_service.membership[player.player_id]
 		var old_peer := 100
 		while session.connected_players.has(old_peer): old_peer += 1
 		var old_player: PlayerResource = player if mode == "relogin_shared" else player.duplicate()
@@ -122,6 +130,7 @@ func set_context(mode: String) -> void:
 		session._on_peer_disconnected(old_peer)
 		session._on_peer_disconnected(old_peer) # duplicate/unknown disconnect is safe.
 		assert(not session.connected_players.has(old_peer))
+		assert(session.party_service.membership.get(player.player_id,0)==party_id and session.party_service.peer_for(player.player_id)==peer,"old disconnect cannot invalidate the current party seat")
 		assert(session.runtime_attack(player.player_id) == 37, "old disconnect invalidated new combat stats")
 		assert(session.master_disconnects.size() == disconnect_count, "old peer disconnected the new account session at Master")
 	context_ready.rpc_id(peer, mode, id)

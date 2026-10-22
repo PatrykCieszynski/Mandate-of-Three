@@ -190,6 +190,7 @@ func tick_mob(dog: MobActor3D, delta: float, now: int) -> void:
 		if horizontal_distance(dog.position,dog.return_target) < 0.4:
 			dog.hp = dog.max_hp
 			dog.contributions.clear()
+			dog.reward_claims.clear()
 			dog.contribution_players.clear()
 			dog.target_peer = 0
 			dog.ai_state = MobState.Value.IDLE
@@ -266,6 +267,7 @@ func apply_hit(dog: MobActor3D, peer_id: int, result: CombatHitResult, direction
 	aggro_pack(dog.pack_instance_id,peer_id)
 	dog.hp -= result.damage
 	var owner_id: int = services.owner_id_for_peer(peer_id)
+	if services.party()!=null: services.party().record(dog.reward_claims,owner_id,result.damage)
 	dog.contributions[owner_id] = dog.contributions.get(owner_id,0)+result.damage
 	dog.contribution_players[owner_id] = services.player_for_peer(peer_id)
 	if dog.hp == 0: die(dog,now)

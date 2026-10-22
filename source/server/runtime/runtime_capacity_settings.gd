@@ -1,5 +1,5 @@
 extends RefCounted
-## Validated immutable capacity/replication limits. Credentials and gameplay rules stay elsewhere.
+## Validated immutable runtime limits/ranges. Credentials and reward formulas stay elsewhere.
 const DEFAULTS: Dictionary = {
 	"version": 1,
 	"inventory_bindings": 64,
@@ -12,6 +12,7 @@ const DEFAULTS: Dictionary = {
 	"mob_aoi_exit_radius": 72,
 	"mob_aoi_cell_size": 32,
 	"mob_position_interval_ms": 100,
+	"party_reward_radius": 40,
 }
 var _limits: Dictionary
 

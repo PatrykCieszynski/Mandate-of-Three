@@ -1,3 +1,4 @@
+import {isParty} from './screens/party/party-view.js';
 import {isExchangeSnapshot} from './screens/market/exchange-model.js';
 import {isBrowserSnapshot} from './screens/market/browser-model.js';
 import {isMarketSnapshot} from './screens/market/market-model.js';
@@ -45,10 +46,10 @@ export function isCommandResult(result: unknown): result is CommandResult {
     (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message: Envelope): message is StateMessage {
-  return !message.id && ['ui.snapshot','exchange.updated','market_browser.updated','market.updated','upgrade.updated','npc_targets.updated','shop.updated','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
+  return !message.id && ['ui.snapshot','party.updated','exchange.updated','market_browser.updated','market.updated','upgrade.updated','npc_targets.updated','shop.updated','npc.updated','storage.updated','inventory.updated','equipment.updated','wallet.updated','player.updated','hud.updated'].includes(message.type);
 }
 export function isDomainName(value: string): value is DomainName {
-  return ['exchange','market_browser','market','upgrade','npc_targets','shop','npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
+  return ['party','exchange','market_browser','market','upgrade','npc_targets','shop','npc','storage','inventory','equipment','wallet','player','hud'].includes(value);
 }
 export function isRawDomainState(value: unknown): value is RawDomainState {
   return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -159,6 +160,7 @@ function isNpc(value: unknown): value is NpcInteractionSnapshot {
 export function isValidDomainValue(domain: DomainName, value: unknown): value is RawObject {
   if (!isObject(value)) return false;
   switch (domain) {
+    case 'party': return isParty(value);
     case 'exchange': return isExchangeSnapshot(value);
     case 'market_browser': return isBrowserSnapshot(value);
     case 'market': return isMarketSnapshot(value);

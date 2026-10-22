@@ -37,6 +37,7 @@ var npc_endpoint: NpcInteraction3D
 var metin_encounter: MetinEncounter
 var region: FirstRegionGraybox
 var currency_endpoint: CurrencyEndpoint3D
+var party_endpoint: Node
 var world_time: WorldTimeSync3D
 
 func _ready() -> void:
@@ -46,6 +47,9 @@ func _ready() -> void:
 	world_time.name = "WorldTime"
 	world_time.services = services
 	add_child(world_time)
+	party_endpoint = preload("res://source/common/gameplay/party/party_endpoint.gd").new()
+	party_endpoint.name = "Party"
+	add_child(party_endpoint)
 	_build_arena()
 	ground_loot.setup(self,services)
 	inventory_endpoint = InventoryEndpoint3D.new()

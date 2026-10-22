@@ -95,6 +95,7 @@ jobs:
           & ./tests/run-spike3d.ps1
           & ./tests/run-pve.ps1
           & ./tests/run-combat.ps1 -Scene mob_interest_network -MarkerPrefix AOI
+          & ./tests/run-combat.ps1 -Scene party_network -MarkerPrefix PARTY
       - name: Verify exported client and server packs
         shell: pwsh
         run: |
