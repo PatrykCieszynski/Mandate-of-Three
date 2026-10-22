@@ -26,8 +26,7 @@ extends Resource
 ## Visual size multiplier — a boss reads BIGGER. Scales the SPRITE only, never the
 ## collision / attack reach (a scaled node can't close to melee range). 1.0 = normal.
 @export var visual_scale: float = 1.0
-## A BOSS type. A dungeon RoomNode gives any boss-type mob it spawns a BossController
-## (phases, telegraphed slam, enrage) and keeps its loot — no per-marker flag needed.
+## Legacy 2D boss flag. Active 3D enemies are authored with MobDefinition.
 @export var is_boss: bool = false
 
 @export_group("Combat")
@@ -90,9 +89,8 @@ extends Resource
 
 
 @export_group("Boss")
-## Phase 2: enrage when HP drops to this fraction of max (speeds the body up,
-## summons adds, slams faster). Only read for an is_boss type that a dungeon
-## RoomNode has given a BossController.
+## Legacy 2D boss tuning, retained with its existing resource data.
+## No active 3D boss controller reads these values.
 @export var enrage_health_fraction: float = 0.5
 ## Telegraphed slam: danger-ring radius (px), the wind-up players get to step out
 ## of it, and the damage dealt to anyone still inside when it lands.

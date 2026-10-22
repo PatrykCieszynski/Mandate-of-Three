@@ -1,10 +1,14 @@
 # World Server optimization — staged execution plan
 
-**Status:** Proposed / review-only, 2026-10-15. **Priority:** deferred until Economy rework and targeted Clean Code / SoC refactor are integrated and stable. This document is **not authorization to implement** a physics rewrite or merge experimental PR #18 into `main`.
+**Status (2026-10-22): deferred by the maintainer.** W0/W1 and session/control/cache capacity are integrated (PRs #114–116). Further profiling/controller experiments are paused pending representative map scale, mob/player populations and a separately agreed AOI plan. Retain the [profiling tools](../development/world-profiling.md) for later use; do not run this roadmap as an automatic queue. This document does not authorize a physics rewrite or merging experimental branches.
+
+Current W0 deliverables: [limit ownership audit](world-w0-limit-audit.md) and
+[measurement contract/runner](../development/world-baseline.md). Configuration
+implementation for workers/operation budgets remains separate; no limits are raised in W1.
 
 **Target:** Keep Godot 4.7.2 as both client and authoritative World Server. Reduce unnecessary physics and per-viewer replication work while keeping the Metin-like gameplay contract, existing Economy ownership, RPC/session security and instance architecture intact.
 
-**Reference:** [Pre-alpha hardening](architecture-hardening.md), [World MapInstance/channel ADR](../architecture/world-instance-architecture.md), [Economy C1–C5](../architecture/economy/README.md), and the historical [experimental World PR #18](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/18). The experiment branch is evidence/source code, **not** a branch to merge wholesale over the newer Economy/SoC work.
+**Reference:** [Pre-alpha hardening](../history/postgresql-migration.md), [World MapInstance/channel ADR](../architecture/world-instance-architecture.md), [Economy C1–C5](../architecture/economy/README.md), and the historical [experimental World PR #18](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/18). The experiment branch is evidence/source code, **not** a branch to merge wholesale over the newer Economy/SoC work.
 
 ## 0. Execution rules (for Codex)
 
@@ -16,6 +20,8 @@
 6. **No unrelated architecture work:** Do not introduce Nakama, Go, PostgreSQL, ORM, job bus, new Economy writes/worker, extra World processes, a new MapInstance scheduler or a new client protocol in optimization PRs. The accepted ADR already covers eventual dynamic channels and separate economy ownership.
 7. **Rollback:** Keep old behavior callable behind a **temporary server-side** controller selector/feature gate until parity and load gates pass. No global rollout and no removal of fallback before acceptance. Feature flags are for controlled comparison, not a permanent second physics engine.
 8. **Evidence:** Each PR states invariant, changed files, failure/rollback cases, executed commands, before/after measurements (median of >=3 repeats), CI status, and *not-tested* cases. No performance numbers hardcoded as flaky CI assertions. No generated logs, runtime DBs, local addons or synthetic results committed as executable truth.
+
+**Runtime capacity/configuration supplement:** [World runtime configuration and capacity budgets](world-runtime-configuration.md) adds a W0 audit of hardcoded limits, server-only validated settings, a commented example and W6 binding/real-client capacity gates. It does not change the W0–W7 sequence or authorize higher runtime defaults.
 
 ## 1. Evidence already collected (diagnostic, not capacity claims)
 

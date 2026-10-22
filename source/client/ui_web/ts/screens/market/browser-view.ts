@@ -24,6 +24,7 @@ interface Options {
   search: (p: MarketSearch) => Promise<CommandResult>;
   visit: (shop: number, offer: string) => Promise<CommandResult>;
   buy: (p: MarketCommand) => Promise<CommandResult>;
+  retryPurchase?: () => Promise<CommandResult>;
   close: () => void;
   regions: () => void;
 }
@@ -75,6 +76,7 @@ export function mountMarketBrowser(
     lastSearch: MarketSearch | undefined;
   let buyIntent: MarketCommand | undefined;
   let uncertainPurchase = false;
+  let nativePurchase = false;
   let criteriaKey = '';
   const tooltip = ItemTooltip(root, { geometry: () => o.manager }),
     shopTooltip = ItemTooltip(shopRoot, { geometry: () => o.manager });
@@ -239,11 +241,13 @@ export function mountMarketBrowser(
     }
   }
   function syncPurchaseControls() {
-    retry.hidden = !uncertainPurchase;
-    retry.disabled = pending;
+    const recovering =
+      uncertainPurchase || (state.active && !!state.purchasePending);
+    retry.hidden = !recovering;
+    retry.disabled = pending || (state.active && !!state.purchaseBusy);
     buy.disabled =
       pending ||
-      uncertainPurchase ||
+      recovering ||
       !selected ||
       !state.active ||
       !('status' in state.shop) ||
@@ -254,7 +258,11 @@ export function mountMarketBrowser(
     if (pending || !state.active) return;
     // A timed-out purchase may already have committed. Never overwrite its ID
     // with a second intent until the original receipt resolves.
-    if (replay ? !uncertainPurchase || !buyIntent : uncertainPurchase) return;
+    const recovering = uncertainPurchase || !!state.purchasePending;
+    const nativeRetry =
+      !!o.retryPurchase && (!!state.purchasePending || nativePurchase);
+    if (replay ? !recovering || (!buyIntent && !nativeRetry) : recovering)
+      return;
     if (
       !replay &&
       (!selected || !('active' in state.shop) || !state.shop.active)
@@ -269,15 +277,21 @@ export function mountMarketBrowser(
         revision: selected.revision,
         price: selected.price!,
       };
-    if (!buyIntent) return;
+    if (!buyIntent && !(replay && nativeRetry)) return;
     const command = buyIntent;
     pending = true;
     syncPurchaseControls();
     offerInfo.textContent = 'Waiting for server…';
     try {
-      const result = await o.buy(command);
+      const result =
+        replay && nativeRetry
+          ? await o.retryPurchase!()
+          : await o.buy(command!);
       if (disposed) return;
-      uncertainPurchase = !result.ok && result.error === 'timeout';
+      nativePurchase = !result.ok && result.error === 'seller_pending';
+      uncertainPurchase =
+        !result.ok &&
+        ['timeout', 'seller_pending'].includes(result.error ?? '');
       if (!uncertainPurchase) buyIntent = undefined;
       offerInfo.textContent = result.ok
         ? 'Purchased.'
@@ -287,7 +301,7 @@ export function mountMarketBrowser(
           'Purchase outcome unknown. Retry the same purchase first.';
       // Refresh failure is not evidence that an acknowledged buy is uncertain.
       try {
-        await o.visit(Number(command.shop_id ?? 0), selected?.id ?? '');
+        await o.visit(Number(command?.shop_id ?? 0), selected?.id ?? '');
       } catch {
         // Keep the known outcome and allow the player to reopen the shop.
       }

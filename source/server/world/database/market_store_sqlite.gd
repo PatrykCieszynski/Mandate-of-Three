@@ -1,9 +1,10 @@
 class_name MarketStoreSqlite
 extends RefCounted
 ## Shop domain SQL. Atomic commands compose the shared SQLite receipt boundary.
-const COLUMNS := 5
-const ROWS := 8
-const CAPACITY := COLUMNS*ROWS
+const Grid = preload("res://source/common/gameplay/items/domain/shop_grid.gd")
+const COLUMNS := Grid.COLUMNS
+const ROWS := Grid.ROWS
+const CAPACITY := Grid.CAPACITY
 const MAX_REVENUE := 9223372036854775807 # SQLite integer storage ceiling, not wallet capacity.
 var db: SQLite
 var _transaction: EconomyCommandSqlite
@@ -187,10 +188,7 @@ func mine(character_id: int) -> Dictionary:
 	return result
 
 func _cells(position: int, height: int) -> Array[int]:
-	var cells: Array[int] = []
-	if position<0 or height<1 or height>3 or position+COLUMNS*(height-1)>=CAPACITY: return cells
-	for row: int in height: cells.append(position+COLUMNS*row)
-	return cells
+	return Grid.cells(position,height)
 
 func list_item(character_id: int, command_id: String, uid: String, revision: int, position: int, price: int) -> Dictionary:
 	if not _transaction.begin(character_id,command_id,"list",[uid,revision,position,price]): return _transaction.cached

@@ -1,6 +1,6 @@
 # Collectable player-shop revenue
 
-Implementation scope: current single-World SQLite Shop/Auction purchases only.
+Implementation scope: current single-World PostgreSQL Shop/Auction purchases, with retained SQLite reference fixtures.
 Exchange settlement stays unchanged. Approved on 2026-10-16: collect as much as
 fits in the existing account wallet; keep the remainder claimable.
 
@@ -14,7 +14,7 @@ discovers, while explicit Retry may resubmit the original operation.
 
 Storage: additive account revenue table, zero for existing accounts. Historical
 sales already credited to wallets stay final; no backfill or double credit. The
-ledger uses SQLite signed int64, exposed as a decimal string to avoid JSON/JS
+ledger uses signed 64-bit integers, exposed as a decimal string to avoid JSON/JS
 precision loss. Its storage ceiling is INT64_MAX, independent of the much smaller
 wallet cap. At that technical limit a sale is rejected atomically; it cannot
 silently discard income or overflow into a float. No new gameplay limit or
@@ -29,7 +29,7 @@ receipts remain readable. Downgrading to direct-credit code after enabling this
 feature is unsafe: preserve the ledger and deploy a forward fix/restore a verified
 whole-database backup rather than reverting only the code.
 
-Verification will extend purchase, network, load and crash/WAL recovery fixtures,
+Verification includes purchase, network, load and reference SQLite crash/WAL recovery fixtures,
 including offline sale, full wallet, partial collection, rollback, replay,
 response loss and restart recovery. Native CEF/input and multi-World behavior are
 separate verification boundaries.
@@ -46,6 +46,4 @@ Validation on 2026-10-16: standard smoke, market custody/purchase/search, Exchan
 orders, two-client Marketplace recovery, process-crash/WAL recovery and auction
 load with collection all passed. Headless Chrome passed the existing ten
 viewport/scale cases plus exact int64 decimal display and Collect/Retry commands.
-The topic also integrates the newer main Marketplace uncertain-buy guard; smoke,
-Marketplace network and browser checks are rerun on that combined tree. No real
-player databases or visible game windows are used.
+The uncertain-buy guard is part of the integrated Marketplace. The 2026-10-16 results above are historical SQLite evidence, not PostgreSQL acceptance. Use [full-state PostgreSQL verification](postgres-full-state.md) and the [testing policy](testing.md) for the current backend. Disposable fixtures do not touch real player databases.

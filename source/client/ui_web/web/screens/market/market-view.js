@@ -69,7 +69,31 @@ export function mountMarket(root, options) {
     status.className = 'market-status';
     status.setAttribute('role', 'status');
     const retry = button('Retry same command', () => {
-        if (lastIntent)
+        if (state.active && state.sellerPending && options.retrySeller) {
+            if (pending || state.sellerBusy)
+                return;
+            pending = true;
+            void options
+                .retrySeller()
+                .then((result) => {
+                if (!disposed) {
+                    if (result.ok) {
+                        lastIntent = null;
+                        retry.hidden = true;
+                    }
+                    setStatus(result.ok ? 'Saved.' : String(result.error ?? 'Rejected.'));
+                }
+            })
+                .catch(() => {
+                if (!disposed)
+                    setStatus('Outcome unknown. Retry the same command.');
+            })
+                .finally(() => {
+                pending = false;
+                retry.disabled = Boolean(state.active && state.sellerBusy);
+            });
+        }
+        else if (lastIntent)
             void submit(lastIntent.action, lastIntent.payload);
     });
     retry.hidden = true;
@@ -186,7 +210,8 @@ export function mountMarket(root, options) {
                     root.contains(document.activeElement))
                     document.activeElement.blur();
             }
-            else if (result.error === 'timeout')
+            else if (result.error === 'timeout' ||
+                result.error === 'seller_pending')
                 retry.hidden = false;
         }
         catch {
@@ -197,6 +222,7 @@ export function mountMarket(root, options) {
         }
         finally {
             pending = false;
+            retry.disabled = Boolean(state.active && state.sellerBusy);
         }
     }
     function validPrice() {
@@ -330,6 +356,11 @@ export function mountMarket(root, options) {
             options.onClose();
     });
     function render() {
+        if (state.active && state.sellerPending)
+            retry.hidden = false;
+        else if (!lastIntent)
+            retry.hidden = true;
+        retry.disabled = pending || Boolean(state.active && state.sellerBusy);
         revenue.textContent =
             'Claimable: ' +
                 (state.active

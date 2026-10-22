@@ -46,7 +46,7 @@ signal wardstones_changed
 var wardstones: PackedStringArray
 ## The local character's level, mirrored from progression data (progression.get on
 ## spawn/map change + combat.reward pushes — see HUD._apply_progression). Client-side
-## cosmetic checks only (e.g. a gated Portal suppressing its fade); the server enforces.
+## cosmetic checks only; gameplay admission remains server-authoritative.
 var player_level: int = 1
 ## True while a blocking menu is open (NPC dialogue, shop, quest log, inventory).
 ## While set, the local player's movement and actions are suppressed, so you can't
@@ -274,10 +274,11 @@ func _apply_node_visual_state(data: Dictionary) -> void:
 	var raw_path: Variant = data.get("node_path", null)
 	if raw_path == null:
 		return
-	if InstanceClient.current == null:
+	var instance: WorldInstanceClient3D = Client.instance_manager.current_instance if Client.instance_manager != null else null
+	if instance == null:
 		return
 	var path: NodePath = raw_path as NodePath
-	var node: Node = InstanceClient.current.get_node_or_null(path)
+	var node: Node = instance.get_node_or_null(path)
 	if node == null or not (node is MineableNode):
 		return
 	(node as MineableNode).apply_visual_state(

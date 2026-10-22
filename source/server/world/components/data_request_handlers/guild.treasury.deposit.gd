@@ -10,7 +10,7 @@ const MIN_DEPOSIT: int = 1
 
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var player: PlayerResource = world_server.connected_players.get(peer_id)
 	if player == null:
@@ -39,12 +39,13 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	if guild == null:
 		return {"error": 1, "ok": false, "message": "Guild not found."}
 
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,[player])
+	if not mutation.started: return mutation.failure()
 	Inventory.remove_amount_by_id(player.inventory, gold_id, cost)
 	guild.treasury += gained
-	store.save_guild(guild)
-	store.save_player(player)
-	store.commit()
+	if not mutation.save_guild(guild): return mutation.abort()
+	if not mutation.save_player(player): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	store.add_guild_log(guild_id, "deposit", player.display_name, "", {"amount": gained})
 

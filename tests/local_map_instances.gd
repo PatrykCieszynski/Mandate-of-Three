@@ -7,12 +7,6 @@ class ForeignCombat extends CombatEndpoint3D:
 	func _ready() -> void: pass
 class ForeignCurrency extends CurrencyEndpoint3D:
 	func _ready() -> void: pass
-class LegacyHost extends ServerInstance:
-	var despawn_count := 0
-	func _ready() -> void: pass
-	@rpc("authority", "call_remote", "reliable", 0)
-	func despawn_player(_peer_id: int, _delete: bool = false) -> void:
-		despawn_count+=1
 class FailedCheckpoint extends WorldDatabase:
 	var calls := 0
 	func flush_character(_owner_id: int = -1) -> bool:
@@ -71,7 +65,7 @@ func _ready() -> void:
 		api.peer_connected.connect(func(peer: int)->void:
 			var owner:=EconomyFixture.create_character(server.database.store,"map%d" % peer,{"name":"Map%d" % peer,"skin":1})
 			EconomyFixture.prepare(server.database)
-			var player:=server.database.store.get_player(owner)
+			var player: PlayerResource=server.database.store.get_player(owner)
 			player.current_peer_id=peer
 			server.connected_players[peer]=player
 			server.player_id_to_peer_id[owner]=peer
@@ -91,7 +85,7 @@ func _ready() -> void:
 			check(catalogue.get("ok",false),"authenticated public catalogue")
 			check(catalogue.channels.size()==2 and catalogue.channels.all(func(row: Dictionary)->bool:return row.keys().size()==4 and row.channel_id in [1,2]),"public catalogue excludes reserved IDs, sessions and host metadata")
 			client_manager.select_initial_channel(number))
-		client_manager.instance_changed.connect(func(instance: InstanceClient)->void:
+		client_manager.instance_changed.connect(func(instance: WorldInstanceClient3D)->void:
 			if recovery_items!=null:
 				recovery_session.close("teardown")
 				recovery_items.dispose()
@@ -125,6 +119,15 @@ func finished() -> void:
 	if GameMode.is_world_server(): done[multiplayer.get_remote_sender_id()]=true
 
 func run_server() -> void:
+	var legacy_map := InstanceResource.new()
+	legacy_map.instance_name = &"LegacyMapRejected"
+	legacy_map.use_3d = false
+	legacy_map.map_path = "res://tests/fixtures/world3d/test_arena.tscn"
+	var before_legacy := manager.loading_instances.size()
+	check(manager.charge_instance(legacy_map, 1) == null and manager.prepare_instance(legacy_map) == null
+		and manager.select_entry_instance(legacy_map) == null and manager.find_public_instance(legacy_map) == null
+		and manager.loading_instances.size() == before_legacy,
+		"production instance manager must reject 2D resources before construction")
 	var broken:=InstanceResource.new();broken.instance_name=&"BrokenFixture";broken.use_3d=true;broken.map_path="res://tests/inventory_grid.tscn"
 	var loading_before:=manager.loading_instances.size()
 	check(manager.prepare_instance(broken)==null and manager.loading_instances.size()==loading_before and broken.charged_instances.is_empty(),"failed map load leaves no half-registered instance")
@@ -135,6 +138,8 @@ func run_server() -> void:
 	var a:=manager.find_instance_for_peer(first)
 	var b:=manager.find_instance_for_peer(second)
 	check(a!=null and b!=null and a!=b,"initial admission distributes players between configured copies")
+	check(not (a is LegacyServerInstance2D) and not (b is LegacyServerInstance2D), "production 3D hosts do not inherit legacy 2D gameplay")
+	check(a.get_node_or_null("StateSynchronizerManager") == null and b.get_node_or_null("StateSynchronizerManager") == null, "3D instance hosts never start the 2D state synchronizer")
 	check(a.instance_resource==b.instance_resource and a.identity.map_id==b.identity.map_id,"two copies of one map definition")
 	check(a.identity.instance_id!=b.identity.instance_id and a.identity.channel_id!=b.identity.channel_id,"instance/channel identities distinct")
 	check(a.identity.realm_id==b.identity.realm_id and a.identity.host_id==b.identity.host_id,"one local realm and host")
@@ -346,8 +351,7 @@ func exercise_access_policy() -> void:
 	resource.charged_instances.erase(private_copy);resource.charged_instances.append(private_copy)
 	resource.max_players=2
 	check(resource.get_instance()==private_copy,"regression fixture has RESERVED last after PUBLIC CH1/CH2")
-	check(manager.find_public_instance(resource) in [public_copy,public_second],"legacy public routing excludes last RESERVED copy")
-	exercise_legacy_transfer_guard(private_copy)
+	check(manager.find_public_instance(resource) in [public_copy,public_second],"public routing excludes last RESERVED copy")
 	check(not manager.reserve_entry(910002,resource,private_copy).ok and public_copy.awaiting_peers.has(910002),"different target cannot replace a pending assignment")
 	resource.idle_timeout_seconds=0
 	private_copy.allowed_character_ids.clear()
@@ -368,36 +372,6 @@ func exercise_access_policy() -> void:
 		manager._release_pending_peer(peer_id)
 		server.connected_players.erase(peer_id);server.player_id_to_peer_id.erase(peer_id)
 	manager.instance_collection.erase(resource.instance_name)
-
-func exercise_legacy_transfer_guard(private_copy: ServerInstance) -> void:
-	var source:=LegacyHost.new();source.name="LegacySource"
-	source.instance_resource=InstanceResource.new();source.instance_resource.instance_name=&"LegacySource"
-	source.instance_resource.charged_instances.append(source)
-	manager.instance_collection[&"LegacySource"]=source.instance_resource
-	manager.add_child(source)
-	var target:=LegacyHost.new();target.name="LegacyTarget";target.instance_resource=InstanceResource.new()
-	manager.add_child(target)
-	var session:=PlayerResource.new();session.player_id=920001;session.current_peer_id=920001
-	server.connected_players[920001]=session;server.player_id_to_peer_id[920001]=920001
-	var actor:=Player.new();actor.name="920001";actor.player_resource=session
-	source.connected_peers.append(920001);source.players_by_peer_id[920001]=actor
-	var saved_database:=server.database
-	var checkpoint:=FailedCheckpoint.new();server.database=checkpoint
-	check(not manager.player_switch_instance(private_copy,0,actor,source),"legacy transfer rejects RESERVED/3D before despawn")
-	check(not manager.teleport_peer_to(920001,private_copy,Vector2.ZERO),"direct cross-instance teleport rejects private target")
-	target.access_policy=ServerInstance.AccessPolicy.RESERVED
-	check(not manager.player_switch_instance(target,0,actor,source),"legacy access guard does not rely only on 3D type")
-	target.access_policy=ServerInstance.AccessPolicy.PUBLIC;target.admission_state=ServerInstance.AdmissionState.DRAINING
-	check(not manager.player_switch_instance(target,0,actor,source),"draining target rejected before checkpoint/despawn")
-	check(checkpoint.calls==0 and source.despawn_count==0 and source.get_player(920001)==actor and source.connected_peers.has(920001),"rejected targets preserve source actor and membership without side effects")
-	target.admission_state=ServerInstance.AdmissionState.ACCEPTING
-	check(not manager.player_switch_instance(target,0,actor,source) and checkpoint.calls==1,"accepted legacy target still requires successful checkpoint")
-	check(source.despawn_count==0 and source.get_player(920001)==actor and target.awaiting_peers.is_empty(),"failed checkpoint leaves source and target unchanged")
-	server.database=saved_database;checkpoint.free()
-	actor.free();source.players_by_peer_id.clear();source.connected_peers.clear()
-	server.connected_players.erase(920001);server.player_id_to_peer_id.erase(920001)
-	manager.instance_collection.erase(&"LegacySource");source.instance_resource.charged_instances.clear()
-	source.queue_free();target.queue_free()
 
 func healthy_budget():
 	var budget=preload("res://source/server/world/components/instance_provision_budget.gd").new()

@@ -9,7 +9,7 @@ class_name DailyQuestService
 ## complete just because you happen to be holding the target items.
 ##
 ## Flow:
-##   - Player clicks the QuestBoard -> quest.board.info -> get_or_roll +
+##   - Player opens the daily board -> quest.board.info -> get_or_roll +
 ##     build_board_payload.
 ##   - A gameplay event (kill / gather / craft / duel / dungeon clear) calls the
 ##     matching on_* hook, which bumps counters and pushes daily.progress so an

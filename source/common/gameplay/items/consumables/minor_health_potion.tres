@@ -1,13 +1,11 @@
 [gd_resource type="Resource" script_class="ConsumableItem" format=3 uid="uid://6m10gk0883iw"]
 
-[ext_resource type="Texture2D" uid="uid://bwliwrqdilakc" path="res://assets/sprites/items/icons/Icon302.png" id="1_p8ujo"]
 [ext_resource type="Script" uid="uid://bprsise4rcsak" path="res://source/common/gameplay/items/consumable_item.gd" id="1_script"]
 
 [resource]
 script = ExtResource("1_script")
 heal_amount = 20
 item_name = &"Minor Health Potion"
-item_icon = ExtResource("1_p8ujo")
 description = "A small draught. Cheap and handy your first days out."
 metadata/slug = &"minor_health_potion"
 metadata/id = 68

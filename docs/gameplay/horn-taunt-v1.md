@@ -14,3 +14,17 @@ Selection rules:
 - At most the horn's cap can be recruited in one activation; cooldown is consumed even when no mobs qualify.
 
 Deferred: proper horn item/unlock/equip UI, visual/audio feedback, upgrade progression, explicit error feedback on cooldown and fine balancing. Do not market improved/advanced horns as player-unlockable until equipment/progression hooks exist.
+
+Horn activation is a live simulation action, not an economic mutation. It checks
+World availability, an existing living actor and the local transfer gate; it does
+not use the legacy synchronous economic-write guard. Inventory/Wallet PostgreSQL
+owners therefore do not disable taunting. Failed admission does not consume the
+cooldown. Item custody, tier unlocks and persistent item USE remain deferred.
+
+Verification: `tests/horn_taunt.gd` is part of default smoke and covers selection,
+the production `try_use()` path with PG owner presence, cooldown, death/missing
+actor, transfer refusal and preservation of another player's target. The PG owner
+fixture exercises admission only; it does not start a PostgreSQL database.
+
+The new GameWorld RPC ships with build version 0.30.0. Restart server roles and
+clients together; the existing Gateway version gate rejects older builds.

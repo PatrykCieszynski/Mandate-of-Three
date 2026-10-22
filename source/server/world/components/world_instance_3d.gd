@@ -1,6 +1,6 @@
 extends ServerInstance
-## Session adapter: preserves the authenticated instance lifecycle, bypassing
-## legacy Player/Map/weapon/status systems until their domains are rebuilt.
+## 3D runtime host: inherits only identity, admission and lifecycle contracts.
+## Legacy Player/Map/synchronizer implementation lives in LegacyServerInstance2D.
 
 var map_3d: GameWorld3D
 

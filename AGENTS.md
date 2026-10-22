@@ -8,13 +8,20 @@ Architecture references:
 - `docs/architecture/world-instance-architecture.md` — World Processes, MapInstances, dynamic channels and dungeon hosting.
 - `docs/architecture/economy/README.md` — accepted Economy V2 contracts C1–C5.
 - `docs/architecture/persistence-policy.md` — current runtime persistence behavior.
-- `docs/plans/architecture-hardening.md` — staged infrastructure refactoring priorities.
+- `docs/history/postgresql-migration.md` — completed PostgreSQL milestone provenance.
 - `docs/development/testing.md` — verification and regression-testing policy.
 
 Distinguish **accepted future architecture** from **currently implemented behavior**.
-The runtime currently uses Gateway, Master, a single World Process and SQLite.
-The Economy V2 contracts do not imply that a distributed Economy Service,
-PostgreSQL or multi-process hosting has already been implemented.
+Normal development uses Gateway, Master, a single World Process and PostgreSQL,
+including accounts/profiles. SQLite remains a reference/legacy fixture backend.
+See docs/development/postgres-full-state.md. This does not imply a distributed
+Economy Service or multi-World hosting.
+
+## Documentation policy for Codex
+
+Start at `docs/README.md` and read only the **current** domain documentation required for the task. Do not recursively read all of `docs/` or treat historical plans, granular P1–P4 evidence, spike branches or old TODOs as pending work. Verify contradictory status claims against current source and the canonical document.
+
+**Do not create a summary/report Markdown file after each commit or PR.** Routine changes belong in the PR body (scope, verification commands/results, caveats) and a small update to an existing canonical document only when its contract changed. At the **end of a meaningful milestone**, one concise consolidated summary/evidence report may capture accepted behavior, reproducible tests, limitations and source SHAs. Never create evidence directories for routine commits. Ask for a reason before introducing another documentation file. Keep future roadmap ownership with the maintainer.
 
 ## Development workflow
 
@@ -69,7 +76,7 @@ behavior over speculative abstractions or large structural rewrites.
 - Reconcile runtime state and publish committed changes only after successful transactions. Do not confuse receipt replay with a new commit.
 - Combat must not perform database or network round trips per hit.
 - Soft progression and eligible grinding Yang may continue using the documented bounded checkpoint policy.
-- Keep SQLite until a concrete multi-process milestone requires shared authoritative persistence.
+- Preserve SQLite reference/parity fixtures; never fall back to SQLite when a selected PostgreSQL deployment fails startup or a write.
 
 ### Refactoring
 

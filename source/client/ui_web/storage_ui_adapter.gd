@@ -94,7 +94,7 @@ func _retry(allow_execution: bool) -> Dictionary:
 	var result := await _session.wait(id,_tree)
 	if _disposed: return result
 	_in_flight = false
-	if result.ok:
+	if result.ok or result.get("terminal",false):
 		if not _release(): return {"ok":false,"error":"journal_unavailable"}
 		publish(_endpoint.state)
 		return result

@@ -2,13 +2,13 @@ class_name InstanceManagerClient
 extends Node
 
 
-signal instance_changed(instance: InstanceClient)
+signal instance_changed(instance: WorldInstanceClient3D)
 signal channels_changed(catalogue: Dictionary)
 signal channel_selection_finished(result: Dictionary)
 signal transfer_changed(result: Dictionary)
 
 
-var current_instance: InstanceClient
+var current_instance: WorldInstanceClient3D
 var auto_select_channel: bool = true
 var channels: Dictionary = {}
 var _next_channel_request: int = 1
@@ -113,45 +113,12 @@ func charge_new_instance(map_path: String, instance_id: String, identity: Dictio
 		push_error("Could not load instance map: " + map_path)
 		return
 	var loaded_map: Node = scene.instantiate()
-	if loaded_map is GameWorld3D:
-		_charge_3d_instance(loaded_map, instance_id, identity)
+	if not loaded_map is GameWorld3D:
+		push_error("Unsupported non-3D instance map: " + map_path)
+		if loaded_map != null:
+			loaded_map.free()
 		return
-	var new_instance: InstanceClient = InstanceClient.new()
-	new_instance.name = instance_id
-	new_instance.identity=identity.duplicate(true)
-	
-	print("Loading new map: %s." % map_path)
-	var map: Map = loaded_map as Map
-	if not map:
-		loaded_map.free()
-		new_instance.free()
-		return
-	new_instance.instance_map = map
-	
-	map.ready.connect(
-		new_instance.ready_to_enter_instance.rpc_id.bind(1),
-		CONNECT_ONE_SHOT
-	)
-	map.ready.connect(
-		instance_changed.emit.bind(new_instance),
-		CONNECT_ONE_SHOT
-	)
-	# First-visit region banner (client-only cosmetic; no-op for known/unlisted maps).
-	map.ready.connect(
-		ZoneDiscovery.on_map_loaded.bind(map_path),
-		CONNECT_ONE_SHOT
-	)
-	
-	if current_instance:
-		if current_instance.local_player:
-			current_instance.instance_map.remove_child(current_instance.local_player)
-			#current_instance.local_player.reparent(new_instance, false)
-		current_instance.queue_free()
-	current_instance = new_instance
-
-	new_instance.add_child(map, true)
-	add_child(new_instance, true)
-	
+	_charge_3d_instance(loaded_map as GameWorld3D, instance_id, identity)
 
 
 func _charge_3d_instance(map: Node3D, instance_id: String, identity: Dictionary = {}) -> void:
@@ -160,7 +127,7 @@ func _charge_3d_instance(map: Node3D, instance_id: String, identity: Dictionary 
 	InstanceClient.local_player = null
 	ClientState.local_player = null
 	ClientState.menu_open = false
-	var instance: InstanceClient = preload("res://source/client/network/world_instance_3d.gd").new()
+	var instance: WorldInstanceClient3D = preload("res://source/client/network/world_instance_3d.gd").new()
 	instance.name = instance_id
 	instance.identity=identity.duplicate(true)
 	current_instance = instance

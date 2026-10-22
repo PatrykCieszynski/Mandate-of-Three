@@ -2,12 +2,38 @@ class_name WorldManagerClient
 extends BaseMultiplayerEndpoint
 
 
-signal token_received(auth_token: String, username: String, character_id: int, account_id: int)
-
 @export var database: WorldDatabase
 @export var world_server: WorldServer
 
 var world_info: Dictionary
+var _maintenance: Dictionary={}
+var _shutdown_in_progress:=false
+var _maintenance_task: RefCounted
+var _shutdown_task: RefCounted
+
+func _stores_closing() -> bool:
+	return not _maintenance.is_empty() or _shutdown_task!=null or _shutdown_in_progress
+
+@rpc("authority","call_remote","reliable")
+func economy_quiesce(id: String) -> void:
+	if not ItemInstance.valid_uid(id) or world_server.economy_bootstrap==null: return
+	if not _maintenance.is_empty():
+		if _maintenance.id==id and _maintenance.done: economy_quiesced.rpc_id(1,id,_maintenance.result)
+		return
+	if _shutdown_in_progress or not world_server.economy_bootstrap.ready():
+		economy_quiesced.rpc_id(1,id,{"ok":false,"profiles_closed":false,"workers_stopped":false});return
+	_maintenance={"id":id,"done":false,"result":{}}
+	_maintenance_task=preload("res://source/server/world/operations/world_maintenance.gd").new(world_server)
+	var result: Dictionary=await _maintenance_task.run()
+	_maintenance.result=result
+	_maintenance.done=true
+	if multiplayer_api!=null and multiplayer_api.has_multiplayer_peer() and multiplayer_api.multiplayer_peer.get_connection_status()==MultiplayerPeer.CONNECTION_CONNECTED:
+		economy_quiesced.rpc_id(1,id,result)
+	_send_heartbeat()
+
+@rpc("any_peer","call_remote","reliable")
+func economy_quiesced(_id: String, _result: Dictionary) -> void: pass
+
 
 
 func start_client_to_master_server(_world_info: Dictionary) -> void:
@@ -41,7 +67,9 @@ func _on_connection_succeeded() -> void:
 			"port": world_info.port,
 			"address": reported_address,
 			"info": world_info,
-			"population": world_server.connected_players.size()
+			"population": world_server.connected_players.size(),
+			"economy_backend":database.economy_backend,
+			"economy_authority_id":world_server.economy_bootstrap.authority_id() if world_server.economy_bootstrap!=null else ""
 		}
 	)
 	# Start the heartbeat once we're attached. Master uses it to drive the
@@ -108,6 +136,7 @@ func _build_snapshot() -> Dictionary:
 		recent_chat = world_server.chat_service.recent(20)
 
 	return {
+		"economy":world_server.economy_bootstrap.status() if world_server.economy_bootstrap!=null else {},
 		"name": str(world_info.get("name", "world")),
 		"population": world_server.connected_players.size(),
 		"instances": instance_count,
@@ -131,23 +160,50 @@ func heartbeat(_snapshot: Dictionary) -> void:
 ## Master tells this world to flush all connected players + snapshot the DB.
 @rpc("authority")
 func master_save() -> void:
+	if _stores_closing(): return
 	if world_server == null or database == null:
 		return
+	if not await world_server.flush_postgres_wallets():
+		push_error("Save refused: PostgreSQL wallet checkpoint unresolved.")
+		return
+	if _stores_closing(): return
 	var saved: int = database.save_all_connected(world_server.connected_players)
 	var ok: bool = await database.coordinated_backup()
 	ServerLog.info("Dashboard 'save' triggered: %d player(s), backup %s." % [saved, "ok" if ok else "FAILED"])
 
 
 ## Master tells this world to shut down gracefully. Final save runs first.
-@rpc("authority")
+@rpc("authority","call_remote","reliable")
 func master_shutdown() -> void:
+	if not _maintenance.is_empty(): return
 	if world_server == null or database == null:
 		return
+	if _shutdown_in_progress: return
+	_shutdown_in_progress=true
 	ServerLog.info("Dashboard 'shutdown' triggered — saving + quitting.")
+	if world_server.economy_bootstrap!=null:
+		# Retain the concrete owner/resources across a failed profile checkpoint.
+		# The economy drain disconnects players before returning; a later scan of
+		# connected_players alone cannot certify that their latest profiles saved.
+		if _shutdown_task==null:
+			_shutdown_task=preload("res://source/server/world/operations/world_maintenance.gd").new(world_server)
+		var result: Dictionary=await _shutdown_task.run()
+		_shutdown_in_progress=false
+		if not result.ok or not result.profiles_closed or not result.workers_stopped:
+			push_error("Graceful shutdown refused: economy/profile closure unresolved; retain process and retry.")
+			return
+		get_tree().quit.call_deferred()
+		return
+	if not await world_server.shutdown_economy():
+		_shutdown_in_progress=false
+		push_error("Graceful shutdown cancelled: PostgreSQL wallet checkpoint unresolved.")
+		return
 	if database.save_all_connected(world_server.connected_players) < 0:
+		_shutdown_in_progress=false
 		push_error("Graceful shutdown cancelled: character checkpoint failed.")
 		return
 	if not await database.shutdown_database():
+		_shutdown_in_progress=false
 		push_error("Graceful shutdown cancelled: reader drain/backup failed.")
 		return
 	get_tree().quit.call_deferred()
@@ -160,6 +216,7 @@ func master_shutdown() -> void:
 ## same [param seconds] before stopping, so the countdown and the stop line up.
 @rpc("authority")
 func master_restart(seconds: int, message: String) -> void:
+	if _stores_closing(): return
 	if world_server == null or world_server.chat_service == null:
 		return
 	var note: String = message if not message.is_empty() else "Server restarting for an update."
@@ -174,8 +231,13 @@ func master_restart(seconds: int, message: String) -> void:
 		_broadcast_restart_notice(remaining, note)
 	if remaining > 0:
 		await get_tree().create_timer(remaining).timeout
+	if _stores_closing(): return
 	# Insurance save in case the deploy's stop is delayed or never lands.
 	if database != null:
+		if not await world_server.flush_postgres_wallets(true):
+			push_error("Restart save refused: PostgreSQL wallet checkpoint unresolved.")
+			return
+		if _stores_closing(): return
 		var saved: int = database.save_all_connected(world_server.connected_players)
 		var ok: bool=await database.coordinated_backup(10,false,true)
 		ServerLog.info("Restart countdown elapsed — final save (%d player(s)), reader drain/backup %s; awaiting stop." % [saved,"ok" if ok else "FAILED"])
@@ -200,6 +262,7 @@ func _broadcast_restart_notice(remaining: int, note: String) -> void:
 ## Master pushes a system message to every connected player in this world.
 @rpc("authority")
 func master_broadcast(message: String) -> void:
+	if _stores_closing(): return
 	if world_server == null or world_server.chat_service == null:
 		return
 	for peer_id: int in world_server.connected_players:
@@ -219,6 +282,7 @@ func master_broadcast(message: String) -> void:
 
 @rpc("authority")
 func master_mute(player_id: int, reason: String, duration_ms: int) -> void:
+	if _stores_closing(): return
 	var account: String = _account_for_id(player_id)
 	if account.is_empty():
 		ServerLog.warn("Dashboard mute: no account for player #%d" % player_id)
@@ -232,6 +296,7 @@ func master_mute(player_id: int, reason: String, duration_ms: int) -> void:
 
 @rpc("authority")
 func master_unmute(player_id: int) -> void:
+	if _stores_closing(): return
 	var account: String = _account_for_id(player_id)
 	if not account.is_empty() and MuteList.unmute(account):
 		ServerLog.info("Dashboard unmute: @%s (#%d)" % [account, player_id])
@@ -240,6 +305,7 @@ func master_unmute(player_id: int) -> void:
 
 @rpc("authority")
 func master_jail(player_id: int, reason: String, duration_ms: int) -> void:
+	if _stores_closing(): return
 	var account: String = _account_for_id(player_id)
 	if account.is_empty():
 		ServerLog.warn("Dashboard jail: no account for player #%d" % player_id)
@@ -257,6 +323,7 @@ func master_jail(player_id: int, reason: String, duration_ms: int) -> void:
 
 @rpc("authority")
 func master_unjail(player_id: int) -> void:
+	if _stores_closing(): return
 	var account: String = _account_for_id(player_id)
 	if not account.is_empty() and JailList.release(account):
 		ServerLog.info("Dashboard unjail: @%s (#%d)" % [account, player_id])
@@ -278,6 +345,7 @@ func _account_for_id(player_id: int) -> String:
 
 @rpc("authority")
 func master_kick(player_id: int) -> void:
+	if _stores_closing(): return
 	var peer_id: int = world_server.player_id_to_peer_id.get(player_id, 0)
 	if peer_id == 0:
 		return
@@ -297,6 +365,7 @@ func master_kick(player_id: int) -> void:
 
 @rpc("authority")
 func master_grant_role(player_id: int, role: String) -> void:
+	if _stores_closing(): return
 	var peer_id: int = world_server.player_id_to_peer_id.get(player_id, 0)
 	if peer_id == 0:
 		return
@@ -311,6 +380,7 @@ func master_grant_role(player_id: int, role: String) -> void:
 
 @rpc("authority")
 func master_revoke_role(player_id: int, role: String) -> void:
+	if _stores_closing(): return
 	var peer_id: int = world_server.player_id_to_peer_id.get(player_id, 0)
 	if peer_id == 0:
 		return
@@ -331,12 +401,18 @@ func _notify_player(player_id: int, message: String) -> void:
 
 
 func _on_connection_failed() -> void:
+	if world_server!=null: world_server.invalidate_inventory_admissions()
 	print("Failed to connect to the MasterServer as WorldServer.")
 	await get_tree().create_timer(3.0).timeout
 	start_client_to_master_server(world_info)
 
 
 func _on_server_disconnected() -> void:
+	if database.economy_backend=="postgresql": database.wallet_ready=false
+	if world_server!=null and (world_server.inventory_runtime!=null or world_server.wallet_runtime!=null):
+		# An isolated PG World must not retain gameplay ownership after losing its
+		# issuer. Default SQLite reconnect behavior remains unchanged.
+		world_server.invalidate_inventory_admissions()
 	print("WorldServer disconnected from MasterServer.")
 	await get_tree().create_timer(3.0).timeout
 	start_client_to_master_server(world_info)
@@ -348,8 +424,14 @@ func fetch_server_info(_info: Dictionary) -> void:
 
 
 @rpc("authority")
-func fetch_token(auth_token: String, username: String, character_id: int, account_id: int) -> void:
-	token_received.emit(auth_token, username, character_id, account_id)
+func fetch_token(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> void:
+	# Trusted World acceptance reserves session + Economy capacity before Master
+	# publishes the ticket to Gateway. Never treat fire-and-forget delivery as ACK.
+	var accepted: bool=world_server.accept_master_handoff(auth_token,username,character_id,account_id,inventory_context)
+	handoff_accepted.rpc_id(1,auth_token,accepted)
+
+@rpc("any_peer","call_remote","reliable")
+func handoff_accepted(_token: String, _accepted: bool) -> void: pass
 
 
 @rpc("authority")
@@ -364,6 +446,18 @@ func player_disconnected(_username: String, _session_token: String) -> void:
 
 @rpc("authority")
 func account_identity_manifest(identities: Dictionary) -> void:
+	if database.economy_backend=="postgresql":
+		database.wallet_ready=false
+		var audit: Dictionary=database.store.audit_account_identities(identities)
+		if not audit.ok or not audit.orphaned.is_empty() or not audit.mismatched.is_empty():
+			push_error("PG identity manifest refused: profile identity mismatch");return
+		for username: String in audit.unbound:
+			if not identities[username] is int or identities[username]<=0 or not database.store.bind_account_identity(username,identities[username]): return
+		if not world_server.economy_bootstrap.ready(): return
+		database.wallet_ready=true
+		economy_identity_ready.rpc_id(1,world_server.economy_bootstrap.authority_id())
+		ServerLog.info("PostgreSQL identity manifest ready.")
+		return
 	var result := database.prepare_account_wallets(identities)
 	if not result.ok:
 		ServerLog.error("Account wallet migration refused: %s" % str(result))
@@ -371,11 +465,19 @@ func account_identity_manifest(identities: Dictionary) -> void:
 	ServerLog.info("Account wallet identity/migration ready.")
 	if not await database.start_auction_queries(): ServerLog.error("Auction reader unavailable; economy remains operational.")
 
+@rpc("any_peer")
+func economy_identity_ready(_authority: String) -> void: pass
+
 @rpc("authority")
 func create_player_character_request(gateway_id: int, peer_id: int, username: String, character_data: Dictionary, account_id: int, attempt_id: String) -> void:
 	var character_id := 0
 	if database.wallet_ready and database.store.bind_account_identity(username,account_id,true):
 		character_id = database.create_player_character(username, character_data)
+		if character_id>0 and database.economy_backend=="postgresql":
+			var bound: Dictionary=await world_server.inventory_runtime.ensure_identity(account_id,character_id)
+			# Keep the committed profile on failure. Login/retry converges the SAME
+			# mapping; never delete/recreate it or repeat a starter grant.
+			if not bound.ok or not database.wallet_ready or not world_server.economy_bootstrap.ready(): character_id=0
 	
 	player_character_creation_result.rpc_id(
 		1,
@@ -421,6 +523,10 @@ func request_login(
 	if not database.wallet_ready or player == null or player.account_name != username:
 		result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id,attempt_id)
 		return
+	if database.economy_backend=="postgresql":
+		var bound: Dictionary=await world_server.inventory_runtime.ensure_identity(database.store.resolve_account_id(character_id),character_id)
+		if not bound.ok or not database.wallet_ready or not world_server.economy_bootstrap.ready():
+			result_login.rpc_id(1,GatewayAPI.ERR_BAD_CREDENTIALS,gateway_id,peer_id,username,character_id,attempt_id);return
 	result_login.rpc_id(
 		1,
 		OK,

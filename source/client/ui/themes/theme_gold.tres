@@ -1,6 +1,5 @@
 [gd_resource type="Theme" format=3]
 
-[ext_resource type="Texture2D" uid="uid://dmtdcavfc5y51" path="res://assets/sprites/ui/gateway/frame_h_neutral.png" id="1_jxqpw"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3pd4s"]
 content_margin_left = 8.0
@@ -123,21 +122,29 @@ corner_radius_bottom_left = 4
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_rjn7w"]
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_sibwv"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxTexture_sibwv"]
 content_margin_left = 20.0
 content_margin_top = 8.0
 content_margin_right = 20.0
 content_margin_bottom = 8.0
-texture = ExtResource("1_jxqpw")
-modulate_color = Color(0.95, 0.74, 0.44, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+bg_color = Color(0.06, 0.05, 0.04, 0.95)
+border_color = Color(0.95, 0.74, 0.44, 1)
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_k5tfo"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxTexture_k5tfo"]
 content_margin_left = 20.0
 content_margin_top = 8.0
 content_margin_right = 20.0
 content_margin_bottom = 8.0
-texture = ExtResource("1_jxqpw")
-modulate_color = Color(0.72, 0.56, 0.34, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+bg_color = Color(0.06, 0.05, 0.04, 0.95)
+border_color = Color(0.72, 0.56, 0.34, 1)
 
 [sub_resource type="StyleBoxFlat" id="SB_grab"]
 content_margin_left = 3.0

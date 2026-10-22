@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_7gygy")
 content_name = &"quests"
-version = 1783762918
+version = 1783762919
 next_id = 42
 entries = Array[Dictionary]([{
 &"hash": "4a44a478c7d7cc48d1505b2b9a58825ab9f456554790eb88d9a427d70d4f95e6",
@@ -38,7 +38,7 @@ entries = Array[Dictionary]([{
 &"path": "res://source/common/gameplay/quests/resources/bandit_hideout/cloth_for_the_watch.tres",
 &"slug": &"cloth_for_the_watch"
 }, {
-&"hash": "166de212cc36f8860cc62155fc230384a2af87a7ad87f43ee56ccb378cf2ba8f",
+&"hash": "3562fd824de855a7bd6462bea06fe97f1eac259d824ad48d6897caabedcf6919",
 &"id": 20,
 &"path": "res://source/common/gameplay/quests/resources/bandit_hideout/the_bandit_captain.tres",
 &"slug": &"the_bandit_captain"
@@ -78,22 +78,22 @@ entries = Array[Dictionary]([{
 &"path": "res://source/common/gameplay/quests/resources/fungus_cave/spores_in_the_dark.tres",
 &"slug": &"spores_in_the_dark"
 }, {
-&"hash": "996ef3985510e344d8aadb70660fbe114764612a510a78a8246da2d6130b41a0",
+&"hash": "f2f60d74ffe5142faa6608bb70560be4ac08cd745fa836193914868031743f3d",
 &"id": 41,
 &"path": "res://source/common/gameplay/quests/resources/fungus_cave/the_fungal_heart.tres",
 &"slug": &"the_fungal_heart"
 }, {
-&"hash": "01aa50641918283659906893a5111e4553b3848796dbc0e4dd9444a82a450ff9",
+&"hash": "c898504abcb647805df145ac783b398898b92728dd960191063a15443af92e0c",
 &"id": 28,
 &"path": "res://source/common/gameplay/quests/resources/goblin_woodland/break_the_warren_guard.tres",
 &"slug": &"break_the_warren_guard"
 }, {
-&"hash": "32217f8394ea13d46f41a4381d6fe8fad37cc1be1303640358bbc278417491ce",
+&"hash": "d94da9cffdce7d690b4ff369c2505e998bae7a4027274f18dedd07db8a27e15f",
 &"id": 29,
 &"path": "res://source/common/gameplay/quests/resources/goblin_woodland/clear_the_path.tres",
 &"slug": &"clear_the_path"
 }, {
-&"hash": "20ebbd53895d05390f1566a7a0847c62026581cc414f8e7d835fc757d492c663",
+&"hash": "6b719a65f3901cd94da774a4930f89bfc7e9123c63fb5bc05423f4a711f76f4c",
 &"id": 30,
 &"path": "res://source/common/gameplay/quests/resources/goblin_woodland/cloth_for_the_warden.tres",
 &"slug": &"cloth_for_the_warden"
@@ -103,7 +103,7 @@ entries = Array[Dictionary]([{
 &"path": "res://source/common/gameplay/quests/resources/goblin_woodland/first_blood.tres",
 &"slug": &"first_blood"
 }, {
-&"hash": "ab91709b8b11a138b599d86ffb23a818094fa1fd785196933420898e0dc1e99c",
+&"hash": "24b93a94809ed236ee729f13e5d952b4c6676fd79ff8c5267a7f34c3751cb615",
 &"id": 32,
 &"path": "res://source/common/gameplay/quests/resources/goblin_woodland/the_goblin_chief.tres",
 &"slug": &"the_goblin_chief"

@@ -1,6 +1,6 @@
 # P0 evidence, 2026-10-14
 
-See [the diagnosis and decision](../../marketplace-auction-soci-p0.md) for cohort
+See [the diagnosis and decision (historical)](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/8a4127916ed27336c380495019116b2ad4323d72/docs/marketplace-auction-soci-p0.md) for cohort
 selection, limitations, repeat commands and production versus addon scope.
 
 `samples.csv` contains 6,861 valid first-connection/warmed measurements from 27

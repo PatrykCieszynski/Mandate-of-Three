@@ -1,13 +1,17 @@
 [gd_scene format=3 uid="uid://5wv1gfwppcnf"]
 
 [ext_resource type="Script" uid="uid://ch86ljq7iwgv8" path="res://source/client/gateway/gateway.gd" id="2_74q4y"]
-[ext_resource type="Texture2D" uid="uid://cl572rmxiaw1m" path="res://assets/sprites/ui/backgrounds/fairy_forest.png" id="4_uvr2v"]
-[ext_resource type="FontFile" uid="uid://cehc3gujked8x" path="res://assets/fonts/Cinzel/static/Cinzel-Bold.ttf" id="5_opc3y"]
-[ext_resource type="SpriteFrames" uid="uid://bqcsne8jhbmi8" path="res://source/common/gameplay/characters/sprite_frames/knight.tres" id="6_g2eid"]
-[ext_resource type="FontFile" uid="uid://cr1d4ugttxggp" path="res://assets/fonts/Atkinson_Hyperlegible/AtkinsonHyperlegible-Bold.ttf" id="6_tnybn"]
-[ext_resource type="Texture2D" uid="uid://cp0ddo3nvmx2u" path="res://assets/sprites/ui/gateway/icon_more.png" id="7_4oa66"]
 [ext_resource type="PackedScene" uid="uid://dgpsxb4qq1hex" path="res://source/client/ui/settings/settings_menu.tscn" id="7_g2eid"]
 [ext_resource type="Script" uid="uid://q5rsjtg6nsto" path="res://source/client/gateway/popup_panel.gd" id="9_4rdug"]
+
+[sub_resource type="Gradient" id="GatewayGradient"]
+colors = PackedColorArray(0.025, 0.035, 0.05, 1, 0.08, 0.10, 0.13, 1)
+
+[sub_resource type="GradientTexture2D" id="GatewayBackdrop"]
+gradient = SubResource("GatewayGradient")
+width = 960
+height = 540
+fill_to = Vector2(0, 1)
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_q35d6"]
 
@@ -24,7 +28,6 @@ fill_from = Vector2(0, 0.465812)
 fill_to = Vector2(1, 0.491453)
 
 [sub_resource type="LabelSettings" id="LabelSettings_rky0m"]
-font = ExtResource("6_tnybn")
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dfj0q"]
 content_margin_left = 12.0
@@ -56,9 +59,8 @@ grow_vertical = 2
 script = ExtResource("2_74q4y")
 
 [node name="Background" type="Sprite2D" parent="." unique_id=1217529567]
-position = Vector2(0, -300)
-scale = Vector2(0.6, 0.6)
-texture = ExtResource("4_uvr2v")
+position = Vector2(0, 0)
+texture = SubResource("GatewayBackdrop")
 centered = false
 
 [node name="BackgroundRect" type="ColorRect" parent="." unique_id=46713697]
@@ -99,7 +101,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="MainPanel/VBoxContainer" unique_id=2087592224]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 34
 text = "Mandate of Three"
 horizontal_alignment = 1
@@ -119,7 +120,6 @@ theme_override_constants/separation = 14
 custom_minimum_size = Vector2(420, 60)
 layout_mode = 2
 theme_type_variation = &"FrameButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 18
 text = "LOGIN"
 
@@ -127,7 +127,6 @@ text = "LOGIN"
 custom_minimum_size = Vector2(420, 60)
 layout_mode = 2
 theme_type_variation = &"FrameButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 18
 text = "CREATE_ACC"
 
@@ -135,7 +134,6 @@ text = "CREATE_ACC"
 custom_minimum_size = Vector2(420, 60)
 layout_mode = 2
 theme_type_variation = &"FrameButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 18
 text = "PLAY_AS_GUEST"
 
@@ -161,7 +159,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="LoginPanel/VBoxContainer" unique_id=985210558]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 24
 text = "LOGIN"
 horizontal_alignment = 1
@@ -211,7 +208,6 @@ placeholder_text = "ENTER_PASSWORD"
 custom_minimum_size = Vector2(420, 60)
 layout_mode = 2
 theme_type_variation = &"FrameButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 18
 text = "LOGIN"
 
@@ -237,7 +233,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="CreateAccountPanel/VBoxContainer" unique_id=1492652728]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 24
 text = "CREATE_ACC"
 horizontal_alignment = 1
@@ -302,7 +297,6 @@ placeholder_text = "ENTER_PASSWORD_CONFIRM"
 custom_minimum_size = Vector2(420, 60)
 layout_mode = 2
 theme_type_variation = &"FrameButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 18
 text = "CREATE_ACC"
 
@@ -330,7 +324,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="WorldSelection/VBoxContainer" unique_id=1449260793]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 24
 text = "WORLD_SELECTION"
 horizontal_alignment = 1
@@ -383,7 +376,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="CharacterSelection/VBoxContainer" unique_id=1397529779]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 24
 text = "CHARACTER_SELECTION"
 horizontal_alignment = 1
@@ -454,7 +446,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="CharacterCreation/VBoxContainer" unique_id=1588363991]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 24
 text = "CHARACTER_CREATION"
 horizontal_alignment = 1
@@ -482,7 +473,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer" unique_id=164507258]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 18
 text = "STARTING_SKIN"
 horizontal_alignment = 1
@@ -501,7 +491,6 @@ layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_type_variation = &"GradientButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 16
 text = "KNIGHT"
 
@@ -511,7 +500,6 @@ layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_type_variation = &"GradientButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 16
 text = "ROGUE"
 
@@ -521,7 +509,6 @@ layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_type_variation = &"GradientButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 16
 text = "WIZARD"
 
@@ -531,7 +518,6 @@ layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 0
 theme_type_variation = &"GradientButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 16
 text = "???"
 
@@ -543,7 +529,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer2" unique_id=893379059]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 18
 text = "PREVIEW"
 horizontal_alignment = 1
@@ -558,14 +543,6 @@ layout_mode = 2
 custom_minimum_size = Vector2(260, 130)
 layout_mode = 2
 
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer2/CenterContainer/Control" unique_id=1440170042]
-texture_filter = 1
-position = Vector2(0, -130)
-scale = Vector2(4, 4)
-sprite_frames = ExtResource("6_g2eid")
-animation = &"run"
-centered = false
-
 [node name="VBoxContainer3" type="VBoxContainer" parent="CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer" unique_id=1309098980]
 visible = false
 layout_mode = 2
@@ -575,7 +552,6 @@ theme_override_constants/separation = 16
 
 [node name="Label" type="Label" parent="CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer3" unique_id=315743443]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 18
 text = "DESCRIPTION"
 horizontal_alignment = 1
@@ -610,7 +586,6 @@ custom_minimum_size = Vector2(210, 56)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"GradientButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 18
 text = "CREATE"
 
@@ -637,7 +612,6 @@ theme_override_constants/separation = 16
 
 [node name="TitleLabel" type="Label" parent="PopupPanel/VBoxContainer" unique_id=701584626]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 24
 text = "WAITING"
 horizontal_alignment = 1
@@ -666,7 +640,6 @@ custom_minimum_size = Vector2(220, 56)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_type_variation = &"GradientButton"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 18
 text = "OK"
 
@@ -692,7 +665,6 @@ offset_right = 103.0
 offset_bottom = -56.99997
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_fonts/font = ExtResource("5_opc3y")
 theme_override_font_sizes/font_size = 24
 text = "Mandate of Three"
 horizontal_alignment = 1
@@ -754,7 +726,6 @@ offset_bottom = 57.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_type_variation = &"Chip"
-theme_override_fonts/font = ExtResource("6_tnybn")
 theme_override_font_sizes/font_size = 24
 text = "<"
 
@@ -783,7 +754,7 @@ offset_right = -15.0
 offset_bottom = 57.0
 grow_horizontal = 0
 theme_type_variation = &"Chip"
-icon = ExtResource("7_4oa66")
+text = "..."
 icon_alignment = 1
 
 [node name="MoreBackdrop" type="ColorRect" parent="." unique_id=211781075]

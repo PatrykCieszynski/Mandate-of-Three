@@ -4,7 +4,7 @@ extends Node
 
 #const ChatConstants: GDScript = preload("res://source/common/utils/chat_constants.gd")
 
-var store: ChatStoreSqlite
+var store: RefCounted
 
 
 func setup_with_db(db: SQLite) -> void:

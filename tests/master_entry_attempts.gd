@@ -2,8 +2,8 @@ extends Node
 ## Concrete regression: World replies reordered across login/enter/create must
 ## pass through the real Master callbacks without issuing a stale usable ticket.
 class Accounts extends AuthenticationManager:
-	func save_account_collection() -> void:
-		pass
+	func save_account_collection() -> bool:
+		return true
 	func validate_credentials(username: String, _password: String) -> AccountResource:
 		return account_collection.collection.get(username)
 
@@ -19,6 +19,7 @@ class Master extends WorldManagerServer:
 
 class World extends WorldManagerClient:
 	var ready_for_test := false
+	var hold_ack:=false
 	var requests: Dictionary[int, Dictionary] = {}
 	var tickets: Array[String] = []
 	var usable: Array[String] = []
@@ -33,9 +34,10 @@ class World extends WorldManagerClient:
 	func create_player_character_request(gateway: int, request: int, username: String, _data: Dictionary, _account: int, attempt: String) -> void:
 		requests[request] = {"gateway": gateway, "username": username, "character": 0, "attempt": attempt, "create": true}
 	@rpc("authority")
-	func fetch_token(token: String, _username: String, _character: int, _account: int) -> void:
+	func fetch_token(token: String, _username: String, _character: int, _account: int, _inventory_context: Dictionary = {}) -> void:
 		tickets.append(token)
 		usable.append(token)
+		if not hold_ack: handoff_accepted.rpc_id(1,token,true)
 	@rpc("authority")
 	func master_kick(_character: int) -> void:
 		pass # No combat actors in the controlled worker.
@@ -48,6 +50,14 @@ class World extends WorldManagerClient:
 			player_character_creation_result.rpc_id(1, entry.gateway, request, entry.username, result, entry.attempt)
 		else:
 			result_login.rpc_id(1, result, entry.gateway, request, entry.username, entry.character, entry.attempt)
+
+class DelayedGrant extends RefCounted:
+	var requested:=false
+	var request: Dictionary={"queued":true,"done":false,"result":{}}
+	func request_grant(_world: int,_username: String,_token: String) -> Dictionary:
+		requested=true;return request
+	func poll() -> void: pass
+	func retire(_username: String,_token: String) -> void: pass
 
 var master := Master.new()
 var world := World.new()
@@ -79,6 +89,7 @@ func run() -> void:
 	accounts.account_collection = AccountResourceCollection.new()
 	accounts.account_collection.collection["alpha"] = identity
 	master.authentication_manager = accounts
+	master.runtime_settings=preload("res://source/server/runtime/runtime_capacity_settings.gd").resolve({}).settings
 	gateway.authentication_manager = accounts
 	gateway.world_manager = master
 	master.name = "Master"
@@ -99,7 +110,7 @@ func run() -> void:
 	assert(world.tickets.is_empty() and not master.responses.has(100) and identity.peer_id == 0)
 
 	# B wins; A's late success/error and a duplicate B must issue no extra ticket
-	# and must not reject B while its normal 0.5-second handoff delay is running.
+	# and must not reject B while its acceptance acknowledgement is in flight.
 	await enter(101)
 	assert(not gateway.login_request("alpha", "fixture").has("error"))
 	await enter(102)
@@ -154,6 +165,25 @@ func run() -> void:
 	world.reply(111)
 	await wait_for(func() -> bool: return master.responses.has(111))
 	assert(master.responses[111].has("auth-token") and world.tickets.size() == 6)
+	# A World may start draining while its native grant is in flight. Its late
+	# success must not issue a ticket, even while Master itself remains ready.
+	await enter(112)
+	var delayed:=DelayedGrant.new();master.inventory_session_issuer=delayed
+	world.reply(112)
+	await wait_for(func()->bool:return delayed.requested)
+	master.connected_worlds[world_id]["draining"]=true
+	delayed.request.result={"ok":true,"context":{}};delayed.request.done=true
+	await wait_for(func()->bool:return master.responses.has(112))
+	assert(master.responses[112].has("error") and world.tickets.size()==6)
+	master.inventory_session_issuer=null
+	master.connected_worlds[world_id]["draining"]=false
+	# Likewise fence a handoff whose World acceptance ACK has not arrived.
+	world.hold_ack=true
+	await enter(113);world.reply(113)
+	await wait_for(func()->bool:return world.tickets.size()==7)
+	master.connected_worlds[world_id]["draining"]=true
+	await wait_for(func()->bool:return master.responses.has(113))
+	assert(master.responses[113].has("error") and not master.world_ready(world_id))
 	world.peer.close()
 	master.peer.close()
 	get_tree().set_multiplayer(null, world.get_path())

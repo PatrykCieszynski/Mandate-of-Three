@@ -17,6 +17,11 @@ func attach(endpoint: MarketEndpoint3D,dispatcher: UiCommandDispatcher,session: 
 static func _valid(p: Dictionary,action: String) -> bool:
 	if action=="visit": return p.size()==2 and p.has_all(["shop_id","offer_id"]) and MarketEndpoint3D.valid_query("visit",{"shop_id":p.shop_id}) and p.offer_id is String and (p.offer_id.is_empty() or ItemInstance.valid_uid(p.offer_id))
 	return MarketEndpoint3D.valid_query(action,p)
+func accept_purchase_recovery(pending: bool, busy: bool) -> void:
+	_view.purchasePending=pending
+	_view.purchaseBusy=busy
+	publish()
+
 func open() -> void:
 	active=true;publish();await _query({"query":""},"catalog")
 func close() -> void:

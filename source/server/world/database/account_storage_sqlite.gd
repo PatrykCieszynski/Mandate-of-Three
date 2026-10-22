@@ -1,11 +1,12 @@
 class_name AccountStorageSqlite
 extends RefCounted
 ## Account membership is resolved from the authenticated character, never the RPC.
-const COLUMNS: int = 15
-const ROWS: int = 9
-const PAGES: int = 2
-const PAGE_CELLS: int = COLUMNS * ROWS
-const CAPACITY: int = PAGE_CELLS * PAGES
+const Grid = preload("res://source/common/gameplay/items/domain/storage_grid.gd")
+const COLUMNS: int = Grid.COLUMNS
+const ROWS: int = Grid.ROWS
+const PAGES: int = Grid.PAGES
+const PAGE_CELLS: int = Grid.PAGE_CELLS
+const CAPACITY: int = Grid.CAPACITY
 const SELECT: String = "SELECT i.*, 'storage' AS location,s.position AS bag_position,'' AS equipment_slot FROM item_instances i JOIN account_storage s ON s.item_uid=i.uid "
 var db: SQLite
 # Last transfer mutated durable custody/placement, excluding same-cell success.
@@ -23,10 +24,7 @@ static func ensure_schema(database: SQLite) -> bool:
 	database.query("ROLLBACK;")
 	return false
 static func cells(position: int, height: int) -> Array[int]:
-	var result: Array[int] = []
-	if position < 0 or position >= CAPACITY or height < 1 or height > 3 or (position % PAGE_CELLS) / COLUMNS + height > ROWS: return result
-	for offset: int in height: result.append(position + offset * COLUMNS)
-	return result
+	return Grid.cells(position,height)
 func account(character_id: int) -> String:
 	if not db.query_with_bindings("SELECT account_name FROM players WHERE player_id=?;", [character_id]) or db.query_result.is_empty(): return ""
 	return str(db.query_result[0].account_name)

@@ -3,7 +3,7 @@ extends DataRequestHandler
 
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var query: String = str(args.get("q", "")).strip_edges()
 	if query.is_empty():

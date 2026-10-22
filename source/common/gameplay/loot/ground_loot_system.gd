@@ -7,6 +7,7 @@ const PROTECTION_MS: int = 15000
 const LOOT_LIFETIME_MS: int = 120000
 const MAX_AFFIXES: int = 6
 var drops: Dictionary[String, Dictionary] = {}
+var pending_claims: Dictionary[String, bool] = {} # Server-only async reservation.
 var _world: Node3D
 var _services: MandateWorldServices
 
@@ -89,7 +90,7 @@ static func attack_for_drop(definition: ItemDefinition, drop: Dictionary) -> int
 
 func expire(now: int) -> void:
 	for uid: String in drops.keys():
-		if now >= int(drops[uid].expires):
+		if not pending_claims.has(uid) and now >= int(drops[uid].expires):
 			drops.erase(uid)
 
 func snapshot_for_peer(peer_id: int, now: int) -> Dictionary:
@@ -107,6 +108,9 @@ func snapshot_for_peer(peer_id: int, now: int) -> Dictionary:
 	return snapshot
 
 func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
+	if _services.ground_item_runtime()!=null:
+		var queued: Dictionary=_services.ground_item_runtime().pickup(peer_id,self,uid,now)
+		return queued if queued.queued else {"ok":false,"error":queued.error}
 	if not _services.mutations_allowed(peer_id):
 		return {"ok": false, "error": "transfer_pending"}
 
@@ -129,7 +133,7 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 	var item := prepare_claim_item(uid, owner_id, drop)
 	if item == null:
 		return {"ok": false, "error": "request"}
-	var operation := _services.economy().claim_ground_item_operation(owner_id, uid, item)
+	var operation: Variant = _services.economy().claim_ground_item_operation(owner_id, uid, item)
 	var result: Dictionary = operation.response()
 	if result.ok or result.get("error", "") == "claimed":
 		drops.erase(uid)
@@ -141,3 +145,16 @@ func pickup_for_peer(peer_id: int, uid: String, now: int) -> Dictionary:
 		# A committed UID/placement precedes cache refresh and all publication.
 		_world.inventory_endpoint.accept_committed_change(peer_id)
 	return result
+
+## World admission only. Copy immutable contents before crossing the worker
+## boundary; range/rights are checked in the enqueue turn, not by browser input.
+func claim_candidate(peer_id: int, uid: String, now: int) -> Dictionary:
+	if _services.transfer_pending(peer_id): return {"ok":false,"error":"transfer_pending"}
+	if not _world.combat_endpoint.is_player_alive(peer_id): return {"ok":false,"error":"player"}
+	if not drops.has(uid): return {"ok":false,"error":"gone"}
+	var drop: Dictionary=drops[uid]
+	if now>=int(drop.expires): return {"ok":false,"error":"gone"}
+	if now<int(drop.protected_until) and _services.owner_id_for_peer(peer_id)!=int(drop.owner): return {"ok":false,"error":"reserved"}
+	var body: Node3D=_world.characters[peer_id]
+	if body.position.distance_to(drop.position)>PICKUP_REACH or not _world.has_line_of_sight(body.position,drop.position): return {"ok":false,"error":"distance"}
+	return {"ok":true,"drop":drop.duplicate(true)}

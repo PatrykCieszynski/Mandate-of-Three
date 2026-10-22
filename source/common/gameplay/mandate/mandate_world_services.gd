@@ -1,29 +1,61 @@
 class_name MandateWorldServices
 extends RefCounted
-## Narrow TinyMMO boundary. Resolve current session/store references on demand:
+## Resolve current world session/store references on demand:
 ## reconnects and disposable test stores must not leave stale captured objects.
 
 func _server() -> WorldServer:
 	return WorldServer.curr
 
 func available() -> bool:
-	return _server() != null
+	return _server() != null and (_server().economy_bootstrap==null or _server().economy_bootstrap.ready())
 
 func economy() -> WorldDatabase:
-	return null if _server() == null else _server().database
+	return null if not available() or _server().inventory_runtime != null or _server().wallet_runtime != null else _server().database
 
 func progression() -> WorldDatabase:
-	return economy()
+	return null if _server() == null else _server().database
 
 func world_time() -> WorldTime:
 	return null if _server() == null else _server().world_time
 
+func startup_limits() -> RefCounted:
+	if _server() != null and _server().runtime_settings != null:
+		return _server().runtime_settings
+	# Disposable World fixtures use the same validated defaults as normal startup.
+	return preload("res://source/server/runtime/runtime_capacity_settings.gd").resolve({}).settings
+
 func item_store() -> ItemStoreSqlite:
 	var server := _server()
-	return null if server == null or server.database == null else server.database.item_store
+	return null if not available() or server.inventory_runtime != null or server.wallet_runtime != null or server.database == null else server.database.item_store
+
+func inventory_runtime() -> RefCounted:
+	return null if _server()==null else _server().inventory_runtime
+
+func wallet_runtime() -> RefCounted:
+	return null if _server()==null else _server().wallet_runtime
+
+func npc_runtime() -> RefCounted:
+	return null if _server()==null else _server().npc_runtime
+
+func storage_runtime() -> RefCounted:
+	return null if _server()==null else _server().storage_runtime
+
+func ground_item_runtime() -> RefCounted:
+	return null if _server()==null else _server().ground_item_runtime
+
+func seller_runtime() -> RefCounted:
+	return null if _server()==null else _server().seller_runtime
+
+func npc_interactions_allowed(peer: int) -> bool:
+	if transfer_pending(peer): return false
+	return mutations_allowed(peer) if npc_runtime()==null else inventory_runtime()!=null and inventory_runtime().mutations_allowed(peer)
+
+func currency_allowed(peer_id: int) -> bool:
+	if transfer_pending(peer_id): return false
+	return mutations_allowed(peer_id) if wallet_runtime()==null else wallet_runtime().ready(peer_id)
 
 func item_domain_ready() -> bool:
-	return item_store() != null
+	return item_store() != null or ground_item_runtime()!=null
 
 func player_for_peer(peer_id: int) -> PlayerResource:
 	return null if _server() == null else _server().connected_players.get(peer_id)
@@ -63,8 +95,14 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 	return -1.0 if _server() == null else _server().runtime_attack_speed_ratio(owner_id)
 
 func mutations_allowed(peer_id: int) -> bool:
+	# Legacy synchronous writes must stay disabled even during failed PG startup.
+	var server:=_server()
+	if server!=null and server.economy_bootstrap!=null and not server.economy_bootstrap.ready(): return false
+	return inventory_runtime()==null and wallet_runtime()==null and not transfer_pending(peer_id)
+
+func transfer_pending(peer_id: int) -> bool:
 	var server := _server()
-	return server==null or server.instance_manager==null or not server.instance_manager.transfers.gated(peer_id)
+	return server!=null and server.instance_manager!=null and server.instance_manager.transfers.gated(peer_id)
 
 func interrupt_transfer(peer_id: int, reason: String) -> void:
 	var server := _server()

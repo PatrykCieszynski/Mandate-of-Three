@@ -27,9 +27,13 @@ func tier_for(peer_id: int) -> StringName:
 func try_use(peer_id: int, now_ms: int, mob_system: MobSystem, services: MandateWorldServices) -> Dictionary:
 	if not GameMode.is_world_server() or peer_id <= 0 or now_ms < 0 or mob_system == null or services == null:
 		return {"ok": false, "error": "invalid"}
-	if not services.mutations_allowed(peer_id):
+	# Taunting changes live AI only. The legacy economic-write guard deliberately
+	# rejects PostgreSQL owners and must not gate this runtime action.
+	if not services.available():
+		return {"ok": false, "error": "unavailable"}
+	if services.transfer_pending(peer_id):
 		return {"ok": false, "error": "transfer_pending"}
-	if mob_system._world == null or not mob_system._world.characters.has(peer_id) or not mob_system._endpoint.is_player_alive(peer_id):
+	if mob_system._world == null or mob_system._endpoint == null or not mob_system._world.characters.has(peer_id) or not mob_system._endpoint.is_player_alive(peer_id):
 		return {"ok": false, "error": "player"}
 	if now_ms < _ready_at.get(peer_id, 0):
 		return {"ok": false, "error": "cooldown"}

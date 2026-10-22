@@ -43,7 +43,7 @@ func _validate_actor(peer_id: int, instance_id: String) -> Dictionary:
 	return {"ok":true, "actor":actor}
 
 func interact_for_peer(peer_id: int, instance_id: String) -> Dictionary:
-	if not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
+	if not services.npc_interactions_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
 	var result: Dictionary = _validate_actor(peer_id, instance_id)
 	if not result.ok:
 		close_for_peer(peer_id)
