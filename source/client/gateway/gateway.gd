@@ -77,12 +77,10 @@ const BUILD_STAGE: String = "Prototype"
 @onready var _more_logout: Button = %LogoutButton
 
 
-# Character-creation skin picker — Prev/Next cycle through the whole roster (the big centre
-# preview shows the current one). Sourced from PlayerSkins (every `sprites` entry), so new
-# art appears here automatically — no list to maintain. Populated in prepare_character_creation_menu.
+# Character creation retains the registered skin IDs and text labels for protocol
+# compatibility, without loading retired TinyMMO sprite sheets.
 var _skin_ids: Array[int] = []
 var _skin_index: int = 0
-var _skin_preview: AnimatedSprite2D
 var _skin_name_label: Label
 
 @onready var main_panel: PanelContainer = $MainPanel
@@ -677,22 +675,9 @@ func _on_character_selected(world_id: int, character_id: int) -> void:
 	queue_free.call_deferred()
 
 
-## Dress an existing-character card: the character's actual sprite (idle pose) up
-## top, name + level pinned to the bottom. Children use MOUSE_FILTER_IGNORE so the
-## card button still receives the click.
+## Character selection uses text until the 3D portrait presentation is introduced.
 func _fill_character_card(button: Button, entry: Dictionary) -> void:
 	button.text = ""
-	var frames: SpriteFrames = ContentRegistryHub.load_by_id(&"sprites", int(entry.get("skin", 1))) as SpriteFrames
-	if frames:
-		var portrait: AnimatedSprite2D = AnimatedSprite2D.new()
-		portrait.sprite_frames = frames
-		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST  # pixel sprite
-		portrait.scale = Vector2(2.4, 2.4)
-		portrait.position = Vector2(75.0, 100.0)  # upper-centre of the 150x250 card
-		var anim: StringName = _card_anim(frames)
-		if not anim.is_empty():
-			portrait.play(anim)
-		button.add_child(portrait)
 	var info: Label = Label.new()
 	info.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	info.offset_top = -54.0
@@ -702,17 +687,6 @@ func _fill_character_card(button: Button, entry: Dictionary) -> void:
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info.text = tr("NAME_LEVEL") % [entry["name"], entry["level"]]
 	button.add_child(info)
-
-
-## Prefer an idle pose for the card, fall back to run, then the first animation.
-func _card_anim(frames: SpriteFrames) -> StringName:
-	for candidate: StringName in [&"idle", &"run"]:
-		if frames.has_animation(candidate):
-			return candidate
-	var names: PackedStringArray = frames.get_animation_names()
-	if not names.is_empty():
-		return StringName(names[0])
-	return &""
 
 
 func _on_create_character_button_pressed() -> void:
@@ -1309,12 +1283,8 @@ func request_enter_world() -> Dictionary:
 
 func prepare_character_creation_menu() -> void:
 	_skin_ids = PlayerSkins.ids()
-	_skin_preview = $CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer2/CenterContainer/Control/AnimatedSprite2D
-	_skin_preview.play(&"run")
 
-	# Replace the tiny-icon grid with a Prev / name / Next cycler. The big centre
-	# preview is the visual, so the chosen character shows LARGE instead of as 8
-	# small icons.
+	# Retain the existing skin IDs and name selector without retired 2D portraits.
 	var grid: GridContainer = $CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/VBoxContainer
 	for child: Node in grid.get_children():
 		child.queue_free()
@@ -1341,7 +1311,7 @@ func prepare_character_creation_menu() -> void:
 	grid.add_child(_skin_name_label)
 	grid.add_child(next)
 
-	_apply_skin(0)  # show the first skin in the preview
+	_apply_skin(0)
 
 	# Enable the (scene-hidden) "Random" dice next to the name field.
 	var name_edit: LineEdit = $CharacterCreation/VBoxContainer/VBoxContainer/HBoxContainer2/LineEdit
@@ -1360,19 +1330,13 @@ func _cycle_skin(delta: int) -> void:
 	_apply_skin(wrapi(_skin_index + delta, 0, _skin_ids.size()))
 
 
-## Apply a skin by index — set selected_skin_id, update the preview + name label.
+## Retain the existing skin identity contract without loading retired 2D sprites.
 func _apply_skin(index: int) -> void:
 	if index < 0 or index >= _skin_ids.size():
 		return
 	var skin_id: int = _skin_ids[index]
-	var frames: SpriteFrames = ContentRegistryHub.load_by_id(&"sprites", skin_id) as SpriteFrames
-	if not frames:
-		return
 	_skin_index = index
 	selected_skin_id = skin_id
-	if _skin_preview:
-		_skin_preview.sprite_frames = frames
-		_skin_preview.play(&"run")
 	if _skin_name_label:
 		_skin_name_label.text = PlayerSkins.display_name(skin_id)
 

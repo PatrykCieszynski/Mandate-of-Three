@@ -11,7 +11,7 @@
 - [Realm workload](realm-workload-foundation/README.md).
 
 ## Archived granular evidence
-The existing `postgres-p1a` … `postgres-p3v` and other package directories are retained as **historical technical evidence**, not as separate actionable project milestones. Do not read all of them by default. Follow one only to investigate a concrete invariant, regression or original measurement.
+The 46 per-package `postgres-p1a` … `postgres-p3v` Markdown reports have been removed from the current tree. Their original descriptions remain in [Git history](https://github.com/PatrykCieszynski/Mandate-of-Three/tree/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence); intentional raw measurement files remain in place. Start with the [completed migration milestone](../history/postgresql-migration.md), current runbooks and the milestone evidence above. Consult an old package report only for a concrete regression or original finding.
 
 ## Policy
 A PR description holds routine verification and an exact link to CI. Do **not** create a new `docs/evidence/<PR-or-commit>/README.md` per PR or commit. Add one short consolidated evidence report **after a completed milestone** only when it has meaningful reproducible results, failure analysis or a decision worth preserving. Retain raw artifacts in ignored locations unless they are small, intentional fixtures. Always record SHA, environment, commands, limitations and the distinction between synthetic and connected-client tests.

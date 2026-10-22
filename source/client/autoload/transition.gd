@@ -10,7 +10,6 @@ extends CanvasLayer
 ## Built in code (like Toaster) so it stays one self-contained file — intended to
 ## fold into a single UI autoload (with Toaster) later.
 
-const _SPINNER_TEX: String = "res://assets/sprites/ui/spinner.png"
 const _CREAM: Color = Color(0.929, 0.894, 0.820)
 # "Entering the world" payoff cue — a soft magical swell, played once as the cover
 # begins. Lives here (not the gateway) so every enter path triggers it identically.
@@ -18,7 +17,7 @@ const _SFX_ENTER: String = "res://assets/audio/sfx/ui/ui_enter.wav"
 
 var _root: Control
 var _background: TextureRect
-var _spinner: TextureRect
+var _spinner: ProgressBar
 var _label: Label
 var _buttons: HBoxContainer
 var _back_button: Button
@@ -244,15 +243,12 @@ func _build_ui() -> void:
 	vbox.add_theme_constant_override(&"separation", 20)
 	center.add_child(vbox)
 
-	_spinner = TextureRect.new()
-	_spinner.texture = load(_SPINNER_TEX)
-	_spinner.custom_minimum_size = Vector2(52, 52)
-	_spinner.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_spinner.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_spinner.pivot_offset = Vector2(26, 26)
+	_spinner = ProgressBar.new()
+	_spinner.custom_minimum_size = Vector2(120, 10)
+	_spinner.indeterminate = true
+	_spinner.show_percentage = false
 	_spinner.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vbox.add_child(_spinner)
-	create_tween().set_loops().tween_property(_spinner, "rotation", TAU, 1.0).from(0.0)
 
 	_label = Label.new()
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

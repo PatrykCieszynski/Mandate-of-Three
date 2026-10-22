@@ -126,7 +126,7 @@ python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --sui
 Owned disposable fixtures cover refusal, partial native connection exhaustion,
 offline provisioning, profile/XP writes with no SQLite starter wallet, uncertain
 settlement during shutdown and the ten actual-client economic flows. Run shared
-18098/18099 network suites sequentially. See [evidence](../evidence/postgres-p3r/README.md).
+18098/18099 network suites sequentially. See [evidence](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence/postgres-p3r/README.md).
 
 The subsequent [P3s integration](postgres-process-startup.md) supplies normal
 startup/configuration, trusted identity/creation-manifest integration and readiness

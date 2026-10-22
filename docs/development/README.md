@@ -10,9 +10,9 @@ Read [project direction](../decisions/project-direction.md), [runtime persistenc
 
 ## Reference tools and historical fixture scope
 
-[Native readiness](postgres-readiness.md), [transaction retry](postgres-transaction-retry.md),
-[backend concurrency](postgres-concurrency-acceptance.md) and
-[projection budget](economy-projection-budget.md) retain useful commands and
+[Native readiness](../history/postgres-readiness.md), [transaction retry](postgres-transaction-retry.md),
+[backend concurrency](../history/postgres-concurrency-acceptance.md) and
+[projection budget](../history/economy-projection-budget.md) retain useful commands and
 failure analysis. Their original stage/default-backend statements are historical;
 use the current runbooks above for deployment, not their old pending gates.
 

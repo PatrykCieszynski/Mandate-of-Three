@@ -121,5 +121,5 @@ running. Only this deliberately failed **disposable fixture** is forcibly cleane
 up afterward; that is not a runtime recovery path or successful graceful stop.
 Focused injected cases cover missing/late/foreign/malformed ACK, timeout, World
 loss, empty-token auth and account checkpoint failure. See
-[evidence](../evidence/postgres-p3t/README.md). Linux, physical CEF,
+[evidence](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence/postgres-p3t/README.md). Linux, physical CEF,
 controlled process handoff, sustained load/soak/import and cutover remain open.

@@ -9,7 +9,6 @@
 [ext_resource type="Resource" uid="uid://dqeqdxrq0lpyc" path="res://source/common/gameplay/quests/resources/herbs_for_mira.tres" id="8_herbs"]
 [ext_resource type="Script" uid="uid://cb4eeew5u1da1" path="res://source/common/gameplay/characters/npc/interactions/dialogue_interaction.gd" id="8_hg6wj"]
 [ext_resource type="Resource" uid="uid://cawy8c6jytb28" path="res://source/common/gameplay/quests/resources/miras_supplies.tres" id="9_supplies"]
-[ext_resource type="SpriteFrames" uid="uid://bp5625khvdl8r" path="res://source/common/gameplay/characters/sprite_frames/scholar_censor.tres" id="10_hg6wj"]
 
 [sub_resource type="Resource" id="ShopInteraction_mira"]
 script = ExtResource("3_shop")
@@ -28,6 +27,5 @@ metadata/_custom_type_script = "uid://cb4eeew5u1da1"
 [resource]
 script = ExtResource("1_npcres")
 npc_name = "Mira"
-skin = ExtResource("10_hg6wj")
 greeting = "[wave]Welcome, dear.[/wave] I'm [color=#d8a]Mira[/color], folk say my brews taste of swamp water.  They're not wrong. Here to learn the herbs, or just to buy?"
 interactions = Array[ExtResource("2_npcint")]([SubResource("ShopInteraction_mira"), SubResource("QuestInteraction_mira"), SubResource("Resource_un32s")])

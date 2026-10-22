@@ -45,4 +45,4 @@ The following per-slice development notes are intentionally removed from the act
 - `development/postgres-wallet-parity.md`
 - `development/postgres-wallet-runtime.md`
 
-The original per-slice tests and detailed results remain in [evidence](../evidence/README.md) for reproducibility. Their historical phase statements do not override the current implementation. PR descriptions should cover routine runs; create one consolidated milestone summary only after a milestone closes.
+The per-slice tests remain in the repository. The 46 P1–P3 evidence reports are retained in [Git history](https://github.com/PatrykCieszynski/Mandate-of-Three/tree/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence), while raw measurements and milestone reports remain in [evidence](../evidence/README.md). Their historical phase statements do not override the current implementation. PR descriptions should cover routine runs; create one consolidated milestone summary only after a milestone closes.

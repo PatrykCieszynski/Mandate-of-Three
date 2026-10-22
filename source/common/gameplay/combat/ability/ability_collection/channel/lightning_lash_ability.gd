@@ -21,7 +21,7 @@ extends ChannelAbility
 @export var mana_per_hit: float = 0.0
 @export var arc_scene: PackedScene = preload("res://source/common/gameplay/combat/melee_arc.tscn")
 
-const CAST_VFX: SpriteFrames = preload("res://source/common/gameplay/combat/vfx/lash_cast.tres")
+@export var cast_frames: SpriteFrames
 
 
 ## A CAST TIME (cast_time_s, set on the .tres) telegraphs the lash: a sky-strike lands on
@@ -33,7 +33,7 @@ func use_ability(user: Entity, direction: Vector2) -> void:
 		return
 	# Telegraph on every client (this runs on each peer via the action echo).
 	if GameMode.is_client() and cast_time_s > 0.0:
-		SpriteEffect.spawn(user, CAST_VFX, {
+		SpriteEffect.spawn(user, cast_frames, {
 			"scale": Vector2(0.55, 0.55),
 			"offset": Vector2(0.0, -100.0),  # the bolt strikes DOWN onto the caster from above
 			"z_index": 1,

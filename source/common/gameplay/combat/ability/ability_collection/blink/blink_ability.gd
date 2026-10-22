@@ -33,16 +33,6 @@ func predict_use(user: Entity, direction: Vector2) -> void:
 	if not hit.is_empty():
 		to = (hit["position"] as Vector2) - dir * wall_margin
 	player.global_position = to
-	# A smoke poof at the launch and landing points (caster-side; the position sync
-	# already shows the jump to others).
-	var map: Node = player.get_parent()
-	if map != null:
-		var poof: SpriteFrames = load("res://source/common/gameplay/combat/vfx/smoke_poof.tres") as SpriteFrames
-		if poof != null:
-			for at: Vector2 in [from, to]:
-				var fx: SpriteEffect = SpriteEffect.spawn(map, poof, {"scale": Vector2(0.6, 0.6), "z_index": 1})
-				if fx != null:
-					fx.global_position = at + Vector2(0, -16)  # raise it onto the body (sheet has top whitespace)
 
 
 func extra_stat_lines() -> PackedStringArray:

@@ -119,7 +119,7 @@ nonempty revenue/reservations/fills and receipt/UID state, restores into another
 database and file set, then boots normal processes and logs in again. It rejects
 active sessions/grants, mismatched profile/account files, corrupted dumps,
 existing destinations and populated databases. A second dirty Yang/XP checkpoint
-uses the restored stores. [Evidence](../evidence/postgres-p3u/README.md).
+uses the restored stores. [Evidence](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence/postgres-p3u/README.md).
 
 Tested: Windows, Python 3.13, PostgreSQL 18.6, Godot 4.7.2, godot-soci 0.4.3.
 Linux/physical CEF NOT VERIFIED. Python must provide SQLite `Connection.serialize`.
