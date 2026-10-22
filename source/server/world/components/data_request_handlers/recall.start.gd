@@ -9,9 +9,10 @@ const RECALL_ABILITY: RecallAbility = preload("res://source/common/gameplay/comb
 
 
 func data_request_handler(peer_id: int, instance: ServerInstance, _args: Dictionary) -> Dictionary:
+	var legacy_players: Dictionary = instance.players_by_peer_id
 	if not RateLimiter.check(peer_id, &"recall.start", 4, 1_000):
 		return {}
-	var player: Player = instance.players_by_peer_id.get(peer_id, null)
+	var player: Player = legacy_players.get(peer_id, null)
 	if player == null or player.is_dead:
 		return {}
 	# Already channeling something — ignore (a re-press shouldn't restart the cast;

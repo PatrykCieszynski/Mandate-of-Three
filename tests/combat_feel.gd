@@ -188,7 +188,7 @@ func run_server() -> void:
 	var dead_position: Vector3 = world.characters[hero].position
 	var before: Dictionary = server.database.item_store.inventory(server.connected_players[hero].player_id)
 	drop_uid = Crypto.new().generate_random_bytes(16).hex_encode()
-	world.ground_loot.drops[drop_uid] = {"position": dead_position, "definition_id": "iron_sword", "bonus": 3,
+	world.ground_loot.drops[drop_uid] = {"position": dead_position, "definition_id": "iron_sword", "amount":1,"affixes":[{"stat":"attack","value":3}],
 		"owner": server.connected_players[hero].player_id, "owner_name": "Test", "protected_until": 0, "expires": Time.get_ticks_msec() + 120000}
 	set_phase("DEAD", hero)
 	await get_tree().create_timer(0.6).timeout

@@ -47,6 +47,7 @@ const RES_CONFIG_PATH: String = "res://data/config/dashboard.cfg"
 
 var _started_at_unix: int = 0
 var _auth_token: String = ""
+var _configured_port: int=PORT
 var _bind_address: String = DASHBOARD_BIND_DEFAULT
 
 
@@ -57,6 +58,8 @@ func _ready() -> void:
 
 	router.register_static_dir(&"/", "res://source/server/master/dashboard", "index.html")
 
+	router.register_route(HTTPClient.Method.METHOD_POST, &"/v1/economy/status",_handle_economy_status)
+	router.register_route(HTTPClient.Method.METHOD_POST, &"/v1/economy/quiesce",_handle_economy_quiesce)
 	router.register_route(HTTPClient.Method.METHOD_GET,  &"/v1/status",            _handle_status)
 	router.register_route(HTTPClient.Method.METHOD_GET,  &"/v1/worlds",            _handle_worlds)
 	router.register_route(HTTPClient.Method.METHOD_GET,  &"/v1/players",           _handle_players)
@@ -77,8 +80,8 @@ func _ready() -> void:
 	router.register_route(HTTPClient.Method.METHOD_GET,  &"/v1/accounts",                _handle_accounts)
 	router.register_route(HTTPClient.Method.METHOD_POST, &"/v1/accounts/reset_password", _handle_account_reset_password)
 
-	server.listen(PORT, _bind_address)
-	ServerLog.info("Dashboard listening on %s:%d" % [_bind_address, PORT])
+	server.listen(_configured_port, _bind_address)
+	ServerLog.info("Dashboard listening on %s:%d" % [_bind_address, _configured_port])
 	if _bind_address == "*" and _auth_token.is_empty():
 		ServerLog.warn("Dashboard: bound to ALL interfaces with NO auth token — admin routes are open. Set [auth] token or [server] bind=127.0.0.1 in dashboard.cfg.")
 	DiscordNotifier.notify_master_online()
@@ -97,6 +100,16 @@ func _handle_status(payload: Dictionary) -> Dictionary:
 		"registered_accounts": authentication_manager.account_collection.collection.size(),
 	}
 
+
+## New control surfaces require a configured token even on loopback. The
+## legacy dashboard's development auth-disabled mode does not authorize them.
+func _handle_economy_status(payload: Dictionary) -> Dictionary:
+	if _auth_token.is_empty() or not _check_auth(payload): return _unauthorized()
+	return world_manager.operational_status()
+
+func _handle_economy_quiesce(payload: Dictionary) -> Dictionary:
+	if _auth_token.is_empty() or not _check_auth(payload): return _unauthorized()
+	return world_manager.begin_maintenance(str(payload.get("operation_id","")))
 
 func _handle_worlds(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
@@ -129,6 +142,7 @@ func _handle_worlds(payload: Dictionary) -> Dictionary:
 func _handle_world_save(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	if not world_manager.tell_world_to_save(world_id):
 		return {"ok": false, "error": "unknown_world"}
@@ -138,6 +152,7 @@ func _handle_world_save(payload: Dictionary) -> Dictionary:
 func _handle_world_shutdown(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	if not world_manager.tell_world_to_shutdown(world_id):
 		return {"ok": false, "error": "unknown_world"}
@@ -147,6 +162,7 @@ func _handle_world_shutdown(payload: Dictionary) -> Dictionary:
 func _handle_world_broadcast(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	var message: String = str(payload.get("message", "")).strip_edges()
 	if message.is_empty():
@@ -165,6 +181,7 @@ func _handle_world_broadcast(payload: Dictionary) -> Dictionary:
 func _handle_restart_all(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var seconds: int = clampi(int(payload.get("seconds", 300)), 0, 3600)
 	var message: String = str(payload.get("message", "")).strip_edges()
 	if message.length() > 280:
@@ -180,6 +197,7 @@ func _handle_restart_all(payload: Dictionary) -> Dictionary:
 func _handle_save_all(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var count: int = world_manager.tell_all_worlds_to_save()
 	ServerLog.info("Dashboard save_all: %d world(s)." % count)
 	return {"ok": true, "worlds": count}
@@ -263,6 +281,7 @@ func _handle_logs(payload: Dictionary) -> Dictionary:
 func _handle_player_mute(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	var player_id: int = int(payload.get("player_id", 0))
 	var reason: String = str(payload.get("reason", ""))
@@ -277,6 +296,7 @@ func _handle_player_mute(payload: Dictionary) -> Dictionary:
 func _handle_player_unmute(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	var player_id: int = int(payload.get("player_id", 0))
 	if player_id <= 0:
@@ -289,6 +309,7 @@ func _handle_player_unmute(payload: Dictionary) -> Dictionary:
 func _handle_player_jail(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	var player_id: int = int(payload.get("player_id", 0))
 	var reason: String = str(payload.get("reason", ""))
@@ -303,6 +324,7 @@ func _handle_player_jail(payload: Dictionary) -> Dictionary:
 func _handle_player_unjail(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	var player_id: int = int(payload.get("player_id", 0))
 	if player_id <= 0:
@@ -315,6 +337,7 @@ func _handle_player_unjail(payload: Dictionary) -> Dictionary:
 func _handle_player_kick(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	var player_id: int = int(payload.get("player_id", 0))
 	if player_id <= 0:
@@ -327,6 +350,7 @@ func _handle_player_kick(payload: Dictionary) -> Dictionary:
 func _handle_player_grant(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	var player_id: int = int(payload.get("player_id", 0))
 	var role: String = str(payload.get("role", "")).strip_edges()
@@ -340,6 +364,7 @@ func _handle_player_grant(payload: Dictionary) -> Dictionary:
 func _handle_player_revoke(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var world_id: int = int(payload.get("world_id", 0))
 	var player_id: int = int(payload.get("player_id", 0))
 	var role: String = str(payload.get("role", "")).strip_edges()
@@ -378,6 +403,7 @@ func _handle_accounts(payload: Dictionary) -> Dictionary:
 func _handle_account_reset_password(payload: Dictionary) -> Dictionary:
 	if not _check_auth(payload):
 		return _unauthorized()
+	if not world_manager.admissions_open(): return {"ok":false,"error":"maintenance"}
 	var username: String = str(payload.get("username", "")).strip_edges().to_lower()
 	var new_password: String = str(payload.get("new_password", ""))
 	if username.is_empty() or new_password.is_empty():
@@ -387,7 +413,7 @@ func _handle_account_reset_password(payload: Dictionary) -> Dictionary:
 		return {"ok": false, "error": "account_not_found"}
 	var account: AccountResource = collection[username]
 	account.password = PasswordHasher.hash_password(new_password)
-	authentication_manager.save_account_collection()
+	if not authentication_manager.save_account_collection(): return {"ok":false,"error":"storage"}
 	ServerLog.info("Dashboard: reset password for account '%s' (id %d)." % [account.username, account.id])
 	return {"ok": true, "username": account.username, "id": account.id}
 
@@ -411,10 +437,11 @@ func _unauthorized() -> Dictionary:
 
 func _load_config() -> void:
 	var config: ConfigFile = ConfigFile.new()
-	var path: String = USER_CONFIG_PATH if FileAccess.file_exists(USER_CONFIG_PATH) else RES_CONFIG_PATH
+	var path: String = str(CmdlineUtils.get_parsed_args().get("dashboard-config", USER_CONFIG_PATH if FileAccess.file_exists(USER_CONFIG_PATH) else RES_CONFIG_PATH))
 	if config.load(path) != OK:
 		ServerLog.warn("Dashboard: no config found, running with auth DISABLED. Create %s or %s with [auth] token=\"...\"" % [USER_CONFIG_PATH, RES_CONFIG_PATH])
 		return
+	_configured_port=int(config.get_value("server","port",PORT))
 	_auth_token = str(config.get_value("auth", "token", ""))
 	if _auth_token.is_empty():
 		ServerLog.warn("Dashboard: token is empty in config, running with auth DISABLED.")

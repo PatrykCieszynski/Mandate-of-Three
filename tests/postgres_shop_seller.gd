@@ -2,6 +2,7 @@ extends Node
 ## Native seller custody/occupancy/receipts require backend parity and overlapping
 ## sessions. Purchase, revenue and account claims are deliberately separate risks.
 const Schema = preload("res://source/server/world/database/postgres/shop_schema_postgres.gd")
+const Grid = preload("res://source/common/gameplay/items/domain/shop_grid.gd")
 const StorageSchema = preload("res://source/server/world/database/postgres/storage_schema_postgres.gd")
 const PgSeller = preload("res://source/server/world/database/postgres/shop_seller_postgres.gd")
 const PgItems = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
@@ -227,6 +228,7 @@ func _ready() -> void:
 	var candidate:=exercise(PgSeller.new(pg),items,PgStorage.new(pg),true)
 	assert(baseline==candidate, "seller snapshots, occupancy, Inventory/Storage, revisions and receipt counts match SQLite")
 	await native_checks(items)
+	await retry_checks(items)
 	pg.close()
 	runtime.db=null
 	runtime.free()
@@ -334,8 +336,205 @@ func race_worker(dsn: String, character: int, action: String, args: Array, id: S
 	var opened: bool=database.open("postgresql",dsn)
 	ready.post()
 	if not opened: return {"result":{"ok":false,"error":"fixture_connection"},"committed":false}
-	var seller:=PgSeller.new(database) # Each worker owns its own session/cache.
-	var result: Dictionary=seller.list_item(character,id,args[0],args[1],args[2],args[3]) if action=="list" else seller.cancel_offer(character,id,args[0],args[1])
-	var committed: bool=seller.committed
+	var store: RefCounted=PgItems.new(database) if action=="inventory" else (PgStorage.new(database) if action=="storage" else PgSeller.new(database))
+	var result: Dictionary
+	if action=="inventory": result=store.inventory_command(character,args[0],args[1],args[2],args[3],id)
+	elif action=="storage": result=store.transfer_command(character,args[0],args[1],args[2],args[3],args[4],id)
+	else: result=retry_call(store,character,action,args,id)
+	var committed: bool=store.committed
 	database.close()
 	return {"result":result,"committed":committed}
+
+func retry_call(seller: RefCounted, character: int, action: String, args: Array, command_id: String) -> Dictionary:
+	match action:
+		"list": return seller.list_item(character,command_id,args[0],args[1],args[2],args[3])
+		"edit": return seller.edit_offer(character,command_id,args[0],args[1],args[2],args[3])
+		"configure": return seller.configure(character,command_id,args[0],args[1],args[2])
+		_: return seller.cancel_offer(character,command_id,args[0],args[1])
+
+func retry_checks(items: RefCounted) -> void:
+	assert(PgWallet.new(pg).initialize_account(8500).ok)
+	assert(pg.execute("CREATE SEQUENCE economy.fixture_seller_attempt;").ok)
+	assert(pg.execute("CREATE FUNCTION economy.fixture_seller_retry() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE attempt BIGINT; BEGIN attempt:=nextval('economy.fixture_seller_attempt'); IF attempt>=TG_ARGV[1]::BIGINT AND attempt<=TG_ARGV[2]::BIGINT THEN IF TG_NARGS>3 THEN PERFORM pg_advisory_xact_lock(95131); END IF; RAISE EXCEPTION 'seller retry fixture' USING ERRCODE=TG_ARGV[0]; END IF; RETURN NEW; END; $$;").ok)
+	var seller:=PgSeller.new(pg)
+	var index: int=0
+	for code: String in ["40001","40P01"]:
+		for receipt_fault: bool in [false,true]:
+			var owner: int=85000+index*2
+			var alt: int=owner+1
+			assert(items.bind_character(owner,8500) and items.bind_character(alt,8500))
+			var item_uid: String=uid(500000+index)
+			seed_item(items,true,owner,500000+index,0)
+			var original: Dictionary=items.inventory(owner).items[0]
+			# Fail at the last cell after custody/offer and earlier cells were written.
+			var cells: int=ItemDefinitions.IRON_SWORD.inventory_height
+			var table: String="market_commands" if receipt_fault else "shop_cells"
+			var fault_at: int=1 if receipt_fault else cells
+			seller_retry_fault(table,"INSERT",code,fault_at,fault_at)
+			var listed: Dictionary=seller.list_item(owner,"cycle-list-"+str(index),item_uid,0,0,100)
+			assert(listed.ok and seller.committed and seller_attempts()==(2 if receipt_fault else cells*2))
+			clear_seller_retry(table)
+			var state:=retry_state()
+			assert(seller.list_item(alt,"cycle-list-"+str(index),item_uid,0,0,100)==listed and not seller.committed and retry_state()==state)
+			assert(seller.receipt(alt,"cycle-list-"+str(index))==listed)
+			var shop_revision: int=int(seller.mine(owner).revision)
+			table="market_commands" if receipt_fault else "account_shops"
+			seller_retry_fault(table,"INSERT" if receipt_fault else "UPDATE",code,1,1)
+			var configured: Dictionary=seller.configure(alt,"cycle-config-"+str(index),shop_revision,"Retry shop","paused")
+			assert(configured.ok and seller.committed and configured.revision==shop_revision+1 and seller_attempts()==2)
+			clear_seller_retry(table)
+			state=retry_state()
+			assert(seller.configure(owner,"cycle-config-"+str(index),shop_revision,"Retry shop","paused")==configured and not seller.committed and retry_state()==state)
+			assert(seller.mine(owner).status=="paused")
+			table="market_commands" if receipt_fault else "shop_cells"
+			seller_retry_fault(table,"INSERT",code,fault_at,fault_at)
+			var edited: Dictionary=seller.edit_offer(alt,"cycle-edit-"+str(index),listed.offer_id,0,10,0)
+			assert(edited.ok and seller.committed and edited.revision==1 and seller_attempts()==(2 if receipt_fault else cells*2))
+			clear_seller_retry(table)
+			assert(seller.mine(owner).offers[0].price==null and seller.mine(owner).offers[0].item.revision==2)
+			state=retry_state()
+			assert(seller.edit_offer(owner,"cycle-edit-"+str(index),listed.offer_id,0,10,0)==edited and not seller.committed and retry_state()==state)
+			# A retried price-only edit changes the offer, not item/custody revisions.
+			var watermark: Dictionary=items.read_state(owner)
+			seller_retry_fault("market_commands","INSERT",code,1,1)
+			assert(seller.edit_offer(owner,"cycle-price-"+str(index),listed.offer_id,1,10,200).ok and seller_attempts()==2)
+			clear_seller_retry("market_commands")
+			assert(items.read_state(owner)==watermark and seller.mine(alt).offers[0].item.revision==2)
+			table="market_commands" if receipt_fault else "item_custody"
+			seller_retry_fault(table,"INSERT" if receipt_fault else "UPDATE",code,1,1)
+			var returned: Dictionary=seller.cancel_offer(alt,"cycle-cancel-"+str(index),listed.offer_id,2)
+			assert(returned.ok and seller.committed and seller_attempts()==2)
+			clear_seller_retry(table)
+			var inventory: Array=items.inventory(alt).items
+			assert(inventory.size()==1 and inventory[0].uid==item_uid and inventory[0].owner_character_id==alt and inventory[0].revision==3 and inventory[0].bag_position==returned.position)
+			assert(inventory[0].affixes==original.affixes and inventory[0].sockets==original.sockets and seller.mine(owner).offers.is_empty())
+			assert(rows(true,"SELECT * FROM economy.shop_cells WHERE item_uid='"+item_uid+"';").is_empty())
+			state=retry_state()
+			assert(seller.cancel_offer(owner,"cycle-cancel-"+str(index),listed.offer_id,2)==returned and not seller.committed and retry_state()==state)
+			index+=1
+	var owner: int=85900
+	assert(items.bind_character(owner,8500))
+	seed_item(items,true,owner,600000,0)
+	seed_item(items,true,owner,600001,1)
+	var offer: Dictionary=seller.list_item(owner,"budget-source",uid(600001),0,20,100)
+	assert(offer.ok)
+	var commands: Dictionary={"list":[uid(600000),0,0,100],"configure":[int(seller.mine(owner).revision),"Updated shop","active"],"edit":[offer.offer_id,0,10,0],"cancel":[offer.offer_id,0]}
+	for action: String in commands:
+		for code: String in ["40001","40P01","23505","55P03","57014"]:
+			seller_retry_fault("market_commands","INSERT",code,1,99)
+			var state:=retry_state()
+			var result: Dictionary=retry_call(seller,owner,action,commands[action],"exhausted-"+action+code)
+			assert(result.error=="storage" and not seller.committed and not pg.in_transaction() and retry_state()==state)
+			assert(seller_attempts()==(3 if code in ["40001","40P01"] else 1))
+			clear_seller_retry("market_commands")
+		for code: String in ["40001","40P01"]:
+			seller_retry_fault("market_commands","INSERT",code,1,99,true)
+			var state:=retry_state()
+			var result: Dictionary=retry_call(seller,owner,action,commands[action],"unknown-"+action+code)
+			assert(result.get("outcome_unknown",false) and not seller.committed and not pg.is_open())
+			assert(pg.open("postgresql",connection) and seller_attempts()==1)
+			clear_seller_retry("market_commands")
+			assert(retry_state()==state and seller.receipt(owner,"unknown-"+action+code).error=="unknown_command")
+	assert(seller.cancel_offer(owner,"clear-budget",offer.offer_id,0).ok)
+	for scenario: String in ["owner","revision","shop_capacity","inventory_capacity","configuration"]: await retry_reselection(items,scenario)
+	print("POSTGRES_SHOP_SELLER_RETRY_OK full seller lifecycle, partial cells/provenance/revisions, account replay, bounded attempts, no COMMIT retry and current custody/capacity")
+
+func retry_state() -> Array:
+	var state: Array=[]
+	for table: String in ["item_instances","item_custody","account_item_revisions","account_wallets","account_shops","shop_offers","shop_cells","market_commands"]:
+		var result: Dictionary=pg.query("SELECT row_to_json(t)::text AS value FROM economy."+table+" t ORDER BY row_to_json(t)::text;",{},10000)
+		assert(result.ok and not result.truncated)
+		state.append(result.rows)
+	return state
+
+func seller_retry_fault(table: String, event: String, code: String, first: int, last: int, deferred: bool = false) -> void:
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_seller_attempt RESTART WITH 1;").ok)
+	var create: String="CREATE CONSTRAINT TRIGGER fixture_retry AFTER INSERT ON economy.%s DEFERRABLE INITIALLY DEFERRED" % table if deferred else "CREATE TRIGGER fixture_retry BEFORE %s ON economy.%s" % [event,table]
+	assert(pg.execute(create+" FOR EACH ROW EXECUTE FUNCTION economy.fixture_seller_retry('%s','%d','%d');" % [code,first,last]).ok)
+
+func clear_seller_retry(table: String) -> void:
+	assert(pg.execute("DROP TRIGGER fixture_retry ON economy."+table+";").ok)
+
+func seller_attempts() -> int:
+	return int(pg.query("SELECT last_value FROM economy.fixture_seller_attempt;").rows[0].last_value)
+
+func retry_reselection(items: RefCounted, scenario: String) -> void:
+	var index: int=["owner","revision","shop_capacity","inventory_capacity","configuration"].find(scenario)
+	var owner: int=85910+index*2
+	var alt: int=owner+1
+	assert(items.bind_character(owner,8500) and items.bind_character(alt,8500))
+	seed_item(items,true,owner,800000+index*2,0)
+	var item_uid: String=uid(800000+index*2)
+	var seller:=PgSeller.new(pg)
+	var actor_action: String="configure" if scenario=="configuration" else ("list" if scenario in ["owner","shop_capacity"] else "cancel")
+	var args: Array=[item_uid,0,0,100]
+	var shop_revision: int=int(seller.mine(owner).revision)
+	if actor_action=="configure": args=[shop_revision,"Old request","active"]
+	var listed: Dictionary={}
+	if actor_action=="cancel":
+		listed=seller.list_item(owner,"race-source-"+scenario,item_uid,0,0,100)
+		assert(listed.ok)
+		args=[listed.offer_id,0]
+	if scenario in ["shop_capacity","inventory_capacity"]: seed_item(items,true,alt,800001+index*2,20,ItemDefinitions.UPGRADE_ORE)
+	assert(pg.execute("ALTER SEQUENCE economy.fixture_seller_attempt RESTART WITH 1;").ok)
+	assert(pg.execute("CREATE TRIGGER fixture_retry BEFORE INSERT ON economy.market_commands FOR EACH ROW WHEN (current_setting('application_name')='retry-seller') EXECUTE FUNCTION economy.fixture_seller_retry('40001','1','1','gate');").ok)
+	assert(pg.execute("SELECT pg_advisory_lock(95131);").ok)
+	# Per-session synchronization slack only; normal fixture budgets are unchanged.
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var actor:=Thread.new()
+	assert(actor.start(race_worker.bind(connection+" application_name=retry-seller"+budgets,owner if actor_action=="list" else alt,actor_action,args,"reselect-"+scenario,ready))==OK)
+	ready.wait()
+	var acting: bool=await seller_waiting("retry-seller")
+	var edit_action: String
+	var edit_args: Array
+	var edit_character: int=owner
+	var blocked: int=InventoryGrid.cells(0,ItemDefinitions.IRON_SWORD.inventory_height).back() if scenario=="inventory_capacity" else Grid.cells(0,ItemDefinitions.IRON_SWORD.inventory_height).back()
+	match scenario:
+		"configuration":
+			edit_action="configure"
+			edit_args=[shop_revision,"Editor shop","paused"]
+		"owner":
+			edit_action="storage"
+			edit_args=[item_uid,0,"inventory","storage",0]
+		"revision":
+			edit_action="edit"
+			edit_args=[listed.offer_id,0,0,101]
+		"shop_capacity":
+			edit_character=alt
+			edit_action="list"
+			edit_args=[uid(800001+index*2),0,blocked,100]
+		_:
+			edit_character=alt
+			edit_action="inventory"
+			edit_args=["move",uid(800001+index*2),0,blocked]
+	var editor:=Thread.new()
+	assert(editor.start(race_worker.bind(connection+" application_name=retry-seller-editor"+budgets,edit_character,edit_action,edit_args,"editor-"+scenario,ready))==OK)
+	ready.wait()
+	var editing: bool=await seller_waiting("retry-seller-editor")
+	assert(pg.execute("SELECT pg_advisory_unlock(95131);").ok)
+	var acted: Dictionary=actor.wait_to_finish()
+	var edited: Dictionary=editor.wait_to_finish()
+	clear_seller_retry("market_commands")
+	assert(acting and editing and edited.result.ok and edited.committed)
+	if scenario=="inventory_capacity":
+		assert(acted.result.ok and acted.committed and acted.result.position!=0 and seller_attempts()==2)
+		assert(not InventoryGrid.cells(int(acted.result.position),ItemDefinitions.IRON_SWORD.inventory_height).has(blocked))
+		assert(items.inventory(alt).items.any(func(item: Dictionary) -> bool: return item.uid==item_uid and item.owner_character_id==alt and item.revision==2))
+	else:
+		assert(acted.result.error=={"owner":"owner","revision":"stale","shop_capacity":"occupied","configuration":"stale"}[scenario] and not acted.committed and seller_attempts()==1)
+		assert(pg.query("SELECT command_id FROM economy.market_commands WHERE account_id=8500 AND command_id=:id;",{"id":"reselect-"+scenario}).rows.is_empty())
+		if scenario=="owner": assert(PgStorage.new(pg).snapshot(alt).items.any(func(item: Dictionary) -> bool: return item.uid==item_uid and item.revision==1))
+		elif scenario=="revision": assert(seller.mine(owner).offers[0].item.uid==item_uid and seller.mine(owner).offers[0].price==101 and items.inventory(alt).items.is_empty())
+		else: assert(items.inventory(owner).items.any(func(item: Dictionary) -> bool: return item.uid==item_uid and item.revision==0))
+		if scenario=="configuration": assert(seller.mine(owner).name=="Editor shop" and seller.mine(owner).status=="paused" and int(seller.mine(owner).revision)==shop_revision+1)
+	# Clear the remaining offer for the next independent shared-Shop scenario.
+	for offer: Dictionary in seller.mine(owner).offers: assert(seller.cancel_offer(owner,"clear-"+offer.offer_id,offer.offer_id,int(offer.revision)).ok)
+
+func seller_waiting(label: String) -> bool:
+	var deadline: int=Time.get_ticks_msec()+2000
+	while Time.get_ticks_msec()<deadline:
+		assert(pg.execute("SELECT pg_stat_clear_snapshot();").ok)
+		if int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name=:label AND wait_event_type='Lock';",{"label":label}).rows[0].n)==1: return true
+		await get_tree().create_timer(0.005).timeout
+	return false

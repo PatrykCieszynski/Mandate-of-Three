@@ -22,8 +22,8 @@ extends AbilityResource
 @export var fall_s: float = 0.35
 @export var arc_scene: PackedScene = preload("res://source/common/gameplay/combat/melee_arc_centered.tscn")
 
-const COMET: SpriteFrames = preload("res://source/common/gameplay/combat/vfx/star_comet.tres")
-const BOOM: SpriteFrames = preload("res://source/common/gameplay/combat/vfx/fire_explosion.tres")
+@export var comet_frames: SpriteFrames
+@export var explosion_frames: SpriteFrames
 
 
 func use_ability(user: Entity, direction: Vector2) -> void:
@@ -59,7 +59,7 @@ func _client_telegraph(user: Entity, target: Vector2) -> void:
 func _client_fall(map: Node, target: Vector2) -> void:
 	if not is_instance_valid(map):
 		return
-	var comet: SpriteEffect = SpriteEffect.spawn(map, COMET, {
+	var comet: SpriteEffect = SpriteEffect.spawn(map, comet_frames, {
 		"loop": true,
 		"duration": fall_s + 0.1,  # frees itself right after landing
 		"scale": Vector2(0.9, 0.9),
@@ -77,7 +77,7 @@ func _client_fall(map: Node, target: Vector2) -> void:
 func _client_boom(map: Node, target: Vector2) -> void:
 	if not is_instance_valid(map):
 		return
-	var fx: SpriteEffect = SpriteEffect.spawn(map, BOOM, {
+	var fx: SpriteEffect = SpriteEffect.spawn(map, explosion_frames, {
 		"scale": Vector2(blast_radius * 2.2 / 128.0, blast_radius * 2.2 / 128.0),
 		"z_index": 2,
 	})

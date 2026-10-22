@@ -1,5 +1,6 @@
 extends RefCounted
-## Narrow PostgreSQL parity store, not wired into World. One caller/thread owns
+## PostgreSQL wallet primitives. Runtime uses WalletSession's session/receipt
+## boundary, never these unreceipted standalone writes. One caller/thread owns
 ## this synchronous native SOCI session for the ENTIRE transaction. Never yield
 ## an open transaction or distribute its statements across async dispatchers.
 const MAX_YANG: int = 9000000000000000
@@ -27,7 +28,16 @@ func checkpoint(deltas: Dictionary) -> Dictionary:
 	if not _begin(): return {"ok":false,"error":"storage"}
 	var balances: Dictionary = {}
 	var states: Array = []
-	for account_id: int in deltas:
+	# Admit every account before touching wallets, in the same order as Shop
+	# settlement/Exchange. Sorting wallet updates alone is insufficient: a match
+	# may flush taker's wallet before maker's while holding both account locks.
+	var accounts: Array = deltas.keys()
+	accounts.sort()
+	for account_id: int in accounts:
+		var admitted: Dictionary=db.query("SELECT account_id FROM economy.accounts WHERE account_id=:account FOR NO KEY UPDATE;",{"account":account_id})
+		if not admitted.ok: return _rollback("storage")
+		if admitted.rows.is_empty(): return _rollback("owner")
+	for account_id: int in accounts:
 		var result := _apply_income(account_id, int(deltas[account_id]))
 		if not result.ok: return _rollback(str(result.error))
 		balances[account_id] = result.balance
@@ -92,6 +102,6 @@ func _finish(result: Dictionary) -> Dictionary:
 	if not result.ok: return _rollback(str(result.error))
 	if db.commit(): return result
 	# A failed COMMIT is not evidence of failure. No blind retry of a spend or
-	# grinding delta. P3 must add operation discovery/fencing before runtime use.
+	# grinding delta. Runtime uses wallet_session_postgres.gd for fenced receipts.
 	db.close()
 	return {"ok":false,"error":"outcome_unknown","outcome_unknown":true}

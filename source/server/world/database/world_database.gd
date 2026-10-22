@@ -2,6 +2,8 @@ class_name WorldDatabase
 extends Node
 
 
+var economy_profile_id: String=""
+
 signal experience_awarded(owner_id: int, amount: int, levels_gained: int, level: int)
 
 func award_experience(player: PlayerResource, amount: int) -> void:
@@ -10,10 +12,12 @@ func award_experience(player: PlayerResource, amount: int) -> void:
 	mark_progression_dirty(player)
 	experience_awarded.emit(player.player_id,amount,int(result.levels_gained),int(result.level))
 
+var economy_backend: String="sqlite" # Explicit bootstrap selection; never auto-fallback.
 var database_path: String
 var db: SQLite
-var store: WorldStoreSqlite
-var mail_store: MailStore
+var store: RefCounted
+var mail_store: RefCounted
+var profile_pg: Object
 var item_store: ItemStoreSqlite
 var wallet_store: WalletStoreSqlite
 const WALLET_SAVE_SECONDS: float = 30.0
@@ -33,6 +37,7 @@ func auction_binding_current() -> bool:
 	return auction_queries!=null and auction_queries.writer==db and auction_queries.path==wanted
 
 func start_auction_queries() -> bool:
+	if economy_backend!="sqlite": return false
 	if not wallet_ready or db==null: return false
 	if auction_queries==null:
 		auction_queries=AuctionQueryService.new();add_child(auction_queries)
@@ -46,6 +51,8 @@ func start_auction_queries() -> bool:
 	return await auction_queries.start(db,wanted)
 
 func coordinated_backup(keep_last: int = 10, restart_reader: bool = true, final_flush: bool = false) -> bool:
+	# PostgreSQL checkpoints are not file backups. Offline pg_dump owns backups.
+	if profile_pg!=null: return flush_character()
 	if _auction_lifecycle_busy: return false
 	_auction_lifecycle_busy=true
 	var had_reader:=auction_queries!=null
@@ -62,9 +69,13 @@ func shutdown_database() -> bool:
 	if not await coordinated_backup(10,false,true): return false
 	wallet_ready=false
 	_economy_identity = ""
+	if profile_pg!=null:
+		profile_pg.close()
+		return true
 	return db!=null and db.close_db()
 
 func economic_context(character_id: int) -> Dictionary:
+	if economy_backend!="sqlite": return {}
 	if db == null or character_id <= 0: return {}
 	if _economy_identity.is_empty():
 		if not db.query("SELECT value FROM meta WHERE key='economy_authority_id';") or db.query_result.is_empty(): return {}
@@ -77,11 +88,12 @@ func economic_context(character_id: int) -> Dictionary:
 
 func wallet_account_id(character_id: int) -> int:
 	if not _wallet_accounts.has(character_id) and store != null:
-		var account_id := store.resolve_account_id(character_id)
+		var account_id: int = store.resolve_account_id(character_id)
 		if account_id > 0: _wallet_accounts[character_id] = account_id
 	return _wallet_accounts.get(character_id,0)
 
 func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
+	if economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	if _wallet_reconciliation_failed: return {"ok":false,"error":"wallet_reconciliation"}
 	var result := WorldSchema.migrate_account_wallets(db,master_ids)
 	if result.ok and not MarketStoreSqlite.ensure_schema(db): result = {"ok":false,"error":"market_custody_migration"}
@@ -95,6 +107,7 @@ func prepare_account_wallets(master_ids: Dictionary) -> Dictionary:
 
 ## Server-only durable credit; online pending income shares the same commit.
 func credit_account(account_id: int, amount: int) -> Dictionary:
+	if economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	if not wallet_ready or wallet_store == null: return {"ok":false,"error":"storage"}
 	var pending := int(runtime_wallets.get(account_id,{}).get("pending_currency_delta",0))
 	var result := wallet_store.credit(account_id,pending,amount)
@@ -124,6 +137,7 @@ func flush_progression(owner_id: int = -1) -> bool:
 	return true
 
 func load_wallet(character_id: int) -> bool:
+	if economy_backend!="sqlite": return false
 	var owner_id := wallet_account_id(character_id)
 	if not wallet_ready or owner_id <= 0: return false
 	if runtime_wallets.has(owner_id): return true
@@ -136,6 +150,7 @@ func load_wallet(character_id: int) -> bool:
 	return true
 
 func wallet_balance(character_id: int) -> int:
+	if economy_backend!="sqlite": return -1
 	var owner_id := wallet_account_id(character_id)
 	return int(runtime_wallets.get(owner_id, {}).get("wallet_balance", -1))
 
@@ -144,6 +159,7 @@ func wallet_available(character_id: int) -> int:
 	return wallet_balance(character_id)-int(runtime_wallets.get(account,{}).get("reserved_yang",0))
 
 func add_yang(character_id: int, amount: int) -> bool:
+	if economy_backend!="sqlite": return false
 	var owner_id := wallet_account_id(character_id)
 	if not wallet_ready or not runtime_wallets.has(owner_id) or amount <= 0: return false
 	var wallet: Dictionary = runtime_wallets[owner_id]
@@ -154,6 +170,14 @@ func add_yang(character_id: int, amount: int) -> bool:
 	return true
 
 func flush_wallet(character_id: int = -1) -> bool:
+	if economy_backend=="postgresql" and WorldServer.curr!=null and WorldServer.curr.economy_bootstrap!=null and WorldServer.curr.economy_bootstrap.stopped(): return true
+	var runtime:=_postgres_wallet_runtime()
+	if runtime!=null:
+		if character_id<0:
+			runtime.checkpoint_all()
+			return runtime.drained()
+		return runtime.checkpoint(WorldServer.curr.player_id_to_peer_id.get(character_id,0))
+	if economy_backend!="sqlite": return dirty_wallet.is_empty()
 	if not wallet_ready: return dirty_wallet.is_empty()
 	var owner_id := wallet_account_id(character_id) if character_id >= 0 else -1
 	if character_id >= 0 and owner_id <= 0: return false
@@ -170,6 +194,7 @@ func flush_wallet(character_id: int = -1) -> bool:
 	return wallet_ready
 
 func spend_yang(character_id: int, cost: int) -> Dictionary:
+	if economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	var owner_id := wallet_account_id(character_id)
 	# Affordability is checked against authoritative RAM, including pending income.
 	if not wallet_ready or cost <= 0 or not runtime_wallets.has(owner_id): return {"ok": false, "error": "request"}
@@ -218,6 +243,7 @@ func reconcile_committed_wallet(state: Dictionary) -> void:
 	push_error("Committed wallet state could not be reconciled; monetary writes disabled until restart.")
 
 func wallet_snapshot(character_id: int) -> Dictionary:
+	if economy_backend!="sqlite": return {}
 	var account := wallet_account_id(character_id)
 	if not runtime_wallets.has(account): return {"balance":-1,"wallet_state":{}}
 	var wallet: Dictionary = runtime_wallets[account]
@@ -243,6 +269,7 @@ func upgrade_candidate(owner_id: int, uid: String, revision: int, recipe: Upgrad
 	return _economy().upgrade_candidate(owner_id, uid, revision, recipe)
 
 func storage_snapshot(owner_id: int) -> Dictionary:
+	if economy_backend!="sqlite": return {"ok":false,"error":"backend"}
 	if db == null: return {"ok":false,"error":"storage"}
 	return AccountStorageSqlite.new(db).snapshot(owner_id)
 
@@ -302,12 +329,61 @@ func _process(delta: float) -> void:
 	_wallet_elapsed += delta
 	if _wallet_elapsed >= WALLET_SAVE_SECONDS:
 		_wallet_elapsed = fmod(_wallet_elapsed, WALLET_SAVE_SECONDS)
-		if not flush_wallet(): push_error("Wallet checkpoint failed; pending income retained for retry.")
+		# The PG owner runs its own ordinary (non-quiescing) 30-second batching.
+		# Do not turn that into a forced save through this legacy timer as well.
+		if _postgres_wallet_runtime()==null and not flush_wallet(): push_error("Wallet checkpoint failed; pending income retained for retry.")
 	_progression_elapsed += delta
 	if _progression_elapsed < PROGRESSION_SAVE_SECONDS: return
 	_progression_elapsed = fmod(_progression_elapsed, PROGRESSION_SAVE_SECONDS)
 	if not flush_progression(): push_error("Progression checkpoint failed; dirty characters retained for retry.")
 
+func _postgres_wallet_runtime() -> RefCounted:
+	var world:=WorldServer.curr
+	return null if world==null or world.database!=self else world.wallet_runtime
+
+
+## Native full-state selection; runtime checks schema and never provisions it.
+func start_postgres_profiles(settings: Dictionary) -> bool:
+	economy_backend="postgresql"
+	wallet_ready=false
+	profile_pg=preload("res://source/server/world/database/postgres/realm_schema_postgres.gd").connect_store(settings)
+	if profile_pg==null: return false
+	var identity: Dictionary=profile_pg.query("SELECT value FROM economy.meta WHERE key='world_profile_id';")
+	if not identity.ok or identity.rows.size()!=1 or not ItemInstance.valid_uid(identity.rows[0].value):
+		profile_pg.close();return false
+	economy_profile_id=identity.rows[0].value
+	store=preload("res://source/server/world/database/postgres/world_store_postgres.gd").new(profile_pg)
+	mail_store=preload("res://source/server/world/database/postgres/mail_store_postgres.gd").new(profile_pg)
+	return true
+
+func profile_store_ready() -> bool:
+	if profile_pg!=null: return store!=null and store.db==profile_pg and profile_pg.query("SELECT 1;").ok
+	return db!=null and store!=null and store.db==db and db.query("SELECT 1;")
+
+func start_profile_database(path: String) -> bool:
+	economy_backend="postgresql"
+	wallet_ready=false
+	if path.is_empty() or not path.ends_with(".db"): return false
+	database_path=path
+	if DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))!=OK: return false
+	open_database()
+	if not db.query("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('account_wallets','item_instances');"): return false
+	var tables: Array=db.query_result.duplicate(true)
+	for row: Dictionary in tables:
+		if not db.query("SELECT 1 FROM "+str(row.name)+" LIMIT 1;") or not db.query_result.is_empty(): return false
+	WorldSchema.ensure_schema(db)
+	if not db.query("SELECT 1 FROM players LIMIT 1;"): return false
+	if not db.query("SELECT value FROM meta WHERE key='pg_profile_id';"): return false
+	if db.query_result.is_empty():
+		var identity:=Crypto.new().generate_random_bytes(16).hex_encode()
+		if not db.query_with_bindings("INSERT INTO meta(key,value) VALUES('pg_profile_id',?);",[identity]): return false
+		if not db.query("SELECT value FROM meta WHERE key='pg_profile_id';"): return false
+	economy_profile_id=str(db.query_result[0].value)
+	if not ItemInstance.valid_uid(economy_profile_id): return false
+	store=WorldStoreSqlite.new(db)
+	store.economic_initialization=false
+	mail_store=MailStore.new(db)
+	return true
 
 func start_database(world_info: Dictionary) -> void:
 	if auction_queries!=null and auction_queries.reader.dispatcher!=null:
@@ -402,7 +478,7 @@ func save_all_connected(connected_players: Dictionary) -> int:
 		var p: PlayerResource = connected_players[peer_id]
 		if p == null:
 			continue
-		store.save_player(p)
+		if not store.save_player(p): return -1
 		count += 1
 	return count
 

@@ -3,8 +3,7 @@ extends InstanceResource
 ## A dungeon's RULES as data, looked up by its instance_name in the
 ## instance_collection (DungeonResource IS an InstanceResource, so the collection
 ## scan registers it automatically). This puts the reward / description / levels /
-## difficulty in ONE file instead of scattering them across the map scene's
-## RoomNodes — the map scene keeps only encounter authoring (SpawnMarkers), and
+## difficulty in ONE file. Encounter authoring is separate from these rules;
 ## DungeonService reads the reward off the RUN's resource on clear.
 
 ## Pretty name shown in the lobby title (falls back to instance_name if blank).

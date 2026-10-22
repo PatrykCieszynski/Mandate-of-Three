@@ -8,6 +8,10 @@ var rejected: MarketRejectedCommands
 var _transaction: RefCounted
 var committed: bool:
 	get: return _transaction.committed
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+
+func authorize_session(context: Dictionary) -> void: _transaction.economic_context=context.duplicate(true)
 
 func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -> void:
 	db=database
@@ -15,6 +19,9 @@ func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -
 	_transaction=Commands.new(db,rejected)
 
 func claim_item(character: int, command: String, uid: String, revision: int, requested_position: int = -1) -> Dictionary:
+	return _transaction.run_with_retry(_claim_once.bind(character,command,uid,revision,requested_position))
+
+func _claim_once(character: int, command: String, uid: String, revision: int, requested_position: int) -> Dictionary:
 	if not _transaction.begin(character,command,"claim",[character,uid,revision,requested_position],true): return _transaction.cached
 	var found: Dictionary=db.query(Items.ITEM_SELECT+"WHERE i.uid=:uid AND c.location='account_claim' AND c.claim_account_id=:account;",{"uid":uid,"account":_transaction.account_id})
 	if not found.ok: return _transaction.rollback("storage")

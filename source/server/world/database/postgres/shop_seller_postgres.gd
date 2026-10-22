@@ -1,5 +1,5 @@
 extends RefCounted
-## Seller-only port; purchase/revenue/claims/search remain separate milestones.
+## Seller command boundary; settlement, revenue, claims and search have separate owners.
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
 const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 const Grid = preload("res://source/common/gameplay/items/domain/shop_grid.gd")
@@ -9,6 +9,10 @@ var _transaction: RefCounted
 var rejected: MarketRejectedCommands
 var committed: bool:
 	get: return _transaction.committed
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+
+func authorize_session(context: Dictionary) -> void: _transaction.economic_context=context.duplicate(true)
 
 func _init(database: Object, rejected_commands: MarketRejectedCommands = null) -> void:
 	db=database
@@ -20,6 +24,9 @@ func mine(character: int) -> Dictionary:
 	return preload("res://source/server/world/database/postgres/shop_queries_postgres.gd").new(db).seller_mine(character)
 
 func list_item(character: int, command: String, uid: String, revision: int, position: int, price: int) -> Dictionary:
+	return _transaction.run_with_retry(_list_once.bind(character,command,uid,revision,position,price))
+
+func _list_once(character: int, command: String, uid: String, revision: int, position: int, price: int) -> Dictionary:
 	if not _transaction.begin(character,command,"list",[uid,revision,position,price],true): return _transaction.cached
 	if not ItemInstance.valid_uid(uid) or revision<0 or price<0 or price>MAX_PRICE: return _reject("request")
 	var result: Dictionary=db.query(Items.ITEM_SELECT+"WHERE i.uid=:uid AND i.owner_character_id=:owner AND c.owner_id=:owner AND c.location='bag';",{"uid":uid,"owner":character})
@@ -44,6 +51,9 @@ func list_item(character: int, command: String, uid: String, revision: int, posi
 	return _transaction.commit({"ok":true,"offer_id":offer,"uid":uid,"revision":0,"shop_id":shop})
 
 func cancel_offer(character: int, command: String, offer: String, revision: int) -> Dictionary:
+	return _transaction.run_with_retry(_cancel_once.bind(character,command,offer,revision))
+
+func _cancel_once(character: int, command: String, offer: String, revision: int) -> Dictionary:
 	# Preserve the existing account-scoped fingerprint, including cross-alt retries.
 	if not _transaction.begin(character,command,"cancel",[offer,revision],true): return _transaction.cached
 	var found:=_offer(offer)
@@ -62,6 +72,9 @@ func cancel_offer(character: int, command: String, offer: String, revision: int)
 	return _transaction.commit({"ok":true,"uid":str(row.item_uid),"position":int(receiving.position)})
 
 func configure(character: int, command: String, revision: int, name: String, status: String) -> Dictionary:
+	return _transaction.run_with_retry(_configure_once.bind(character,command,revision,name,status))
+
+func _configure_once(character: int, command: String, revision: int, name: String, status: String) -> Dictionary:
 	if not _transaction.begin(character,command,"configure",[revision,name,status],true): return _transaction.cached
 	if name.strip_edges().is_empty() or name.length()>40 or status not in ["active","paused"]: return _reject("request")
 	for letter: String in name:
@@ -75,6 +88,9 @@ func configure(character: int, command: String, revision: int, name: String, sta
 	return _transaction.commit({"ok":true,"revision":revision+1})
 
 func edit_offer(character: int, command: String, offer: String, revision: int, position: int, price: int) -> Dictionary:
+	return _transaction.run_with_retry(_edit_once.bind(character,command,offer,revision,position,price))
+
+func _edit_once(character: int, command: String, offer: String, revision: int, position: int, price: int) -> Dictionary:
 	if not _transaction.begin(character,command,"edit",[offer,revision,position,price],true): return _transaction.cached
 	if price<0 or price>MAX_PRICE: return _reject("request")
 	var found:=_offer(offer)

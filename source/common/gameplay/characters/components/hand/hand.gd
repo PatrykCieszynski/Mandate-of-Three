@@ -1,5 +1,4 @@
 @tool
-@icon("res://assets/node_icons/blue/icon_hand.png")
 class_name Hand
 extends Sprite2D
 
@@ -34,8 +33,7 @@ enum Types {
 		status = new_status
 		_update_hands()
 
-@export var type: Types = Types.HUMAN:
-	set = _set_type
+@export var type: Types = Types.HUMAN
 
 
 func _init() -> void:
@@ -47,16 +45,3 @@ func _update_hands() -> void:
 		region_rect = Rect2(2 * SIZE, 1 * SIZE, SIZE, SIZE)
 	else:
 		region_rect = Rect2(side * SIZE, status * SIZE, SIZE, SIZE)
-
-
-func _set_type(new_type: Types) -> void:
-	match new_type:
-		Types.HUMAN:
-			texture = preload("res://assets/sprites/items/weapons/hands/human_hands.png")
-		Types.BROWN:
-			texture = preload("res://assets/sprites/items/weapons/hands/brown_leather_gloves.png")
-		Types.GOBLIN:
-			texture = preload("res://assets/sprites/items/weapons/hands/goblin_hands.png")
-		Types.ORC:
-			texture = preload("res://assets/sprites/items/weapons/hands/orc_hands.png")
-	type = new_type

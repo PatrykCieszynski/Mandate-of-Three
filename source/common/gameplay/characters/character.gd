@@ -1,4 +1,3 @@
-@icon("res://assets/node_icons/blue/icon_character.png")
 class_name Character
 extends Entity
 

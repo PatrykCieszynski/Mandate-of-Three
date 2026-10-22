@@ -1,12 +1,9 @@
 class_name PlayerSkins
-## Thin facade over the `sprites` ContentRegistry: every sprite is a wearable player skin.
-## Character creation (gateway), the wardrobe, and the server's buy/equip validation all go
-## through here so they agree on the roster + display names WITHOUT a hardcoded list — drop a
-## SpriteFrames into the sprite_frames folder, reindex, and it's offered everywhere at once.
+## Registered character appearance identities. The inherited `sprites` registry
+## name remains a wire/profile compatibility key; entries no longer require
+## TinyMMO SpriteFrames. First Region renders the Warrior through its 3D presenter.
 
 
-## All skin ids, sorted ascending (so the original starters lead) — every entry in the
-## `sprites` registry. Used by the wardrobe + character creation to list buyable skins.
 static func ids() -> Array[int]:
 	var registry: ContentRegistry = ContentRegistryHub.registry_of(&"sprites")
 	if registry == null:
@@ -16,8 +13,7 @@ static func ids() -> Array[int]:
 	return out
 
 
-## True when [param skin_id] resolves to a real sprite. Server-side anti-cheat: stops a
-## client buying/equipping an id that doesn't exist in the registry.
+## Only registered appearance IDs may be selected by the client.
 static func is_valid(skin_id: int) -> bool:
 	var registry: ContentRegistry = ContentRegistryHub.registry_of(&"sprites")
 	return registry != null and registry.has_id(skin_id)

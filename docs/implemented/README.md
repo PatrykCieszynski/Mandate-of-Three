@@ -1,22 +1,13 @@
-# Implemented and verified — branch-aware index
+# Current implemented baseline
 
-This is a **map to implementation reports**, not a statement that every manual/native test has passed. Read the report's date, branch and validation limits.
+This is a *navigation index*, not a claim of public-production or Linux readiness.
 
-## On `main` (existing prototype)
+- **Runtime:** Godot 4.7.2 Gateway, Master and one World; PostgreSQL for accounts, profiles and Economy. [Full state](../development/postgres-full-state.md).
+- **Economy:** unique ItemInstances, Inventory/Equipment, Wallet/Yang, Storage, Ground pickup, NPC Shop/Upgrade, Marketplace/Auction/Exchange, transaction receipts and recovery. [Ownership contracts](../architecture/economy/README.md), [persistence](../architecture/persistence-policy.md).
+- **Sessions:** validated startup budgets and Master-to-World ACK before publishing an accepted handoff. [Runtime capacity](../development/runtime-capacity.md).
+- **Gameplay:** server-authoritative movement/combat, mob packs and Metins; First Region is still a graybox, not a finished authored map. [Combat](../gameplay/combat/README.md), [First Region](../world/first-region-graybox.md).
+- **Client/UI:** TypeScript/CEF interfaces for core systems. [UI](../ui/README.md).
+- **Terrain:** Terrain3D compatibility/authoring foundation exists; map authoring and visual polish are outstanding. [Guide](../world/terrain3d-authoring-guide.md).
+- **Performance:** W0 and W1 produced *synthetic* controls; experiments do not prove real player capacity. [Evidence](../evidence/README.md).
 
-| System | Evidence / contract |
-| --- | --- |
-| Item UID, inventory, equipment and pickup | [ItemInstance](../architecture/item-instances.md), [ground loot](../gameplay/pve-ground-loot.md) |
-| Yang checkpoints and critical spend | [Yang](../architecture/yang-wallet.md), [persistence](../architecture/persistence-policy.md) |
-| Server-authoritative 3D combat and mob packs | [Combat trace](../gameplay/combat/warrior-combat-trace-v1.md), [mob packs](../gameplay/mob-packs-v1.md) |
-| First region, Metins and native visual passes | [First region](../world/first-region-graybox.md), [Metin encounter](../gameplay/metin-encounter-v1.md), [Visual V4 terrain foundation](../world/visuals/visual-upgrade-v4-terrain3d.md) |
-| CEF Core UI, Storage, NPC Shop/Upgrade | [Core UI](../ui/core-ui.md), [NPC services](../gameplay/npc/npc-services.md), [Upgrade](../gameplay/npc/npc-upgrade-ui.md) |
-| Build and regression policy | [Testing](../development/testing.md), [CI](../development/ci.md) |
-
-## Implemented on `shop`, **not yet merged to `main`** (at time of writing)
-
-[Marketplace PR #1](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/1) adds verified account identity, account Yang, durable Shops, Auction search, Exchange and many regressions. Auction PR #2 was integrated into `shop`. Read its PR body and the branch-specific reports for scope, platform gaps and native/SQL limitations.
-
-The [newer Marketplace policy](../decisions/marketplace-v2-gaps.md) intentionally differs from that implementation in several UX and payout rules. Do not mark these changes implemented until they pass tests and merge.
-
-For upcoming hardening packages, use the [technical implementation plan](../plans/architecture-hardening.md).
+Historical `shop` / PR #1 branch descriptions are superseded by the integrated Marketplace. Do not infer all experimental controller, AOI or multi-World features have shipped.

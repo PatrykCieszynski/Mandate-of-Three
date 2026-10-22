@@ -8,6 +8,7 @@ $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
 New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
 # Isolated databases. No servers, game windows, balances, exact DOM or geometry.
 $taskCases = [ordered]@{
+    content_catalog = 'CONTENT_CATALOG_OK'
     upgrade_transaction = 'UPGRADE_TRANSACTION_OK'
     shop_purchase = 'SHOP_PURCHASE_OK'
     npc_foundation = 'NPC_FOUNDATION_OK'
@@ -22,6 +23,7 @@ $taskCases = [ordered]@{
     hotbar_bindings = 'HOTBAR_BINDINGS_OK'
     world_event_drops = 'WORLD_EVENT_DROPS_OK'
     mob_packs = 'MOB_PACKS_OK'
+    mob_interest = 'MOB_INTEREST_OK'
     hit_reactions = 'HIT_REACTIONS_OK'
 }
 foreach ($taskCase in $taskCases.GetEnumerator()) {

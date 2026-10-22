@@ -107,11 +107,6 @@ func _ready() -> void:
 			str(payload.get("dungeon", "The dungeon")),
 			"Clear each room. Defeat the boss to escape.",
 			{"delay": 0.6}))
-	# Boss enrage (dungeon phase 2): a red center banner + camera shake so the
-	# escalation reads — see BossController._announce_enrage.
-	Client.subscribe(&"boss.enrage", func(payload: Dictionary) -> void:
-		Announcer.announce("%s enrages!" % str(payload.get("name", "The boss")), "", {"color": PVP_TOAST_COLOR})
-		shake_camera(0.6))
 
 
 ## The local player's own over-head HP bar reads as "self" (green), never
@@ -457,8 +452,10 @@ func set_camera_zoom(zoom: Vector2) -> void:
 	camera_2d.zoom = zoom
 
 
-func _on_instance_changed_camera_limits(instance: InstanceClient) -> void:
-	_apply_camera_limits(instance.instance_map if instance != null else null)
+func _on_instance_changed_camera_limits(instance: Node) -> void:
+	# The 3D host has its own camera and no legacy Map bounds.
+	var legacy_map: Map = instance.instance_map if instance is InstanceClient else null
+	_apply_camera_limits(legacy_map)
 
 
 ## Clamp the camera to [param map]'s per-edge limits. Each edge defaults to ±CAMERA_LIMIT

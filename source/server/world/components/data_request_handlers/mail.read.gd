@@ -14,5 +14,8 @@ func data_request_handler(
 	var mail_id: int = int(args.get("mail_id", 0))
 	if mail_id <= 0:
 		return {"ok": false}
-	instance.world_server.database.mail_store.mark_read(pr.player_id, mail_id)
+	var store: RefCounted=instance.world_server.database.mail_store
+	if store is MailStorePostgres:
+		if not store.mark_read(pr.player_id,mail_id): return {"ok":false,"reason":store.last_write_error}
+	else: store.mark_read(pr.player_id,mail_id)
 	return {"ok": true}

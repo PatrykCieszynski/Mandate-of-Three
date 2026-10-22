@@ -186,6 +186,7 @@ func _ready() -> void:
 	var candidate:=exercise(Orders.new(pg),true)
 	assert(baseline==candidate,"wallets/reserves, order/fill priority, snapshots/depth and receipt totals match SQLite")
 	await native_checks()
+	await retry_checks()
 	pg.close()
 	runtime.db=null
 	runtime.free()
@@ -325,3 +326,169 @@ func race_worker(dsn: String, spec: Array, ready: Semaphore) -> Dictionary:
 	var committed: bool=store.committed
 	database.close()
 	return {"result":result,"committed":committed}
+
+func retry_checks() -> void:
+	var store:=Orders.new(pg)
+	# Isolate the book from earlier parity/race cases without bypassing cancellation.
+	for row: Dictionary in rows(true,"SELECT o.order_id,o.revision,MIN(c.character_id) AS character FROM economy.exchange_orders o JOIN economy.characters c ON c.account_id=o.account_id WHERE o.status='active' AND o.base_asset IN ('beast_hide','bandit_token') GROUP BY o.sequence;"):
+		assert(store.cancel_order(int(row.character),"retry-clear-"+row.order_id,row.order_id,int(row.revision),{}).ok)
+	for id: int in range(8000,8004):
+		assert(Wallet.new(pg).initialize_account(id).ok and Items.new(pg).bind_character(id*10,id))
+		execute(true,"UPDATE economy.account_wallets SET yang=10000 WHERE account_id="+str(id)+";")
+		for asset: String in ["beast_hide","bandit_token"]:
+			execute(true,"INSERT INTO economy.exchange_assets VALUES(:account,:asset,200,0);",{"account":id,"asset":asset})
+	execute(true,"CREATE SEQUENCE economy.fixture_order_attempt;")
+	execute(true,"CREATE FUNCTION economy.fixture_order_retry() RETURNS trigger LANGUAGE plpgsql AS $$ DECLARE attempt BIGINT; BEGIN attempt:=nextval('economy.fixture_order_attempt'); IF attempt>=TG_ARGV[1]::BIGINT AND attempt<=TG_ARGV[2]::BIGINT THEN IF TG_NARGS>3 THEN PERFORM pg_advisory_xact_lock(95125); END IF; RAISE EXCEPTION 'order retry fixture' USING ERRCODE=TG_ARGV[0]; END IF; RETURN NEW; END; $$;")
+	# The pair admission precedes the common character/receipt owner.
+	order_retry_fault("exchange_books","INSERT","40P01",1,1)
+	var admission: Dictionary=store.place_order(80030,request("sell",2,100,1,"retry-pair","bandit_token"),{})
+	assert(admission.ok and store.committed and order_retry_attempts()==2)
+	clear_order_retry("exchange_books")
+	# Material refunds use the same transaction contract as Yang reservations.
+	order_retry_fault("exchange_assets","UPDATE","40001",1,1)
+	var refund: Dictionary=store.cancel_order(80030,"retry-material-refund",admission.order_id,0,{})
+	assert(refund.ok and refund.refunded==2 and order_retry_attempts()==2)
+	clear_order_retry("exchange_assets")
+	var restored: Dictionary=pg.query("SELECT free,reserved FROM economy.exchange_assets WHERE account_id=8003 AND asset_id='bandit_token';").rows[0]
+	assert(int(restored.free)==200 and int(restored.reserved)==0)
+	for code: String in ["40001","40P01"]:
+		assert(store.place_order(80000,request("sell",5,10,1,"maker-a-"+code,"beast_hide"),{}).ok)
+		assert(store.place_order(80010,request("sell",5,11,1,"maker-b-"+code,"beast_hide"),{}).ok)
+		var balances: Array=[]
+		for id: int in [8000,8001,8002]: balances.append(Wallet.new(pg).load_wallet(id).balance)
+		var held: int=int(rows(true,"SELECT free FROM economy.exchange_assets WHERE account_id=8002 AND asset_id='beast_hide';")[0].free)
+		# Abort the SECOND fill, after the first maker and all wallet writes.
+		order_retry_fault("exchange_fills","INSERT",code,2,2)
+		var p:=request("buy",10,12,1,"retry-match-"+code,"beast_hide")
+		var bought: Dictionary=store.place_order(80020,p,{8000:7,8001:11,8002:17})
+		assert(bought.ok and bought.remaining==0 and store.committed and order_retry_attempts()==4)
+		assert(int(rows(true,"SELECT COUNT(*) AS n FROM economy.exchange_fills WHERE taker_id='"+bought.order_id+"';")[0].n)==2,"aborted first fill must not survive the retry")
+		assert(Wallet.new(pg).load_wallet(8000).balance==balances[0]+50+7)
+		assert(Wallet.new(pg).load_wallet(8001).balance==balances[1]+55+11)
+		assert(Wallet.new(pg).load_wallet(8002).balance==balances[2]-105+17)
+		assert(Wallet.new(pg).load_wallet(8002).reserved_yang==0)
+		assert(int(rows(true,"SELECT free FROM economy.exchange_assets WHERE account_id=8002 AND asset_id='beast_hide';")[0].free)==held+10)
+		var before:=native_state()
+		assert(store.place_order(80020,p,{8002:999})==bought and not store.committed and native_state()==before and order_retry_attempts()==4)
+		clear_order_retry("exchange_fills")
+	# Re-run reservation and receipt creation from scratch; only one order survives.
+	for table: String in ["account_wallets","market_commands"]:
+		order_retry_fault(table,"INSERT" if table=="market_commands" else "UPDATE","40001",1,1)
+		var p:=request("buy",3,1,1,"retry-reserve-"+table,"bandit_token")
+		var before_balance: int=Wallet.new(pg).load_wallet(8003).balance
+		var placed: Dictionary=store.place_order(80030,p,{8003:13})
+		assert(placed.ok and store.committed and Wallet.new(pg).load_wallet(8003).balance==before_balance+13)
+		assert(int(rows(true,"SELECT COUNT(*) AS n FROM economy.market_commands WHERE command_id='"+p.command_id+"';")[0].n)==1)
+		clear_order_retry(table)
+		# Abort after refund and order mutation, at receipt persistence.
+		order_retry_fault("market_commands","INSERT","40P01",1,1)
+		var cancelled: Dictionary=store.cancel_order(80030,"retry-cancel-"+table,placed.order_id,0,{8003:19})
+		assert(cancelled.ok and cancelled.refunded==3 and store.committed and order_retry_attempts()==2)
+		assert(Wallet.new(pg).load_wallet(8003).balance==before_balance+13+19 and Wallet.new(pg).load_wallet(8003).reserved_yang==0)
+		var before:=native_state()
+		assert(store.cancel_order(80030,"retry-cancel-"+table,placed.order_id,0,{8003:999})==cancelled and not store.committed and native_state()==before and order_retry_attempts()==2)
+		clear_order_retry("market_commands")
+	# Both order creation and cancellation stop at the shared three-attempt cap;
+	# unrelated storage codes are not silently retried.
+	for code: String in ["40001","40P01","23505","55P03","57014"]:
+		var source: Dictionary=store.place_order(80030,request("buy",2,1,1,"budget-source-"+code,"bandit_token"),{})
+		assert(source.ok)
+		for cancel: bool in [false,true]:
+			order_retry_fault("market_commands","INSERT",code,1,99)
+			var before:=native_state()
+			var result: Dictionary=store.cancel_order(80030,"budget-cancel-"+code,source.order_id,0,{8003:23}) if cancel else store.place_order(80030,request("buy",2,1,1,"budget-place-"+code,"bandit_token"),{8003:23})
+			assert(result.error=="storage" and not store.committed and native_state()==before and not pg.in_transaction())
+			assert(order_retry_attempts()==(3 if code in ["40001","40P01"] else 1))
+			clear_order_retry("market_commands")
+		assert(store.cancel_order(80030,"clear-budget-"+code,source.order_id,0,{}).ok)
+	# Even a retryable code at COMMIT is ambiguous, never a retry authorization.
+	for code: String in ["40001","40P01"]:
+		var source: Dictionary=store.place_order(80030,request("buy",2,1,1,"commit-source-"+code,"bandit_token"),{})
+		assert(source.ok)
+		for cancel: bool in [false,true]:
+			order_retry_fault("market_commands","INSERT",code,1,99,true)
+			var before:=native_state()
+			var command: String="unknown-"+code+str(cancel)
+			var result: Dictionary=store.cancel_order(80030,command,source.order_id,0,{8003:29}) if cancel else store.place_order(80030,request("buy",2,1,1,command,"bandit_token"),{8003:29})
+			assert(result.get("outcome_unknown",false) and not store.committed and not pg.is_open())
+			assert(pg.open("postgresql",connection) and order_retry_attempts()==1)
+			clear_order_retry("market_commands")
+			assert(native_state()==before and store.receipt(80030,command).error=="unknown_command")
+		assert(store.cancel_order(80030,"clear-commit-"+code,source.order_id,0,{}).ok)
+	await retry_book_reselection()
+	await retry_cancel_reselection()
+	print("POSTGRES_EXCHANGE_ORDER_RETRY_OK multi-maker rollback, pending once, reserve/refund/replay, bounded attempts, no COMMIT retry and current-book reselection")
+
+func order_retry_fault(table: String, event: String, code: String, first: int, last: int, deferred: bool = false) -> void:
+	execute(true,"ALTER SEQUENCE economy.fixture_order_attempt RESTART WITH 1;")
+	var create: String="CREATE CONSTRAINT TRIGGER fixture_retry AFTER INSERT ON economy.%s DEFERRABLE INITIALLY DEFERRED" % table if deferred else "CREATE TRIGGER fixture_retry BEFORE %s ON economy.%s" % [event,table]
+	execute(true,create+" FOR EACH ROW EXECUTE FUNCTION economy.fixture_order_retry('%s','%d','%d');" % [code,first,last])
+
+func clear_order_retry(table: String) -> void:
+	execute(true,"DROP TRIGGER fixture_retry ON economy."+table+";")
+
+func order_retry_attempts() -> int:
+	return int(rows(true,"SELECT last_value FROM economy.fixture_order_attempt;")[0].last_value)
+
+func retry_book_reselection() -> void:
+	var store:=Orders.new(pg)
+	var maker: Dictionary=store.place_order(80000,request("sell",5,10,1,"reselect-maker","beast_hide"),{})
+	assert(maker.ok)
+	execute(true,"ALTER SEQUENCE economy.fixture_order_attempt RESTART WITH 1;")
+	execute(true,"CREATE TRIGGER fixture_retry BEFORE INSERT ON economy.exchange_fills FOR EACH ROW WHEN (current_setting('application_name')='retry-order-buyer') EXECUTE FUNCTION economy.fixture_order_retry('40001','1','1','gate');")
+	execute(true,"SELECT pg_advisory_lock(95125);")
+	# Diagnostic barriers only; normal runner timeouts remain unchanged.
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var buyer:=Thread.new()
+	assert(buyer.start(race_worker.bind(connection+" application_name=retry-order-buyer"+budgets,[80020,"place",request("buy",5,10,1,"reselect-buyer","beast_hide"),{8002:31}],ready))==OK)
+	ready.wait()
+	var buyer_waiting: bool=await order_retry_waiting("retry-order-buyer")
+	var editor:=Thread.new()
+	assert(editor.start(race_worker.bind(connection+" application_name=retry-order-editor"+budgets,[80000,"cancel",["reselect-cancel",maker.order_id,0],{}],ready))==OK)
+	ready.wait()
+	var editor_waiting: bool=await order_retry_waiting("retry-order-editor")
+	execute(true,"SELECT pg_advisory_unlock(95125);")
+	var bought: Dictionary=buyer.wait_to_finish()
+	var cancelled: Dictionary=editor.wait_to_finish()
+	clear_order_retry("exchange_fills")
+	assert(buyer_waiting and editor_waiting and cancelled.result.ok and cancelled.result.refunded==5)
+	assert(bought.result.ok and bought.result.remaining==5 and bought.committed and order_retry_attempts()==1,"retry must reacquire the pair and reselect makers after the earlier cancellation")
+	assert(rows(true,"SELECT * FROM economy.exchange_fills WHERE maker_id='"+maker.order_id+"';").is_empty())
+	assert(store.receipt(80020,"reselect-buyer")==bought.result)
+	assert(store.cancel_order(80020,"clear-reselect",bought.result.order_id,0,{}).ok)
+
+func order_retry_waiting(label: String) -> bool:
+	var deadline: int=Time.get_ticks_msec()+2000
+	while Time.get_ticks_msec()<deadline:
+		execute(true,"SELECT pg_stat_clear_snapshot();")
+		if int(pg.query("SELECT COUNT(*) AS n FROM pg_stat_activity WHERE application_name=:label AND wait_event_type='Lock';",{"label":label}).rows[0].n)==1: return true
+		await get_tree().create_timer(0.005).timeout
+	return false
+
+func retry_cancel_reselection() -> void:
+	var store:=Orders.new(pg)
+	var source: Dictionary=store.place_order(80020,request("buy",5,10,1,"reselect-cancel-source","beast_hide"),{})
+	assert(source.ok and source.remaining==5)
+	var balance: int=Wallet.new(pg).load_wallet(8002).balance
+	execute(true,"ALTER SEQUENCE economy.fixture_order_attempt RESTART WITH 1;")
+	execute(true,"CREATE TRIGGER fixture_retry BEFORE INSERT ON economy.market_commands FOR EACH ROW WHEN (current_setting('application_name')='retry-order-cancel') EXECUTE FUNCTION economy.fixture_order_retry('40P01','1','1','gate');")
+	execute(true,"SELECT pg_advisory_lock(95125);")
+	var budgets: String=" options='-c statement_timeout=10000 -c lock_timeout=8000 -c idle_in_transaction_session_timeout=10000'"
+	var ready:=Semaphore.new()
+	var canceller:=Thread.new()
+	assert(canceller.start(race_worker.bind(connection+" application_name=retry-order-cancel"+budgets,[80020,"cancel",["reselect-refund",source.order_id,0],{8002:37}],ready))==OK)
+	ready.wait()
+	var cancel_waiting: bool=await order_retry_waiting("retry-order-cancel")
+	var seller:=Thread.new()
+	assert(seller.start(race_worker.bind(connection+" application_name=retry-order-fill"+budgets,[80000,"place",request("sell",5,10,1,"reselect-fill","beast_hide"),{}],ready))==OK)
+	ready.wait()
+	var seller_waiting: bool=await order_retry_waiting("retry-order-fill")
+	execute(true,"SELECT pg_advisory_unlock(95125);")
+	var cancelled: Dictionary=canceller.wait_to_finish()
+	var sold: Dictionary=seller.wait_to_finish()
+	clear_order_retry("market_commands")
+	assert(cancel_waiting and seller_waiting and sold.result.ok and sold.result.remaining==0)
+	assert(cancelled.result.error=="stale" and not cancelled.committed and order_retry_attempts()==1,"cancel retry must recheck revision after a queued fill, not refund a filled order")
+	assert(Wallet.new(pg).load_wallet(8002).balance==balance-50 and Wallet.new(pg).load_wallet(8002).reserved_yang==0)
+	assert(store.receipt(80020,"reselect-refund").error=="unknown_command")

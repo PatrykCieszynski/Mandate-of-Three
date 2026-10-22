@@ -1,6 +1,6 @@
-[gd_resource type="ShaderMaterial" load_steps=4 format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cpk3ytoccrfj3"]
 
-[ext_resource type="Shader" path="res://source/client/world_visuals/water/region_water.gdshader" id="1"]
+[ext_resource type="Shader" uid="uid://dx3arpptedmmw" path="res://source/client/world_visuals/water/region_water.gdshader" id="1"]
 
 [sub_resource type="FastNoiseLite" id="Ripples"]
 seed = 31415
@@ -10,12 +10,23 @@ fractal_octaves = 3
 [sub_resource type="NoiseTexture2D" id="Normal"]
 width = 256
 height = 256
+noise = SubResource("Ripples")
 seamless = true
 as_normal_map = true
 bump_strength = 2.0
-noise = SubResource("Ripples")
 
 [resource]
 resource_local_to_scene = true
+render_priority = 0
 shader = ExtResource("1")
 shader_parameter/ripple_normal = SubResource("Normal")
+shader_parameter/shallow_color = Color(0.12, 0.37, 0.36, 1)
+shader_parameter/deep_color = Color(0.014, 0.075, 0.12, 1)
+shader_parameter/foam_color = Color(0.65, 0.73, 0.7, 1)
+shader_parameter/absorption = 0.65
+shader_parameter/wave_strength = 1.0
+shader_parameter/normal_strength = 0.16
+shader_parameter/refraction_strength = 0.003
+shader_parameter/foam_strength = 0.65
+shader_parameter/surface_time = 0.0
+shader_parameter/detail_fade = Vector2(18, 70)

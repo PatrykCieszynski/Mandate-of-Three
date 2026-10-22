@@ -2,7 +2,7 @@
 
 **Status: Accepted (2026-10-14)**
 
-This contract states the target authority boundaries for Economy V2. It does **not** claim that the current SQLite WorldDatabase has already been extracted into another process.
+This contract states the target authority boundaries for Economy V2. It does **not** claim that the current World economy has already been extracted into another process.
 
 ## Accepted ownership boundaries
 
@@ -36,11 +36,11 @@ This contract states the target authority boundaries for Economy V2. It does **n
 
 ## Current code and migration implications
 
-- The prototype's godot-sqlite writer, WorldDatabase account-wallet RAM/pending delta, Market/Exchange transactions, UID custody and durable command receipts remain in place.
-- Existing [persistence policy](../persistence-policy.md) is the **current runtime contract** until migration. In particular, its local pending Yang delta and world-side equipment cache are not retroactively invalidated by this future-state document.
-- Future extraction should put the Economy API/domain boundary around working transaction semantics, not copy SQL calls or move SceneTree nodes into background threads. Both local SQLite and eventual PostgreSQL implementations must uphold the same externally visible invariants.
+- Normal development uses the PostgreSQL stores/runtimes in one World Process, including account wallets, pending income, Market/Exchange transactions, UID custody and durable command outcomes. SQLite remains a reference fixture backend.
+- Existing [persistence policy](../persistence-policy.md) is the **current runtime contract**. In particular, its local pending Yang delta and world-side equipment cache are not retroactively invalidated by this future-state document.
+- Future extraction should put the Economy API/domain boundary around working transaction semantics, not copy SQL calls or move SceneTree nodes into background threads. Both the SQLite reference and current PostgreSQL implementations must uphold the same externally visible invariants.
 - Transition requires a plan for multi-World session authority, shared wallet ownership, migration of current pending-income behavior and versioned cache refresh, specified by C2–C5.
 
 ## Still open — not part of C1 approval
 
-Exact command envelope/transport, batching protocol for soft Yang (not the accepted durability distinction), seller-claim overflow/limits (not the accepted collectable revenue model), handoff messages, snapshot revision granularity, PostgreSQL concurrency strategy and deployment topology belong to C2–C5 and implementation design.
+Exact command envelope/transport, batching protocol for soft Yang (not the accepted durability distinction), future seller-claim limits (local partial collection is already approved), handoff messages, snapshot revision granularity, future cross-World concurrency protocol and deployment topology belong to C2–C5 and implementation design.

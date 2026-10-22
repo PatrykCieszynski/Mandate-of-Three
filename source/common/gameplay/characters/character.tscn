@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://bu6yn6ww7d7c8" path="res://source/common/gameplay/characters/character.gd" id="1_uqmoo"]
 [ext_resource type="AnimationLibrary" uid="uid://n1w3r0jaxp0q" path="res://source/common/gameplay/characters/animations/locomotion.tres" id="2_k3wew"]
-[ext_resource type="SpriteFrames" uid="uid://bqcsne8jhbmi8" path="res://source/common/gameplay/characters/sprite_frames/knight.tres" id="2_pypn5"]
 [ext_resource type="AnimationLibrary" uid="uid://rbv6cl1ldcc7" path="res://source/common/gameplay/items/weapons/sword/sword_animations.tres" id="3_8hp20"]
 [ext_resource type="Script" uid="uid://d1a30n4ktgm71" path="res://source/common/network/sync/state_synchronizer.gd" id="5_eyotc"]
 [ext_resource type="Script" uid="uid://gl2cwrrfvlkh" path="res://source/common/gameplay/combat/components/stats_component.gd" id="6_fg3fs"]
@@ -241,8 +240,6 @@ parameters/OnFoot/RightOneShot/internal_active = false
 parameters/OnFoot/RightOneShot/request = 0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1675562039]
-sprite_frames = ExtResource("2_pypn5")
-animation = &"idle"
 frame_progress = 0.125846
 speed_scale = 1.5
 offset = Vector2(0, -30)

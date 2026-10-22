@@ -51,15 +51,15 @@ const HARD_HEALTH_MULT: float = 2.0
 const HARD_DAMAGE_MULT: float = 1.5
 
 
-## Is the run living in [param instance] a Hard one? Read by RoomNode when it spawns
-## mobs (to scale them) and picks the reward.
+## Is the run living in [param instance] a Hard one? Kept for the dungeon
+## encounter system when the 3D room lifecycle is implemented.
 static func is_hard_run(instance: Node) -> bool:
 	if instance == null:
 		return false
 	return _run_hard.get(_instance_to_group.get(str(instance.name), 0), false)
 
 
-# --- lobby (matchmaking at a DungeonMaster station) -------------------------
+# --- lobby (matchmaking at a dungeon-keeper station) ------------------------
 
 ## Join / leave / start / solo a dungeon lobby (dungeon.queue handler). Mirrors
 ## the spar queue, minus teams: one shared queue per station, Start launches the
@@ -135,10 +135,8 @@ static func lobby_status(instance: Node, peer_id: int, station: String) -> Dicti
 	}
 
 
-## Resolve a station by its node NAME → {node, dungeon}. Works for a legacy
-## DungeonMaster (its .dungeon) or a dungeon-keeper NPC (its DungeonInteraction) —
-## both are direct map children, so get_node(name) finds them. Empty if the node is
-## gone or isn't a dungeon station. This is what replaces the manual master_id.
+## Resolve a dungeon-keeper NPC by node name to {node, dungeon}. Its
+## DungeonInteraction owns the destination. Unknown stations are rejected.
 static func _resolve_station(instance: Node, station: String) -> Dictionary:
 	if instance == null or instance.instance_map == null or station.is_empty():
 		return {}
@@ -152,8 +150,6 @@ static func _resolve_station(instance: Node, station: String) -> Dictionary:
 
 
 static func _station_dungeon(node: Node) -> DungeonResource:
-	if node is DungeonMaster:
-		return (node as DungeonMaster).dungeon
 	if node is NPC and (node as NPC).npc_resource != null:
 		for inter: NPCInteraction in (node as NPC).npc_resource.interactions:
 			if inter is DungeonInteraction:
@@ -412,8 +408,8 @@ static func start_run(peers: Array, dungeon: DungeonResource, hard: bool = false
 
 
 ## Once the private instance is loaded, switch every group member in (from
-## whatever instance they're standing in). Mob spawning is NOT done here anymore —
-## the map's authored RoomNodes drive the encounters as the party walks in.
+## whatever instance they're standing in). Mob encounters are handled separately;
+## this function only orchestrates player admission to the run.
 static func _enter_run(group_id: int, members: Array) -> void:
 	var instance: Node = _runs.get(group_id, null)
 	if instance == null or WorldServer.curr == null:
@@ -476,7 +472,7 @@ static func on_player_left(peer_id: int, left_instance: Node) -> void:
 ## The final room cleared — the run is COMPLETE. Grant each member their reward
 ## (honoring the soft daily lockout), push a per-member recap (dungeon name,
 ## completion time, what they got), then after EJECT_DELAY_S send everyone home and
-## let the group dissolve. Called from RoomNode (final_room). Server-only.
+## let the group dissolve. The future 3D encounter controller calls this. Server-only.
 static func on_dungeon_cleared(instance: Node) -> void:
 	if instance == null or WorldServer.curr == null:
 		return
@@ -510,7 +506,6 @@ static func on_dungeon_cleared(instance: Node) -> void:
 			"eject_in": int(EJECT_DELAY_S),
 			"reward": _grant_reward(player, lockout_key, reward),
 		})
-	# (The victory sting is fired by the dungeon boss's own BossController on death.)
 	# Linger on the recap, then send the party home; on_player_left dissolves the
 	# group as each one leaves.
 	WorldServer.curr.get_tree().create_timer(EJECT_DELAY_S).timeout.connect(

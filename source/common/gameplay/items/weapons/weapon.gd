@@ -1,4 +1,3 @@
-@icon("res://assets/node_icons/blue/icon_sword.png")
 class_name Weapon
 extends Node2D
 ## Base weapon: a thin shell around its abilities array. Slot 0 = primary

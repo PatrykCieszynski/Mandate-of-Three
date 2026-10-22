@@ -30,6 +30,7 @@ export type ExchangeSnapshot =
   | { active: false }
   | {
       active: true;
+      ledgerOnly?: boolean;
       yang: number;
       reservedYang: number;
       assets: ExchangeAsset[];
@@ -80,6 +81,7 @@ export function isExchangeSnapshot(v: unknown): v is ExchangeSnapshot {
     Number(v.reservedYang) <= Number(v.yang) &&
     typeof v.busy === 'boolean' &&
     typeof v.retryAvailable === 'boolean' &&
+    (!('ledgerOnly' in v) || typeof v.ledgerOnly === 'boolean') &&
     Array.isArray(v.assets) &&
     v.assets.length <= 32 &&
     v.assets.every(

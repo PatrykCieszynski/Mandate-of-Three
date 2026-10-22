@@ -1,248 +1,106 @@
-# Persistence policy - explicit state categories
+# Persistence policy — current runtime
 
-Accepted following the user's review. The database is the persistence layer;
-an active character's authoritative state lives in World Server memory. Do not
-build a generic stats/event framework or autosave the entire profile for each change.
+Normal development uses PostgreSQL for Economy, Master accounts and World
+profiles/social services. The owner approved a clean test-data start on
+2026-10-21. [Full-state setup](../development/postgres-full-state.md) is the
+canonical deployment runbook. SQLite is a reference/legacy fixture backend;
+selecting PostgreSQL never permits fallback after startup or write failure.
 
-| State / operation | Runtime | Persistence |
+An active character's simulation state and committed-state projections live in
+World memory. Durable economic authority belongs to database transactions, not
+the cache. Combat never performs SQL or network round trips per hit.
+
+## State categories
+
+| State / operation | Runtime behavior | Persistence |
 | --- | --- | --- |
-| XP, level, unspent attribute points | PlayerResource + separate dirty set | Approximately 60-second checkpoint, dirty characters only, one transaction |
-| Equipment and combat stats | Minimal server cache restored on entry | Immediate item transaction; refresh cache after commit |
-| Account Storage deposit/withdrawal | Account placement; receiving character on withdrawal | Immediate atomic item/placement/ownership/revision transaction |
-| ItemInstance: pickup, equip/unequip, ownership, placement | Server validates intent | Immediate atomic persistence |
-| Yang grinding income | Balance + pending delta + wallet dirty | Delta checkpoint around 30 seconds |
-| Economically significant Yang spending | Check affordability against RAM | Immediate transaction including pending income, spending and economic mutation |
-| Trade, upgrade, socket, reroll, crafting | Server-side result | Immediate transaction for all changed durable data |
-| Materials/currencies acting as inventory items or stacks | Item/stack | Immediate transaction, including split/merge and creation/destruction |
+| XP, level, available attribute points | Immediate change and level-up; separate dirty set | About 60-second checkpoint, only dirty characters and the three progression fields |
+| Grinding Yang income | Account wallet balance, pending delta, separate dirty category | About 30-second delta checkpoint; no record per currency stack |
+| Item creation/destruction, pickup, ownership, placement, equipment | Validate authoritative item/session context; refresh projections after commit | Immediate atomic transaction with custody/revisions and applicable receipt |
+| Storage transfer | Account-shared custody; withdrawal names its receiving character | Immediate item/placement/ownership/revision transaction |
+| Critical Yang spend, NPC purchase, upgrade, trading | Include captured pending income with the durable mutation | Immediate atomic transaction; no independent payment/item commits |
+| Marketplace sale | Transfer UID, debit buyer and credit seller's claimable revenue | One immediate transaction, including its durable result |
+| Revenue collection / Exchange | Reconcile committed balances and reservations | Immediate transaction with replay/recovery guarantees |
+| Transient actors, GroundCurrency, encounter HP | Authoritative World simulation | No per-tick or per-mob-death durable history |
 
-## Current runtime and checkpoints
+Materials/currencies represented as Inventory items or stacks follow item
+transactions, including split/merge, rather than the wallet checkpoint policy.
+Accepted future Trade/socket/reroll/crafting operations must preserve these
+atomicity rules; this table does not assert that all those features exist.
 
-`WorldServer.runtime_equipment` stores active characters' equipment UIDs and
-resulting stats by persistent ID. Application operations explicitly call
-`InventoryEndpoint3D.refresh_authoritative_state()` on entry/repair or after a
-committed item mutation. This prepares the private snapshot, equipment cache and
-server weapon state before any notification/publication. `_send_state()` consumes
-the prepared snapshot; publication never refreshes the authoritative combat cache.
+## Soft progression and wallet checkpoints
 
-Shop and Upgrade retain their existing application operation owners: the database
-operation commits items/Yang and accepts wallet RAM, then the caller invokes
-Inventory `accept_committed_change(peer_id)` (refresh/cache → its own fact), then
-Currency `accept_committed_change(peer_id)` (its own fact after the already-accepted
-wallet RAM). External callers never emit endpoint signals. Subscribers publish
-already-prepared state; their registration order is not part of transaction correctness. Account Storage
-prepares all affected on-map characters before the first notification.
+`WorldDatabase.dirty_progression` retains dirty character references. A batch
+updates only `level`, `experience` and `available_attributes_points`; successful
+commit clears dirty state, while failure rolls back the batch and preserves it
+for retry. Clean intervals cause no progression transaction. Normal full-profile
+saves remain separate; an XP change does not serialize Inventory, quests or the
+entire PlayerResource.
 
-Combat reads `attack` from runtime without querying on a swing. Failed equipment
-changes affect neither placement nor attack; a missing valid snapshot invalidates
-the cache so combat cannot use stale stats after a read error. Explicit
-`resynchronize()` repairs entry/rejected/stale requests without emitting a
-committed-change fact.
+The PostgreSQL Wallet runtime owns account bindings, loaded wallet state and
+pending income. Checkpoints persist captured deltas, not stale balance snapshots.
+Critical operations include the captured pending prefix in their transaction.
+Only a confirmed result may consume that prefix; income earned later remains
+pending. Wallet revisions and reconciliation prevent older results or receipt
+replay from overwriting newer RAM. See
+[wallet/ground currency](yang-wallet.md) and
+[committed-state reconciliation](../development/economy-command-boundary.md).
 
-Mob death is a runtime event. DEAD state prevents repeated processing within the
-current encounter. Contribution resolution and XP run in RAM; level-up and client
-notification are immediate. There is no persistent KillEvent or kill ID for XP.
-The ground item's UID still serves its economy-critical claim independently of progression.
+Logout/disconnect, map/session departure and graceful save/shutdown force the
+relevant checkpoints. Local CH transfer waits for checkpoint success before
+removing the source actor. Failed saving retains dirty/pending state; graceful
+shutdown cannot report success while required work remains unresolved. See
+[local transfer](../development/local-channel-transfer.md) and
+[maintenance/drain](../development/postgres-maintenance.md).
 
-`WorldDatabase.dirty_progression` is a separate set of character references.
-Every 60 seconds, one transaction checkpoints only `level`, `experience` and
-`available_attributes_points` for dirty characters. Success clears their dirty
-flags; failure rolls back the batch and retains RAM/dirty state for retry.
-No dirty characters means no transaction. Reentry reads the dirty resource to
-avoid reverting unsaved progression.
+A crash can lose soft progression and eligible grinding income since the last
+successful checkpoint: normally about 60 and 30 seconds respectively, potentially
+longer during backend failure. This accepted window does not apply to committed
+item mutations or critical Yang transactions. Mob death grants XP in RAM without
+a persistent KillEvent/kill receipt. Ground pickup has its own economic identity
+and durable claim protection.
 
-Forced checkpoints run before session end, on disconnect and 3D map departure,
-before existing instance transfer and during world save/shutdown/restart.
-Graceful shutdown through the master is cancelled if a checkpoint fails.
-Dirty references remain available for retry after disconnect. 3D process transfer
-is not implemented; future handoff must wait for a successful checkpoint before
-transferring ownership.
-Local same-process public CH transfer now waits for both checkpoints before
-removing the source actor. Failure aborts with the source intact; after fencing,
-a stalled destination load disconnects normally and can recover via relog.
-It does not serialize the full profile merely to change CH. See
-[local transfer](../development/local-channel-transfer.md).
+## Committed state, receipts and recovery
 
-The older full-profile serializer still handles independent legacy data, normal
-session saving and backups. XP ticks/kills do not invoke it. Its existing schedule
-does not replace the progression checkpoint.
+Inventory, Wallet, Storage, pickup, NPC and Marketplace/Exchange operations use
+their existing application/runtime owners and PostgreSQL stores. World endpoints
+own authorization/admission and publication; workers own transaction execution.
+A result reconciles current Inventory/equipment/combat and wallet projections
+before publication. A receipt replay is not a new commit or a second mutation
+fact. Combat reads the prepared equipment-derived cache; invalid/missing state
+must not silently leave usable stale stats.
 
-Schema v13 removes unused `kill_xp_rewards`, retaining XP fields and items.
-A crash may lose soft progression since the last successful checkpoint: normally
-about one minute, or back to the last successful save if the DB is unavailable.
-Kills are not recovered from durable history. Item pickup/placement retain
-immediate transactions and their own double-pickup protection.
+Client intentions retain original operation identity and payload through lost
+responses and reload/reconnect. Recovery queries existing outcomes; transport
+failure is not proof of rollback and does not authorize a new operation identity.
+Storage preserves the original issuing/receiving character within account-scoped
+recovery. Current snapshots, not historical receipt contents, restore usable
+runtime state. See [command/recovery boundary](../development/economy-command-boundary.md).
 
-## Yang: runtime wallet and ground currency
+Shop/Auction sales credit separate account `account_shop_revenue`, not the seller's
+spendable wallet or pending income. Manual collection takes only what fits,
+counting pending income and reservations, and retains the remainder. Values cross
+the browser boundary as decimal strings. See [revenue policy](../development/shop-revenue.md).
 
-Each Master account has one Yang wallet in a logical World and runtime GroundCurrency. Dogs drop 30 Yang
-with the same loot rights as their items. Auto-pickup works within 1.25 m; G picks
-up within 2.5 m. There is no pet, persistent stack UID or per-drop DB record.
-Legacy gold remains separate upstream state and is not migrated into the wallet.
+Profile/guild/mail/social writes check transaction start, each write and COMMIT;
+client success and live-state publication follow confirmed commit. Unknown profile
+COMMIT outcomes fail closed and require authoritative reload/operator recovery,
+not automatic mutation retry. This path does not claim durable guild-command
+receipts. Details: [full-state failure behavior](../development/postgres-full-state.md).
 
-Wallet fields are explicit: `wallet_balance`, `pending_currency_delta` and a
-separate dirty set. Income changes RAM balance, accumulates a positive delta and
-marks the wallet dirty. Every 30 seconds, checkpoints add the delta rather than
-overwriting an older snapshot:
+## Deployment, verification and limits
 
-```sql
-UPDATE account_wallets SET yang = yang + ? WHERE account_id = ?;
-```
+PostgreSQL backup/restore uses the documented maintenance barrier and database
+tools, not copying a SQLite file or treating a checkpoint as a backup. See
+[backup/restore](../development/postgres-backup-restore.md).
 
-`runtime_wallets` and `dirty_wallet` are keyed by verified Master account ID.
-Gameplay consumers keep their authenticated character context; WorldDatabase
-resolves/caches the account once and owns the shared wallet. New character
-creation grants 1500 Yang only when that account's wallet is first created.
-A successful commit consumes only the pending delta captured by that transaction;
-later income remains dirty. Failure retains the original delta for retry.
-WorldDatabase's separate `dirty_wallet` checkpoint is not part of full
-PlayerResource autosave or dirty progression.
+Use [testing policy](../development/testing.md) to select the relevant runtime,
+race, rollback and recovery suites. SQLite/WAL tests remain reference coverage;
+they do not prove PostgreSQL concurrency. The full-state fixture covers real
+Gateway/Master/World login, persistence and restart with disposable PostgreSQL.
 
-The test button spends a fixed, server-defined 50 Yang. Critical spending checks
-runtime affordability and commits pending income with the cost. The current test
-only consumes currency. A future upgrade/purchase/trade must mutate durable
-economic state in the same transaction; separate spend and item commits are not
-acceptable. Example: DB 40000 + pending 30000 - cost 50000 = 20000 in one COMMIT.
-After commit, runtime balance is 20000 and pending delta is zero. Rollback does
-not consume pending income or publish item changes. Transactions must also prevent
-negative balances. Old DB state must not reject a purchase affordable after pending income.
-
-Inventory receiving uses `ItemStoreSqlite.resolve_inventory_position` in the
-caller's transaction: explicit targets are exact, absent targets use first fit.
-NPC Shop begins one transaction, validates its authoritative offer/price,
-resolves capacity, uses `WalletStoreSqlite.spend_in_transaction`, creates and
-places the item, then commits. `inventory_full` precedes wallet writes. Rollback must
-retain RAM balance and pending income; publish/reset them only after commit. The
-SQLite wallet and Shop smoke fixtures prove capacity/no-charge and item-write
-rollback with these helpers. `ShopStoreSqlite.purchase` implements this flow;
-`WorldDatabase.accept_committed_wallet_balance` synchronizes RAM only after commit.
-The authenticated Shop RPC revalidates the selected NPC service on every purchase.
-See [NPC Shop](../gameplay/npc/npc-shop.md).
-
-GroundCurrency is a runtime entity: amount, loot rights/owner, position, expiry.
-Pickup adds to the wallet and removes the entity. It creates no persistent
-ItemInstance, durable UID or DB row for each small Yang stack. A tradable inventory
-currency remains an item/stack with immediate persistence.
-
-Wallet and progression have separate dirty sets and independent checkpoints.
-Position dirty state is future work. Wallet loads on entry; logout/disconnect/
-handoff/save/shutdown force both checkpoints. Failed wallet saving retains RAM
-and pending delta even offline. Schema v18 atomically replaces v14 `wallets` with
-`account_wallets`, summing legacy balances exactly once after trusted Master
-mapping; no silent orphan repair or overflow clipping. PlayerResource's
-serializer does not overwrite it. A crash may lose unsaved income and ground
-currency, normally from a roughly 30-second window. Committed critical spending is durable.
-
-Critical account credits include an online account's pending income in the same
-transaction, then refresh shared RAM after commit. Offline credit changes only SQL.
-Future Player Shop purchases must use the in-transaction credit API alongside
-buyer debit and item transfer, never separate sale/payment commits. World stops
-before first account-wallet migration; startup awaits the full trusted Master
-manifest before admitting characters/economic actions. See [E0b](../marketplace-e0b-wallet.md).
-
-## Tests
-
-`run-progression` verifies runtime attack after equip, rollback without cache
-mutation, zero inventory reads in both tested swings and stat restoration from
-persistent equipment on entry. `run-xp` verifies multiple kills in RAM, no receipt
-table, checkpointing, real disconnect, batch rollback, UPDATE of only three columns,
-no clean-character writes and the accepted crash window. Full gateway/master/world
-still tests logout/relog, level-up and the exact weapon UID.
-
-`run-yang.ps1` checks delta checkpoints, no XP/profile writes for Yang, spend/batch
-rollback, private HUD, rights/autoloot/pickup races, expiry, obstacles, RPC replay
-and real disconnect. Full `pve_session` verifies combat/autoloot income and exact
-balance after logout/relog.
-
-## Package A reward boundary (2026-10-12)
-
-Combat's death guard emits mob_died once. KillRewardResolver selects the existing
-contribution winner and reward policy. It resolves the current PlayerResource via
-MandateWorldServices before WorldDatabase.award_experience updates RAM/dirty
-progression and emits the XP fact. The adapter uses pending_progression_player()
-rather than accessing the dirty set; the combat endpoint only publishes its existing
-XP RPC. Full progression runtime extraction remains P2.
-
-GroundLootSystem owns live item drops, rights, expiry and pickup. Its application
-operation prepares an ItemInstance from the authoritative drop and passes it to
-ItemStoreSqlite.claim_ground_item(owner_id, drop_uid, item). SQL validates identity
-and owner and commits receipt/item/placement together. It no longer generates a
-sword or attack roll. Cache refresh and notification follow commit and ground
-erase. The current live drop model still encodes a weapon attack roll (1..9),
-weapon_attack presentation and an attack affix on pickup. It is not a generic item
-payload yet; the first real non-weapon ground drop will drive that cleanup. The
-prepared SQL claim can already accept non-weapons. No schema, checkpoint intervals
-or per-kill durability were added.
-
-## Visual world calendar
-
-[Visual V2](../world/visuals/visual-upgrade-v2.md) derives the shared presentation calendar from a
-fixed UTC/game epoch and advances it from monotonic server ticks. Restart recovers
-the ongoing calendar without SQL or dirty checkpoints. Client synchronization
-does not change combat/respawn/loot timers, progression checkpoint policy, or
-immediate atomic item/economy transactions.
-
-## Marketplace / Exchange
-
-Schemas 19-22 use canonical UID custody, account shops/claims, durable account
-command receipts and fungible Exchange free/reserved balances. Yang reserves stay
-on account_wallets, and all critical spend checks unreserved funds. Order matching
-and both-account settlement commit together with pending income; RAM updates follow
-fresh COMMIT, never receipt replay. [Exchange](../marketplace-e5-exchange.md) documents
-integer ratio bounds, limits, rollback and recovery. World uses WAL synchronous FULL
-by default; NORMAL is an explicit development choice. Backup checks checkpoint busy
-status before copying the main file, under the single authoritative writer contract.
-
-Marketplace orchestration is owned by MarketplaceService. WorldDatabase retains
-its connection and runtime/dirty categories and delegates the existing marketplace
-entry points. MarketStoreSqlite and ExchangeStoreSqlite compose EconomyCommandSqlite
-for command identity/replay and atomic receipt+commit; Exchange does not inherit
-from Shop. Failed validation rolls back and uses the bounded RAM rejection cache;
-successful economic receipts remain durable. See
-[R3–R4 boundaries](../marketplace-refactor-r3-r4.md).
-
-
-Character-local Inventory move/equip/unequip/activate now commits its successful
-receipt with placement/revision writes. The client persists the original ID and
-payload before RPC and resolves restart uncertainty through receipt-only lookup;
-only explicit Retry may execute an absent intention. A successful no-op also has
-a durable receipt, without a mutation fact. See
-[the Inventory vertical slice](../development/economy-command-boundary.md#inventory-vertical-slice-durable-command-through-client-recovery).
-Account Storage deposit/move/withdrawal follows the same immediate receipt+item
-transaction policy, with the original issuing/receiving character in its
-account-scoped fingerprint. Its separate local journal preserves uncertainty;
-restart only queries the result, and explicit Retry alone may execute an absent
-intention. Old receipts never restore historical ownership/placement. Current
-account views refresh before local change publication, including repair without
-new mutation facts on replay. No cross-World coherence or session-fencing claim
-is implied. See [the Storage vertical slice](../development/economy-command-boundary.md#account-storage-vertical-slice-receipts-through-client-recovery).
-
-
-Account item state now carries an identity-qualified durable watermark, advanced
-by transaction-local ItemInstance/custody triggers and captured in new successful
-command receipts. Rollback reverses the watermark too; replay retains the original
-receipt revision. Current Inventory snapshots hydrate derived World combat inputs;
-stale/duplicate revisions cannot restore older equipment. Failed hydration gates
-combat until a current full snapshot is accepted. Combat still reads RAM only.
-This additive item-state feature migration preserves existing custody migrations;
-it does not change wallet checkpoints or implement cross-World cache coherence.
-See [durable item revisions](../development/economy-command-boundary.md#durable-account-item-revisions-and-world-cache-reconciliation).
-
-
-Wallet Yang/reservation changes now advance a durable account revision in the
-same transaction. Final balances, revisions and consumed pending prefixes are
-captured before COMMIT; World reconciles loaded accounts before publishing facts.
-Newer income is retained, duplicate/older results cannot clear it, and historical
-receipts never reset RAM. Currency delivery ordering separately protects pending
-income display while the durable revision is unchanged. Checkpoint cadence, delta
-writes and the accepted crash window are unchanged. This is synchronous local
-reconciliation, not distributed Yang batch idempotency or multi-writer support.
-See [versioned wallet commits](../development/economy-command-boundary.md#versioned-wallet-commits-and-pending-income-reconciliation).
-
-Player Shop/Auction sales now debit the buyer and credit separate account
-`account_shop_revenue` in the same UID/offer/receipt transaction. They never credit
-the seller wallet or consume seller pending income. Manual collection in My Shop
-transfers only what fits in the current wallet (counting pending income), leaving
-the remainder claimable. Collection is immediate and receipt-backed; its original
-ID survives lost responses and client restart. Revenue is an int64 SQLite ledger
-shown as a decimal string; existing direct-credit sales are never backfilled.
-Exchange settlement remains unchanged. See [Shop revenue](../development/shop-revenue.md).
+Current development still has one World Process. This policy does not establish
+cross-host ownership, distributed cache coherence or an extracted Economy Service.
+[Economy C1–C5](economy/README.md) defines accepted target contracts; completed
+migration steps and old SQLite schema versions belong in
+[migration history](../history/postgresql-migration.md), not the current setup.

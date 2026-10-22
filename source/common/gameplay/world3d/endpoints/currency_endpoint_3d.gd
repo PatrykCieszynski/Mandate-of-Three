@@ -1,7 +1,7 @@
 class_name CurrencyEndpoint3D
 extends Node
 var services: MandateWorldServices
-## Ground currency is transient; only account wallet deltas reach SQLite.
+## Ground currency is transient; account wallet batches reach persistence.
 const DOG_YANG: int = 30
 const AUTO_REACH: float = 1.25
 const PICKUP_REACH: float = 2.5
@@ -36,6 +36,12 @@ func _database() -> WorldDatabase:
 	return null if not services.available() else services.economy()
 
 func initialize_peer(peer_id: int) -> void:
+	if services.wallet_runtime()!=null:
+		var runtime:=services.wallet_runtime()
+		if not runtime.changed.is_connected(_runtime_changed): runtime.changed.connect(_runtime_changed)
+		if not runtime.spend_finished.is_connected(_runtime_spent): runtime.spend_finished.connect(_runtime_spent)
+		_send_snapshot(peer_id)
+		return
 	if _database() == null: return # Physics-only fixture.
 	if not _database().load_wallet(_owner(peer_id)):
 		push_error("Could not load Yang wallet; currency actions disabled for this character.")
@@ -58,8 +64,8 @@ func spawn_currency(position: Vector3, owner_id: int, owner_name: String, now: i
 	return _next_drop_id
 
 func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP_REACH) -> Dictionary:
-	if not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
-	if not _world.combat_endpoint.is_player_alive(peer_id) or _database() == null:
+	if not services.currency_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
+	if not _world.combat_endpoint.is_player_alive(peer_id) or (_database() == null and services.wallet_runtime()==null):
 		return {"ok": false, "error": "player"}
 	if not ground.has(drop_id): return {"ok": false, "error": "gone"}
 	var drop: Dictionary = ground[drop_id]
@@ -72,10 +78,12 @@ func pickup_for_peer(peer_id: int, drop_id: int, now: int, reach: float = PICKUP
 	var position: Vector3 = _world.characters[peer_id].position
 	if position.distance_to(drop.position) > reach or not _world.has_line_of_sight(position, drop.position):
 		return {"ok": false, "error": "distance"}
-	if not _database().add_yang(owner_id, int(drop.amount)):
+	var runtime:=services.wallet_runtime()
+	var added: bool=runtime.add_income(peer_id,int(drop.amount)) if runtime!=null else _database().add_yang(owner_id,int(drop.amount))
+	if not added:
 		return {"ok": false, "error": "wallet"}
 	ground.erase(drop_id) # Synchronous RAM mutation and erase: no double pickup.
-	return {"ok": true, "amount": int(drop.amount), "balance": _database().wallet_balance(owner_id)}
+	return {"ok": true, "amount": int(drop.amount), "balance": int(runtime.snapshot(peer_id).balance) if runtime!=null else _database().wallet_balance(owner_id)}
 
 @rpc("any_peer", "call_remote", "reliable", 1)
 func request_pickup(drop_id: int) -> void:
@@ -88,14 +96,17 @@ func request_pickup(drop_id: int) -> void:
 	_send_snapshot()
 
 func spend_for_peer(peer_id: int, sequence: int, now: int) -> Dictionary:
-	if not services.mutations_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
-	if not _world.combat_endpoint.is_player_alive(peer_id) or _database() == null:
+	if not services.currency_allowed(peer_id): return {"ok":false,"error":"transfer_pending"}
+	if not _world.combat_endpoint.is_player_alive(peer_id) or (_database() == null and services.wallet_runtime()==null):
 		return {"ok": false, "error": "player"}
 	if sequence < 0 or sequence > 2147483647 or sequence <= _spend_sequences.get(peer_id, -1):
 		return {"ok": false, "error": "replay"}
 	_spend_sequences[peer_id] = sequence
 	if now - _spend_ms.get(peer_id, -1000) < 100: return {"ok": false, "error": "too_fast"}
 	_spend_ms[peer_id] = now
+	if services.wallet_runtime()!=null:
+		var queued: Dictionary=services.wallet_runtime().test_spend(peer_id)
+		return {"ok":false,"error":"pending","pending":true} if queued.queued else {"ok":false,"error":queued.error}
 	var result: Dictionary = _database().spend_yang(_owner(peer_id), TEST_SPEND_COST)
 	if result.ok:
 		result["spent"] = TEST_SPEND_COST
@@ -108,11 +119,12 @@ func request_test_spend(sequence: int) -> void:
 	var peer_id: int = multiplayer.get_remote_sender_id()
 	if not _world.characters.has(peer_id): return
 	var result: Dictionary = spend_for_peer(peer_id, sequence, Time.get_ticks_msec())
+	if result.get("pending",false): return
 	receive_feedback.rpc_id(peer_id, result)
 	if not result.ok: _send_snapshot() # Repair, not a committed-change notification.
 
 func _physics_process(delta: float) -> void:
-	if not GameMode.is_world_server() or _database() == null: return
+	if not GameMode.is_world_server() or (_database() == null and services.wallet_runtime()==null): return
 	_tick_elapsed += delta
 	if _tick_elapsed < 0.2: return
 	_tick_elapsed = fmod(_tick_elapsed, 0.2)
@@ -130,6 +142,7 @@ func _physics_process(delta: float) -> void:
 	_send_snapshot()
 
 func _wallet_changed(owner_id: int) -> void:
+	if _database()==null: return
 	var account_id: int = _database().wallet_account_id(owner_id)
 	for peer_id: int in _world.characters:
 		if _database().wallet_account_id(_owner(peer_id)) == account_id: _send_snapshot(peer_id)
@@ -143,8 +156,14 @@ func accept_committed_change(peer_id: int) -> void:
 func resynchronize(peer_id: int) -> void:
 	_send_snapshot(peer_id)
 
+func _runtime_changed(peer_id: int) -> void:
+	if _world.characters.has(peer_id): _send_snapshot(peer_id)
+
+func _runtime_spent(peer_id: int, _operation_id: String, result: Dictionary) -> void:
+	if _world.characters.has(peer_id): receive_feedback.rpc_id(peer_id,result)
+
 func _send_snapshot(only_peer: int = -1) -> void:
-	if _database() == null: return
+	if _database() == null and services.wallet_runtime()==null: return
 	var now: int = Time.get_ticks_msec()
 	for peer_id: int in _world.characters:
 		if only_peer != -1 and peer_id != only_peer: continue
@@ -154,7 +173,8 @@ func _send_snapshot(only_peer: int = -1) -> void:
 			drops[id] = {"amount": drop.amount, "position": drop.position,
 				"allowed": now >= int(drop.protected_until) or _owner(peer_id) == int(drop.owner),
 				"reserved_for": drop.owner_name if now < int(drop.protected_until) else ""}
-		var snapshot := _database().wallet_snapshot(_owner(peer_id))
+		var snapshot: Dictionary = services.wallet_runtime().snapshot(peer_id) if services.wallet_runtime()!=null else _database().wallet_snapshot(_owner(peer_id))
+		if snapshot.is_empty(): continue
 		_projection_version += 1
 		snapshot.merge({"drops":drops,"projection_version":_projection_version})
 		receive_state.rpc_id(peer_id,snapshot)
@@ -217,6 +237,7 @@ func receive_feedback(result: Dictionary) -> void:
 			"distance": _notice = "Podejdź bliżej Yang."
 			"gone": _notice = "Yang już zabrane lub wygasło."
 			"too_fast", "replay": _notice = "Odczekaj przed kolejną operacją."
+			"wallet_pending": _notice = "Trwa potwierdzanie operacji Yang."
 			_: _notice = "Operacja nie powiodła się. Spróbuj ponownie."
 	_refresh_hud()
 	feedback_received.emit(result)

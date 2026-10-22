@@ -214,6 +214,7 @@ const marketBrowser = mountMarketBrowser(marketBrowserRoot, marketVisitorRoot, {
     search: (p) => bridge.request('market.browser.search', p),
     visit: (shop_id, offer_id) => bridge.request('market.browser.visit', { shop_id, offer_id }),
     buy: (p) => bridge.request('market.buy', p),
+    retryPurchase: () => bridge.request('market.retry_seller', {}),
     close: () => {
         void bridge.request('market.browser.close', {});
     },
@@ -224,6 +225,7 @@ const market = mountMarket(marketRoot, {
     drag,
     resolveItemIcon,
     command: (action, payload) => bridge.request(`market.${action}`, payload),
+    retrySeller: () => bridge.request('market.retry_seller', {}),
     collectRevenue: (retry) => bridge.request(retry ? 'market.retry_revenue' : 'market.collect_revenue', {}),
     onClose: () => {
         drag.cancel();

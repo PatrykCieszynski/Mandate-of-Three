@@ -13,7 +13,7 @@ extends BaseMultiplayerEndpoint
 ## player, keeps the data-loss window short); the backup folds in every Nth save. Side
 ## benefit: with keep_last=10 the retained history stretches from ~50 min to ~5 h.
 ## See docs/netcode_perf_audit.md.
-const BACKUP_EVERY_N_SAVES: int = 6  # 6 × 5 min = 30 min
+const BACKUP_EVERY_N_SAVES: int = 6  # 6 Ä‚â€” 5 min = 30 min
 var _periodic_save_count: int = 0
 
 ## Short-lived, single-use Master tickets, not cached character snapshots.
@@ -22,6 +22,63 @@ var _periodic_save_count: int = 0
 var token_list: Dictionary[String, Dictionary] = {}
 var _pending_admissions: Dictionary[int, Dictionary] = {}
 var _session_tokens: Dictionary[int, String] = {}
+## Explicit opt-in owner only; normal gameplay has no PostgreSQL backend switch.
+var economy_bootstrap: RefCounted
+var inventory_runtime: RefCounted
+var wallet_runtime: RefCounted
+var npc_runtime: RefCounted
+var storage_runtime: RefCounted
+var ground_item_runtime: RefCounted
+var seller_runtime: RefCounted
+var runtime_settings: RefCounted
+
+## Tickets and native auth reserve the same account slots as active sessions.
+## Wallet capacity includes detached dirty/unknown accounts; never evict them.
+func has_entry_capacity(username: String, account_id: int) -> bool:
+	var names: Dictionary={};names[username]=true
+	var accounts: Dictionary={};accounts[account_id]=true
+	for player: PlayerResource in connected_players.values(): names[player.account_name]=true
+	for collection: Dictionary in [token_list,_pending_admissions]:
+		for ticket: Dictionary in collection.values():
+			names[ticket.account]=true
+			if int(ticket.get("account_id",0))>0: accounts[int(ticket.account_id)]=true
+	var maximum: int=runtime_settings.value("world_sessions") if runtime_settings!=null else 64
+	if names.size()>maximum: return false
+	var required: Array=accounts.keys()
+	return (inventory_runtime==null or inventory_runtime.has_account_capacity(required)) and (wallet_runtime==null or wallet_runtime.has_account_capacity(required))
+
+func _process(_delta: float) -> void:
+	if economy_bootstrap!=null: economy_bootstrap.check_health()
+	if inventory_runtime!=null: inventory_runtime.poll()
+	if wallet_runtime!=null: wallet_runtime.poll(_delta)
+	if npc_runtime!=null: npc_runtime.poll()
+	if storage_runtime!=null: storage_runtime.poll()
+	if ground_item_runtime!=null: ground_item_runtime.poll()
+	if seller_runtime!=null: seller_runtime.poll()
+
+## Nonblocking checkpoint barrier. A failure/unknown result refuses a graceful
+## handoff/shutdown; dirty income remains owned in RAM for recovery.
+func flush_postgres_wallets(shutdown: bool = false) -> bool:
+	if wallet_runtime==null and npc_runtime!=null: return false
+	if shutdown and storage_runtime!=null: storage_runtime.begin_drain()
+	if shutdown and ground_item_runtime!=null: ground_item_runtime.begin_drain()
+	if shutdown and seller_runtime!=null: seller_runtime.begin_drain()
+	if shutdown and npc_runtime!=null: npc_runtime.begin_drain()
+	if wallet_runtime!=null:
+		if shutdown: wallet_runtime.begin_drain()
+		else: wallet_runtime.checkpoint_all()
+	var deadline: int=Time.get_ticks_msec()+8000
+	while not _postgres_economy_settled(shutdown) and Time.get_ticks_msec()<deadline:
+		await get_tree().process_frame
+	return _postgres_economy_settled(shutdown)
+
+func _postgres_economy_settled(shutdown: bool) -> bool:
+	var npc_ok: bool=npc_runtime==null or (npc_runtime.shutdown_complete() if shutdown else npc_runtime.drained())
+	var wallet_ok: bool=wallet_runtime==null or (wallet_runtime.shutdown_complete() if shutdown else wallet_runtime.drained())
+	var storage_ok: bool=storage_runtime==null or (storage_runtime.shutdown_complete() if shutdown else storage_runtime.drained())
+	var ground_ok: bool=ground_item_runtime==null or (ground_item_runtime.shutdown_complete() if shutdown else ground_item_runtime.drained())
+	var seller_ok: bool=seller_runtime==null or (seller_runtime.shutdown_complete() if shutdown else seller_runtime.drained())
+	return npc_ok and wallet_ok and storage_ok and ground_ok and seller_ok
 
 ## {peer_id: PlayerResource}
 var connected_players: Dictionary[int, PlayerResource]
@@ -34,6 +91,15 @@ var _equipment_versions: Dictionary[int, Dictionary] = {}
 const ItemStateVersion = preload("res://source/common/gameplay/items/domain/item_state_version.gd")
 ## UTC epoch gives restart/process continuity without a database write per tick.
 var world_time := WorldTime.authority(preload("res://source/common/gameplay/world_time/world_time_settings.tres"))
+
+## Server-side identity check for asynchronous delivery owners. A client cannot
+## choose the character or reuse a retired peer's token through this helper.
+func session_ticket_fingerprint(peer_id: int, character_id: int) -> String:
+	if not inventory_master_available(): return ""
+	var player: PlayerResource=connected_players.get(peer_id)
+	if player==null or player.player_id!=character_id or player.current_peer_id!=peer_id or player_id_to_peer_id.get(character_id,0)!=peer_id: return ""
+	var token: String=_session_tokens.get(peer_id,"")
+	return "" if token.is_empty() else token.sha256_text()
 
 func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> bool:
 	if not snapshot.get("ok", false):
@@ -52,22 +118,74 @@ func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> bool:
 	return true
 
 func runtime_attack(owner_id: int) -> int:
+	if not _inventory_combat_ready(owner_id): return -1
 	if not runtime_equipment.has(owner_id): return -1
 	return int(runtime_equipment[owner_id].stats.get("attack", 10))
 
 func runtime_attack_speed_ratio(owner_id: int) -> float:
+	if not _inventory_combat_ready(owner_id): return -1.0
 	if not runtime_equipment.has(owner_id): return -1.0
 	var speed := float(runtime_equipment[owner_id].stats.get("attack_speed",100.0))
 	if not is_finite(speed) or speed <= 0: return -1.0
 	return speed/100.0
 
+func _inventory_combat_ready(owner_id: int) -> bool:
+	if economy_bootstrap!=null and (not economy_bootstrap.ready() or database==null or not database.wallet_ready): return false
+	return inventory_runtime==null or inventory_runtime.mutations_allowed(player_id_to_peer_id.get(owner_id,0))
+
+func invalidate_runtime_equipment(owner_id: int) -> void:
+	# Preserve the monotonic watermark while denying dependent combat. Only an
+	# authoritative snapshot may rebuild this view; a hit never reads persistence.
+	runtime_equipment.erase(owner_id)
+
 static var curr: WorldServer
 
+## PG admission depends on the live trusted control connection, not just a
+## cached ticket or durable grant. SQLite keeps its existing lifecycle policy.
+func inventory_master_available() -> bool:
+	if economy_bootstrap!=null and not economy_bootstrap.sessions_valid(): return false
+	return (inventory_runtime==null and wallet_runtime==null) or (world_manager!=null and world_manager.multiplayer_api!=null and world_manager.multiplayer_api.has_multiplayer_peer() and world_manager.multiplayer_api.multiplayer_peer.get_connection_status()==MultiplayerPeer.CONNECTION_CONNECTED)
+
+func invalidate_inventory_admissions() -> void:
+	if inventory_runtime==null and wallet_runtime==null: return
+	token_list.clear()
+	var pending: Array=_pending_admissions.keys()
+	_pending_admissions.clear() # Invalidate suspended continuations before closing sockets.
+	var live: Array=[]
+	if multiplayer_api!=null and multiplayer_api.has_multiplayer_peer():
+		live=Array(multiplayer_api.get_peers())
+		for peer_id: int in multiplayer_api.get_authenticating_peers():
+			live.append(peer_id)
+			if not pending.has(peer_id): pending.append(peer_id)
+	for peer_id: int in pending:
+		if live.has(peer_id): peer.disconnect_peer(peer_id)
+	for peer_id: int in connected_players.keys():
+		if inventory_runtime!=null: inventory_runtime.detach(peer_id)
+		if wallet_runtime!=null: wallet_runtime.detach(peer_id)
+		if live.has(peer_id): peer.disconnect_peer(peer_id)
+
 ## Internal Master connection only; public clients submit a token, never an ID.
-func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int) -> bool:
+func accept_master_handoff(auth_token: String, username: String, character_id: int, account_id: int, inventory_context: Dictionary = {}) -> bool:
+	if economy_bootstrap!=null and (not economy_bootstrap.ready() or database==null or not database.wallet_ready): return false
+	if not inventory_master_available(): return false
+	if inventory_runtime!=null or wallet_runtime!=null:
+		if not inventory_context.get("epoch") is int or inventory_context.epoch<=0 or inventory_context.get("account_id")!=account_id or inventory_context.get("character")!=character_id or inventory_context.get("session_fingerprint")!=auth_token.sha256_text(): return false
+	elif not inventory_context.is_empty(): return false # Never silently use SQLite for a PG ticket.
 	if not database.wallet_ready: return false
 	var player: PlayerResource = database.get_player_resource(character_id)
 	if auth_token.is_empty() or player == null or player.account_name != username: return false
+	prune_handoff_tickets()
+	if token_list.has(auth_token):
+		var existing: Dictionary=token_list[auth_token]
+		return existing.account==username and existing.character_id==character_id and existing.get("account_id",0)==account_id and existing.inventory_context==inventory_context
+	for existing: Dictionary in _pending_admissions.values():
+		if existing.token==auth_token:
+			return int(existing.expires_at)>Time.get_ticks_msec() and existing.account==username and existing.character_id==character_id and existing.get("account_id",0)==account_id and existing.inventory_context==inventory_context
+	for peer_id: int in _session_tokens:
+		if _session_tokens[peer_id]==auth_token:
+			var current: PlayerResource=connected_players.get(peer_id)
+			return current!=null and current.account_name==username and current.player_id==character_id
+	if not has_entry_capacity(username,account_id): return false
 	if not database.store.bind_account_identity(username,account_id):
 		push_warning("Rejected Master account identity mapping for world character %d." % character_id)
 		return false
@@ -78,13 +196,19 @@ func accept_master_handoff(auth_token: String, username: String, character_id: i
 		_notify_master_disconnected(username, auth_token)
 		return false
 	token_list[auth_token] = {
-		"account": username, "character_id": character_id,
+		"account": username, "account_id":account_id, "character_id": character_id,
 		"expires_at": Time.get_ticks_msec() + maxi(1, handoff_ttl_ms),
+		"inventory_context":inventory_context.duplicate(true),
 	}
 	return true
 
 
 func revoke_account_admission(username: String) -> void:
+	if inventory_runtime!=null or wallet_runtime!=null:
+		for peer_id: int in connected_players:
+			if connected_players[peer_id].account_name==username:
+				if inventory_runtime!=null: inventory_runtime.detach(peer_id)
+				if wallet_runtime!=null: wallet_runtime.detach(peer_id)
 	for token: String in token_list.keys():
 		if token_list[token].account == username:
 			token_list.erase(token)
@@ -116,8 +240,6 @@ func resolve_peer_account_id(peer_id: int) -> int:
 
 
 func start_world_server() -> void:
-	world_manager.token_received.connect(accept_master_handoff)
-
 	var configuration: Dictionary = ConfigFileUtils.load_section(
 		"world-server",
 		CmdlineUtils.get_parsed_args().get("config", "res://data/config/world_config.cfg")
@@ -128,7 +250,10 @@ func start_world_server() -> void:
 	else:
 		create(Role.SERVER, configuration.bind_address, configuration.port)
 
-	chat_service.setup_with_db(database.db)
+	if database.profile_pg!=null:
+		chat_service.store=preload("res://source/server/world/database/postgres/chat_store_postgres.gd").new(database.profile_pg)
+	else:
+		chat_service.setup_with_db(database.db)
 	$InstanceManager.start_instance_manager()
 
 	# Periodic save + backup. 5 minutes balances "low data loss on crash"
@@ -161,6 +286,10 @@ func start_world_server() -> void:
 
 
 func _on_periodic_save() -> void:
+	if economy_bootstrap!=null and not economy_bootstrap.ready(): return
+	if not await flush_postgres_wallets():
+		push_error("Periodic save refused: PostgreSQL wallet checkpoint unresolved.")
+		return
 	# Refresh last-seen for everyone online so a crash only loses at most one
 	# save interval of it (the authoritative stamp is on disconnect).
 	var now_unix_ms: int = int(Time.get_unix_time_from_system() * 1000.0)
@@ -176,7 +305,7 @@ func _on_periodic_save() -> void:
 		ServerLog.info("Periodic save: %d player(s) flushed." % saved)
 		return
 	var ok: bool = await database.coordinated_backup()
-	ServerLog.info("Periodic save: %d player(s) flushed, backup %s." % [saved, "ok" if ok else "FAILED"])
+	ServerLog.info("Periodic save: %d player(s) flushed, %s %s." % [saved,"checkpoint" if database.profile_pg!=null else "backup","ok" if ok else "FAILED"])
 
 
 ## Best-effort save on a window-manager close (editor run / windowed build).
@@ -185,12 +314,24 @@ func _on_periodic_save() -> void:
 ## is master-triggered (master_save / master_restart, RPC-driven so it's signal-
 ## free) — the deploy calls /v1/save_all before stopping. This handler stays only
 ## for the interactive/windowed case; it's harmless and never the sole safety net.
+func shutdown_economy() -> bool:
+	if economy_bootstrap!=null:
+		if economy_bootstrap.stopped(): return true
+		return await economy_bootstrap.shutdown_world()
+	return await flush_postgres_wallets(true)
+
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_WM_CLOSE_REQUEST:
 		return
 	if database == null:
 		return
 	get_tree().auto_accept_quit=false
+	if economy_bootstrap!=null and world_manager!=null:
+		await world_manager.master_shutdown()
+		return
+	if not await shutdown_economy():
+		push_error("Window shutdown refused: PostgreSQL wallet checkpoint unresolved.")
+		return
 	if database.save_all_connected(connected_players)<0 or not await database.shutdown_database():
 		push_error("Window shutdown refused: checkpoint or auction reader drain failed.")
 		return
@@ -210,7 +351,8 @@ func _on_peer_connected(peer_id: int) -> void:
 	# Both sides completed native authentication. Until this signal there is no
 	# gameplay authority, even if our complete_auth has already succeeded.
 	var ticket: Dictionary = _pending_admissions.get(peer_id, {})
-	if ticket.is_empty():
+	if ticket.is_empty() or not inventory_master_available():
+		_pending_admissions.erase(peer_id)
 		peer.disconnect_peer(peer_id)
 		return
 	_pending_admissions.erase(peer_id)
@@ -225,11 +367,19 @@ func _on_peer_connected(peer_id: int) -> void:
 	player.session_start_ms = Time.get_ticks_msec()
 	player_id_to_peer_id[player.player_id] = peer_id
 	BlockList.set_for(player.player_id, player.blocked_ids)
+	if inventory_runtime!=null and not inventory_runtime.attach(peer_id,ticket.get("inventory_context",{})):
+		peer.disconnect_peer(peer_id)
+		return
+	if wallet_runtime!=null and not wallet_runtime.attach(peer_id,ticket.get("inventory_context",{})):
+		peer.disconnect_peer(peer_id)
+		return
 	_publish_authenticated_state(peer_id, player)
 	ServerLog.info("Peer %d connected." % peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	if inventory_runtime!=null: inventory_runtime.detach(peer_id)
+	if wallet_runtime!=null: wallet_runtime.detach(peer_id)
 	var session_token: String = _session_tokens.get(peer_id, "")
 	_session_tokens.erase(peer_id)
 	ServerLog.info("Peer %d disconnected." % peer_id)
@@ -292,11 +442,14 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _notify_master_disconnected(account_name: String, session_token: String = "") -> void:
-	if world_manager != null and world_manager.multiplayer_api != null and world_manager.multiplayer_api.has_multiplayer_peer():
+	if world_manager != null and world_manager.multiplayer_api != null and world_manager.multiplayer_api.has_multiplayer_peer() and world_manager.multiplayer_api.multiplayer_peer.get_connection_status()==MultiplayerPeer.CONNECTION_CONNECTED:
 		world_manager.player_disconnected.rpc_id(1, account_name, session_token)
 
 
 func _on_peer_authenticating(peer_id: int) -> void:
+	if not inventory_master_available():
+		peer.disconnect_peer(peer_id)
+		return
 	print("Peer: %d is trying to authenticate." % peer_id)
 	multiplayer.send_auth(peer_id, "data_from_server".to_ascii_buffer())
 
@@ -310,6 +463,10 @@ func _on_peer_authentication_failed(peer_id: int) -> void:
 
 
 func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
+	if (economy_bootstrap!=null and not economy_bootstrap.ready()) or not inventory_master_available():
+		_pending_admissions.erase(peer_id)
+		peer.disconnect_peer(peer_id)
+		return
 	# A duplicate packet cannot start another continuation for an admitted ticket.
 	if _pending_admissions.has(peer_id): return
 	if data.size() > 1024:
@@ -336,6 +493,10 @@ func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
 	while true:
 		await get_tree().process_frame
 		if _pending_admissions.get(peer_id, {}).get("token", "") != auth_token: return
+		if not inventory_master_available():
+			_pending_admissions.erase(peer_id)
+			peer.disconnect_peer(peer_id)
+			return
 		if Time.get_ticks_msec() >= cleanup_deadline or not multiplayer_api.get_authenticating_peers().has(peer_id):
 			peer.disconnect_peer(peer_id)
 			return
@@ -357,6 +518,7 @@ func _publish_authenticated_state(peer_id: int, player: PlayerResource) -> void:
 
 
 func is_valid_authentication_token(auth_token: String) -> bool:
+	if not inventory_master_available(): return false
 	prune_handoff_tickets()
 	return token_list.has(auth_token)
 
@@ -512,7 +674,7 @@ func request_instance(peer_id: int, instance_id: String = "") -> ServerInstance:
 		if world == null or not world.characters.has(peer_id):
 			return null
 	else:
-		var actor: Player = instance.players_by_peer_id.get(peer_id)
+		var actor: Player = instance.players_by_peer_id.get(peer_id, null)
 		if actor == null or actor.player_resource != player:
 			return null
 	return instance

@@ -7,7 +7,7 @@ extends DataRequestHandler
 
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var player: PlayerResource = world_server.connected_players.get(peer_id)
 	if player == null:
@@ -37,11 +37,12 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	if guild.treasury < cost:
 		return {"error": 1, "ok": false, "message": "Not enough Guild Funds (need %d)." % cost}
 
-	store.begin()
+	var mutation:=RealmProfileMutation.new(store,[])
+	if not mutation.started: return mutation.failure()
 	guild.treasury -= cost
 	guild.banner_color = color_norm
-	store.save_guild(guild)
-	store.commit()
+	if not mutation.save_guild(guild): return mutation.abort()
+	if not mutation.commit(): return mutation.failure()
 
 	store.add_guild_log(guild_id, "banner", player.display_name, "", {"cost": cost})
 

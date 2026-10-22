@@ -18,7 +18,7 @@ func data_request_handler(
 	args: Dictionary
 ) -> Dictionary:
 	var world_server: WorldServer = instance.world_server
-	var store: WorldStoreSqlite = world_server.database.store
+	var store: RefCounted = world_server.database.store
 
 	var from_player: PlayerResource = world_server.connected_players.get(peer_id)
 	if from_player == null:

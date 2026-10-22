@@ -1,18 +1,17 @@
-# Evidence and validation
+# Evidence — measurements and reproducible validation
 
-Measured evidence must state **branch/commit**, platform, test command, runtime versions and limitations. A CI green check proves only the suites it actually ran.
+**Evidence is historical by definition.** It supports a dated result on a particular SHA, build and machine; it is not the active implementation specification.
 
-## On `main`
+## Milestone evidence (preferred entry points)
+- [Full-state PostgreSQL cutover](postgres-full-cutover/README.md).
+- [P4 Representative Economy Soak](representative-economy/README.md).
+- [P4c recovery and sustained runs](postgres-p4c/README.md).
+- [World W0 baseline](world-w0-baseline/README.md), [W1 profiling](world-w1-profile/README.md).
+- [Runtime capacity and ACK admission](runtime-capacity/README.md).
+- [Realm workload](realm-workload-foundation/README.md).
 
-- [Testing policy and reproduction](../development/testing.md)
-- [CI / platform checks](../development/ci.md)
-- [Historical native validation](../history/README.md) (dated results, not current acceptance)
-- [Terrain3D adoption and verification](../world/visuals/visual-upgrade-v4-terrain3d.md)
+## Archived granular evidence
+The 46 per-package `postgres-p1a` … `postgres-p3v` Markdown reports have been removed from the current tree. Their original descriptions remain in [Git history](https://github.com/PatrykCieszynski/Mandate-of-Three/tree/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence); intentional raw measurement files remain in place. Start with the [completed migration milestone](../history/postgresql-migration.md), current runbooks and the milestone evidence above. Consult an old package report only for a concrete regression or original finding.
 
-## Auction/Marketplace — on `shop` until PR #1 merges
-
-The `shop` branch contains the Auction D0–D2 reports and evidence under `docs/evidence/`, including the Windows D2 load/recovery measurements. They are deliberately **not copied into `main`** just to make documentation appear current; access them through [PR #1](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/1) or switch to `shop` until merge.
-
-Recorded D2 limitations: Linux runtime not verified, actual native-only SQL timing unavailable from the public addon API, and economy writes still cause measurable simulation tick tails. A benchmark passing on the developer's Windows host is not a production SLA.
-
-This directory retains reproducible raw evidence. The documentation cleanup removes obsolete *plans*, not Auction D2 performance data on `shop`. Large diagnostic P0 data needs separate review after integration.
+## Policy
+A PR description holds routine verification and an exact link to CI. Do **not** create a new `docs/evidence/<PR-or-commit>/README.md` per PR or commit. Add one short consolidated evidence report **after a completed milestone** only when it has meaningful reproducible results, failure analysis or a decision worth preserving. Retain raw artifacts in ignored locations unless they are small, intentional fixtures. Always record SHA, environment, commands, limitations and the distinction between synthetic and connected-client tests.

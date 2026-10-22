@@ -1,5 +1,4 @@
 @tool
-@icon("res://assets/node_icons/color/icon_map_colored.png")
 class_name Map
 extends Node2D
 
@@ -57,7 +56,8 @@ enum ZoneModifiers {
 @export var camera_limit_right: int = 10000000
 @export var camera_limit_bottom: int = 10000000
 
-var warpers: Dictionary[int, Warper]
+## Legacy 2D arrival nodes; no concrete Warper subtype is required.
+var warpers: Dictionary[int, Node2D]
 ## merchant NPC giver_key (its NPCResource filename slug) -> ShopResource, gathered
 ## from the NPCs placed in this map. The server uses this to resolve/verify a shop the
 ## player is actually at, rather than trusting a client-sent key — and it lets an inline

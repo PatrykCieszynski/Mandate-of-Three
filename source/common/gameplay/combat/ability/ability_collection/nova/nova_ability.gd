@@ -35,7 +35,7 @@ extends AbilityResource
 @export var vfx_frame_px: float = 128.0
 
 
-const CAST_RUNE: SpriteFrames = preload("res://source/common/gameplay/combat/vfx/battle_rune_build.tres")
+@export var cast_frames: SpriteFrames
 
 
 ## A cast time (cast_time_s on the .tres) telegraphs the nova with a ground rune at the
@@ -45,7 +45,7 @@ func use_ability(user: Entity, _direction: Vector2) -> void:
 	if user is not Character:
 		return
 	if GameMode.is_client() and cast_time_s > 0.0:
-		SpriteEffect.spawn(user, CAST_RUNE, {
+		SpriteEffect.spawn(user, cast_frames, {
 			"scale": Vector2(radius / 90.0, radius / 90.0),
 			"offset": Vector2(0.0, 6.0),  # a rune on the ground at the caster's feet
 			"z_index": -1,

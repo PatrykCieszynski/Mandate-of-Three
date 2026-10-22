@@ -14,12 +14,16 @@ var _next_query_epoch := 0
 # recent IDs share a 64-entry history, not durable transaction receipts.
 const QUERY_HISTORY_LIMIT := 64
 var _query_requests: Dictionary = {}
+var _seller_postgres: RefCounted
 func _ready() -> void:
 	_world=get_parent()
+	if GameMode.is_world_server() and services.seller_runtime()!=null:
+		_seller_postgres=preload("res://source/common/gameplay/world3d/endpoints/seller_postgres_adapter.gd").new(self,services.seller_runtime())
 	if GameMode.is_world_server() and services.available():
 		_economy=services.economy()
 		if _economy!=null: _economy.market_account_changed.connect(_account_changed)
 func _exit_tree() -> void:
+	if _seller_postgres!=null: _seller_postgres.dispose()
 	if is_instance_valid(_economy) and _economy.auction_queries!=null: _economy.auction_queries.cancel_scope(str(get_instance_id())+":")
 	if is_instance_valid(_economy) and _economy.market_account_changed.is_connected(_account_changed): _economy.market_account_changed.disconnect(_account_changed)
 func _account_changed(account_id: int) -> void:
@@ -45,8 +49,8 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	var owner := _owner(peer_id)
 	if owner<=0: return {"ok":false,"error":"owner"}
 	if action=="open": return {"ok":true}
-	var operation := services.economy().market_operation(owner, action, payload)
-	var response := operation.response()
+	var operation: Variant = services.economy().market_operation(owner, action, payload)
+	var response: Variant = operation.response()
 	var recovered_receipt := action == "receipt" and bool(response.get("ok", false))
 	if response.get("ok", false) and (recovered_receipt or action in ["list","cancel","claim","buy","deposit","withdraw"]):
 		if operation.new_commit:
@@ -62,7 +66,7 @@ func perform_for_peer(peer_id: int, action: String, payload: Dictionary) -> Dict
 	return response
 
 func _publish(peer_id: int) -> void:
-	if _owner(peer_id)<=0: return
+	if _owner(peer_id)<=0 or services.economy()==null: return
 	var started := Time.get_ticks_usec() if observe.is_valid() else 0
 	var snapshot: Dictionary = services.economy().market_snapshot(_owner(peer_id))
 	if observe.is_valid(): observe.call({"kind":"market_snapshot","cost_us":Time.get_ticks_usec()-started})
@@ -74,6 +78,16 @@ func _publish(peer_id: int) -> void:
 func request_market(action: String, payload: Dictionary, request_id: String) -> void:
 	if not GameMode.is_world_server() or request_id.is_empty() or request_id.length()>80 or not _world.characters.has(multiplayer.get_remote_sender_id()): return
 	var peer_id := multiplayer.get_remote_sender_id()
+	if _seller_postgres!=null:
+		if _seller_postgres.pending(peer_id,request_id): return
+		var now: int=Time.get_ticks_msec()
+		var rate: Dictionary=_rate.get(peer_id,{"started":now,"count":0})
+		if now-int(rate.started)>1000: rate={"started":now,"count":0}
+		rate.count+=1
+		_rate[peer_id]=rate
+		if int(rate.count)>15: receive_operation.rpc_id(peer_id,request_id,{"ok":false,"error":"rate_limited"})
+		else: _seller_postgres.request(peer_id,action,payload,request_id)
+		return
 	if not services.available() or services.economy()==null: return
 	var owner := _owner(peer_id)
 	var account_id: int = services.economy().wallet_account_id(owner)
@@ -89,6 +103,8 @@ func request_market(action: String, payload: Dictionary, request_id: String) -> 
 	receive_operation.rpc_id(peer_id,request_id,{"ok":true} if result.ok else {"ok":false,"error":result.error})
 
 func remove_peer(peer_id: int) -> void:
+	if _seller_postgres!=null: _seller_postgres.remove_peer(peer_id)
+	_rate.erase(peer_id)
 	_rate.erase("query_"+str(peer_id))
 	_query_epochs.erase(peer_id)
 	_query_requests.erase(peer_id)
@@ -127,6 +143,19 @@ static func valid_query(action: String,p: Dictionary) -> bool:
 func request_query(action: String,payload: Dictionary,request_id: String) -> void:
 	if not GameMode.is_world_server() or request_id.is_empty() or request_id.length()>80 or not _world.characters.has(multiplayer.get_remote_sender_id()): return
 	var peer_id:=multiplayer.get_remote_sender_id()
+	if _seller_postgres!=null:
+		if not _seller_postgres.admit_query(peer_id,request_id): return
+		var now: int=Time.get_ticks_msec()
+		var key: String="query_"+str(peer_id)
+		var rate: Dictionary=_rate.get(key,{"started":now,"count":0})
+		if now-int(rate.started)>1000: rate={"started":now,"count":0}
+		rate.count+=1
+		_rate[key]=rate
+		if int(rate.count)>8:
+			_seller_postgres.query_reply(peer_id,request_id,{"ok":false,"error":"rate_limited"})
+			return
+		_seller_postgres.query(peer_id,action,payload,request_id)
+		return
 	if not services.available() or services.economy()==null: return
 	var player:=services.player_for_peer(peer_id)
 	if player==null: return
@@ -177,6 +206,7 @@ func receive_query(request_id: String,result: Dictionary) -> void:
 
 signal exchange_state_changed(snapshot: Dictionary)
 func _publish_exchange(peer_id: int) -> void:
+	if services.economy()==null: return
 	var started := Time.get_ticks_usec() if observe.is_valid() else 0
 	var snapshot: Dictionary=services.economy().market_query(_owner(peer_id),"exchange",{})
 	if observe.is_valid(): observe.call({"kind":"exchange_snapshot","cost_us":Time.get_ticks_usec()-started})

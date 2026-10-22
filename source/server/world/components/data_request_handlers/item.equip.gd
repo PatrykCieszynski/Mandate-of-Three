@@ -6,9 +6,10 @@ func data_request_handler(
 	instance: ServerInstance,
 	args: Dictionary
 ) -> Dictionary:
+	var legacy_players: Dictionary = instance.players_by_peer_id
 	var item_id: int = int(args.get("id", 0))
 
-	var player: Player = instance.players_by_peer_id.get(peer_id, null)
+	var player: Player = legacy_players.get(peer_id, null)
 	if not player:
 		return {}
 	# No item actions during the death/respawn window. Abilities are already gated

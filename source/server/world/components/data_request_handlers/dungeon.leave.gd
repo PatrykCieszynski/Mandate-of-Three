@@ -3,7 +3,7 @@ extends DataRequestHandler
 ## from the group (recall_player → player_switch_instance → DungeonService
 ## .on_player_left dissolves the group when it empties). Args: none. The recall
 ## ability does the same thing from anywhere — this is the explicit, mob-proof exit
-## you reach from the DungeonExit station at the entrance.
+## requested through the dungeon exit UI.
 
 
 func data_request_handler(peer_id: int, instance: ServerInstance, _args: Dictionary) -> Dictionary:

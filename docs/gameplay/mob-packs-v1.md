@@ -90,15 +90,15 @@ fixtures use that same setup. This is capacity configuration, not snapshot/AOI
 redesign; it increases per-connection buffer capacity. The engine properties are
 listed in [Godot's WebSocketMultiplayerPeer API](https://docs.godotengine.org/en/stable/classes/class_websocketmultiplayerpeer.html).
 
-The full snapshot now carries `mobs` as an array of compact records:
+Complete mob records use the following compact format:
 
 ```text
 [instance_id, position, yaw, hp, numeric_state, mob_key, source_metinstone_id, down_remaining_ms, get_up_remaining_ms]
 ```
 
-`MobSnapshot.Field` defines the indices. `MobSnapshot.State` defines stable wire
+`MobSnapshot.Field` defines the indices. `MobState.Value` defines stable wire
 values: IDLE=0, WANDER=1, CHASE=2, ATTACK=3, RETURN=4, DEAD=5, DISABLED=6.
-Server AI continues using its existing names internally. The shared
+Server AI uses the same shared numeric states. The shared
 `MobDefinitions.resolve(mob_key)` registry supplies client display name, maximum
 HP and visual ID. Register new content in that registry before spawning it;
 unknown keys are warned about once per key for the endpoint lifetime and skipped
@@ -109,11 +109,69 @@ is not supported.
 Damage, speed, home/pack anchor, pack ID, leash, aggro and respawn state are not
 replicated. The source stone ID remains for encounter provenance/debugging.
 World actors contain no DogVisual or name/HP Label3D nodes and do not format label
-text during physics ticks. Clients create new actors from the current position, remove missing ones (including
-an empty full snapshot), and interpolate. They do not spawn, wander, leash or
-respawn. The target resolver clears dead/removed identities and disables autoattack;
-a replacement cannot revive an old selection. Transport, cadence, full-snapshot
-semantics and 1 MiB buffers remain unchanged. AOI, deltas and split RPCs are deferred.
+text during physics ticks. Clients create actors from authoritative records and interpolate; they do not
+simulate spawning, wandering, leashing or respawn. The target resolver clears
+dead/removed identities and disables autoattack; a replacement cannot revive an
+old selection. The 1 MiB buffers remain unchanged.
+
+### Mob interest and sparse reliable updates
+
+Each MapInstance owns its own mob interest grid and per-peer sent-state baseline.
+The grid uses XZ cells and exact horizontal distance, independent of camera
+position or client-supplied targets. The older TinyMMO grid is coupled to 2D
+StateSynchronizer/PathRegistry entities; the dedicated mob owner uses the same
+cell-query approach without importing that legacy replication stack.
+
+World's existing reliable ordered combat-state RPC still runs at about 10 Hz.
+Its `mob_ids` array is the complete authoritative visible set; `mobs` contains
+only new or changed records. An absent changed record retains an actor, while
+absence from membership removes it. New entry always includes a complete record.
+Hysteresis uses a smaller entry radius than exit radius to avoid boundary churn.
+
+Changed positions/yaw have a separate per-peer/per-mob minimum interval. State-only
+records use null POSITION/YAW to omit transforms; the client merges them with its
+existing baseline before presentation. No record is sent for an unchanged idle
+mob. Motion that stops inside the rate window is sent on the next eligible
+combat publication, so the final position is not lost. HP, AI state, death and
+hit-lock changes do not wait for the motion deadline. Native interpolation remains
+unchanged; physical feel at the reduced motion rate still needs manual validation.
+
+The client-facing combat state reconstructs the complete visible `mobs` list;
+UI/target consumers never have to interpret wire deltas. Disconnect/attachment
+initialization clears the peer baseline. A failed RPC enqueue also invalidates
+the baseline so the next publication bootstraps it again. New MapInstances have independent
+baselines and client actors, so entry/re-entry receives fresh authoritative state.
+There are no new spawn/despawn/resync RPCs: correctness relies on the existing
+reliable ordered connection. Client and server must ship this protocol together.
+The game build version is advanced for the wire change so the existing Gateway
+exact-match login/handshake gate rejects older published clients. Restart the
+normal roles and clients together; mixed-version rolling deployment is unsupported.
+
+World `[runtime]` configuration defaults in `data/config/world_config.cfg`:
+`mob_aoi_enter_radius=60`, `mob_aoi_exit_radius=72`, `mob_aoi_cell_size=32`
+(metres), and `mob_position_interval_ms=100`. They are validated at startup;
+entry must not exceed exit, dimensions are positive integers and the position
+interval is 50–2000 ms. Actual motion delivery is also bounded by combat cadence.
+The initial default is 100 ms / 10 Hz, pending manual combat-feel validation.
+For a same-scene comparison, edit only `mob_position_interval_ms` in that config
+and restart World: try 100, 150 and 200. The publisher runs every 100 ms, so 150
+is a minimum interval, not a guaranteed 6.7 Hz stream; it usually delivers around
+200 ms. These are initial tuning values, not measured capacity limits.
+
+Only mobs use this interest policy. Player replication, Metin state, ground loot,
+combat event broadcasts, AI and authoritative hit testing are unchanged. AOI does
+not put distant mobs to sleep or alter gameplay authority. Unreliable movement,
+quantization, event interest and broader entity AOI remain separate work.
+
+Verification: default smoke includes `mob_interest`; the existing network runner
+accepts `-Scene mob_interest_network -MarkerPrefix AOI` for two observers,
+empty deltas, boundary hysteresis, death, removal and re-entry. Both clients also
+observe sustained forward motion with interleaved HP-only publications at
+100/150/200 ms settings: target and rendered positions must not rewind, and
+actor identity must survive updates. This headless contract test does not
+validate input/render latency or visual feel. Existing local-map
+and session suites cover recreation/instance isolation; no MMO capacity claim is
+made from these focused fixtures.
 
 ### Serialized payload measurement
 

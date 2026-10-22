@@ -1,6 +1,6 @@
 # Economy V2 — contract index
 
-**Scope:** design contracts for a future realm-wide economy shared by World Processes on one or many hosts. These documents are **not** a request to implement a service, change the live SQLite schema, or start an infrastructure refactor.
+**Scope:** design contracts for a future realm-wide economy shared by World Processes on one or many hosts. These documents are **not** a request to implement a service, change the live database schema, or start an infrastructure refactor.
 
 **State of decisions (2026-10-14):** C1–C5 are accepted **at the architectural level** after a cross-contract consistency review. Acceptance defines future safety guarantees and ownership boundaries; it does **not** claim the runtime implements distributed Economy or authorize migration. Wire formats, concrete limits and some gameplay/recovery behavior remain deferred.
 
@@ -17,7 +17,7 @@
 - A realm (e.g. Season or Classic) has one **logical economic authority** independent of its number of CH, layers, dungeons, World Processes or machines. Season and Classic economies are isolated, even if infrastructure is shared.
 - Account Yang is shared by all characters of that account **within one realm**. Critical currency/item/equipment/trade operations commit durably and atomically before success is acknowledged. Shop/Auction seller revenue is **accepted** as separate account-level `claimable_yang` to be manually claimed in the shop panel; direct credit is not the target future design.
 - The future Economy Service is a separate process, communicating asynchronously with World Processes. One logical authority need not mean a single SQL worker or one physical instance forever.
-- The current development environment remains **single-process World + local SQLite**. PostgreSQL and process extraction come later; do not replace working economy code or add threads just to conform to this design.
+- Normal development uses **one World Process + PostgreSQL**, including accounts/profiles and Economy. SQLite remains reference/legacy coverage. Extracting a distributed Economy process and multi-World hosting are separate future work; these contracts do not authorize them.
 - Simulated gameplay must not wait synchronously for database/network round trips. A particular economic operation may remain pending until its durable result is known.
 
 ## Cross-contract consistency checks
@@ -43,4 +43,4 @@ The separate [world instance architecture](../world-instance-architecture.md) co
 
 Each file separates **Accepted**, **Proposed / open**, **Failure contracts**, and **Current code / migration implications**. Do not infer a wire protocol, deployment topology or implementation task from examples. Update contract status only after a concrete decision; mark replaced designs superseded rather than silently rewriting history.
 
-**Current status:** C1–C5 architectural docs have been merged to `main`. The [pre-alpha hardening plan](../../plans/architecture-hardening.md) improves internal World/Shop/session boundaries **now**, while preserving single-World + SQLite until a distinct process-extraction milestone. The [Marketplace decision delta](../../decisions/marketplace-v2-gaps.md) separates newer product decisions from still-open `shop` implementation. Any later documentation relocation must preserve links and historical evidence.
+**Current status:** C1–C5 are accepted target contracts. Local PostgreSQL transaction/recovery behavior is implemented; distributed service boundaries are not. See [current deployment](../../development/postgres-full-state.md), [completed migration history](../../history/postgresql-migration.md) and the [Marketplace decisions](../../decisions/marketplace-v2-gaps.md) for implemented behavior versus remaining product choices.

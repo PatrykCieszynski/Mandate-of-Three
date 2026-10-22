@@ -8,6 +8,13 @@ var db: Object
 var _transaction: RefCounted
 var committed: bool:
 	get: return _transaction.committed
+var receipt_replay: bool:
+	get: return _transaction.receipt_replay
+var income_token: String=""
+
+func authorize_session(context: Dictionary, token: String) -> void:
+	_transaction.economic_context=context.duplicate(true)
+	income_token=token
 
 func _init(database: Object) -> void:
 	db=database
@@ -26,9 +33,15 @@ func candidate(owner: int, uid: String, revision: int, recipe: UpgradeDefinition
 	return {"ok":true,"item":item}
 
 func upgrade(owner: int, pending_yang: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String = "") -> Dictionary:
+	# Keep this accepted operation's server-owned recipe and pending prefix stable
+	# while each attempt rereads target/materials/funds under fresh admission.
+	var captured: UpgradeDefinition=recipe.duplicate(true) if recipe!=null else null
+	return _transaction.run_with_retry(_upgrade_once.bind(owner,pending_yang,captured,uid,revision,operation_id))
+
+func _upgrade_once(owner: int, pending_yang: int, recipe: UpgradeDefinition, uid: String, revision: int, operation_id: String) -> Dictionary:
 	_transaction.committed=false
 	if revision<0 or recipe==null or not recipe.validation_errors().is_empty(): return _error("request")
-	if not _transaction.begin(owner,operation_id,"upgrade",[owner,str(recipe.upgrade_id),uid,revision]): return _transaction.cached
+	if not _transaction.begin(owner,operation_id,"upgrade",[owner,str(recipe.upgrade_id),uid,revision],true): return _transaction.cached
 	var selected:=candidate(owner,uid,revision,recipe)
 	if not selected.ok: return _transaction.rollback(str(selected.error))
 	var item: ItemInstance=selected.item
@@ -59,7 +72,9 @@ func upgrade(owner: int, pending_yang: int, recipe: UpgradeDefinition, uid: Stri
 	result=db.execute("UPDATE economy.item_instances SET upgrade_level=:level,revision=revision+1 WHERE uid=:uid AND owner_character_id=:owner AND revision=:revision AND upgrade_level=:previous;",{"level":recipe.to_level,"uid":uid,"owner":owner,"revision":revision,"previous":recipe.from_level})
 	if not result.ok: return _transaction.rollback("storage")
 	if int(result.affected_rows)!=1: return _transaction.rollback("stale")
-	return _transaction.commit({"ok":true,"balance":spent.balance,"wallet_states":[spent.wallet_state]})
+	var response: Dictionary={"ok":true,"balance":spent.balance,"wallet_states":[spent.wallet_state]}
+	if not income_token.is_empty(): response.income_token=income_token
+	return _transaction.commit(response)
 
 func upgrade_receipt(owner: int, operation_id: String) -> Dictionary:
 	if not Commands.valid_id(operation_id): return _error("request")

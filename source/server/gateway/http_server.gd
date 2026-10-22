@@ -67,7 +67,9 @@ func _ready() -> void:
 		handle_handshake
 	)
 	router.register_route(HTTPClient.Method.METHOD_POST, &"/v1/logout", handle_logout)
-	server.listen(8088, "127.0.0.1")
+	var configuration: Dictionary=ConfigFileUtils.load_section_with_defaults("gateway-server",CmdlineUtils.get_parsed_args().get("config","res://data/config/gateway_config.cfg"),{"port":8088,"bind_address":"127.0.0.1"})
+	if configuration.has("error"): return
+	server.listen(int(configuration.port),str(configuration.bind_address))
 	
 	_bind_master_lifecycle()
 
