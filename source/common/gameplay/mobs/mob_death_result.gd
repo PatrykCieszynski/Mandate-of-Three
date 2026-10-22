@@ -5,6 +5,7 @@ var mob_id: int
 var mob_key: StringName
 var position: Vector3
 var timestamp_ms: int
+var party_claims: Dictionary = {}
 var contributions: Dictionary
 var reward_owner: int
 var experience_reward: int
@@ -32,6 +33,7 @@ static func capture(mob: MobActor3D, now: int, services: MandateWorldServices) -
 	result.position = mob.position
 	result.timestamp_ms = now
 	result.contributions = mob.contributions.duplicate()
+	result.party_claims = mob.reward_claims.duplicate(true)
 	result.reward_owner = owner_for_contributions(result.contributions)
 	result.experience_reward = mob.definition.experience_reward
 	result.spawn_base_loot_rolls = mob.spawn_base_loot_rolls

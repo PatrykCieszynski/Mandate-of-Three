@@ -89,7 +89,15 @@ func run_server() -> void:
 	set_phase("FIGHT",int(contributors[1]))
 	await wait_until(func() -> bool: return encounter.runtime.reward_claimed)
 	set_phase("WAIT")
-	check(world.ground_loot.drops.size()==1 and world.currency_endpoint.ground.size()==1,"one ground item and Yang reward: items=%d currency=%d" % [world.ground_loot.drops.size(),world.currency_endpoint.ground.size()])
+	check(world.ground_loot.drops.size()==1,"one shared Metin item, never one per contributor")
+	var yang_total: int=0
+	var recipients: Dictionary={}
+	for drop: Dictionary in world.currency_endpoint.ground.values():
+		yang_total+=int(drop.amount);recipients[int(drop.owner)]=true
+	check(yang_total==encounter.definition.reward_yang,"Metin Yang shares conserve the single existing pool")
+	for owner: int in encounter.runtime.participants:
+		if int(encounter.runtime.participants[owner])*10>=encounter.definition.max_hp:
+			check(recipients.has(owner),"significant independent contributor gets a share of Metin Yang")
 	check(encounter.runtime.spawned_mobs.size()==11,"all threshold waves issued once")
 	for id: int in encounter.runtime.spawned_mobs:
 		var dog: MobActor3D = world.mob_system.mobs[id]

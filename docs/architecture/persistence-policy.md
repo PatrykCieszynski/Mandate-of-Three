@@ -21,6 +21,7 @@ the cache. Combat never performs SQL or network round trips per hit.
 | Critical Yang spend, NPC purchase, upgrade, trading | Include captured pending income with the durable mutation | Immediate atomic transaction; no independent payment/item commits |
 | Marketplace sale | Transfer UID, debit buyer and credit seller's claimable revenue | One immediate transaction, including its durable result |
 | Revenue collection / Exchange | Reconcile committed balances and reservations | Immediate transaction with replay/recovery guarantees |
+| Party membership/invitations | World-process RAM, 120-second reconnect grace; independent of local MapInstance | No persistence; World restart clears party |
 | Transient actors, GroundCurrency, encounter HP | Authoritative World simulation | No per-tick or per-mob-death durable history |
 
 Materials/currencies represented as Inventory items or stacks follow item

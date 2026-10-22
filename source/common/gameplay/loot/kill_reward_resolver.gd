@@ -7,6 +7,7 @@ var _currency: CurrencyEndpoint3D
 var _region_key: StringName = &""
 var _rng := RandomNumberGenerator.new()
 var event_drops := WorldEventDropService.new()
+var party_rewards = preload("res://source/common/gameplay/party/party_rewards.gd").new(self)
 
 func setup(services: MandateWorldServices, ground: GroundLootSystem, currency: CurrencyEndpoint3D, region_key: StringName = &"") -> void:
 	_services = services
@@ -16,6 +17,7 @@ func setup(services: MandateWorldServices, ground: GroundLootSystem, currency: C
 	_rng.randomize()
 
 func handle_mob_death(result: MobDeathResult) -> void:
+	if party_rewards.handle_mob(result): return
 	# Temporary legacy arena fixture: keep old one-sword behavior until its
 	# equipment/pickup scripts are converted. Production region is data-driven.
 	if _region_key.is_empty():

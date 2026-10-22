@@ -32,6 +32,7 @@ var hp: int = MAX_HP
 var ai_state: MobState.Value = MobState.Value.IDLE
 var target_peer: int = 0
 var dead_until_ms: int = 0
+var reward_claims: Dictionary = {}
 var contributions: Dictionary[int, int] = {}
 var contribution_players: Dictionary[int, PlayerResource] = {}
 var last_attack_ms: int = -1000

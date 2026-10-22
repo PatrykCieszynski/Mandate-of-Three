@@ -30,6 +30,7 @@ var npc_runtime: RefCounted
 var storage_runtime: RefCounted
 var ground_item_runtime: RefCounted
 var seller_runtime: RefCounted
+var party_service = preload("res://source/common/gameplay/party/party_service.gd").new(self)
 var runtime_settings: RefCounted
 
 ## Tickets and native auth reserve the same account slots as active sessions.
@@ -48,6 +49,7 @@ func has_entry_capacity(username: String, account_id: int) -> bool:
 	return (inventory_runtime==null or inventory_runtime.has_account_capacity(required)) and (wallet_runtime==null or wallet_runtime.has_account_capacity(required))
 
 func _process(_delta: float) -> void:
+	party_service.sweep()
 	if economy_bootstrap!=null: economy_bootstrap.check_health()
 	if inventory_runtime!=null: inventory_runtime.poll()
 	if wallet_runtime!=null: wallet_runtime.poll(_delta)
@@ -417,6 +419,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	runtime_equipment.erase(player.player_id)
 	_equipment_versions.erase(player.player_id)
 
+	party_service.remember_disconnect(player.player_id)
 	player_id_to_peer_id.erase(player.player_id)
 	BlockList.clear_player(player.player_id)
 

@@ -30,6 +30,7 @@ connection strings, account identities or a raw config dump.
 | `mob_aoi_exit_radius` | 72 | integer 1..65,536, >= entry | Retention radius for already visible mobs |
 | `mob_aoi_cell_size` | 32 | integer 1..65,536 | World mob interest grid cell width in metres |
 | `mob_position_interval_ms` | 100 | integer 50..2,000 | Minimum interval for changed mob transforms; HP/state do not wait |
+| `party_reward_radius` | 40 | positive integer, at most 65,536 | Metres from reward source; same MapInstance is also required |
 
 No `[runtime]` section uses these explicit defaults, including disposable legacy
 fixtures. Unknown runtime keys, floats/bools in integer fields, invalid ranges,

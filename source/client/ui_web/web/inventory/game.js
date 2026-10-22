@@ -1,4 +1,5 @@
 import { mountBottomHud } from './bottom-hud.js';
+import { mountParty } from '../screens/party/party-view.js';
 import { mountExchange } from '../screens/market/exchange-view.js';
 import { mountMarketBrowser } from '../screens/market/browser-view.js';
 import { mountMarket } from '../screens/market/market-view.js';
@@ -107,6 +108,9 @@ const bridge = new WebBridge({
         });
         if (message.type === 'ui.snapshot' || message.type === 'hud.updated')
             bottomHud.setScale(manager.scale);
+        if ((message.type === 'ui.snapshot' || message.type === 'party.updated') &&
+            state.party)
+            party.setState(state.party);
         if (message.type === 'ui.snapshot' || message.type === 'npc.updated') {
             npc.setState(state.npc ?? { active: false });
             upgrade.setNpcState(state.npc ?? { active: false });
@@ -236,6 +240,14 @@ const market = mountMarket(marketRoot, {
     },
     onRegionsChanged: () => regions?.refresh(),
 });
+const party = mountParty(findElement(document, '#party', 'main'), {
+    manager,
+    command: (p) => bridge.request('party.command', p),
+    close: () => {
+        void bridge.request('party.close', {});
+    },
+    regions: () => regions?.refresh(),
+});
 const textFocus = reportTextFocus(bridge);
 const upgrade = mountUpgrade(upgradeRoot, {
     select: (payload) => bridge.request('upgrade.select', payload),
@@ -279,6 +291,7 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
     onRegionsChanged: () => regions?.refresh(),
 });
 regions = reportInteractiveRegions(bridge, [
+    ...party.regions,
     ...worldDrop.regions,
     ...shop.regions,
     ...exchange.regions,
@@ -293,6 +306,7 @@ regions = reportInteractiveRegions(bridge, [
 ]);
 window.addEventListener('pagehide', () => {
     bottomHud.dispose();
+    party.dispose();
     worldDrop.dispose();
     upgrade.dispose();
     shop.dispose();

@@ -7,6 +7,8 @@ class ForeignCombat extends CombatEndpoint3D:
 	func _ready() -> void: pass
 class ForeignCurrency extends CurrencyEndpoint3D:
 	func _ready() -> void: pass
+class ForeignParty extends "res://source/common/gameplay/party/party_endpoint.gd":
+	func _ready() -> void: pass
 class FailedCheckpoint extends WorldDatabase:
 	var calls := 0
 	func flush_character(_owner_id: int = -1) -> bool:
@@ -190,6 +192,14 @@ func run_server() -> void:
 		for mob: MobActor3D in map.mob_system.mobs.values(): mob.ai_enabled=false
 	var owner_a:=server.connected_players[first].player_id
 	var owner_b:=server.connected_players[second].player_id
+	check(server.party_service.command(owner_a,{"action":"invite","target":owner_b}).ok,"cross-CH party invitation")
+	check(server.party_service.command(owner_b,{"action":"accept"}).ok,"cross-CH party acceptance")
+	var party_id: int=server.party_service.membership[owner_a]
+	var cohort: Dictionary={"party":party_id,"members":[owner_a,owner_b]}
+	var party_rows: Array=server.party_service.snapshot(owner_a,left).members
+	check(party_rows.any(func(row: Dictionary)->bool: return row.id==owner_b and row.hp>0 and not row.same_instance),"party HP remains visible across CH without sharing rewards")
+	check(server.party_service.eligible(cohort,left,left.characters[first].position,100000).size()==1,"party reward never crosses CH despite ample distance radius")
+
 	var buyer_balance:=server.database.wallet_balance(owner_b)
 	var drop_a:=left.ground_loot.spawn_item(left.characters[first].position+Vector3(0,0,1),owner_a,"A",now,&"iron_sword",1)
 	var drop_b:=right.ground_loot.spawn_item(right.characters[second].position+Vector3(0,0,1),owner_b,"B",now,&"iron_sword",1)
@@ -537,6 +547,8 @@ func exercise(foreign: Dictionary, other_peer: int, own_drop: String, foreign_dr
 	var fake:=ForeignMap.new();fake.name="GameWorld";shell.add_child(fake)
 	var combat:=ForeignCombat.new();combat.name="Combat";fake.add_child(combat)
 	var currency:=ForeignCurrency.new();currency.name="Currency";fake.add_child(currency)
+	var party:=ForeignParty.new();party.name="Party";fake.add_child(party)
+	party.request.rpc_id(1,"foreign-party",{"action":"leave"})
 	fake.join_world.rpc_id(1)
 	fake.submit_input.rpc_id(1,99,Vector2(1,0))
 	combat.request_attack.rpc_id(1,99)
@@ -580,6 +592,7 @@ func shutdown() -> void:
 func exercise_transfer(peer: int, other: int, source: ServerInstance, target: ServerInstance) -> void:
 	var map: GameWorld3D=source.get_node("GameWorld")
 	var destination: GameWorld3D=target.get_node("GameWorld")
+	var party_before: int=server.party_service.membership.get(server.connected_players[peer].player_id,0)
 	var session: PlayerResource=server.connected_players[peer]
 	var owner:=session.player_id
 	var channel:=int(target.identity.channel_id)
@@ -668,6 +681,7 @@ func exercise_transfer(peer: int, other: int, source: ServerInstance, target: Se
 	check(not transfer.cancel(peer,transfer.snapshot(peer).attempt,transfer.snapshot(peer).epoch).ok,"late cancel never resurrects source")
 	confirm_transfer.rpc_id(peer,str(target.name),final_balance)
 	await wait_until(func()->bool:return answers.get(peer)=="transfer_confirmed")
+	check(server.party_service.membership.get(owner,0)==party_before and party_before>0,"party survives completed production channel handoff")
 	print("LOCAL_TRANSFER_OK cancel/movement/combat/drain/failure/gates/checkpoint, client recreation, single activation and retained HP/Yang")
 
 func exercise_transfer_movement(peer: int, source: ServerInstance, target: ServerInstance) -> void:

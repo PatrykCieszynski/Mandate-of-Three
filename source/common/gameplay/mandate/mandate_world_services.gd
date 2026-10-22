@@ -9,6 +9,9 @@ func _server() -> WorldServer:
 func available() -> bool:
 	return _server() != null and (_server().economy_bootstrap==null or _server().economy_bootstrap.ready())
 
+func party() -> RefCounted:
+	return null if _server()==null else _server().party_service
+
 func economy() -> WorldDatabase:
 	return null if not available() or _server().inventory_runtime != null or _server().wallet_runtime != null else _server().database
 
