@@ -1,6 +1,6 @@
 # Project direction — current technical and gameplay focus
 
-**Updated 2026-10-21.** This is the short, current orientation document referenced by `AGENTS.md`. It is **not** a ledger of completed spike branches, a balance specification or permission to build a distributed service immediately.
+**Updated 2026-10-22.** This is the short, current orientation document referenced by `AGENTS.md`. It is **not** a ledger of completed spike branches, a balance specification or permission to build a distributed service immediately.
 
 ## Current running prototype
 
@@ -21,15 +21,11 @@ The **Marketplace/Auction/Exchange** vertical slice is integrated, with bounded 
 - Preserve physical ground loot and familiar trading. Selected valuable dungeon rewards may use manifest-backed protection and a limited 12-hour fallback stash; ordinary ground drops remain transient. C3 controls economic invariants; detailed contribution/loot balance is separate.
 - Shop behavior includes price-free listings, Inventory-capacity-backed withdrawal and account-level claimable sale proceeds. Built-in bidder/negotiation escrow is deferred. Historical gaps are recorded in the [delta](marketplace-v2-gaps.md); current code and implementation docs determine completion.
 
-## Immediate engineering priorities
+## Current focus and ownership
 
-1. Complete W0 on the integrated baseline: audit limit ownership, reconcile admission budgets and capture repeatable control measurements.
-2. Implement validated server-only startup configuration in a separate reviewed slice, preserving accepted defaults and unresolved operation ownership.
-3. Follow [World W0–W7](../plans/world-server-optimization.md): profiling before movement/AI/replication optimization; preserve gameplay parity and measure real connected-client capacity separately.
-4. Preserve Gateway/session, World RPC, local CH handoff and Economy fencing guarantees already implemented. Cross-host Economy extraction remains deferred.
-5. Keep cleanup scoped to verified dead consumers. PR #88 retired orphaned 2D runtime, not all shared legacy data or SQLite parity fixtures.
+The maintainer owns the roadmap. Avoid treating old P1–P4 and W0–W7 checklists as automatic new work. PostgreSQL full-state, W0/W1 profiling and validated session admission are integrated. Profiling/controller experiments are deferred until representative map scale and mob/player populations are defined. Current work is documentation/repository cleanup; the maintainer will provide AOI scope separately. Authored maps, actual game assets, real-client gameplay and visual polish remain important unfinished work. Do not extrapolate synthetic load tests to hosting capacity.
 
-[Ordered technical hardening plan](../plans/architecture-hardening.md) and [testing policy](../development/testing.md) control these milestones. Keep changes reviewable, preserve legacy data or explicitly migrate it, and do not infer production readiness from a Windows-only fixture.
+Use [documentation index](../README.md) to distinguish current contracts, plans, historical notes and evidence. Legacy TinyMMO systems must be audited for live RPC reachability before deletion.
 
 ## Gameplay and visuals next
 

@@ -86,4 +86,4 @@ additionally covers delayed grant and post-ticket handoff completion during drai
 
 Windows native acceptance only. Linux, physical CEF, cross-host/concurrent owner
 handoff and P4 load/soak/import/cutover are not verified by these checks. See
-[evidence](../evidence/postgres-p3v/README.md).
+[evidence](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence/postgres-p3v/README.md).

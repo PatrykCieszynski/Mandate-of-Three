@@ -1,52 +1,22 @@
-# Development and verification
+# Current development and verification
 
-- [PostgreSQL bootstrap ownership](postgres-bootstrap.md) - P3r authority/schema preflight, shared Master/World composition, no fallback and orderly pool drain.
+Read [project direction](../decisions/project-direction.md), [runtime persistence](../architecture/persistence-policy.md) and [testing policy](testing.md) first. Normal development uses PostgreSQL for Economy, accounts and profiles; **SQLite is a reference/legacy fixture**, not a production fallback.
 
-- [PostgreSQL Auction runtime](postgres-auction-runtime.md) - P3q bounded public catalog/search, session-qualified native reads and RPC correlation.
+## Canonical current runbooks
+- [Full PostgreSQL state](postgres-full-state.md), [backup/restore](postgres-backup-restore.md), [process startup](postgres-process-startup.md), [maintenance barrier](postgres-maintenance.md) and [World replacement](postgres-world-replacement.md).
+- [World admission / capacity](runtime-capacity.md), [World session admission](world-session-admission.md), [RPC admission](world-rpc-admission.md), [channel transfer](local-channel-transfer.md).
+- [Testing](testing.md), [CI](ci.md), [World baseline](world-baseline.md), [World profiling](world-profiling.md) (retained tools; profiling work is deferred).
+- [CEF integration](../ui/cef-addon-integration.md), [local visuals](local-dev-visuals.md).
 
-- [PostgreSQL Exchange matching runtime](postgres-exchange-matching-runtime.md) - P3p captured participant wallets, order/cancel/matching, private-view freshness and native recovery.
+## Reference tools and historical fixture scope
 
-- [PostgreSQL Exchange ledger runtime](postgres-exchange-ledger-runtime.md) - P3o item/Storage conversions, coherent projections and native client journals; matching remains separate.
+[Native readiness](../history/postgres-readiness.md), [transaction retry](postgres-transaction-retry.md),
+[backend concurrency](../history/postgres-concurrency-acceptance.md) and
+[projection budget](../history/economy-projection-budget.md) retain useful commands and
+failure analysis. Their original stage/default-backend statements are historical;
+use the current runbooks above for deployment, not their old pending gates.
 
-- [PostgreSQL Marketplace settlement runtime](postgres-market-settlement-runtime.md) - P3n optional purchases/proceeds, pending-income tokens, seller refresh and purchase journals.
+## Older implementation notes
+The old `postgres-*-parity.md` and P3 `postgres-*-runtime.md` reports described incremental implementation stages. Thirty superseded stage-level documents have been removed from this directory and indexed in [completed PostgreSQL milestone history](../history/postgresql-migration.md), with exact source paths recoverable in Git history. The remaining operational runbooks and [evidence](../evidence/README.md) are authoritative for their respective purposes.
 
-- [PostgreSQL seller runtime](postgres-seller-runtime.md) - P3m optional seller/claim execution, private projection fencing and client journal recovery; buyer settlement remains separate.
-
-- [Testing policy](testing.md) — supported suites, fixture expectations, runtime acceptance.
-- [PostgreSQL backend concurrency acceptance](postgres-concurrency-acceptance.md) — opt-in P2 matrix; production still uses SQLite.
-- [PostgreSQL Inventory execution](postgres-inventory-executor.md) — P3a local bounded transaction owners; runtime integration remains pending.
-- [PostgreSQL Inventory identity/recovery](postgres-inventory-intents.md) — P3b durable admission, terminal outcomes and discovery.
-- [PostgreSQL Inventory session fence](postgres-inventory-sessions.md) — P3c delegated backend epochs and recovery barrier; actual issuer/World integration remains pending.
-- [PostgreSQL Inventory runtime](postgres-inventory-runtime.md) — P3d opt-in World-thread recovery and combat projection reconciliation; live login/endpoint wiring remains pending.
-- [PostgreSQL Inventory session bridge](postgres-inventory-session-bridge.md) — P3e opt-in current Master ticket to durable grant/native World recovery; playable endpoint/bootstrap integration remains pending.
-- [PostgreSQL Inventory endpoint](postgres-inventory-endpoint.md) — P3f opt-in RPC/client journal, private state and public weapon delivery; other domains/bootstrap remain pending.
-- [PostgreSQL Inventory cache reconciliation](postgres-inventory-cache-fence.md) — P3g freshness ACK, versioned local invalidations and RAM-only combat-input gates.
-- [PostgreSQL pending recovery](postgres-pending-recovery.md) — P3h indexed unresolved-only recovery, preserved receipt history; see the [actual adoption/cutover status](../plans/postgresql-migration.md#runtime-adoption-status).
-- [PostgreSQL wallet runtime](postgres-wallet-runtime.md) — P3i RAM income batches, receipted async checkpoints, currency RPCs and forced save/relog recovery.
-- [PostgreSQL NPC runtime](postgres-npc-runtime.md) — P3j optional Shop/Upgrade execution, captured income tokens and existing client journal recovery.
-- [PostgreSQL Storage runtime](postgres-storage-runtime.md) � P3k shared custody, combined Inventory/Storage ACK and stable client recovery.
-- [PostgreSQL ground items](postgres-ground-items.md) � P3l marker-based initialization, bounded UID claims and native client pickup/relog.
-- [World RPC admission](world-rpc-admission.md) — A2 authorization contract and network checks.
-- [World session admission](world-session-admission.md) — single-use handoff tickets and account replacement.
-- [Economy command boundary](economy-command-boundary.md) — Stage 2 validation, operation results and commit/replay effects.
-- [CI](ci.md) — scope and limitations of automated validation.
-- [Local visual asset staging](local-dev-visuals.md) and [Warrior compatibility workflow](warrior-compatibility.md).
-- [CEF root addon](../ui/cef-addon-integration.md) — install/export.
-- [Architecture hardening plan](../plans/architecture-hardening.md) — planned technical work, not implemented guarantees.
-- [Third-party attribution](../third-party-credits.md) — retain licence obligations.
-
-Use the repository's pinned Godot/runtime versions; don't treat a historical one-off test as a production acceptance gate.
-
-- [PostgreSQL normal process startup (P3s)](postgres-process-startup.md)
-
-- [PostgreSQL operator maintenance barrier (P3t)](postgres-maintenance.md)
-
-- [PostgreSQL stopped-writer backup and restore](postgres-backup-restore.md)
-
-- [Controlled PostgreSQL World replacement](postgres-world-replacement.md)
-
-- [PostgreSQL mixed World/Economy load baseline](postgres-mixed-load.md)
-
-- [MMO Integration & Load and separate Economy stress case](realm-workload.md)
-
-- [P4 Representative Economy Soak](representative-economy.md)
+Do not write a new development report for every change: update a canonical runbook if behavior changes; put test commands and outcomes in the PR; write a dated [milestone summary](../evidence/README.md) only when a milestone closes.

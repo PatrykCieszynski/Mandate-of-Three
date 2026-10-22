@@ -1,61 +1,17 @@
-# Evidence and validation
+# Evidence — measurements and reproducible validation
 
-- [PostgreSQL P3r bootstrap](postgres-p3r/README.md) - failed-start cleanup, offline provisioning and shared-owner native-client acceptance (topic branch until reviewed/merged).
+**Evidence is historical by definition.** It supports a dated result on a particular SHA, build and machine; it is not the active implementation specification.
 
-- [PostgreSQL P3q Auction reads](postgres-p3q/README.md) - 10k native World observations and public browser/RPC acceptance (topic branch until reviewed/merged).
+## Milestone evidence (preferred entry points)
+- [Full-state PostgreSQL cutover](postgres-full-cutover/README.md).
+- [P4 Representative Economy Soak](representative-economy/README.md).
+- [P4c recovery and sustained runs](postgres-p4c/README.md).
+- [World W0 baseline](world-w0-baseline/README.md), [W1 profiling](world-w1-profile/README.md).
+- [Runtime capacity and ACK admission](runtime-capacity/README.md).
+- [Realm workload](realm-workload-foundation/README.md).
 
-- [PostgreSQL P3p Exchange matching](postgres-p3p/README.md) - native multi-party settlement and ten-client recovery acceptance (topic branch until reviewed/merged).
+## Archived granular evidence
+The 46 per-package `postgres-p1a` … `postgres-p3v` Markdown reports have been removed from the current tree. Their original descriptions remain in [Git history](https://github.com/PatrykCieszynski/Mandate-of-Three/tree/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence); intentional raw measurement files remain in place. Start with the [completed migration milestone](../history/postgresql-migration.md), current runbooks and the milestone evidence above. Consult an old package report only for a concrete regression or original finding.
 
-- [PostgreSQL P3o Exchange ledger](postgres-p3o/README.md) - native custody/recovery and nine-client acceptance (topic branch until reviewed/merged).
-
-- [PostgreSQL P3n settlement runtime](postgres-p3n/README.md) - purchases/proceeds, native uncertainty and eight-client recovery (topic branch until reviewed/merged).
-
-- [PostgreSQL P3m seller runtime](postgres-p3m/README.md) - optional seller/item claims, native failures and seven-client journal recovery (topic branch until reviewed/merged).
-
-Measured evidence must state **branch/commit**, platform, test command, runtime versions and limitations. A CI green check proves only the suites it actually ran.
-
-## On `main`
-
-- [Testing policy and reproduction](../development/testing.md)
-- [PostgreSQL P2 backend acceptance](postgres-p2l/README.md) — disposable native correctness runs, distinct from P3/P4 runtime adoption.
-- [PostgreSQL P3a Inventory execution](postgres-p3a/README.md) — local worker ownership, backpressure and lifecycle, without a live backend switch.
-- [PostgreSQL P3b Inventory recovery](postgres-p3b/README.md) — durable identity, terminal outcomes and discovery after producer-process loss.
-- [PostgreSQL P3c Inventory sessions](postgres-p3c/README.md) — delegated grant fencing and recovery barrier on disposable native PostgreSQL.
-- [PostgreSQL P3d Inventory runtime](postgres-p3d/README.md) — main-thread recovery, actual World combat cache and stale-delivery fencing.
-- [PostgreSQL P3e session bridge](postgres-p3e/README.md) — current Master ticket publication after grant COMMIT, native auth/relogin and normal-role SQLite regression.
-- [PostgreSQL P3f Inventory endpoint](postgres-p3f/README.md) — native client processes, stable journal/receipt recovery, private state/public weapon and no SQLite economic fallback.
-- [PostgreSQL P3g cache reconciliation](postgres-p3g/README.md) — command freshness ACK, versioned local invalidations, bounded repair and current client/stat projections.
-- [PostgreSQL P3h pending recovery](postgres-p3h/README.md) — indexed unresolved-only recovery, data-preserving index migration and retained receipt lookup.
-- [PostgreSQL P3i wallet runtime](postgres-p3i/README.md) — RAM batching, stable checkpoint/spend receipts, native client Yang delivery and lifecycle recovery.
-- [PostgreSQL P3j NPC runtime](postgres-p3j/README.md) — atomic Shop/Upgrade, captured-income replay safety and actual client journal recovery.
-- [PostgreSQL P3k Storage runtime](postgres-p3k/README.md) � shared account custody, combined projection and actual client journal recovery.
-- [PostgreSQL P3l ground items](postgres-p3l/README.md) � idempotent starter hydration, claim faults/races and six-client pickup/relog.
-- [CI / platform checks](../development/ci.md)
-- [Historical native validation](../history/README.md) (dated results, not current acceptance)
-- [Terrain3D adoption and verification](../world/visuals/visual-upgrade-v4-terrain3d.md)
-
-## Auction/Marketplace — on `shop` until PR #1 merges
-
-The `shop` branch contains the Auction D0–D2 reports and evidence under `docs/evidence/`, including the Windows D2 load/recovery measurements. They are deliberately **not copied into `main`** just to make documentation appear current; access them through [PR #1](https://github.com/PatrykCieszynski/Mandate-of-Three/pull/1) or switch to `shop` until merge.
-
-Recorded D2 limitations: Linux runtime not verified, actual native-only SQL timing unavailable from the public addon API, and economy writes still cause measurable simulation tick tails. A benchmark passing on the developer's Windows host is not a production SLA.
-
-This directory retains reproducible raw evidence. The documentation cleanup removes obsolete *plans*, not Auction D2 performance data on `shop`. Large diagnostic P0 data needs separate review after integration.
-
-- [PostgreSQL normal process startup (P3s)](postgres-p3s/README.md)
-
-- [PostgreSQL operator maintenance barrier (P3t)](postgres-p3t/README.md)
-
-- [PostgreSQL P3u backup/restore rehearsal](postgres-p3u/README.md)
-
-- [PostgreSQL P3v World replacement](postgres-p3v/README.md)
-
-- [PostgreSQL P4a mixed-load baseline](postgres-p4a/README.md)
-
-- [P4b mixed-load receipt recovery](postgres-p4b/README.md)
-
-- [P4c backend-process recovery and sustained-run investigation](postgres-p4c/README.md)
-
-- [MMO Integration & Load: first seeded runtime story baseline](realm-workload-foundation/README.md)
-
-- [P4 Representative Economy: dispersed offline shops and controlled peaks](representative-economy/README.md)
+## Policy
+A PR description holds routine verification and an exact link to CI. Do **not** create a new `docs/evidence/<PR-or-commit>/README.md` per PR or commit. Add one short consolidated evidence report **after a completed milestone** only when it has meaningful reproducible results, failure analysis or a decision worth preserving. Retain raw artifacts in ignored locations unless they are small, intentional fixtures. Always record SHA, environment, commands, limitations and the distinction between synthetic and connected-client tests.

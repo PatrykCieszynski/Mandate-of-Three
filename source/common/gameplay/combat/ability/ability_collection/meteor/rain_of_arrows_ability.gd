@@ -14,7 +14,8 @@ extends MeteorAbility
 ## Falling/stuck arrow visuals per cast.
 @export var arrow_count: int = 7
 
-const ARROW_TEX: Texture2D = preload("res://assets/sprites/items/weapons/wood/wood.png")
+# Optional legacy 2D presentation; no bundled TinyMMO texture dependency.
+@export var arrow_texture: Texture2D
 const ARROW_REGION: Rect2 = Rect2(32, 0, 16, 16)
 
 
@@ -22,7 +23,7 @@ const ARROW_REGION: Rect2 = Rect2(32, 0, 16, 16)
 ## circle's edge plus one dead-centre — then STAY stuck for the slow zone's life before
 ## fading. Deterministic layout (no randomness), so every client sees the same volley.
 func _client_fall(map: Node, target: Vector2) -> void:
-	if not is_instance_valid(map):
+	if not is_instance_valid(map) or arrow_texture == null:
 		return
 	var ring_count: int = maxi(2, arrow_count - 1)
 	for i: int in arrow_count:
@@ -32,7 +33,7 @@ func _client_fall(map: Node, target: Vector2) -> void:
 			var ang: float = TAU * float(i - 1) / float(ring_count)
 			land = target + Vector2.from_angle(ang) * blast_radius * 0.8
 		var arrow: Sprite2D = Sprite2D.new()
-		arrow.texture = ARROW_TEX
+		arrow.texture = arrow_texture
 		arrow.region_enabled = true
 		arrow.region_rect = ARROW_REGION
 		arrow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

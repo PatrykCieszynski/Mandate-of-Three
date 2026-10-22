@@ -55,5 +55,5 @@ API is not adopted by this dependency update.
 Windows verification does not establish Linux runtime behavior or PostgreSQL
 economic concurrency correctness. Earlier S0/P0/D1/D2 reports describe their
 original payloads and are not relabeled as v0.4.3 measurements. The exact focused
-adoption run set is recorded in [P2c evidence](../evidence/postgres-p2c/README.md);
+adoption run set is recorded in [P2c evidence](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence/postgres-p2c/README.md);
 the optional Auction load command above does not imply a new capacity benchmark.

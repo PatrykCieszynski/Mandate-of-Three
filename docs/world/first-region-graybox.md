@@ -7,7 +7,7 @@ Restart World and reconnect the client to load the new scene.
 
 ## Authored region
 
-World units are metres. The region envelope is 96 × 144 m: X -48..48,
+World units are metres. The region envelope is 96 Ă— 144 m: X -48..48,
 Z -108..36. Walkable land ends at X 26; the eastern strip is a flat water/material
 placeholder behind a low collision boundary. There is no swimming or water shader.
 The hub is at the southern end (+Z). Default camera forward faces north (-Z).
@@ -72,16 +72,11 @@ fixed; native movement on the region still needs comparison against the arena.
    event cadence. The encounter now supports the loop; its pacing has not yet been manually assessed.
 3. Visual pass after scale/gameplay feedback; final models, terrain and materials.
 
-The first [lighting baseline](visuals/visual-upgrade-v1.md) is now integrated: fixed
-15:30, Sky3D procedural sky/clouds, sun, AgX and light fog. The separate
-[V2 calendar pass](visuals/visual-upgrade-v2.md) now animates dawn/day/sunset/night,
-moon phases, stars, ambient light, exposure and haze. Geometry, routes,
-collisions and gameplay authority are unchanged. This is environment tuning;
-the authored ground/props remain graybox surfaces.
-
-[V3 water](visuals/visual-upgrade-v3.md) now replaces the water material/mesh and adds a
-minimal submerged visual slope for shallow/deep color. The original shore
-collision and route geometry remain; coastline/terrain art is a later V4 pass.
+The [current visual stack](visuals/visual-stack.md) includes Sky3D lighting,
+server-derived day/night/calendar and client-only shader water. The original
+fixed 15:30 lighting baseline was superseded by the calendar. Terrain3D authoring
+and coastline/prop art remain separate from the existing graybox gameplay;
+these integrated visual passes are not pending implementation slices.
 
 Party, affix reroll and speculative region/event frameworks do not block this order.
 Regional pressure remains a design direction; this graybox adds no pressure system.

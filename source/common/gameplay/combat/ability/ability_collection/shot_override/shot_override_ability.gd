@@ -41,7 +41,8 @@ const EXPIRY_S: float = 6.0
 ## Armed-glow tint on the hand while loaded (also how enemies read what's coming).
 @export var glow_color: Color = Color(1.0, 0.85, 0.4)
 
-const GLOW_VFX: SpriteFrames = preload("res://source/common/gameplay/combat/vfx/lash_burst.tres")
+# Optional legacy 2D presentation; no bundled TinyMMO texture dependency.
+@export var glow_frames: SpriteFrames
 const GLOW_NODE: StringName = &"ArmedShotGlow"
 
 
@@ -79,7 +80,7 @@ func use_ability(user: Entity, _direction: Vector2) -> void:
 	if not GameMode.is_client():
 		return
 	# The armed glow: a soft loop on the hand until consumed or expired.
-	if character.right_hand_spot == null:
+	if character.right_hand_spot == null or glow_frames == null:
 		return
 	var old: Node = character.right_hand_spot.get_node_or_null(NodePath(GLOW_NODE))
 	if old != null:
@@ -87,7 +88,7 @@ func use_ability(user: Entity, _direction: Vector2) -> void:
 		# gets auto-renamed, and the consume can never find it (the stale-glow bug).
 		old.name = &"ArmedShotGlowDying"
 		old.queue_free()
-	var fx: SpriteEffect = SpriteEffect.spawn(character.right_hand_spot, GLOW_VFX, {
+	var fx: SpriteEffect = SpriteEffect.spawn(character.right_hand_spot, glow_frames, {
 		"loop": true,
 		"duration": EXPIRY_S,
 		"scale": Vector2(0.22, 0.22),

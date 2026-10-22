@@ -1,4 +1,3 @@
-@icon("res://assets/node_icons/blue/icon_grid.png")
 class_name InteractionArea
 extends Area2D
 ## Base class of all interactible areas. Can be a collectible, a warper, a teleporter etc.

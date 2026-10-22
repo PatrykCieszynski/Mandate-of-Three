@@ -137,4 +137,4 @@ CEF input, extended combat/load/soak, SQLite import rehearsal and P4 cutover
 approval remain open. Subsequent packages add [coherent backup/restore](postgres-backup-restore.md)
 and [sequential World replacement](postgres-world-replacement.md); these are not
 cross-host live handoff or production cutover.
-See [evidence](../evidence/postgres-p3s/README.md).
+See [evidence](https://github.com/PatrykCieszynski/Mandate-of-Three/blob/37827015b8536a5b7862cb092d86a7da79dcf988/docs/evidence/postgres-p3s/README.md).

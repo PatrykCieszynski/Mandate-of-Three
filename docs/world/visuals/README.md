@@ -1,6 +1,7 @@
 # Visual rendering and terrain
 
-- [V4 Terrain3D integration and persistence](visual-upgrade-v4-terrain3d.md) — current technical gate and editor compatibility.
-- [V3 water](visual-upgrade-v3.md), [V2 day/night](visual-upgrade-v2.md), [V1 sky/lighting](visual-upgrade-v1.md), [V0 renderer/CEF](visual-upgrade-v0.md) — earlier accepted slices, to consolidate later into one current visual guide.
+- [Current visual stack (V0–V3 consolidated)](visual-stack.md) — Forward+/Vulkan, CEF, Sky3D day/night and custom shader water.
+- [V4 Terrain3D integration](visual-upgrade-v4-terrain3d.md) — current terrain/editor integration gate.
+- [Terrain3D authoring](../terrain3d-authoring-guide.md).
 
-Keep old benchmark/platform evidence distinguishable from current run instructions.
+The V0–V3 stage reports are retained in Git history; do not treat old shader/platform measurements as current performance evidence.

@@ -114,5 +114,5 @@ Overlapping World owners, production backup sizing, Linux and physical CEF
 testing remain separate scopes.
 
 See [evidence](../evidence/postgres-full-cutover/README.md),
-[migration history](../plans/postgresql-migration.md) and
+[migration history](../history/postgresql-migration.md) and
 [persistence policy](../architecture/persistence-policy.md).

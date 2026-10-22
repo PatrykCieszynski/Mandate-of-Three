@@ -1,5 +1,7 @@
 # W0 World baseline — measurement contract
 
+**Work status (2026-10-22): deferred by the maintainer.** The implemented opt-in tools remain available; no further load/profiling runs are currently requested. Choose representative map/population/AOI scope before resuming. Existing results are historical synthetic observations, not hosting capacity.
+
 Opt-in baseline on the post-PostgreSQL, post-PR #88 code. No production source,
 resource budgets, gameplay, worker counts or network protocol are changed.
 The fixture reuses the existing workload support and current PlayerActor3D,

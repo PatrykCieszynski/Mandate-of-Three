@@ -18,7 +18,7 @@ enum InventoryTab {
 
 # Definition
 @export var item_name: StringName = &"ItemDefault"
-@export var item_icon: Texture2D = preload("res://assets/sprites/items/icons/Icon271.png")
+@export var item_icon: Texture2D
 @export_multiline var description: String
 
 ## Can this item be drawn into the player's HAND (shown off, and tapped to act if it has
