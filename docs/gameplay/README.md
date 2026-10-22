@@ -25,9 +25,14 @@ window; incoming invitations reopen it. Reload gets the current full snapshot.
 
 - Maximum 8 members. Joining/acceptance checks the current highest-to-lowest
   level gap is at most 15. Existing members are never removed by level-up.
-- Disconnect keeps a visible offline seat for 120 seconds. Same-character
-  reconnect under a new peer restores it. Expiry or explicit leave is final;
-  the lowest remaining character ID deterministically inherits leadership.
+- Logout/disconnect keeps a visible offline seat indefinitely, still counting
+  against the 8-member limit. Same-character reconnect under a new peer restores
+  it automatically. Offline members receive no EXP, Yang or rights to new drops.
+  Membership ends only through explicit leave, kick, party dissolution or World
+  restart. An offline leader keeps leadership. On final leader departure, the
+  lowest online character ID inherits it; if nobody is online, the lowest
+  remaining character ID is used. There is no offline-expiry timer or database
+  persistence.
 - Membership survives local channel handoff. Reward recipients must have a
   current actor in the source MapInstance, not be transferring and be within
   `[runtime] party_reward_radius=40` metres in `data/config/world_config.cfg`.
@@ -84,7 +89,10 @@ recovery are not implemented. Client/server build 0.31.0 ships the new Party RPC
 
 Default smoke includes `party_v1`; the two-client `party_network` fixture covers
 actual command RPCs, passive-member XP, Yang conservation, item reservation,
-no-drop cursor behavior, competing pickups and one shared Metin item pool.
+no-drop cursor behavior, kicked-member free-drop denial, offline reward exclusion,
+competing pickups and one shared Metin item pool. Core coverage also checks
+indefinite offline seats/leadership, online-preferred succession, late-join reward
+exclusion and leave/solo-hit/rejoin contribution conservation.
 Existing local-instance and World-RPC fixtures also cover party continuity across
 real CH transfer and delayed old-session disconnect. The PostgreSQL ground runtime
 fixture exercises party-free rights, membership loss, blocked claims, one UID,

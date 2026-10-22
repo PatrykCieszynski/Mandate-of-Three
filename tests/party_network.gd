@@ -108,6 +108,11 @@ func run_server() -> void:
 	for uid: String in world.ground_loot.drops:
 		if uid!=original_uid: free_uid=uid
 	check(not free_uid.is_empty(),"free drop exists")
+	await ask(peers[0],{"action":"kick","target":second})
+	check(world.ground_loot.pickup_for_peer(peers[1],free_uid,Time.get_ticks_msec()).error=="reserved","kicked member cannot pick up an existing free drop during reservation")
+	check(world.ground_loot.drops.has(free_uid),"denied pickup leaves the unique item on the ground")
+	await ask(peers[0],{"action":"invite","target":second})
+	await ask(peers[1],{"action":"accept"})
 	var sum: int=0
 	for drop: Dictionary in world.currency_endpoint.ground.values(): sum+=int(drop.amount)
 	check(sum==CurrencyEndpoint3D.DOG_YANG*2,"Yang pool conserved across two party kills")
@@ -119,6 +124,39 @@ func run_server() -> void:
 		check(result.ok,"party Yang uses existing wallet income path")
 		income[int(drop.owner)]+=int(result.amount)
 	check(income[first]==income[second],"equal Yang independent of drop mode")
+	# Keep the transport alive but remove session authority: even a stale actor
+	# must not make the offline seat eligible for new rewards.
+	var offline_player: PlayerResource=server.connected_players[peers[1]]
+	var offline_level: int=offline_player.level
+	var offline_xp: int=offline_player.experience
+	service.remember_disconnect(second)
+	server.connected_players.erase(peers[1]);server.player_id_to_peer_id.erase(second)
+	service.sweep(Time.get_ticks_msec()+365*24*60*60*1000)
+	var offline_claims: Dictionary={};service.record(offline_claims,first,100)
+	var offline_context: Array=service.contenders(offline_claims,world,Vector3.ZERO,40,false)
+	check(service.membership[second]==pid and service.parties[pid].members.size()==2,"offline membership has no timeout")
+	var offline_snapshot: Dictionary=service.snapshot(first,world)
+	for row: Dictionary in offline_snapshot.members:
+		if int(row.id)==second: check(not row.online,"retained member is presented as offline")
+	check(offline_context.size()==1 and offline_context[0].eligible==[{"id":first,"level":server.connected_players[peers[0]].level}],"offline member does not dilute XP or Yang shares")
+	var online_expected: PlayerResource=server.connected_players[peers[0]].duplicate()
+	online_expected.add_experience(101)
+	var prior_drops: Array=world.ground_loot.drops.keys()
+	world.kill_rewards.party_rewards.distribute(offline_context,Vector3.ZERO,Time.get_ticks_msec(),101,101,[{"definition_id":ItemDefinitions.IRON_SWORD.definition_id,"amount":1,"affixes":[]}])
+	var offline_drop_uid: String=""
+	for uid: String in world.ground_loot.drops:
+		if uid not in prior_drops: offline_drop_uid=uid
+	check(not offline_drop_uid.is_empty() and world.ground_loot.drops[offline_drop_uid].allowed_owners==[first],"offline seat receives no rights to newly generated free loot")
+	check(offline_player.level==offline_level and offline_player.experience==offline_xp,"offline member receives no EXP")
+	check(server.connected_players[peers[0]].level==online_expected.level and server.connected_players[peers[0]].experience==online_expected.experience,"online member receives the entire XP pool")
+	check(world.currency_endpoint.ground.size()==1,"offline reward produces only one Yang share")
+	var offline_yang: Dictionary=world.currency_endpoint.ground.values()[0]
+	check(int(offline_yang.owner)==first and int(offline_yang.amount)==101,"online member receives the entire Yang pool")
+	check(world.currency_endpoint.pickup_for_peer(peers[0],world.currency_endpoint.ground.keys()[0],Time.get_ticks_msec()).ok,"offline-excluded Yang uses existing wallet")
+	server.connected_players[peers[1]]=offline_player;server.player_id_to_peer_id[second]=peers[1]
+	service.sweep()
+	check(service.membership[second]==pid and not service.parties[pid].offline.has(second),"same character restores the retained seat")
+	check(world.ground_loot.pickup_for_peer(peers[1],offline_drop_uid,Time.get_ticks_msec()).error=="reserved","reconnect does not add retroactive drop rights")
 	replies.clear()
 	for id: int in peers: race_pickup.rpc_id(id,free_uid)
 	await wait_until(func()->bool: return replies.size()==2)

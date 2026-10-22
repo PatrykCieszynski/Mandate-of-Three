@@ -62,6 +62,9 @@ between qualified competitors, then equally within each party. The single sword
 chooses one qualified competitor by server-side damage-weighted RNG and applies
 that party's frozen item mode. An independent significant solo and a party can
 therefore both earn Yang from one stone; valuable swords are never multiplied.
+The 10% threshold grants eligibility for the reward split, **not a guaranteed
+item**. The single valuable drop is still drawn among qualified competitors in
+proportion to their damage; a qualified competitor can receive no item.
 The same shared-pool rule applies to authored mobs classified `rank=boss`.
 
 Death still claims once in RAM before delivery: exactly one existing ground sword

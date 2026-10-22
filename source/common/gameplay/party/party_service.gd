@@ -4,7 +4,6 @@ const Exp = preload("res://source/common/gameplay/party/party_exp.gd")
 const Drop = preload("res://source/common/gameplay/party/party_drop.gd")
 const MAX_MEMBERS = 8
 const LEVEL_GAP = 15
-const OFFLINE_GRACE_MS = 120000
 const INVITE_MS = 30000
 const ENCOUNTER_MIN_DAMAGE_PERCENT = 10
 var parties: Dictionary = {}
@@ -41,7 +40,6 @@ func sweep(now: int = Time.get_ticks_msec()) -> void:
 				p.profiles[id]=profile(id)
 				p.offline.erase(id)
 			elif not p.offline.has(id): p.offline[id]=now
-			elif now-int(p.offline[id])>=OFFLINE_GRACE_MS: _leave(id)
 func _clear_invites(pid: int) -> void:
 	for id: int in invitations.keys():
 		if int(invitations[id].party)==pid: invitations.erase(id)
@@ -53,7 +51,13 @@ func _leave(id: int) -> void:
 	membership.erase(id)
 	if p.members.is_empty(): parties.erase(pid);_clear_invites(pid)
 	elif int(p.leader)==id:
-		p.members.sort();p.leader=p.members[0];_clear_invites(pid)
+		p.members.sort()
+		p.leader=p.members[0]
+		for member: int in p.members:
+			if peer_for(member)>0:
+				p.leader=member
+				break
+		_clear_invites(pid)
 static func valid(p: Dictionary) -> bool:
 	var a = p.get("action")
 	if a in ["invite","kick","leader"]: return p.size()==2 and (p.get("target") is int or p.get("target") is float) and is_finite(float(p.target)) and float(p.target)==floor(float(p.target)) and p.target>0 and p.target<=9007199254740991

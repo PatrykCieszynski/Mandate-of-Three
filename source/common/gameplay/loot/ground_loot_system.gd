@@ -16,9 +16,11 @@ func setup(world: Node3D, services: MandateWorldServices) -> void:
 	_services = services
 
 func owner_name_for_owner(owner_id: int) -> String:
+	if owner_id<=0: return "" # Free party loot has no individual owner.
 	for peer_id: int in _world.characters:
 		if _services.owner_id_for_peer(peer_id)==owner_id:
-			return _services.player_for_peer(peer_id).display_name
+			var player = _services.player_for_peer(peer_id)
+			if player!=null: return player.display_name
 	return ""
 
 ## Temporary adapter for the old prototype sword/attack-roll caller.
