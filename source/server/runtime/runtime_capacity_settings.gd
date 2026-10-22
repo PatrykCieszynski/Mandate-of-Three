@@ -13,6 +13,13 @@ const DEFAULTS: Dictionary = {
 	"mob_aoi_cell_size": 32,
 	"mob_position_interval_ms": 100,
 	"party_reward_radius": 40,
+	"chat_general_ms": 3000,
+	"chat_trade_ms": 20000,
+	"chat_light_count": 5,
+	"chat_light_window_ms": 5000,
+	"chat_flood_count": 12,
+	"chat_flood_window_ms": 1000,
+	"chat_local_radius": 40,
 }
 var _limits: Dictionary
 

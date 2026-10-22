@@ -96,6 +96,7 @@ jobs:
           & ./tests/run-pve.ps1
           & ./tests/run-combat.ps1 -Scene mob_interest_network -MarkerPrefix AOI
           & ./tests/run-combat.ps1 -Scene party_network -MarkerPrefix PARTY
+          & ./tests/run-combat.ps1 -Scene chat_network -MarkerPrefix CHAT
       - name: Verify exported client and server packs
         shell: pwsh
         run: |

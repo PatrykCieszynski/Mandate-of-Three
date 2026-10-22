@@ -1,3 +1,6 @@
+import { mountChat, isChatSnapshot } from '../web/screens/chat/chat-view.js';
+import type { ChatSnapshot } from '../web/screens/chat/chat-view.js';
+import { reportTextFocus } from '../web/bridge.js';
 import { mountParty } from '../web/screens/party/party-view.js';
 import { mountExchange } from '../web/screens/market/exchange-view.js';
 import { MAX_STATE_BYTES, MAX_BYTES } from '../web/protocol.js';
@@ -1112,4 +1115,188 @@ test('party HP updates preserve mode selection; commands use explicit targets an
   assert.deepEqual(actions.at(-1), { action: 'accept' });
   view.dispose();
   manager.dispose();
+});
+
+test('chat focus, filters, text safety, whisper identity, minimize and remount', async () => {
+  const { doc, host, manager } = environment();
+  Object.assign(globalThis, { HTMLElement: host.HTMLElement });
+  const root = doc.createElement('main');
+  root.id = 'chat';
+  doc.body.append(root);
+  const actions: unknown[] = [],
+    focus: boolean[] = [];
+  const lease = reportTextFocus({
+    event: (_type, p) => {
+      if (p && 'active' in p) focus.push(p.active);
+    },
+  });
+  const opts = {
+    manager,
+    command: async (type: string, p: unknown) => {
+      actions.push({ type, p });
+      return { ok: true };
+    },
+    regions: () => {},
+  };
+  let view = mountChat(root, opts);
+  const state: ChatSnapshot = {
+    self: 1,
+    guild_available: false,
+    muted: [],
+    messages: [
+      {
+        id: 1,
+        channel: 'general',
+        sender: 2,
+        name: 'Other',
+        target: 0,
+        text: '<img src=x onerror=alert(1)>',
+      },
+    ],
+    conversations: [
+      {
+        id: 2,
+        name: 'Other',
+        mode: 'open',
+        unread: 0,
+        messages: [
+          {
+            id: 2,
+            channel: 'whisper',
+            sender: 2,
+            name: 'Other',
+            target: 1,
+            text: 'private',
+          },
+        ],
+      },
+      { id: 3, name: 'Third', mode: 'minimized', unread: 2, messages: [] },
+    ],
+  };
+  assert.equal(isChatSnapshot(state), true);
+  assert.equal(
+    isChatSnapshot({
+      ...state,
+      messages: [{ ...state.messages[0], text: 'x'.repeat(257) }],
+    }),
+    false,
+  );
+  view.setState(state);
+  view.setState(state);
+  assert.equal(doc.querySelectorAll('#whisper-2').length, 1);
+  assert.equal(doc.querySelectorAll('#whisper-3').length, 1);
+  assert.equal(root.querySelector('img'), null);
+  assert.match(root.textContent ?? '', /<img src=x/);
+  assert.equal(root.textContent?.includes('private'), false);
+  assert.match(doc.querySelector('#whisper-2')!.textContent ?? '', /private/);
+  const input = root.querySelector<HTMLInputElement>(
+    '[aria-label="Chat message"]',
+  )!;
+  measure(input);
+  doc.body.dispatchEvent(
+    new host.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+  );
+  // body is the real native shortcut target; explicit focus API shares that path.
+  view.focus();
+  assert.equal(doc.activeElement, input);
+  assert.equal(focus.at(-1), true);
+  input.value = 'hello';
+  input.form!.dispatchEvent(
+    new host.Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(actions.at(-1), {
+    type: 'chat.send',
+    p: { action: 'send', channel: 'general', text: 'hello' },
+  });
+  input.dispatchEvent(
+    new host.KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  assert.notEqual(doc.activeElement, input);
+  assert.equal(focus.at(-1), false);
+  const whisper = doc.querySelector<HTMLInputElement>('#whisper-2 input')!;
+  measure(whisper);
+  whisper.focus();
+  assert.equal(focus.at(-1), true);
+  whisper.value = 'reply';
+  whisper.form!.dispatchEvent(
+    new host.Event('submit', { bubbles: true, cancelable: true }),
+  );
+  await Promise.resolve();
+  assert.deepEqual(actions.at(-1), {
+    type: 'chat.send',
+    p: { action: 'send', channel: 'whisper', target: 2, text: 'reply' },
+  });
+  Array.from(doc.querySelectorAll<HTMLButtonElement>('#whisper-2 button'))
+    .find((b) => b.textContent === 'Minimize')!
+    .click();
+  await Promise.resolve();
+  assert.deepEqual(actions.at(-1), {
+    type: 'chat.conversation',
+    p: { target: 2, mode: 'minimized' },
+  });
+  assert.equal(focus.at(-1), false);
+  const minimized = {
+    ...state,
+    conversations: state.conversations.map((c) =>
+      c.id === 2 ? { ...c, mode: 'minimized' as const, unread: 1 } : c,
+    ),
+  };
+  view.setState(minimized);
+  doc
+    .querySelector<HTMLButtonElement>('#whisper-2 .chat-whisper-badge')!
+    .click();
+  await Promise.resolve();
+  assert.deepEqual(actions.at(-1), {
+    type: 'chat.conversation',
+    p: { target: 2, mode: 'open' },
+  });
+  const log = root.querySelector<HTMLElement>('.chat-log')!;
+  Object.defineProperties(log, {
+    scrollHeight: { configurable: true, get: () => 1000 },
+    clientHeight: { configurable: true, get: () => 100 },
+  });
+  log.scrollTop = 200;
+  view.setState({
+    ...state,
+    messages: [
+      ...state.messages,
+      { ...state.messages[0]!, id: 5, text: 'another' },
+    ],
+  });
+  assert.equal(
+    log.scrollTop,
+    200,
+    'new messages preserve an older reading position',
+  );
+  log.scrollTop = 900;
+  view.setState({
+    ...state,
+    messages: [
+      ...state.messages,
+      { ...state.messages[0]!, id: 6, text: 'latest' },
+    ],
+  });
+  assert.equal(log.scrollTop, 1000, 'near-bottom readers follow new messages');
+  const before = actions.length;
+  view.dispose();
+  view = mountChat(root, opts);
+  view.setState(state);
+  root.querySelector<HTMLButtonElement>('.chat-line button')!.click();
+  await Promise.resolve();
+  assert.equal(actions.length, before + 1);
+  assert.deepEqual(actions.at(-1), {
+    type: 'chat.open',
+    p: { target: 2, name: 'Other' },
+  });
+  assert.equal(doc.querySelectorAll('#whisper-2').length, 1);
+  view.dispose();
+  lease.dispose();
+  manager.dispose();
+  host.close();
 });

@@ -101,3 +101,59 @@ Native CEF acceptance uses `run-combat.ps1 -Scene party_network -MarkerPrefix PA
 -NativeClient1`: real invite/mode commands through the CEF bridge and roster reload.
 It uses programmatic DOM activation; manual physical input/IME and gameplay feel
 remain separate verification. Export checks preserve server/headless boundaries.
+
+
+## Chat V1 — live World communication
+
+Chat is ephemeral and owned by one World Process. General and Trade broadcast
+across its local CH/MapInstances. Local uses the same MapInstance and 40 m 3D
+distance. Party uses current `PartyService` membership across local CH; retained
+offline members receive nothing and no messages are replayed on reconnect.
+Whispers address an online character ID and echo to sender and recipient only.
+Exact case-insensitive online name lookup is available; ambiguous names fail.
+Sender ID/name and recipients come from the current authoritative session,
+including transfer/current-peer/map membership guards. No SQL runs during send.
+
+Guild remains visible but unavailable: legacy persistent guild/social handlers
+are not an established active Guild V1 flow in the World3D CEF client. Existing
+guild, friend and block persistence is retained; Chat V1 respects the hydrated
+`BlockList` receive filter and also offers session-local mute in whisper windows.
+The legacy `chat.*` data-request operations are no longer admitted, preventing
+old persistent DM/guild sends or command execution from bypassing this path.
+No legacy history is imported into the new chat.
+
+Server policy in `[runtime]` of `data/config/world_config.cfg` defaults to General
+3 s, Trade 20 s, five accepted light-channel messages per 5 s shared by Local /
+Party / Whisper, and twelve request attempts per second including invalid payloads
+and retries. Messages trim edge whitespace, reject control/bidi-format characters,
+and allow at most 256 Unicode code points, with a separate 2048-byte raw text
+and 4096-byte structured payload bound. Requests cannot specify sender metadata
+or send System. Trusted code can use `WorldServer.curr.world_chat.system(text,
+peers)`; no gameplay-wide event wiring or GM-command interface is introduced.
+
+Reliable ordered RPC channel 0 carries sends, acknowledgements and deliveries.
+The last 32 request IDs per online character suppress duplicate sends across
+local map handoff; this is a bounded runtime cache, not durable delivery. A lost
+acknowledgement does not prove delivery failed; the UI warns of uncertainty and
+does not blindly resend under a new ID. Restart/disconnect does not retain chat.
+Client/server build 0.32.0 adds the RPC surface; run matching role/client builds.
+
+CEF provides a bottom-left compact last-five-message view, expandable history,
+channel filters and sending selector. Enter starts typing, Enter in the composer
+sends, Escape blurs and returns gameplay input. Names open separate character-ID
+whisper windows with drag, close, minimize/unread and session mute. Player text
+uses text nodes, never HTML. Client history survives CEF reload and local CH
+handoff, but clears when the World connection closes or character identity changes.
+Public history retains up to 200 entries and each private conversation up to 100.
+A 16-conversation cache prefers closed conversations for eviction, otherwise its
+oldest conversation; a 128 KiB combined history budget may trim earlier messages
+so Unicode-heavy traffic cannot grow memory/reload snapshots without bounds.
+No offline mail, database history, bubbles, item links or inter-World routing.
+
+Verification: smoke includes `chat_v1`; `run-combat.ps1 -Scene chat_network
+-MarkerPrefix CHAT` exercises real two-client RPCs on different CH, local radius,
+whisper/party and a real CH transfer with duplicate suppression. `-NativeClient1`
+checks native CEF, synthetic native Enter/Escape, actual bridge submission and
+reload. Web UI coverage checks text safety, several private windows, minimize,
+focus leases, cleanup/remount and ID-based identity. Native synthetic keys do not
+establish physical IME/Alt-Tab acceptance or a capacity benchmark.

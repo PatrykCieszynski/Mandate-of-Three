@@ -1,0 +1,18 @@
+.chat-window { --window-width:480px; --window-inset:32px; background-color:rgba(12,12,10,.72); }
+#chat .chat-content, .chat-whisper .window-content { display:block; padding:30px 0 24px; }
+.chat-content nav { display:flex; flex-wrap:wrap; gap:3px; }
+.chat-log { height:100px; overflow:auto; overscroll-behavior:contain; user-select:text; font-size:13px; }
+.chat-expanded .chat-log { height:270px; }
+.chat-line { margin:3px 0; overflow-wrap:anywhere; white-space:pre-wrap; }
+.chat-line button { background:none; border:0; padding:0; color:inherit; font:inherit; }
+.channel-general { color:#d8d4c0; }.channel-trade {color:#e7bc68}.channel-local {color:#ece6db}.channel-party {color:#86c7ed}.channel-guild {color:#9cd18c}.channel-system {color:#f0d46f}.channel-whisper {color:#dfb2de}
+.chat-content form, .chat-whisper form { display:flex; gap:4px; }
+.chat-content input, .chat-whisper input { min-width:0; flex:1; color:#eee3c7; background:#171713; border:1px solid #655740; }
+.chat-content p[role="status"] { margin:2px 0; color:#e7ad79; }
+.whisper-window { --window-width:340px; --window-inset:32px; }
+.chat-content button, .chat-content select, .chat-whisper .window-content button { font:inherit; background:var(--panel); color:var(--ink); border:1px solid var(--frame); padding:3px; }
+.chat-line button { border:0!important; background:none!important; padding:0!important; color:inherit!important; }
+.chat-whisper .chat-log { height:190px; }
+.chat-minimized .chat-log, .chat-minimized form { display:none; }
+.chat-whisper-badge { display:block; }
+.chat-whisper-badge[hidden] { display:none; }

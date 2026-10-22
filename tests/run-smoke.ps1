@@ -24,6 +24,7 @@ $taskCases = [ordered]@{
     mob_packs = 'MOB_PACKS_OK'
     horn_taunt = 'HORN_TAUNT_OK'
     party_v1 = 'PARTY_V1_OK'
+    chat_v1 = 'CHAT_V1_OK'
     mob_interest = 'MOB_INTEREST_OK'
     hit_reactions = 'HIT_REACTIONS_OK'
 }

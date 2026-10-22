@@ -1,3 +1,4 @@
+import type {ChatSnapshot,ChatSend} from '../screens/chat/chat-view.js';
 import type {PartySnapshot,PartyCommand} from '../screens/party/party-view.js';
 import type {ExchangeSnapshot,ExchangeDeposit,ExchangeWithdraw,ExchangePlace,ExchangeCancel} from '../screens/market/exchange-model.js';
 import type {MarketBrowserSnapshot,MarketSearch} from '../screens/market/browser-model.js';
@@ -17,9 +18,10 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
+  chat?: ChatSnapshot;
   party?: PartySnapshot;
   exchange?: ExchangeSnapshot;
   market?: MarketSnapshot;
@@ -32,13 +34,17 @@ export type StateType = 'ui.snapshot' | `${DomainName}.updated`;
 // State payloads remain raw until their domain/view validators have checked them.
 export interface StateMessage extends Envelope { type: StateType }
 export interface TooltipDetailsMessage { v: 1; type: 'ui.tooltip_details'; payload: { alt: boolean } }
-export interface ShortcutMessage { v: 1; type: 'ui.shortcut'; payload: {key: 'Escape'} }
+export interface ShortcutMessage { v: 1; type: 'ui.shortcut'; payload: {key: 'Escape'|'Enter'} }
 export interface CommandResultMessage { v: 1; type: 'command.result'; id: string; payload: CommandResult }
 export interface ItemCommand { id: string; revision: number }
 export interface MoveItemCommand extends ItemCommand { x: number; y: number; page: number }
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'chat.send': ChatSend;
+  'chat.open': {target:number;name:string};
+  'chat.conversation': {target:number;mode:'open'|'closed'|'minimized'};
+  'chat.mute': {target:number;muted:boolean};
   'party.command': PartyCommand;
   'party.close': Record<string,never>;
   'exchange.deposit': ExchangeDeposit;

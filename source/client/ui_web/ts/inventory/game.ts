@@ -1,3 +1,4 @@
+import { mountChat } from '../screens/chat/chat-view.js';
 import { mountParty } from '../screens/party/party-view.js';
 import { mountExchange } from '../screens/market/exchange-view.js';
 import { mountMarketBrowser } from '../screens/market/browser-view.js';
@@ -52,7 +53,12 @@ const root = findElement(document, '#inventory', 'main'),
 let regions: ReturnType<typeof reportInteractiveRegions> | undefined;
 const bridge = new WebBridge({
   onTooltipDetails: (alt) => setItemTooltipDetails(document, alt, 'native'),
-  onShortcut: () => {
+  onShortcut: (key) => {
+    if (key === 'Enter') {
+      chat.focus();
+      return;
+    }
+    if (chat.escape()) return;
     if (drag.cancel()) return;
     if (
       exchange.closeIfActive() ||
@@ -131,6 +137,11 @@ const bridge = new WebBridge({
       state.party
     )
       party.setState(state.party);
+    if (
+      (message.type === 'ui.snapshot' || message.type === 'chat.updated') &&
+      state.chat
+    )
+      chat.setState(state.chat);
     if (message.type === 'ui.snapshot' || message.type === 'npc.updated') {
       npc.setState(state.npc ?? { active: false });
       upgrade.setNpcState(state.npc ?? { active: false });
@@ -282,6 +293,11 @@ const party = mountParty(findElement(document, '#party', 'main'), {
   },
   regions: () => regions?.refresh(),
 });
+const chat = mountChat(findElement(document, '#chat', 'main'), {
+  manager,
+  command: (type, p) => bridge.request(type, p),
+  regions: () => regions?.refresh(),
+});
 const textFocus = reportTextFocus(bridge);
 const upgrade = mountUpgrade(upgradeRoot, {
   select: (payload) => bridge.request('upgrade.select', payload),
@@ -326,21 +342,26 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
   },
   onRegionsChanged: () => regions?.refresh(),
 });
-regions = reportInteractiveRegions(bridge, [
-  ...party.regions,
-  ...worldDrop.regions,
-  ...shop.regions,
-  ...exchange.regions,
-  ...marketBrowser.regions,
-  ...market.regions,
-  ...upgrade.regions,
-  ...npc.regions,
-  ...view.regions,
-  ...equipment.regions,
-  ...storage.regions,
-  ...drag.regions,
-]);
+regions = reportInteractiveRegions(
+  bridge,
+  [
+    ...party.regions,
+    ...worldDrop.regions,
+    ...shop.regions,
+    ...exchange.regions,
+    ...marketBrowser.regions,
+    ...market.regions,
+    ...upgrade.regions,
+    ...npc.regions,
+    ...view.regions,
+    ...equipment.regions,
+    ...storage.regions,
+    ...drag.regions,
+  ],
+  () => chat.regions,
+);
 window.addEventListener('pagehide', () => {
+  chat.dispose();
   party.dispose();
   worldDrop.dispose();
   upgrade.dispose();

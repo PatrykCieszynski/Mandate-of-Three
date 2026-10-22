@@ -340,7 +340,7 @@ other characters load the current shared state on entry. Foreign peers never
 receive account contents.
 
 Command input/results retain the existing 16 KiB boundary. Snapshot/domain
-updates have a separate bounded 128 KiB output limit: the full 180 + 270 cell
+updates have a separate bounded 512 KiB output limit (including the bounded Chat V1 history): the full 180 + 270 cell
 presentation measured about 91 KiB with representative native display fields.
 CEF still loads static local assets under the existing CSP; no preview controller
 or fixture code is injected in Godot.
@@ -409,3 +409,23 @@ failure and teardown cancel unresolved waits; the first terminal result wins.
 generation before awaiting a handler and suppresses its reply if navigation has
 replaced the page. Thus a new page can reuse a browser command ID without receiving
 an old page's result. The session has no browser generation dependency.
+
+
+## Chat V1 composition
+
+The production entry mounts `screens/chat/chat-view.ts` alongside the existing
+windows, with one bottom-left main chat and independently registered whisper
+windows keyed by character ID. It reuses UiWindow/WindowManager placement,
+clamping, global scale and the existing `data-ui-text` focus lease. Enter is an
+explicit presentation shortcut from Godot when gameplay owns the keyboard;
+Escape in a composer releases that lease before other window-close shortcuts.
+Dynamic whisper panels are included in interactive-region reporting; closed
+panels release pointer ownership and minimized panels retain their unread badge.
+
+`chat_ui_adapter.gd` owns explicit send/lookup/local-window/mute commands and
+correlation. `chat_history.gd` is client-session RAM, not an authoritative server
+or history store. Its `chat` domain supplies reload snapshots without registering
+new event handlers per message. Full/domain state output has a 512 KiB envelope
+ceiling to accommodate the bounded 128 KiB chat cache with inventory/storage;
+command input/results remain capped at 16 KiB. All player content is rendered as
+text. Server policies and limitations: [Chat V1](../gameplay/README.md#chat-v1--live-world-communication).
