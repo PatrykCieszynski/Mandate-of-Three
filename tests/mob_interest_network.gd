@@ -3,11 +3,69 @@ extends "res://tests/pve_network.gd"
 ## is controlled. Reuses existing two-client/SQLite lifecycle, not a load test.
 var expected: Dictionary = {}
 var observation: int = 0
+var motion_observation: Dictionary = {}
 var observed_instances: Dictionary[int, int] = {}
 
 @rpc("authority", "call_remote", "reliable", 0)
 func observe(request: Dictionary) -> void:
 	expected = request
+
+@rpc("authority", "call_remote", "reliable", 0)
+func begin_motion(tag: int) -> void:
+	var mob: MobActor3D = world.mob_system.mobs[1]
+	motion_observation = {"position": mob.position.x, "target": mob.target_position.x,
+		"hp": mob.hp, "motion": 0, "hp_only": 0, "actor": mob.get_instance_id()}
+	report.rpc_id(1, {"ok": true, "tag": tag})
+
+@rpc("authority", "call_remote", "reliable", 0)
+func end_motion(tag: int, interval_ms: int) -> void:
+	check(int(motion_observation.motion) >= 2, "sustained movement reaches the client")
+	check(int(motion_observation.hp_only) >= 2, "HP changes arrive between movement updates")
+	print("AOI_MOTION_OK interval_ms=", interval_ms, " motion=", motion_observation.motion,
+		" hp_without_motion=", motion_observation.hp_only, " no target/render rewind")
+	motion_observation = {}
+	report.rpc_id(1, {"ok": true, "tag": tag})
+
+func sample_motion() -> void:
+	if motion_observation.is_empty(): return
+	var mob: MobActor3D = world.mob_system.mobs[1]
+	check(mob.get_instance_id() == int(motion_observation.actor), "moving actor is retained")
+	check(mob.position.x + 0.0001 >= float(motion_observation.position), "rendered motion never rewinds on HP update")
+	check(mob.target_position.x + 0.0001 >= float(motion_observation.target), "network target never rewinds on HP update")
+	if mob.target_position.x > float(motion_observation.target):
+		motion_observation.motion += 1
+	elif mob.hp != int(motion_observation.hp):
+		motion_observation.hp_only += 1
+	motion_observation.position = mob.position.x
+	motion_observation.target = mob.target_position.x
+	motion_observation.hp = mob.hp
+
+func moving_hp_updates(peers: Array, interval_ms: int) -> void:
+	world.combat_endpoint._mob_replication.position_interval_ms = interval_ms
+	observation += 1
+	for id: int in peers: begin_motion.rpc_id(id, observation)
+	await wait_until(func() -> bool:
+		return peers.all(func(id: int) -> bool: return replies.get(id, {}).get("tag", -1) == observation))
+	var mob: MobActor3D = world.mob_system.mobs[1]
+	var changed_after_motion: int = -1
+	var until: int = Time.get_ticks_msec() + 2200
+	while Time.get_ticks_msec() < until and not failed:
+		await get_tree().physics_frame
+		mob.position.x += 2.0 * get_physics_process_delta_time()
+		var baseline: Dictionary = world.combat_endpoint._mob_replication._peers[peers[0]]
+		var motion_at: int = baseline.motion_at[1]
+		var age: int = Time.get_ticks_msec() - motion_at
+		# Force one real combat RPC between scheduled transforms. Production
+		# periodic publication remains enabled; only fixture HP/motion is driven.
+		if motion_at != changed_after_motion and age >= 30 and age < interval_ms:
+			changed_after_motion = motion_at
+			mob.hp -= 1
+			world.combat_endpoint._send_snapshot()
+	for id: int in peers: await view(id, [1], mob.hp)
+	observation += 1
+	for id: int in peers: end_motion.rpc_id(id, observation, interval_ms)
+	await wait_until(func() -> bool:
+		return peers.all(func(id: int) -> bool: return replies.get(id, {}).get("tag", -1) == observation))
 
 @rpc("authority", "call_remote", "reliable", 0)
 func complete_aoi() -> void:
@@ -41,6 +99,14 @@ func run_server() -> void:
 	# No mob movement; multiple sparse frames must retain actors and state.
 	await get_tree().create_timer(0.4).timeout
 	await view(peers[0], [1])
+	world.characters[peers[1]].position = Vector3.ZERO
+	await view(peers[1], [1])
+	for interval_ms: int in [100, 150, 200]:
+		await moving_hp_updates(peers, interval_ms)
+	world.combat_endpoint._mob_replication.position_interval_ms = limits.value("mob_position_interval_ms")
+	world.mob_system.mobs[1].position = Vector3.ZERO
+	world.characters[peers[1]].position = Vector3(spacing, 0, 0)
+	await view(peers[1], [2])
 	world.characters[peers[0]].position = Vector3(boundary, 0, 0)
 	world.characters[peers[1]].position = Vector3(boundary, 0, 0)
 	await view(peers[0], [1])
@@ -69,6 +135,7 @@ func _process(delta: float) -> void:
 	if not ready_peers.has(world.local_peer):
 		ready_peers[world.local_peer] = true
 		register_ready.rpc_id(1)
+	sample_motion()
 	if expected.is_empty(): return
 	var actual: Array = world.mob_system.mobs.keys()
 	var wanted: Array = expected.ids.duplicate()

@@ -11,7 +11,7 @@ const DEFAULTS: Dictionary = {
 	"mob_aoi_enter_radius": 60,
 	"mob_aoi_exit_radius": 72,
 	"mob_aoi_cell_size": 32,
-	"mob_position_interval_ms": 200,
+	"mob_position_interval_ms": 100,
 }
 var _limits: Dictionary
 

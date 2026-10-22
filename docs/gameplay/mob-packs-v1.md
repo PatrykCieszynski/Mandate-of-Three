@@ -149,10 +149,14 @@ normal roles and clients together; mixed-version rolling deployment is unsupport
 
 World `[runtime]` configuration defaults in `data/config/world_config.cfg`:
 `mob_aoi_enter_radius=60`, `mob_aoi_exit_radius=72`, `mob_aoi_cell_size=32`
-(metres), and `mob_position_interval_ms=200`. They are validated at startup;
+(metres), and `mob_position_interval_ms=100`. They are validated at startup;
 entry must not exceed exit, dimensions are positive integers and the position
 interval is 50–2000 ms. Actual motion delivery is also bounded by combat cadence.
-These are initial tuning values, not measured capacity limits.
+The initial default is 100 ms / 10 Hz, pending manual combat-feel validation.
+For a same-scene comparison, edit only `mob_position_interval_ms` in that config
+and restart World: try 100, 150 and 200. The publisher runs every 100 ms, so 150
+is a minimum interval, not a guaranteed 6.7 Hz stream; it usually delivers around
+200 ms. These are initial tuning values, not measured capacity limits.
 
 Only mobs use this interest policy. Player replication, Metin state, ground loot,
 combat event broadcasts, AI and authoritative hit testing are unchanged. AOI does
@@ -161,7 +165,11 @@ quantization, event interest and broader entity AOI remain separate work.
 
 Verification: default smoke includes `mob_interest`; the existing network runner
 accepts `-Scene mob_interest_network -MarkerPrefix AOI` for two observers,
-empty deltas, boundary hysteresis, death, removal and re-entry. Existing local-map
+empty deltas, boundary hysteresis, death, removal and re-entry. Both clients also
+observe sustained forward motion with interleaved HP-only publications at
+100/150/200 ms settings: target and rendered positions must not rewind, and
+actor identity must survive updates. This headless contract test does not
+validate input/render latency or visual feel. Existing local-map
 and session suites cover recreation/instance isolation; no MMO capacity claim is
 made from these focused fixtures.
 
