@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/items/domain/item_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+definition_id = &"skill_book_aura"
+item_name = "Skill Book: Aura"
+icon_id = &"skill_book"
+stack_limit = 1
+vendor_price = 10
+recipe_tags = Array[StringName]([&"skill_book"])
+recipe_category = &"book"

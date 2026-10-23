@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="VendorRecipeDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/shops/vendor/vendor_recipe_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+recipe_id = &"recycle_skill_books"
+priority = 100
+inputs = Array[Dictionary]([{"tag": "skill_book", "quantity": 5}])
+reward_pool = &"random_skill_book"
+reward_quantity = 1

@@ -25,6 +25,9 @@ func buy(peer: int, command: String, operation: String, shop: ShopDefinition, of
 func upgrade(peer: int, command: String, operation: String, recipe: UpgradeDefinition, uid: String, revision: int) -> void:
 	_capture(peer,command,operation,_runtime.upgrade(peer,operation,recipe,uid,revision))
 
+func sell(peer: int, command: String, operation: String, quote_id: String, npc: String, service: String) -> void:
+	_capture(peer,command,operation,_runtime.sell(peer,operation,quote_id,npc,service))
+
 func receipt(peer: int, command: String, operation: String) -> void:
 	_capture(peer,command,operation,_runtime.receipt(peer,_kind,operation))
 
@@ -57,4 +60,7 @@ func _reply(peer: int, command: String, result: Dictionary) -> void:
 	# Existing client journals retain uncertainty on 'storage'. A volatile busy/
 	# queued/recovery result must never look like a definitive rejected purchase.
 	if error in ["operation_pending","recovery_required","stale_session","session_required","outcome_unknown","unavailable","busy"]: error="storage"
+	if _kind=="sell":
+		_endpoint.receive_vendor.rpc_id(peer,command,{"ok":true,"yang":str(result.get("yang","0")),"rewards":result.get("rewards",[])} if result.get("ok",false) else {"ok":false,"error":error})
+		return
 	_endpoint.receive_operation.rpc_id(peer,command,{"ok":true} if result.get("ok",false) else {"ok":false,"error":error})

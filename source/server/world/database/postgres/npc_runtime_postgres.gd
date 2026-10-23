@@ -1,5 +1,5 @@
 extends RefCounted
-## Single-World coordinator for the two existing NPC economic operations. No SQL
+## Single-World coordinator for NPC purchases, vendor sales and upgrades. No SQL
 ## on the simulation thread, no server durable-admission ACK. Client journals
 ## retain intent; receipts resolve uncertainty before any explicit resubmission.
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
@@ -13,11 +13,35 @@ var _executor: RefCounted
 var _active: Dictionary={}
 var _jobs: Dictionary={}
 var _draining:=false
+var _vendor_quotes: Dictionary={}
+const QUOTE_SECONDS: int=30
 
 func _init(wallet: RefCounted, inventory: RefCounted, executor: RefCounted) -> void:
 	_wallet=wallet
 	_inventory=inventory
 	_executor=executor
+
+## One bounded, server-held quote per bound account. Preview reads the existing
+## committed projection only; no SQL, custody change, wallet write or RNG.
+func quote(peer: int, npc: String, service: String, basket: Array) -> Dictionary:
+	if _draining or not _inventory.mutations_allowed(peer) or not _wallet.ready(peer): return {"ok":false,"error":"recovery_required"}
+	var context: Dictionary=_wallet.context_for_peer(peer)
+	if context.is_empty() or _active.has(context.account_id): return {"ok":false,"error":"recovery_required"}
+	var lines:=VendorResolver.cart(basket)
+	var snapshot: Dictionary=_inventory.snapshot_for_peer(peer)
+	var plan:=VendorResolver.resolve(lines,snapshot.get("items",[]),VendorRecipes.definitions(),VendorRecipes.pools())
+	if not plan.ok: return plan
+	var quote: Dictionary={"quote_id":Crypto.new().generate_random_bytes(16).hex_encode(),"lines":lines,"plan":plan,"version":VendorRecipes.version(),"npc":npc,"service":service,"expires_at":int(Time.get_unix_time_from_system())+QUOTE_SECONDS}
+	_vendor_quotes[context.account_id]={"context":context.duplicate(true),"quote":quote}
+	return {"ok":true,"quote_id":quote.quote_id,"yang":str(plan.yang),"rewards":plan.rewards.duplicate(true),"expires_at":quote.expires_at}
+
+func sell(peer: int, id: String, quote_id: String, npc: String, service: String) -> Dictionary:
+	var context: Dictionary=_wallet.context_for_peer(peer)
+	var held: Dictionary=_vendor_quotes.get(context.get("account_id",0),{})
+	if held.is_empty() or not Sessions.same_context(context,held.context): return {"queued":false,"error":"quote_stale"}
+	var quote: Dictionary=held.quote
+	if quote.quote_id!=quote_id or quote.npc!=npc or quote.service!=service: return {"queued":false,"error":"quote_stale"}
+	return _begin(peer,"sell",id,{"quote":quote},false)
 
 func buy(peer: int, id: String, shop: ShopDefinition, offer: StringName, position: int) -> Dictionary:
 	if shop==null or not shop.validation_errors().is_empty(): return {"queued":false,"error":"request"}
@@ -46,7 +70,7 @@ func receipt(peer: int, kind: String, id: String) -> Dictionary:
 	return _begin(peer,kind,id,{},true)
 
 func _begin(peer: int, kind: String, id: String, body: Dictionary, lookup: bool) -> Dictionary:
-	if _draining or kind not in ["buy","upgrade"] or not Commands.valid_id(id): return {"queued":false,"error":"request"}
+	if _draining or kind not in ["buy","upgrade","sell"] or not Commands.valid_id(id): return {"queued":false,"error":"request"}
 	var context: Dictionary=_wallet.context_for_peer(peer)
 	if context.is_empty(): return {"queued":false,"error":"stale_session"}
 	if _active.has(context.account_id) or not _inventory.mutations_allowed(peer): return {"queued":false,"error":"recovery_required"}
@@ -101,6 +125,10 @@ func _repair(active: Dictionary) -> void:
 		active.retry_at=Time.get_ticks_msec()+1000
 
 func poll() -> void:
+	for account: int in _vendor_quotes.keys():
+		var binding: Dictionary=_wallet.binding(account)
+		var held: Dictionary=_vendor_quotes[account]
+		if binding.is_empty() or not Sessions.same_context(binding.context,held.context) or int(Time.get_unix_time_from_system())>=int(held.quote.expires_at): _vendor_quotes.erase(account)
 	for event: Dictionary in _executor.poll():
 		if not _jobs.has(event.ticket): continue
 		var active: Dictionary=_active.get(_jobs[event.ticket],{})

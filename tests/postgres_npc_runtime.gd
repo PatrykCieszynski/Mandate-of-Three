@@ -182,6 +182,40 @@ func _ready() -> void:
 	assert(balance(9800)==232 and world.wallet_runtime.snapshot(101).balance==232 and items(98001).is_empty())
 	world.wallet_runtime.detach(100) # Late old disconnect cannot retire alt.
 	assert(ready(101))
+	# Vendor shares the SAME worker owner and Inventory/Wallet barriers. Preview
+	# is read-only; a lost completion resolves the original random reward receipt.
+	var vendor_books: Array=[]
+	for index: int in 5: vendor_books.append(seed_item(98001,ItemDefinitions.BOOK_AURA,index))
+	assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(98001).item_state))
+	await wait_for(func()->bool:return ready(101))
+	var basket: Array=[]
+	for uid: String in vendor_books: basket.append({"uid":uid,"revision":0,"amount":1})
+	var vendor_before: Array=items(98001)
+	var vendor_balance: int=balance(9800)
+	var quoted: Dictionary=world.npc_runtime.quote(101,"map/npc","shop",basket)
+	assert(quoted.ok and quoted.rewards.size()==1 and quoted.rewards[0].quantity==1 and not quoted.rewards[0].has("definition_id"))
+	assert(items(98001)==vendor_before and balance(9800)==vendor_balance)
+	assert(not world.npc_runtime.sell(101,"vendor-wrong",quoted.quote_id,"other-map/npc","shop").queued)
+	boundary.lose_next=true
+	assert(world.npc_runtime.sell(101,"vendor-lost",quoted.quote_id,"map/npc","shop").queued)
+	assert(not world.inventory_runtime.submit(101,"vendor-blocked","move",vendor_books[0],0,10).queued)
+	await wait_for(func()->bool:return result("vendor-lost").get("error","")=="outcome_unknown")
+	assert(world.npc_runtime.receipt(101,"sell","vendor-lost").queued)
+	await wait_for(func()->bool:return result("vendor-lost").get("ok",false) and ready(101))
+	var vendor_result: Dictionary=result("vendor-lost")
+	assert(vendor_result.rewards.size()==1 and items(98001).size()==1 and balance(9800)==vendor_balance)
+	assert(world.npc_runtime.receipt(101,"sell","vendor-lost").queued)
+	await wait_for(func()->bool:return ready(101))
+	assert(result("vendor-lost").rewards==vendor_result.rewards and items(98001).size()==1)
+	var remaining_book: Dictionary=items(98001)[0]
+	var old_quote: Dictionary=world.npc_runtime.quote(101,"map/npc","shop",[{"uid":remaining_book.uid,"revision":remaining_book.revision,"amount":1}])
+	assert(old_quote.ok)
+	world.inventory_runtime.detach(101);world.wallet_runtime.detach(101)
+	var relog:=grant(9800,98001,"vendor-relog",2)
+	bind(102,98001,"vendor-relog")
+	assert(world.inventory_runtime.attach(102,relog) and world.wallet_runtime.attach(102,relog))
+	await wait_for(func()->bool:return ready(102))
+	assert(not world.npc_runtime.sell(102,"retired-quote",old_quote.quote_id,"map/npc","shop").queued,"quote cannot cross session generation")
 	assert(await world.flush_postgres_wallets(true))
 	pools[0].begin_drain()
 	await wait_for(func() -> bool: return pools.all(func(pool: RefCounted) -> bool: return pool.is_stopped()))

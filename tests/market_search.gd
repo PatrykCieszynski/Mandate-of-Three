@@ -28,7 +28,12 @@ func _ready() -> void:
 		assert(MarketRequestRules.valid_search({"definition_id":item_id, "upgrade_min":0,
 			"upgrade_max":9, "price_min":0, "price_max":WalletStoreSqlite.MAX_YANG,
 			"affix_filters":[], "sort":"price_asc", "cursor":"", "limit":50}))
-	assert(MarketSearchSqlite.catalog("").items.size() == 6, "only tradeable definitions are browsable")
+	var expected: Array=[]
+	for definition: ItemDefinition in ItemDefinitions.all_definitions():
+		if definition.tradeable: expected.append(str(definition.definition_id))
+	var catalog_ids: Array=MarketSearchSqlite.catalog("").items.map(func(item: Dictionary)->String:return str(item.definition_id))
+	expected.sort();catalog_ids.sort()
+	assert(catalog_ids==expected, "only tradeable definitions are browsable, including newly authored books")
 	assert(MarketSearchSqlite.catalog("dev_trace_sword").items.is_empty(), "untradeable development equipment stays hidden")
 	assert(MarketSearchSqlite.normalize("ŻELAZNY MIECZ")=="zelazny miecz")
 	var search:=MarketSearchSqlite.new(db)

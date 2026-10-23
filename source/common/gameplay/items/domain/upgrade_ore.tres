@@ -9,3 +9,5 @@ stack_limit = 200
 inventory_height = 1
 
 market_fungible = true
+
+vendor_price = 2

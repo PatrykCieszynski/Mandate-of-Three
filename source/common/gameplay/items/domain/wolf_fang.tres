@@ -8,3 +8,5 @@ icon_id = &"upgrade_ore"
 stack_limit = 100
 market_fungible = true
 inventory_height = 1
+
+vendor_price = 2
