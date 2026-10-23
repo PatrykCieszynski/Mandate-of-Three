@@ -42,6 +42,25 @@ try {
     .filter({ hasText: /^Minimize$/ })
     .all())
     await close.click();
+  await page
+    .getByRole('button', { name: 'Open Character', exact: true })
+    .click();
+  await ui.locator('#stats-window').waitFor();
+  assert.equal(
+    await ui.locator('#stats [data-stat=available_points]').textContent(),
+    '4',
+  );
+  await page.locator('#accept').check();
+  await ui.getByRole('button', { name: 'Increase STR', exact: true }).click();
+  await ui
+    .locator('#stats [data-stat=available_points]')
+    .filter({ hasText: '3' })
+    .waitFor();
+  assert.equal(await ui.locator('#stats [data-stat=STR]').textContent(), '13');
+  await page.locator('#accept').uncheck();
+  await page
+    .getByRole('button', { name: 'Hide Character', exact: true })
+    .click();
   await ui.locator('#inventory .inventory-item').first().waitFor();
   assert.equal(await ui.locator('#inventory .inventory-item').count(), 3);
   assert.equal(await ui.locator('.wallet strong').textContent(), '12,345');
