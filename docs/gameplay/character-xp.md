@@ -55,6 +55,13 @@ Thus equip/upgrade refresh cannot erase allocated attributes, and spending a
 point cannot erase a weapon or a buff. Combat reads RAM only. Stat buffs reuse
 existing `Stat` names and runtime expiration timestamps.
 
+Derived combat values are a local World projection, rebuilt on committed attribute
+allocation, equipment update/invalidation, level change, buff change and instance
+entry/transfer. Combat and MP regeneration read that projection; physics ticks do
+not copy equipment or recompute attribute/buff contributions. A cached earliest
+buff deadline triggers one refresh on expiry, without scanning buffs on every
+read. Disconnect discards the projection; reconnect rebuilds it from current sources.
+
 ## Persistence, allocation and retry
 
 XP is soft progression: RAM update, dirty character, approximately 60-second

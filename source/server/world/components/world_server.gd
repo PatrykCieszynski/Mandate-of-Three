@@ -91,6 +91,9 @@ var player_id_to_peer_id: Dictionary[int, int]
 ## Minimal combat view, keyed by persistent character ID. Refreshed only after
 ## loading inventory or a committed item operation, never by a combat action.
 var runtime_equipment: Dictionary[int, Dictionary] = {}
+## Derived RAM projection. Reads only check the next timed-buff deadline.
+var _combat_stats: Dictionary[int, Dictionary] = {}
+var _buff_deadlines: Dictionary[int, int] = {}
 var character_stats = preload("res://source/server/world/components/character_stats_service.gd").new()
 var _equipment_versions: Dictionary[int, Dictionary] = {}
 const ItemStateVersion = preload("res://source/common/gameplay/items/domain/item_state_version.gd")
@@ -108,11 +111,11 @@ func session_ticket_fingerprint(peer_id: int, character_id: int) -> String:
 
 func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> bool:
 	if not snapshot.get("ok", false):
-		runtime_equipment.erase(owner_id)
+		invalidate_runtime_equipment(owner_id)
 		return false
 	var version: Variant = snapshot.get("item_state")
 	if not ItemStateVersion.valid(version) or version.character_id != owner_id:
-		runtime_equipment.erase(owner_id)
+		invalidate_runtime_equipment(owner_id)
 		return false
 	if not ItemStateVersion.accepts(_equipment_versions.get(owner_id,{}),version): return false
 	# An unchanged watermark cannot overwrite already accepted combat inputs.
@@ -135,11 +138,14 @@ func runtime_attack_speed_ratio(owner_id: int) -> float:
 	if not is_finite(speed) or speed <= 0: return -1.0
 	return speed/100.0
 
-## Independent sources compose additively; no item cache rewrite on attribute spend.
 func runtime_combat_stats(owner_id: int) -> Dictionary:
+	if not _combat_stats.has(owner_id) or (_buff_deadlines.get(owner_id,0)>0 and Time.get_ticks_msec()>=_buff_deadlines[owner_id]):
+		refresh_character_stats(player_id_to_peer_id.get(owner_id,0))
+	return _combat_stats.get(owner_id,{})
+
+## Independent sources compose only when one changes, never per combat read.
+func _compose_character_stats(owner_id: int, player: PlayerResource) -> Dictionary:
 	var stats: Dictionary=runtime_equipment.get(owner_id,{}).get("stats",{"attack":10.0,"attack_speed":100.0}).duplicate(true)
-	var peer: int=player_id_to_peer_id.get(owner_id,0)
-	var player: PlayerResource=connected_players.get(peer)
 	stats[Stat.HEALTH_MAX]=float(stats.get(Stat.HEALTH_MAX,0))+100.0
 	stats[Stat.MANA_MAX]=float(stats.get(Stat.MANA_MAX,0))+PlayerResource.BASE_STATS[Stat.MANA_MAX]
 	stats[Stat.MANA_REGEN]=float(stats.get(Stat.MANA_REGEN,0))+PlayerResource.BASE_STATS[Stat.MANA_REGEN]
@@ -150,8 +156,11 @@ func runtime_combat_stats(owner_id: int) -> Dictionary:
 		var key: StringName=&"attack" if stat==Stat.AD else stat
 		stats[key]=float(stats.get(key,0))+additions[stat]
 	var now := Time.get_ticks_msec()
+	_buff_deadlines[owner_id]=0
 	for buff: Dictionary in player.active_buffs:
-		if int(buff.get("expires_ms",0))<=now: continue
+		var expires: int=int(buff.get("expires_ms",0))
+		if expires<=now: continue
+		if _buff_deadlines[owner_id]==0 or expires<_buff_deadlines[owner_id]: _buff_deadlines[owner_id]=expires
 		var stat := StringName(buff.get("stat",&""))
 		var key: StringName=&"attack" if stat==Stat.AD else stat
 		stats[key]=float(stats.get(key,0))+float(buff.get("amount",0))
@@ -159,13 +168,18 @@ func runtime_combat_stats(owner_id: int) -> Dictionary:
 
 func refresh_character_stats(peer: int) -> void:
 	var player: PlayerResource=connected_players.get(peer)
-	if player==null or instance_manager==null: return
+	if player==null or player_id_to_peer_id.get(player.player_id,0)!=peer: return
+	var changed: Callable=refresh_character_stats.bind(peer)
+	if not player.combat_stats_changed.is_connected(changed): player.combat_stats_changed.connect(changed)
+	if not player.level_gained.is_connected(changed): player.level_gained.connect(changed)
+	var stats := _compose_character_stats(player.player_id,player)
+	_combat_stats[player.player_id]=stats
+	if instance_manager==null: return
 	var instance: ServerInstance=instance_manager.find_instance_for_peer(peer)
 	if instance==null: return
 	var world := instance.get_node_or_null("GameWorld") as GameWorld3D
 	if world==null or not world.characters.has(peer): return
 	var body: PlayerActor3D=world.characters[peer]
-	var stats := runtime_combat_stats(player.player_id)
 	body.max_hp=maxi(1,int(stats[Stat.HEALTH_MAX]))
 	body.hp=mini(body.hp,body.max_hp) # Allocating VIT is not a heal or resurrection.
 	body.max_mp=maxf(0,float(stats[Stat.MANA_MAX]))
@@ -179,6 +193,7 @@ func invalidate_runtime_equipment(owner_id: int) -> void:
 	# Preserve the monotonic watermark while denying dependent combat. Only an
 	# authoritative snapshot may rebuild this view; a hit never reads persistence.
 	runtime_equipment.erase(owner_id)
+	refresh_character_stats(player_id_to_peer_id.get(owner_id,0))
 
 static var curr: WorldServer
 
@@ -436,6 +451,9 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	var player: PlayerResource = connected_players.get(peer_id)
 	if player == null:
 		return
+	var changed: Callable=refresh_character_stats.bind(peer_id)
+	if player.combat_stats_changed.is_connected(changed): player.combat_stats_changed.disconnect(changed)
+	if player.level_gained.is_connected(changed): player.level_gained.disconnect(changed)
 	# Last-login-wins may already have installed a newer peer, sometimes sharing
 	# this very PlayerResource. Retire only the old peer entry, never its current
 	# character authority, progression timestamp, combat cache or account status.
@@ -457,6 +475,8 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 	database.save_player(player)
 	runtime_equipment.erase(player.player_id)
+	_combat_stats.erase(player.player_id)
+	_buff_deadlines.erase(player.player_id)
 	_equipment_versions.erase(player.player_id)
 
 	party_service.remember_disconnect(player.player_id)

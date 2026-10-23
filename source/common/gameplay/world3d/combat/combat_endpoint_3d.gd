@@ -191,7 +191,6 @@ func remember_next_facing(peer_id: int, direction: Vector2) -> void:
 func publish_experience(owner_id: int, amount: int, levels_gained: int, level: int) -> void:
 	for peer_id: int in _world.characters:
 		if services.owner_id_for_peer(peer_id)==owner_id:
-			services.refresh_character_stats(peer_id)
 			receive_experience.rpc_id(peer_id,amount,levels_gained,level)
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -258,7 +257,6 @@ func _physics_process(delta: float) -> void:
 	if not GameMode.is_world_server() or not services.item_domain_ready(): return
 	var now: int = Time.get_ticks_msec()
 	for peer: int in _world.characters:
-		services.refresh_character_stats(peer)
 		var actor: PlayerActor3D=_world.characters[peer]
 		if actor.alive:
 			var stats: Dictionary=services.runtime_combat_stats(services.owner_id_for_peer(peer))

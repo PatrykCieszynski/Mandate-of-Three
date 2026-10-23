@@ -18,11 +18,13 @@ static func apply(player: Player, stat: StringName, amount: float, duration_s: f
 	for buff: Dictionary in player.player_resource.active_buffs:
 		if buff["stat"] == stat and is_equal_approx(float(buff["amount"]), amount):
 			buff["expires_ms"] = maxi(int(buff["expires_ms"]), expires_ms)
+			player.player_resource.combat_stats_changed.emit()
 			return
 	player.player_resource.active_buffs.append(
 		{"stat": stat, "amount": amount, "expires_ms": expires_ms}
 	)
 	player.stats_component.modify_stat(stat, amount)
+	player.player_resource.combat_stats_changed.emit()
 
 
 ## Removes expired buffs (reverting their stat bonus). Called by the instance
@@ -32,10 +34,13 @@ static func tick(player: Player) -> void:
 		return
 	var buffs: Array = player.player_resource.active_buffs
 	var now: int = Time.get_ticks_msec()
+	var changed := false
 	for i: int in range(buffs.size() - 1, -1, -1):
 		if now >= int(buffs[i]["expires_ms"]):
 			player.stats_component.modify_stat(StringName(buffs[i]["stat"]), -float(buffs[i]["amount"]))
 			buffs.remove_at(i)
+			changed=true
+	if changed: player.player_resource.combat_stats_changed.emit()
 
 
 ## Puts live buffs back on top of a FRESHLY REBUILT stat block (spawn after an
@@ -52,3 +57,4 @@ static func reapply(player: Player) -> void:
 			buffs.remove_at(i)
 		else:
 			player.stats_component.modify_stat(StringName(buffs[i]["stat"]), float(buffs[i]["amount"]))
+	player.player_resource.combat_stats_changed.emit()

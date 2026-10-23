@@ -1,4 +1,10 @@
 extends RefCounted
+class CountingWorld extends WorldServer:
+	var compositions: int=0
+	func _compose_character_stats(owner_id: int, player: PlayerResource) -> Dictionary:
+		compositions+=1
+		return super._compose_character_stats(owner_id,player)
+
 static func model() -> void:
 	var p:=PlayerResource.new()
 	assert(p.add_experience(17).points_gained==0)
@@ -28,7 +34,7 @@ static func model() -> void:
 			a.add_experience(shares[id])
 			for i: int in shares[id]: b.add_experience(1)
 			assert(a.progression_state()==b.progression_state() and a.available_attributes_points==b.available_attributes_points and a.experience==b.experience)
-	var world:=WorldServer.new();var actor:=PlayerResource.new();actor.init(7,"stats")
+	var world:=CountingWorld.new();var actor:=PlayerResource.new();actor.init(7,"stats")
 	world.connected_players[70]=actor;world.player_id_to_peer_id[7]=70
 	world.runtime_equipment[7]={"stats":{"attack":23.0,"attack_speed":110.0,"health_max":4.0}}
 	actor.active_buffs=[{"stat":Stat.AD,"amount":3.0,"expires_ms":Time.get_ticks_msec()+10000}]
@@ -37,10 +43,32 @@ static func model() -> void:
 	assert(stats.attack==31.0 and is_equal_approx(stats.attack_speed,110.4) and stats.health_max==124.0)
 	assert(stats.armor==0.5 and stats.mana_max==60.0 and is_equal_approx(stats.mana_regen,0.6))
 	assert(world.runtime_equipment[7].stats.attack==23.0,"composition never rewrites equipment")
-	actor.level=9
+	var builds: int=world.compositions
+	for i: int in 600:
+		assert(world.runtime_combat_stats(7)==stats)
+	assert(world.compositions==builds,"unchanged combat/regen reads never rebuild sources")
+	actor.level=8;actor.level_up()
 	assert(world.runtime_combat_stats(7).attack==31.0,"level has no hidden damage multiplier")
 	assert(world.runtime_combat_stats(7).health_max==164.0,"existing HP per-level constant remains")
+	assert(world.compositions==builds+1,"level change refreshes the projection immediately")
+	actor.active_buffs[0].expires_ms=Time.get_ticks_msec()+10
+	actor.combat_stats_changed.emit()
+	OS.delay_msec(20)
+	assert(world.runtime_combat_stats(7).attack==28.0,"expiry refreshes without legacy StatusTick")
+	builds=world.compositions
+	for i: int in 600: world.runtime_combat_stats(7)
+	assert(world.compositions==builds,"expired buffs cannot cause repeated rebuilds")
+	actor.active_buffs[0].expires_ms=Time.get_ticks_msec()+10000
+	actor.combat_stats_changed.emit()
+	assert(world.runtime_combat_stats(7).attack==31.0,"buff extension refreshes its deadline and contribution")
+	world.invalidate_runtime_equipment(7)
+	assert(world.runtime_combat_stats(7).attack==18.0,"invalidated equipment cannot remain in the projection")
 	assert(AttributeMap.weighted(actor.attributes,{&"STR":2.0,&"INT":3.0})==14.0)
+	var replacement:=PlayerResource.new();replacement.init(7,"stats")
+	world.connected_players[71]=replacement;world.player_id_to_peer_id[7]=71
+	world.refresh_character_stats(71)
+	actor.level_up() # Late notification from the retired session must not restore old stats.
+	assert(world.runtime_combat_stats(7).attack==10.0 and world.runtime_combat_stats(7).health_max==100.0,"reconnect replaces the projection; retired session cannot overwrite it")
 	world.free()
 
 static func persistence(store: RefCounted, player: PlayerResource) -> void:

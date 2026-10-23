@@ -139,6 +139,8 @@ var stats_migrated: bool = false
 ## applies the per-level grants (HEALTH_PER_LEVEL) — one hook instead of touching
 ## every add_experience call site (kills, quests, dailies, /xp, redeems).
 signal level_gained
+## Runtime source notification; no persistence or network work in listeners.
+signal combat_stats_changed
 
 ## Current Network ID
 var current_peer_id: int
