@@ -190,3 +190,11 @@ preview's Open/Hide Character controls provide level/EXP, STR/DEX/VIT/INT, point
 and combat fixtures; + changes fixture counters only when Accept is enabled.
 Native allocation is authenticated, journaled and recovered through the existing
 attribute RPC receipts. See docs/gameplay/character-xp.md for the current contract.
+
+
+Vendor Sell V1 uses the same production Sell window in CEF and standalone preview.
+The Shop button opens a reference-only basket, server quote, mystery reward tooltip,
+quantity editing and receipt-only recovery. **Sample vendor** adds five book fixtures
+in the preview; confirmation there is explicitly non-economic. Native client state
+and a scoped immutable journal retain uncertain sales across reload/relog. See
+[Vendor Sell](../../../docs/gameplay/npc/npc-shop.md) for the runtime and verification boundaries.

@@ -1,0 +1,17 @@
+.vendor-window {--window-width:218px;padding-top:4px;padding-bottom:8px;}
+.vendor-hint {margin:4px 0 6px;color:#b9b09b;font-size:11px;}
+.vendor-basket {max-height:240px;overflow:auto;--slot-size:40px;min-height:120px;}
+.vendor-item {cursor:pointer;touch-action:none;}
+.vendor-item.unavailable {opacity:.4;}
+.vendor-quantity,.vendor-actions {display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+.vendor-quantity[hidden] {display:none;}
+.vendor-quantity input {width:46px;background:#1118;color:#ddd1b8;border:1px solid #665b47;}
+.vendor-offer {display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid #655b45;margin-top:8px;padding-top:8px;}
+.vendor-mystery {min-width:48px;min-height:38px;font:18px Georgia;color:#dfc583;cursor:help;}
+.vendor-status {color:#d5bb8a;font-size:11px;margin:6px 0;}
+.vendor-window .ui-button,.shop-window .shop-sell {min-height:24px;padding:2px 7px;border:1px solid #766448;background:linear-gradient(#382c20,#17130f);color:#e7d9ba;font:11px Georgia;cursor:pointer;}
+.vendor-window .ui-button:hover,.shop-window .shop-sell:hover {border-color:#c9ae70;}
+.vendor-window .ui-button:focus-visible {outline:1px solid #dec477;outline-offset:1px;}
+.vendor-window .ui-button:disabled {opacity:.5;cursor:default;}
+.vendor-mystery {display:flex;align-items:center;justify-content:center;white-space:nowrap;}
+.vendor-yang {color:#ddc58e;}

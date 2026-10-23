@@ -27,6 +27,7 @@ export function mountShop(
     resolveItemIcon: ResolveItemIcon;
     buy: (command: ShopBuyCommand) => Promise<CommandResult>;
     retry?: () => Promise<CommandResult>;
+    sell?: () => void;
     dismissRecovery?: () => void;
     onClose: () => void;
     onRegionsChanged?: () => void;
@@ -88,7 +89,19 @@ export function mountShop(
     onClick: () => void retryPurchase(),
   });
   retry.element.hidden = true;
-  shell.contentRoot.append(offers, tabList, status, retry.element);
+  const sell = UiButton({
+    className: 'ui-button shop-sell',
+    label: 'Sell items',
+    onClick: () => options.sell?.(),
+  });
+  sell.element.hidden = !options.sell;
+  shell.contentRoot.append(
+    offers,
+    tabList,
+    status,
+    retry.element,
+    sell.element,
+  );
   const tip = ItemTooltip(root, { geometry: () => options.manager });
   const sources: DragRegistration[] = [],
     controls = itemWindowControls(options.drag, root);
@@ -206,6 +219,8 @@ export function mountShop(
     root.hidden = !state.active;
     offers.hidden = !!(state.active && state.recoveryOnly);
     updateRetry();
+    sell.element.hidden =
+      !options.sell || !!(state.active && state.recoveryOnly);
     if (state.active) {
       const catalog = state;
       shell.panel.querySelector('h1')!.textContent = catalog.name;
@@ -322,6 +337,7 @@ export function mountShop(
       tabs.forEach((tab) => tab.dispose());
       gridView.dispose();
       retry.dispose();
+      sell.dispose();
       tip.dispose();
       shell.dispose();
     },

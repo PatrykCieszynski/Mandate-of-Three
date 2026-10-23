@@ -1,3 +1,4 @@
+import type {VendorSnapshot} from '../screens/vendor/vendor-model.js';
 import type {HotbarSnapshot} from '../inventory/hotbar-model.js';
 import type {StatsSnapshot,Attribute} from '../screens/stats/stats-model.js';
 import type {ChatSnapshot,ChatSend} from '../screens/chat/chat-view.js';
@@ -20,7 +21,7 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'hotbar'|'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'vendor'|'hotbar'|'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
   hotbar?: HotbarSnapshot;
@@ -30,7 +31,7 @@ export interface DomainSnapshot {
   exchange?: ExchangeSnapshot;
   market?: MarketSnapshot;
   market_browser?: MarketBrowserSnapshot;
-  upgrade?: UpgradeSnapshot; npc_targets?: NpcDropTargets; shop?: ShopSnapshot; npc?: NpcInteractionSnapshot; storage?: StorageSnapshot; inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
+  vendor?: VendorSnapshot; upgrade?: UpgradeSnapshot; npc_targets?: NpcDropTargets; shop?: ShopSnapshot; npc?: NpcInteractionSnapshot; storage?: StorageSnapshot; inventory?: InventorySnapshot; equipment?: EquipmentSnapshot; wallet?: WalletSnapshot;
   player?: RawObject; hud?: HudSnapshot;
 }
 export interface Envelope { v: 1; type: string; id?: string; payload: RawObject }
@@ -87,6 +88,12 @@ export interface CommandPayloads {
   'upgrade.retry': Record<string,never>;
   'upgrade.dismiss_recovery': Record<string,never>;
   'npc.upgrade_item': UpgradeCommand;
+  'vendor.open': Record<string, never>;
+  'vendor.close': Record<string, never>;
+  'vendor.edit': {id:string;amount:number};
+  'vendor.refresh': Record<string, never>;
+  'vendor.confirm': Record<string, never>;
+  'vendor.recover': Record<string, never>;
   'shop.open': {npc_instance_id:string;service_id:string};
   'shop.buy': ShopBuyCommand;
   'shop.retry': Record<string, never>;

@@ -27,6 +27,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
       action === 'stats' ||
       action === 'inventory' ||
       action === 'equipment' ||
+      action === 'vendor' ||
       action === 'hotbar' ||
       action === 'storage'
     )
