@@ -1,3 +1,4 @@
+import {QuickItemTargets} from '../web/inventory/quick-item-targets.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {environment,target,measure,fire,capture,bagItem} from './fixtures.mjs';
@@ -23,6 +24,22 @@ test('vendor accepts Inventory references, rejects Storage, supports partial amo
  s.items=[{...item,quantity:1,maximum:2,available:true}];s.quote={yang:'0',rewards:[{type:'random_pool',pool:'books',quantity:1,icon_id:'mystery'}],expires_at:123};view.setState(s);
  assert.ok(root.querySelector('.vendor-mystery')?.textContent?.includes('?'));
  const offered=root.querySelector<HTMLButtonElement>('.vendor-item')!;offered.click();const amount=root.querySelector<HTMLInputElement>('input')!;amount.value='2';Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='Set quantity')!.click();await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['edit',{id:item.id,amount:2}]);
- s.pending=true;s.items[0]!.available=false;s.quote={};view.setState(s);const recover=Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='Check sale result')!;recover.click();await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['recover',{}]);
+ s.pending=true;s.items[0]!.available=false;s.quote={};view.setState(s);const beforePending=commands.length;assert.equal((await view.offerItem(item)).ok,false);assert.equal(commands.length,beforePending);const recover=Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='Check sale result')!;recover.click();await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['recover',{}]);
  view.dispose();registration.dispose();drag.dispose();env.manager.dispose();
+});
+
+test('quick item destination follows opening order, falls back on close and never on refusal',async()=>{
+ const calls:string[]=[];
+ const storage={root:{hidden:true},receive:async()=>{calls.push('storage');}};
+ const vendor={root:{hidden:true},receive:()=>{calls.push('vendor');return null;}};
+ const targets=new QuickItemTargets([storage,vendor]);
+ assert.equal(targets.receive(bagItem),null);
+ storage.root.hidden=false;targets.sync();await targets.receive(bagItem);
+ vendor.root.hidden=false;targets.sync();await targets.receive(bagItem);
+ targets.sync();await targets.receive(bagItem);
+ assert.deepEqual(calls,['storage','vendor','vendor']);
+ vendor.root.hidden=true;targets.sync();await targets.receive(bagItem);
+ vendor.root.hidden=false;targets.sync();await targets.receive(bagItem);
+ storage.root.hidden=true;targets.sync();storage.root.hidden=false;targets.sync();await targets.receive(bagItem);
+ assert.deepEqual(calls,['storage','vendor','vendor','storage','vendor','storage']);
 });

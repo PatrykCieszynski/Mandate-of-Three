@@ -642,6 +642,11 @@ try {
     .waitFor();
   await ui.locator('#vendor .vendor-item').first().click({ button: 'right' });
   assert.equal(await ui.locator('#vendor .vendor-item').count(), 4);
+  await ui
+    .locator('#inventory [data-id="preview-book-0"]')
+    .click({ modifiers: ['Control'] });
+  await ui.locator('#vendor .vendor-item').nth(4).waitFor();
+
   assert.equal(
     await ui.locator('#inventory .inventory-item').count(),
     beforeBooks,

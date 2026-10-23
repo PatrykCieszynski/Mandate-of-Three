@@ -301,6 +301,14 @@ export function mountVendor(root, options) {
     }
     return {
         regions: [shell.panel],
+        offerItem(item) {
+            if (!state?.active || state.pending || state.busy || flight || disposed)
+                return Promise.resolve({ ok: false, error: 'busy' });
+            return send('edit', {
+                id: item.id,
+                amount: Math.min(200, item.quantity),
+            });
+        },
         setState(next) {
             const open = !state?.active && next.active;
             state = structuredClone(next);

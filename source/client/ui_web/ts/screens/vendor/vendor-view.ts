@@ -1,3 +1,4 @@
+import type { ItemPresentation } from '../../game-ui/item-types.js';
 import { UiWindow } from '../../core/window/ui-window.js';
 import { UiButton } from '../../core/primitives/ui-button.js';
 import type { WindowManager } from '../../core/window/window-manager.js';
@@ -361,6 +362,14 @@ export function mountVendor(
   }
   return {
     regions: [shell.panel],
+    offerItem(item: ItemPresentation) {
+      if (!state?.active || state.pending || state.busy || flight || disposed)
+        return Promise.resolve({ ok: false, error: 'busy' });
+      return send('edit', {
+        id: item.id,
+        amount: Math.min(200, item.quantity),
+      });
+    },
     setState(next: VendorSnapshot) {
       const open = !state?.active && next.active;
       state = structuredClone(next);

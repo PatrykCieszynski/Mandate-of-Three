@@ -1,3 +1,4 @@
+import { QuickItemTargets } from './quick-item-targets.js';
 import { mountVendor } from '../screens/vendor/vendor-view.js';
 import { mountStats } from '../screens/stats/stats-view.js';
 import { mountChat } from '../screens/chat/chat-view.js';
@@ -152,6 +153,7 @@ const bridge = new WebBridge({
         if ((message.type === 'ui.snapshot' || message.type === 'vendor.updated') &&
             state.vendor)
             vendor.setState(state.vendor);
+        quickTargets.sync();
     },
 });
 const drag = new ItemDragRuntime({
@@ -179,7 +181,7 @@ const worldDrop = mountNpcWorldDrop(drag, (npc, service, item) => bridge.request
 const view = mountInventory(root, {
     retry: () => bridge.request('inventory.retry', {}),
     drag,
-    quickDeposit: (item) => storage.tryQuickDeposit(item),
+    quickTransfer: (item) => quickTargets.receive(item),
     withdrawItem: (item, position) => storage.withdrawToInventory(item, position),
     buyShopOffer: (subject, position) => shop.buyOffer(subject, position),
     receiveEquipped: (item, position) => equipment.unequip(item, position),
@@ -353,6 +355,12 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
     },
     onRegionsChanged: () => regions?.refresh(),
 });
+const quickTargets = new QuickItemTargets([
+    { root: storageRoot, receive: (item) => storage.tryQuickDeposit(item) },
+    { root: upgradeRoot, receive: (item) => upgrade.selectItem(item) },
+    { root: marketRoot, receive: (item) => market.selectInventory(item) },
+    { root: vendorRoot, receive: (item) => vendor.offerItem(item) },
+]);
 regions = reportInteractiveRegions(bridge, [
     ...bottomHud.regions,
     ...party.regions,
