@@ -19,9 +19,11 @@
 .bottom-hud-icon .item-icon {max-width:100%;max-height:100%;object-fit:contain}
 .bottom-hud-icon .icon-fallback {font:8px/9px Georgia;overflow-wrap:anywhere;text-align:center}
 .bottom-hud-icon .quantity {position:absolute;bottom:0;right:1px;font:10px Georgia;text-shadow:1px 1px #000}
-.bottom-hud-system {display:grid;gap:2px;min-width:78px}
-.bottom-hud-system button {font:9px/11px Georgia;padding:0 4px;color:var(--ink);border:1px solid #655946;background:#24251e;cursor:pointer}
-.bottom-hud-system button:hover {border-color:#ccb377}
+.bottom-hud-system {display:flex;gap:4px;align-items:center}
+.bottom-hud-system button {display:grid;place-items:center;width:32px;height:36px;padding:4px;border:1px solid #655946;background:linear-gradient(#34352b,#161914);box-shadow:inset 0 0 5px #0008;cursor:pointer}
+.bottom-hud-system button:hover {border-color:#ccb377;background:linear-gradient(#494434,#20251c)}
+.bottom-hud-system button:focus-visible {outline:1px solid #dec477;outline-offset:1px}
+.bottom-hud-system img {width:24px;height:24px;pointer-events:none}
 .bottom-hud-feedback {position:absolute;bottom:100%;left:0;max-width:100%;padding:4px 8px;background:#131711ed;border:1px solid #786540;color:#ebcc8b;font:11px Georgia;pointer-events:none}
 .bottom-hud-panel {width:max-content;max-width:calc(100vw / var(--ui-scale,1));flex-wrap:wrap;justify-content:center}
 .bottom-hud-slots,.bottom-hud-vitals,.bottom-hud-system {flex:none}

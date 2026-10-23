@@ -24,6 +24,6 @@ test('two key banks, current meters, assignment-only drag and system actions',as
  container='storage';fire(source,'pointerdown',2,2);fire(env.doc,'pointermove',300,300);fire(env.doc,'pointerup',300,300);await new Promise(r=>setTimeout(r,0));assert.equal(commands.length,1,'storage subjects cannot assign a shortcut');drag.cancel();
  state.slots[15]={id:item.id,name:item.name,icon_id:item.icon_id,quantity:2,available:true};hud.render(state);button.click();await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['activate',15]);
  button.dispatchEvent(new env.host.MouseEvent('contextmenu',{bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['clear',15]);
- const options=Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='Options')!;options.click();await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['system','options']);
+ const options=Array.from(root.querySelectorAll('button')).find(b=>b.getAttribute('aria-label')==='Options')!;options.click();await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['system','options']);
  hud.dispose();assert.equal(drag.registrationCount,1);drag.dispose();env.manager.dispose();
 });

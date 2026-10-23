@@ -108,7 +108,13 @@ export function mountBottomHud(root, options) {
     ]) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.textContent = label;
+        b.title = label;
+        b.setAttribute('aria-label', label);
+        const image = document.createElement('img');
+        image.src = new URL(`../content/ui-${action}.svg`, import.meta.url).href;
+        image.alt = '';
+        image.setAttribute('aria-hidden', 'true');
+        b.append(image);
         b.onclick = () => {
             void send(() => options.system(action));
         };
