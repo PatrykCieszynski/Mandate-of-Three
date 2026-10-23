@@ -241,20 +241,20 @@ export function mountVendor(
     root.hidden = !state.active;
     tip.hide();
     const occupied = new Set<number>();
-    let rows = 4;
+    let rows = 5;
     const items = state.items.map((item) => {
       let at = 0;
       while (
-        Array.from({ length: item.height }, (_, dy) => at + dy * 8).some((c) =>
+        Array.from({ length: item.height }, (_, dy) => at + dy * 10).some((c) =>
           occupied.has(c),
         )
       )
         at++;
-      for (let dy = 0; dy < item.height; dy++) occupied.add(at + dy * 8);
-      rows = Math.max(rows, Math.floor(at / 8) + item.height);
-      return { ...item, x: at % 8, y: Math.floor(at / 8) };
+      for (let dy = 0; dy < item.height; dy++) occupied.add(at + dy * 10);
+      rows = Math.max(rows, Math.floor(at / 10) + item.height);
+      return { ...item, x: at % 10, y: Math.floor(at / 10) };
     });
-    grid.render({ columns: 8, rows, items }, (item) => {
+    grid.render({ columns: 10, rows, items }, (item) => {
       const el = UiSlot({
         tag: 'button',
         label: `Offered ${item.name}`,
@@ -298,12 +298,12 @@ export function mountVendor(
       });
     rewardGrid.render(
       {
-        columns: 8,
-        rows: Math.max(3, Math.ceil(rewards.length / 8)),
+        columns: 10,
+        rows: Math.max(5, Math.ceil(rewards.length / 10)),
         items: rewards.map((r) => ({
           ...r,
-          x: r.index % 8,
-          y: Math.floor(r.index / 8),
+          x: r.index % 10,
+          y: Math.floor(r.index / 10),
           height: 1,
         })),
       },

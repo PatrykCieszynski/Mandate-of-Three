@@ -1,10 +1,10 @@
-.vendor-window {--window-width:338px;padding-top:4px;padding-bottom:8px;}
+.vendor-window {--window-width:418px;padding-top:4px;padding-bottom:8px;}
 .vendor-heading {margin:8px 0 5px;font:12px Georgia;color:#d1aa62;font-variant:small-caps;letter-spacing:.5px;}
 .vendor-offer-heading {display:flex;justify-content:space-between;align-items:center;gap:8px;}
 .vendor-hint {margin:5px 0;color:#aaa18a;font-size:10px;}
 .vendor-basket,.vendor-offer {overflow:auto;--slot-size:40px;border:1px solid #65543c;background:#080a09a8;}
-.vendor-basket {max-height:240px;min-height:160px;}
-.vendor-offer {max-height:160px;min-height:120px;}
+.vendor-basket {height:202px;}
+.vendor-offer {height:202px;}
 .vendor-item {cursor:pointer;touch-action:none;}
 .vendor-item.unavailable {opacity:.4;}
 .vendor-quantity,.vendor-actions {display:flex;gap:4px;margin-top:6px;}
