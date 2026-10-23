@@ -1,7 +1,7 @@
 class_name HotbarBindings
 extends RefCounted
 ## Client preference: references only. Item custody remains in the authoritative inventory.
-const SLOT_COUNT: int = 8
+const SLOT_COUNT: int = 16
 const ITEM: StringName = &"item"
 const SKILL: StringName = &"skill"
 var slots: Array[Dictionary] = []
@@ -43,7 +43,8 @@ func resolve(index: int, owned_uids: Dictionary, known_skills: Dictionary) -> Di
 	return value
 
 func load_bindings(values: Array) -> bool:
-	if values.size() != SLOT_COUNT:
+	# Preserve the original eight-slot preference format on upgrade.
+	if values.size() not in [8,SLOT_COUNT]:
 		return false
 	var next: Array[Dictionary] = []
 	for value: Variant in values:
@@ -61,6 +62,7 @@ func load_bindings(values: Array) -> bool:
 			next.append({"kind": SKILL, "id": StringName(value.id)})
 		else:
 			return false
+	while next.size()<SLOT_COUNT: next.append({})
 	slots = next
 	return true
 

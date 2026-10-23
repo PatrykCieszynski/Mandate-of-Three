@@ -61,6 +61,34 @@ try {
   await page
     .getByRole('button', { name: 'Hide Character', exact: true })
     .click();
+  const dragItem = ui.locator('#inventory [data-id=preview-sword]');
+  const dragBox = await dragItem.boundingBox(),
+    hotbarBox = await ui.locator('#bottom-hud [data-slot="15"]').boundingBox();
+  assert.ok(dragBox && hotbarBox);
+  await page.mouse.move(
+    dragBox.x + dragBox.width / 2,
+    dragBox.y + dragBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    hotbarBox.x + hotbarBox.width / 2,
+    hotbarBox.y + hotbarBox.height / 2,
+    { steps: 12 },
+  );
+  await page.mouse.up();
+  await ui
+    .getByRole('button', { name: 'Quick slot F8: Iron sword', exact: true })
+    .waitFor();
+  assert.equal(
+    await ui.locator('#inventory [data-id=preview-sword]').count(),
+    1,
+  );
+  await ui
+    .getByRole('button', { name: 'Quick slot F8: Iron sword', exact: true })
+    .click({ button: 'right' });
+  await ui
+    .getByRole('button', { name: 'Quick slot F8, empty', exact: true })
+    .waitFor();
   await ui.locator('#inventory .inventory-item').first().waitFor();
   assert.equal(await ui.locator('#inventory .inventory-item').count(), 3);
   assert.equal(await ui.locator('.wallet strong').textContent(), '12,345');
@@ -123,7 +151,7 @@ try {
         ?.contentDocument?.querySelector<HTMLElement>('#inventory')
         ?.style.getPropertyValue('--ui-scale') === '1.25',
   );
-  // The persistent HUD shares the snapshot scale without becoming an input region.
+  // The persistent HUD shares the snapshot scale and reports only its actual panel as an input region.
   await page.waitForFunction(
     () =>
       document
@@ -507,13 +535,12 @@ try {
     .filter({ hasText: 'A new public message' })
     .waitFor();
   await ui.locator('#bottom-hud .bottom-hud-slot').first().waitFor();
-  assert.equal(await ui.locator('#bottom-hud .bottom-hud-slot').count(), 8);
+  assert.equal(await ui.locator('#bottom-hud .bottom-hud-slot').count(), 16);
   await page
     .getByRole('button', { name: 'Sample hotbar', exact: true })
     .click();
   await ui
-    .locator('#bottom-hud .assigned')
-    .filter({ hasText: 'Potion' })
+    .getByRole('button', { name: 'Quick slot 1: Material', exact: true })
     .waitFor();
   await page.getByRole('button', { name: 'Empty hotbar', exact: true }).click();
   await ui
@@ -525,8 +552,7 @@ try {
     .getByRole('button', { name: 'Sample hotbar', exact: true })
     .click();
   await ui
-    .locator('#bottom-hud .assigned')
-    .filter({ hasText: 'Potion' })
+    .getByRole('button', { name: 'Quick slot 1: Material', exact: true })
     .waitFor();
   if (screenshot) await page.screenshot({ path: screenshot, fullPage: true });
   await ui.locator('#bottom-hud').waitFor({ state: 'visible' });

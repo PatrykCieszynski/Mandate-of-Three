@@ -99,6 +99,7 @@ jobs:
           & ./tests/run-combat.ps1 -Scene chat_network -MarkerPrefix CHAT
           & ./tests/run-combat.ps1 -Scene stats_network -MarkerPrefix STATS
           & ./tests/run-combat.ps1 -Scene stats_ui_network -MarkerPrefix STATS_UI
+          & ./tests/run-combat.ps1 -Scene hotbar_network -MarkerPrefix HOTBAR
       - name: Verify exported client and server packs
         shell: pwsh
         run: |

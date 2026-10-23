@@ -25,6 +25,7 @@ var _npc_repath_ms: int = 0
 var _npc_approach_until_ms: int = 0
 var _camera: Camera3D
 var camera_controller: MandateCamera3D
+var _channel_panel: Control
 var _options: Navigator
 var _ui_failure_label: Label
 var _status: Label
@@ -204,6 +205,7 @@ func _build_camera_and_ui() -> void:
 	_options.hide()
 	options_layer.add_child(_options)
 	var channel_panel := preload("res://source/client/network/channel_transfer_panel.gd").new()
+	_channel_panel=channel_panel
 	options_layer.add_child(channel_panel)
 	var network := get_parent().get_parent() as InstanceManagerClient
 	if network!=null:
@@ -225,9 +227,11 @@ func _build_camera_and_ui() -> void:
 		ClientState.menu_open = _options.visible
 		input_enabled = not _options.visible
 		if not _options.visible: get_viewport().gui_release_focus())
-	options_button.pressed.connect(func() -> void:
-		if is_instance_valid(channel_panel): channel_panel.hide()
-		_options.show())
+	options_button.pressed.connect(show_options)
+
+func show_options() -> void:
+	if is_instance_valid(_channel_panel): _channel_panel.hide()
+	if is_instance_valid(_options): _options.show()
 
 func gameplay_camera() -> Camera3D:
 	return _camera

@@ -1,3 +1,4 @@
+import { isHotbar } from './inventory/hotbar-model.js';
 import { isStats } from './screens/stats/stats-model.js';
 import { isChatSnapshot } from './screens/chat/chat-view.js';
 import { isParty } from './screens/party/party-view.js';
@@ -47,10 +48,10 @@ export function isCommandResult(result) {
         (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message) {
-    return !message.id && ['ui.snapshot', 'stats.updated', 'chat.updated', 'party.updated', 'exchange.updated', 'market_browser.updated', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
+    return !message.id && ['ui.snapshot', 'hotbar.updated', 'stats.updated', 'chat.updated', 'party.updated', 'exchange.updated', 'market_browser.updated', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
 }
 export function isDomainName(value) {
-    return ['stats', 'chat', 'party', 'exchange', 'market_browser', 'market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
+    return ['hotbar', 'stats', 'chat', 'party', 'exchange', 'market_browser', 'market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
 }
 export function isRawDomainState(value) {
     return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -116,8 +117,7 @@ function isHud(value) {
     return isObject(value) && (value.storage_open !== true || value.inventory_open === true) && (!('storage_open' in value) || typeof value.storage_open === 'boolean') && (!('inventory_open' in value) || typeof value.inventory_open === 'boolean') &&
         (!('equipment_open' in value) || typeof value.equipment_open === 'boolean') &&
         (!('ui_scale' in value) || (finiteRange(value.ui_scale, 0.8, 1.5) && UI_SCALES.includes(value.ui_scale))) &&
-        (!('viewport' in value) || isViewport(value.viewport)) &&
-        (!('quick_slots' in value) || (Array.isArray(value.quick_slots) && value.quick_slots.length <= 8 && value.quick_slots.every(slot => isObject(slot) && Object.keys(slot).every(key => key === 'label') && (!('label' in slot) || (typeof slot.label === 'string' && slot.label.length <= 64)))));
+        (!('viewport' in value) || isViewport(value.viewport));
 }
 function isUpgrade(value) {
     if (!isObject(value) || typeof value.active !== 'boolean')
@@ -182,6 +182,7 @@ export function isValidDomainValue(domain, value) {
     if (!isObject(value))
         return false;
     switch (domain) {
+        case 'hotbar': return isHotbar(value);
         case 'stats': return isStats(value);
         case 'chat': return isChatSnapshot(value);
         case 'party': return isParty(value);

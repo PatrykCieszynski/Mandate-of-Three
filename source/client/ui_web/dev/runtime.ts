@@ -22,16 +22,47 @@ import type { DomainSnapshot, StateType } from '../web/protocol/contracts.js';
 import type { PreviewAction } from './contracts.js';
 const receivers: ((raw: unknown) => void)[] = [];
 let accept = false;
-const hotbarFixture = () => [
-  { label: 'Potion' },
-  { label: 'Sword' },
-  {},
-  { label: 'Aura' },
-  {},
-  {},
-  {},
-  {},
-];
+const hotbarFixture =
+  (): import('../web/inventory/hotbar-model.js').HotbarSnapshot => ({
+    slots: Array.from({ length: 16 }, (_, i) =>
+      i === 0
+        ? {
+            id: 'preview-material',
+            name: 'Material',
+            icon_id: 'material',
+            quantity: 12,
+            available: true,
+          }
+        : i === 1
+          ? {
+              id: 'preview-sword',
+              name: 'Iron sword',
+              icon_id: 'iron_sword',
+              quantity: 1,
+              available: true,
+            }
+          : i === 8
+            ? {
+                id: 'preview-armor',
+                name: 'Armor',
+                icon_id: 'armor',
+                quantity: 1,
+                available: true,
+              }
+            : {},
+    ),
+    vitals: {
+      ready: true,
+      hp: 340,
+      max_hp: 360,
+      mp: 65,
+      max_mp: 80,
+      level: '7',
+    },
+    ready: true,
+    busy: false,
+    error: '',
+  });
 function storageFixture(): StorageSnapshot {
   return {
     columns: STORAGE_COLUMNS,
@@ -102,6 +133,7 @@ function storageFixture(): StorageSnapshot {
 
 function fixture(): DomainSnapshot {
   return {
+    hotbar: hotbarFixture(),
     stats: statsFixture(),
     chat: chatFixture(),
     storage: storageFixture(),
@@ -110,7 +142,6 @@ function fixture(): DomainSnapshot {
       inventory_open: true,
       equipment_open: true,
       ui_scale: 1,
-      quick_slots: hotbarFixture(),
     },
     wallet: { balance: 12345, ready: true },
     inventory: {
@@ -242,6 +273,66 @@ window.sendIpcMessage = (raw) => {
   }
   if (!message.id) return;
   queueMicrotask(() => {
+    if (message.type === 'hud.action') {
+      const action = message.payload.action;
+      if (action === 'inventory') {
+        const open = !state.hud?.inventory_open;
+        state.hud = {
+          ...state.hud,
+          inventory_open: open,
+          equipment_open: open,
+          ...(!open ? { storage_open: false } : {}),
+        };
+        emit('hud.updated', state.hud);
+      }
+      if (action === 'stats' && state.stats) {
+        state.stats.opened = !state.stats.opened;
+        emit('stats.updated', state.stats);
+      }
+      emit(
+        'command.result',
+        action === 'options'
+          ? { ok: false, error: 'preview_native_only' }
+          : { ok: true },
+        message.id,
+      );
+      return;
+    }
+    if (message.type.startsWith('hotbar.') && state.hotbar) {
+      const index = message.payload.slot;
+      let result = { ok: false, error: 'unavailable' };
+      if (
+        typeof index === 'number' &&
+        Number.isInteger(index) &&
+        index >= 0 &&
+        index < 16
+      ) {
+        if (message.type === 'hotbar.assign') {
+          const item = state.inventory?.items.find(
+            (item) => item.id === message.payload.id,
+          );
+          if (item) {
+            state.hotbar.slots[index] = {
+              id: item.id,
+              name: item.name,
+              icon_id: item.icon_id,
+              quantity: item.quantity,
+              available: true,
+            };
+            result = { ok: true, error: '' };
+          }
+        }
+        if (message.type === 'hotbar.clear') {
+          state.hotbar.slots[index] = {};
+          result = { ok: true, error: '' };
+        }
+        if (message.type === 'hotbar.activate')
+          result = { ok: false, error: 'preview_native_only' };
+      }
+      emit('hotbar.updated', state.hotbar);
+      emit('command.result', result, message.id);
+      return;
+    }
     if (message.type.startsWith('stats.') && state.stats) {
       if (message.type === 'stats.close') state.stats.opened = false;
       if (
@@ -498,11 +589,10 @@ window.addEventListener('message', (event) => {
       emit('hud.updated', state.hud);
       break;
     case 'hotbar':
-      state.hud = {
-        ...state.hud,
-        quick_slots: request.value ? hotbarFixture() : [],
-      };
-      emit('hud.updated', state.hud);
+      state.hotbar = hotbarFixture();
+      if (!request.value)
+        state.hotbar.slots = Array.from({ length: 16 }, () => ({}));
+      emit('hotbar.updated', state.hotbar);
       break;
     case 'scale':
       state.hud = { ...state.hud, ui_scale: request.value };

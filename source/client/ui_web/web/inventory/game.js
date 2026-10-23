@@ -35,8 +35,6 @@ const itemIcons = new ItemIconResolver({
 export const resolveItemIcon = (id) => itemIcons.resolve(id);
 export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
-const bottomHud = mountBottomHud(findElement(document, '#bottom-hud', 'aside'));
-bottomHud.setScale(manager.scale);
 const root = findElement(document, '#inventory', 'main'), storageRoot = findElement(document, '#storage', 'main'), equipmentRoot = findElement(document, '#equipment', 'main'), shopRoot = findElement(document, '#shop', 'main'), exchangeRoot = findElement(document, '#exchange', 'main'), marketBrowserRoot = findElement(document, '#market-browser', 'main'), marketVisitorRoot = findElement(document, '#market-visitor', 'main'), marketRoot = findElement(document, '#market', 'main'), upgradeRoot = findElement(document, '#upgrade', 'main'), npcRoot = findElement(document, '#npc-menu', 'main'), npcServiceRoot = findElement(document, '#npc-service', 'main'), store = new DomainStore();
 let regions;
 const bridge = new WebBridge({
@@ -117,9 +115,11 @@ const bridge = new WebBridge({
             viewport: () => ({ width: innerWidth, height: innerHeight }),
             onRegionsChanged: () => regions?.refresh(),
         });
+        if ((message.type === 'ui.snapshot' || message.type === 'hotbar.updated') &&
+            state.hotbar)
+            bottomHud.render(state.hotbar);
         if (message.type === 'ui.snapshot' || message.type === 'hud.updated') {
             bottomHud.setScale(manager.scale);
-            bottomHud.render(state.hud?.quick_slots ?? []);
         }
         if ((message.type === 'ui.snapshot' || message.type === 'party.updated') &&
             state.party)
@@ -156,6 +156,16 @@ const drag = new ItemDragRuntime({
         regions?.refresh();
     },
 });
+const bottomHud = mountBottomHud(findElement(document, '#bottom-hud', 'aside'), {
+    drag,
+    resolveItemIcon,
+    assign: (slot, id) => bridge.request('hotbar.assign', { slot, id }),
+    clear: (slot) => bridge.request('hotbar.clear', { slot }),
+    activate: (slot) => bridge.request('hotbar.activate', { slot }),
+    system: (action) => bridge.request('hud.action', { action }),
+    regions: () => regions?.refresh(),
+});
+bottomHud.setScale(manager.scale);
 const worldDrop = mountNpcWorldDrop(drag, (npc, service, item) => bridge.request('npc.upgrade_item', {
     npc_instance_id: npc,
     service_id: service,
@@ -325,6 +335,7 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
     onRegionsChanged: () => regions?.refresh(),
 });
 regions = reportInteractiveRegions(bridge, [
+    ...bottomHud.regions,
     ...party.regions,
     ...worldDrop.regions,
     ...shop.regions,

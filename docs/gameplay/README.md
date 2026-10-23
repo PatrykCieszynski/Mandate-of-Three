@@ -5,6 +5,7 @@ Gameplay rules and server-authoritative player interactions. These describe the 
 - [Combat and Warrior](combat/README.md)
 - [Mobs and packs](mob-packs-v1.md), [horn taunt](horn-taunt-v1.md), [Metin encounters](metin-encounter-v1.md), [ground loot](pve-ground-loot.md)
 - [NPC interactions](npc/README.md)
+- [Hotbar and world HUD](hotbar-v1.md)
 - [Character XP](character-xp.md), [item progression](item-progression.md)
 - [Camera controls](camera-v1.md)
 
