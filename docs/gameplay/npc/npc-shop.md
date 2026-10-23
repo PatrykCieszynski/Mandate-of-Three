@@ -202,9 +202,11 @@ separate boundaries, described below.
 
 ### CEF basket and client recovery
 
-Shop's **Sell items** button opens a compact Sell window with the common frame,
-UiItemGrid and ItemTooltip. Inventory opens alongside it. Inventory-only drag
-adds a reference (default: the current stack, at most 200 units); clicking an
+Shop's **Sell items** button opens a Sell window with the common frame,
+UiItemGrid and ItemTooltip. The vendor's output grid sits above the player's
+offered-item grid, with **Accept** and **Cancel** below. Closing the window keeps
+an unresolved sale available for receipt recovery. Inventory opens alongside it.
+Inventory-only drag adds a reference (default: the current stack, at most 200 units); clicking an
 offered item exposes its quantity editor, and right-click removes that reference.
 Storage/equipment subjects cannot enter this target. None of these gestures
 changes custody, amount, position or revision in authoritative Inventory.

@@ -33,7 +33,13 @@ export function mountVendor(root, options) {
     });
     const hint = document.createElement('p');
     hint.className = 'vendor-hint';
-    hint.textContent = 'Offer items from Inventory. Right-click to remove.';
+    hint.textContent = 'Drag from Inventory · Right-click to remove';
+    const yourHeading = document.createElement('h2');
+    yourHeading.className = 'vendor-heading';
+    yourHeading.textContent = 'Your offer';
+    const offerHeading = document.createElement('h2');
+    offerHeading.className = 'vendor-heading';
+    offerHeading.textContent = 'Vendor’s offer';
     const viewport = document.createElement('div');
     viewport.className = 'vendor-basket';
     viewport.setAttribute('aria-label', 'Sale basket');
@@ -68,6 +74,11 @@ export function mountVendor(root, options) {
     const offer = document.createElement('div');
     offer.className = 'vendor-offer';
     offer.setAttribute('aria-label', 'Vendor offer');
+    const rewardCells = document.createElement('div');
+    offer.append(rewardCells);
+    const rewardGrid = UiItemGrid(rewardCells, { slotSize: () => 40 });
+    const offerSummary = document.createElement('p');
+    offerSummary.className = 'vendor-summary';
     const status = document.createElement('p');
     status.setAttribute('role', 'status');
     status.className = 'vendor-status';
@@ -78,7 +89,7 @@ export function mountVendor(root, options) {
     });
     const confirm = UiButton({
         className: 'ui-button',
-        label: 'Confirm sale',
+        label: 'Accept',
         onClick: () => void send('confirm', {}),
     });
     const recover = UiButton({
@@ -86,10 +97,19 @@ export function mountVendor(root, options) {
         label: 'Check sale result',
         onClick: () => void send('recover', {}),
     });
+    confirm.element.setAttribute('aria-label', 'Confirm sale');
+    const cancel = UiButton({
+        className: 'ui-button',
+        label: 'Cancel',
+        onClick: options.close,
+    });
+    const offerHeader = document.createElement('div');
+    offerHeader.className = 'vendor-offer-heading';
+    offerHeader.append(offerHeading, refresh.element);
     const actions = document.createElement('div');
     actions.className = 'vendor-actions';
-    actions.append(refresh.element, confirm.element, recover.element);
-    shell.contentRoot.append(hint, viewport, editor, offer, status, actions);
+    actions.append(confirm.element, cancel.element);
+    shell.contentRoot.append(offerHeader, offer, offerSummary, yourHeading, viewport, hint, editor, status, recover.element, actions);
     const tip = ItemTooltip(root, { geometry: () => options.manager });
     const controls = itemWindowControls(options.drag, root);
     controls.push(options.drag.registerTarget({
@@ -177,17 +197,17 @@ export function mountVendor(root, options) {
         root.hidden = !state.active;
         tip.hide();
         const occupied = new Set();
-        let rows = 3;
+        let rows = 4;
         const items = state.items.map((item) => {
             let at = 0;
-            while (Array.from({ length: item.height }, (_, dy) => at + dy * 5).some((c) => occupied.has(c)))
+            while (Array.from({ length: item.height }, (_, dy) => at + dy * 8).some((c) => occupied.has(c)))
                 at++;
             for (let dy = 0; dy < item.height; dy++)
-                occupied.add(at + dy * 5);
-            rows = Math.max(rows, Math.floor(at / 5) + item.height);
-            return { ...item, x: at % 5, y: Math.floor(at / 5) };
+                occupied.add(at + dy * 8);
+            rows = Math.max(rows, Math.floor(at / 8) + item.height);
+            return { ...item, x: at % 8, y: Math.floor(at / 8) };
         });
-        grid.render({ columns: 5, rows, items }, (item) => {
+        grid.render({ columns: 8, rows, items }, (item) => {
             const el = UiSlot({
                 tag: 'button',
                 label: `Offered ${item.name}`,
@@ -215,28 +235,61 @@ export function mountVendor(root, options) {
             return el;
         });
         editor.hidden = !state.items.some((i) => i.id === selected);
-        offer.replaceChildren();
-        const yang = document.createElement('div');
-        yang.className = 'vendor-yang';
-        yang.textContent =
+        const rewards = [];
+        if (state.quote.yang !== undefined &&
+            (state.quote.yang !== '0' || !state.quote.rewards?.length))
+            rewards.push({ kind: 'yang', quantity: state.quote.yang, index: 0 });
+        for (const reward of state.quote.rewards ?? [])
+            rewards.push({
+                kind: 'mystery',
+                quantity: String(reward.quantity),
+                index: rewards.length,
+            });
+        rewardGrid.render({
+            columns: 8,
+            rows: Math.max(3, Math.ceil(rewards.length / 8)),
+            items: rewards.map((r) => ({
+                ...r,
+                x: r.index % 8,
+                y: Math.floor(r.index / 8),
+                height: 1,
+            })),
+        }, (reward) => {
+            const isYang = reward.kind === 'yang';
+            const item = UiSlot({
+                label: isYang
+                    ? `${reward.quantity} Yang`
+                    : `Random Skill Book ×${reward.quantity}`,
+                className: isYang ? 'vendor-yang' : 'vendor-mystery',
+            });
+            item.setAttribute('role', 'img');
+            const symbol = document.createElement('span');
+            symbol.className = 'vendor-reward-symbol';
+            symbol.textContent = isYang ? '◉' : '?';
+            const count = document.createElement('span');
+            count.className = 'vendor-reward-count';
+            count.textContent = isYang ? reward.quantity : `×${reward.quantity}`;
+            item.append(symbol, count);
+            item.onpointermove = (e) => tip.show(e, isYang
+                ? {
+                    name: `${reward.quantity} Yang`,
+                    description: 'Currency offered by the vendor for this basket.',
+                }
+                : {
+                    name: 'Random Skill Book',
+                    description: 'One random book from the available pool. The exact reward is drawn only when the sale commits.',
+                });
+            item.onpointerleave = () => tip.hide();
+            return item;
+        });
+        offerSummary.textContent =
             state.quote.yang === undefined
-                ? 'Add items to receive an offer.'
-                : `${state.quote.yang} Yang`;
-        offer.append(yang);
-        for (const reward of state.quote.rewards ?? []) {
-            const mystery = UiSlot({
-                label: `Random Skill Book ×${reward.quantity}`,
-                className: 'vendor-mystery',
-            });
-            mystery.setAttribute('role', 'img');
-            mystery.textContent = `? ×${reward.quantity}`;
-            mystery.onpointermove = (e) => tip.show(e, {
-                name: 'Random Skill Book',
-                description: 'One random book from the available pool. The exact reward is drawn only when the sale commits.',
-            });
-            mystery.onpointerleave = () => tip.hide();
-            offer.append(mystery);
-        }
+                ? 'Add items below to receive an offer.'
+                : `${state.quote.yang} Yang${state.quote.rewards?.length ? ' + mystery reward' : ''}`;
+        cancel.element.textContent = state.pending ? 'Close' : 'Cancel';
+        cancel.element.title = state.pending
+            ? 'Close the window; pending sale recovery is retained.'
+            : 'Close without confirming the offered items.';
         status.textContent = state.busy
             ? 'Confirming sale…'
             : state.quoting
@@ -259,8 +312,9 @@ export function mountVendor(root, options) {
             disposed = true;
             controls.forEach((c) => c.dispose());
             grid.dispose();
+            rewardGrid.dispose();
             tip.dispose();
-            for (const b of [apply, remove, refresh, confirm, recover])
+            for (const b of [apply, remove, refresh, confirm, recover, cancel])
                 b.dispose();
             shell.dispose();
         },
