@@ -139,3 +139,7 @@ wallet/session suites remain the correctness owners for uncertain writes.
 Rollback is a coordinated Master/World version rollback after draining sessions,
 not hot-editing settings or replacing a live owner. No schema migration is added.
 Do not restore the misleading 200 metadata value while retaining 64-owner caps.
+
+Stats V1 uses `[runtime].stats_attempts_per_second` (default 8) for new attribute
+allocation attempts per live peer. Retained successful command retries/conflicts
+are resolved before this budget; rejected commands do not create durable receipts.

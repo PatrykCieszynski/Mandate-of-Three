@@ -80,8 +80,8 @@ func save_progression(players: Array[PlayerResource]) -> bool:
 	if players.is_empty(): return true
 	if not begin(): return false
 	for player: PlayerResource in players:
-		if not _query("UPDATE players SET level=:p0,experience=:p1,available_attributes_points=:p2 WHERE player_id=:p3 RETURNING player_id;",
-			[player.level, player.experience, player.available_attributes_points, player.player_id]) \
+		if not _query("UPDATE players SET level=:p0,experience=:p1,available_attributes_points=:p2,attributes_json=:p4,progression_json=:p5 WHERE player_id=:p3 RETURNING player_id;",
+			[player.level,player.experience,player.available_attributes_points,player.player_id,PlayerProfileCodec.encode_attributes(player.attributes),PlayerProfileCodec.encode_progression(player.progression_state())]) \
 			or _rows.size() != 1:
 			rollback()
 			return false
@@ -92,7 +92,7 @@ func save_progression(players: Array[PlayerResource]) -> bool:
 
 
 func save_player(player: PlayerResource) -> bool:
-	var attributes_json: String = JSON.stringify(player.attributes)
+	var attributes_json: String = PlayerProfileCodec.encode_attributes(player.attributes)
 	var inventory_json: String = JSON.stringify(player.inventory)
 	var equipment_json: String = JSON.stringify(player.equipment)
 	var skills_json: String = JSON.stringify(player.skills)
@@ -127,8 +127,8 @@ func save_player(player: PlayerResource) -> bool:
 		+ "player_id, account_name, display_name, skin_id, level, experience, available_attributes_points, "
 		+ "profile_status, profile_animation, "
 		+ "attributes_json, inventory_json, equipment_json, skills_json, mastery_json, quests_json, friends_json, blocked_ids_json, owned_skins_json, server_roles_json, stats_json, titles_json, dailies_json, dungeon_lockouts_json, redeemed_codes_json, wardstones_json, "
-		+ "active_guild_id, joined_guild_ids_json, led_guild_id"
-		+ ") VALUES(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9, :p10, :p11, :p12, :p13, :p14, :p15, :p16, :p17, :p18, :p19, :p20, :p21, :p22, :p23, :p24, :p25, :p26, :p27) ON CONFLICT(player_id) DO UPDATE SET display_name=EXCLUDED.display_name, skin_id=EXCLUDED.skin_id, level=EXCLUDED.level, experience=EXCLUDED.experience, available_attributes_points=EXCLUDED.available_attributes_points, profile_status=EXCLUDED.profile_status, profile_animation=EXCLUDED.profile_animation, attributes_json=EXCLUDED.attributes_json, inventory_json=EXCLUDED.inventory_json, equipment_json=EXCLUDED.equipment_json, skills_json=EXCLUDED.skills_json, mastery_json=EXCLUDED.mastery_json, quests_json=EXCLUDED.quests_json, friends_json=EXCLUDED.friends_json, blocked_ids_json=EXCLUDED.blocked_ids_json, owned_skins_json=EXCLUDED.owned_skins_json, server_roles_json=EXCLUDED.server_roles_json, stats_json=EXCLUDED.stats_json, titles_json=EXCLUDED.titles_json, dailies_json=EXCLUDED.dailies_json, dungeon_lockouts_json=EXCLUDED.dungeon_lockouts_json, redeemed_codes_json=EXCLUDED.redeemed_codes_json, wardstones_json=EXCLUDED.wardstones_json, active_guild_id=EXCLUDED.active_guild_id, joined_guild_ids_json=EXCLUDED.joined_guild_ids_json, led_guild_id=EXCLUDED.led_guild_id WHERE players.account_name=EXCLUDED.account_name RETURNING player_id;",
+		+ "active_guild_id, joined_guild_ids_json, led_guild_id, progression_json"
+		+ ") VALUES(:p0, :p1, :p2, :p3, :p4, :p5, :p6, :p7, :p8, :p9, :p10, :p11, :p12, :p13, :p14, :p15, :p16, :p17, :p18, :p19, :p20, :p21, :p22, :p23, :p24, :p25, :p26, :p27, :p28) ON CONFLICT(player_id) DO UPDATE SET display_name=EXCLUDED.display_name, skin_id=EXCLUDED.skin_id, level=EXCLUDED.level, experience=EXCLUDED.experience, available_attributes_points=EXCLUDED.available_attributes_points, profile_status=EXCLUDED.profile_status, profile_animation=EXCLUDED.profile_animation, attributes_json=EXCLUDED.attributes_json, inventory_json=EXCLUDED.inventory_json, equipment_json=EXCLUDED.equipment_json, skills_json=EXCLUDED.skills_json, mastery_json=EXCLUDED.mastery_json, quests_json=EXCLUDED.quests_json, friends_json=EXCLUDED.friends_json, blocked_ids_json=EXCLUDED.blocked_ids_json, owned_skins_json=EXCLUDED.owned_skins_json, server_roles_json=EXCLUDED.server_roles_json, stats_json=EXCLUDED.stats_json, titles_json=EXCLUDED.titles_json, dailies_json=EXCLUDED.dailies_json, dungeon_lockouts_json=EXCLUDED.dungeon_lockouts_json, redeemed_codes_json=EXCLUDED.redeemed_codes_json, wardstones_json=EXCLUDED.wardstones_json, active_guild_id=EXCLUDED.active_guild_id, joined_guild_ids_json=EXCLUDED.joined_guild_ids_json, led_guild_id=EXCLUDED.led_guild_id, progression_json=EXCLUDED.progression_json WHERE players.account_name=EXCLUDED.account_name RETURNING player_id;",
 		[
 			player.player_id,
 			player.account_name,
@@ -160,7 +160,8 @@ func save_player(player: PlayerResource) -> bool:
 
 			player.active_guild_id,
 			joined_guild_ids_json,
-			player.led_guild_id
+			player.led_guild_id,
+			PlayerProfileCodec.encode_progression(player.progression_state())
 		]
 	) and _rows.size()==1
 	if not saved and db.in_transaction(): _transaction_failed=true
@@ -183,8 +184,8 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 
 	# ItemInstance/wallet initialization belongs to the existing PG domain owners.
 	player.inventory = {}
-	# Starting attribute points so a new character has something to spend.
-	player.available_attributes_points = PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL
+	# Stats V1 points are earned at EXP milestones.
+	player.available_attributes_points = 0
 	# Everyone who plays the alpha carries the badge for it.
 	player.titles_unlocked = PackedStringArray(["Alpha tester"])
 	player.display_title = "Alpha tester"
@@ -564,3 +565,35 @@ func _query(sql: String, values: Array=[]) -> bool:
 	var ok: bool=result.ok and not result.get("truncated",false)
 	if not ok and db.in_transaction(): _transaction_failed=true
 	return ok
+
+
+## Flush pending soft progression and spend exactly one point in one transaction.
+## COMMIT uncertainty never mutates RAM or blindly repeats the write.
+func spend_attribute(player: PlayerResource, command_id: String, attribute: StringName) -> Dictionary:
+	if command_id.is_empty() or command_id.length()>80 or not AttributeMap.KEYS.has(attribute): return {"ok":false,"error":"payload"}
+	if not begin(): return {"ok":false,"error":"storage"}
+	if not _query("SELECT player_id FROM players WHERE player_id=:p0 FOR UPDATE;",[player.player_id]) or _rows.size()!=1:
+		rollback();return {"ok":false,"error":"storage"}
+	if not _query("SELECT attribute FROM stats_commands WHERE character_id=:p0 AND command_id=:p1;",[player.player_id,command_id]):
+		rollback();return {"ok":false,"error":"storage"}
+	if not _rows.is_empty():
+		var matches: bool=str(_rows[0].attribute)==str(attribute)
+		rollback();return {"ok":true,"replay":true} if matches else {"ok":false,"error":"command_conflict"}
+	if player.available_attributes_points<=0:
+		rollback();return {"ok":false,"error":"points"}
+	if not _query("SELECT progression_json FROM players WHERE player_id=:p0;",[player.player_id]) or _rows.size()!=1:
+		rollback();return {"ok":false,"error":"storage"}
+	var persisted: Dictionary=JSON.parse_string(str(_rows[0].progression_json))
+	if int(persisted.get("revision",0))!=player.stats_revision:
+		rollback();return {"ok":false,"error":"stale"}
+	var attributes: Dictionary=player.attributes.duplicate()
+	attributes[attribute]=int(attributes.get(attribute,0))+1
+	var progression: Dictionary=player.progression_state()
+	progression.revision=player.stats_revision+1
+	if not _query("UPDATE players SET level=:p0,experience=:p1,available_attributes_points=:p2,attributes_json=:p3,progression_json=:p4 WHERE player_id=:p5;",[player.level,player.experience,player.available_attributes_points-1,PlayerProfileCodec.encode_attributes(attributes),PlayerProfileCodec.encode_progression(progression),player.player_id]):
+		rollback();return {"ok":false,"error":"storage"}
+	if not _query("INSERT INTO stats_commands(character_id,command_id,attribute) VALUES(:p0,:p1,:p2);",[player.player_id,command_id,str(attribute)]):
+		rollback();return {"ok":false,"error":"storage"}
+	if not commit():
+		return {"ok":false,"error":"outcome_unknown"}
+	return {"ok":true,"attributes":attributes,"points":player.available_attributes_points-1,"revision":progression.revision}

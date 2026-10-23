@@ -20,6 +20,7 @@ const DEFAULTS: Dictionary = {
 	"chat_flood_count": 12,
 	"chat_flood_window_ms": 1000,
 	"chat_local_radius": 40,
+	"stats_attempts_per_second": 8,
 }
 var _limits: Dictionary
 

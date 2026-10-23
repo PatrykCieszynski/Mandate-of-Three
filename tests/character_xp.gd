@@ -78,7 +78,7 @@ func run_server() -> void:
 		dog.dead_until_ms = Time.get_ticks_msec() + 60000
 		set_phase("WAIT")
 	var player: PlayerResource = server.connected_players[hero]
-	check(player.level == 2 and player.experience == 10 and player.available_attributes_points == starting_points + PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL, "level-up preserves overflow and existing point grant")
+	check(player.level == 2 and player.experience == 10 and player.available_attributes_points == starting_points + PlayerResource.EXP_ATTRIBUTE_MILESTONES, "level-up preserves overflow and the three EXP milestone grants")
 	check(store.get_player(owner_id).level == 1 and store.get_player(owner_id).experience == 0, "many kills change RAM without per-kill DB writes")
 	check(server.database.dirty_progression.size() == 1 and server.database.dirty_progression.has(owner_id), "only changed character is dirty")
 	check(db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='kill_xp_rewards';") and db.query_result.is_empty(), "no persistent kill receipt table")
@@ -91,7 +91,7 @@ func run_server() -> void:
 	check(server.database.dirty_progression.is_empty(), "periodic checkpoint clears dirty state")
 	check(db.close_db() and db.open_db(), "reopen SQLite")
 	player = store.get_player(owner_id)
-	check(player.level == 2 and player.experience == 10 and player.available_attributes_points == starting_points + PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL, "save and reopen preserve character progression")
+	check(player.level == 2 and player.experience == 10 and player.available_attributes_points == starting_points + PlayerResource.EXP_ATTRIBUTE_MILESTONES, "save and reopen preserve character progression")
 	set_phase("INSPECT", hero)
 	await wait_until(func() -> bool: return replies.has(hero))
 	check(replies[hero].ok, "client sees committed level-up and render")

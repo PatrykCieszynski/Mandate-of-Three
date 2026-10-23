@@ -14,7 +14,8 @@ the cache. Combat never performs SQL or network round trips per hit.
 
 | State / operation | Runtime behavior | Persistence |
 | --- | --- | --- |
-| XP, level, available attribute points | Immediate change and level-up; separate dirty set | About 60-second checkpoint, only dirty characters and the three progression fields |
+| XP, level, available attribute points | Immediate change and level-up; separate dirty set | About 60-second checkpoint, only dirty characters and narrow Stats V1 progression fields |
+| Attribute allocation | One authenticated point; current RAM changes only after COMMIT | Immediate narrow progression + allocation transaction and durable command receipt |
 | Grinding Yang income | Account wallet balance, pending delta, separate dirty category | About 30-second delta checkpoint; no record per currency stack |
 | Item creation/destruction, pickup, ownership, placement, equipment | Validate authoritative item/session context; refresh projections after commit | Immediate atomic transaction with custody/revisions and applicable receipt |
 | Storage transfer | Account-shared custody; withdrawal names its receiving character | Immediate item/placement/ownership/revision transaction |
@@ -32,7 +33,8 @@ atomicity rules; this table does not assert that all those features exist.
 ## Soft progression and wallet checkpoints
 
 `WorldDatabase.dirty_progression` retains dirty character references. A batch
-updates only `level`, `experience` and `available_attributes_points`; successful
+updates only `level`, `experience`, `available_attributes_points`, `attributes_json`
+and `progression_json` (milestones, skill points, allocation revision/version); successful
 commit clears dirty state, while failure rolls back the batch and preserves it
 for retry. Clean intervals cause no progression transaction. Normal full-profile
 saves remain separate; an XP change does not serialize Inventory, quests or the

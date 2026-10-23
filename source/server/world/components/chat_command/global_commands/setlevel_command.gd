@@ -1,7 +1,5 @@
 extends ChatCommand
-## Jump straight to a level (1–20). Useful for testing high-level content without
-## grinding XP. Resets experience to 0 within the new level and grants the
-## attribute points the jump would have earned.
+## Privileged forward-only test leveling; uses the same milestone grant path.
 
 
 func _init() -> void:
@@ -27,18 +25,19 @@ func execute(args: PackedStringArray, peer_id: int, server_instance: ServerInsta
 	var ws: WorldServer = server_instance.world_server
 	var res: PlayerResource = target.resource
 	var level_before: int = res.level
-	res.level = new_level
-	res.experience = 0
-	# Compensate the attribute-point gain that would have happened naturally.
-	var levels_jumped: int = new_level - level_before
-	if levels_jumped > 0:
-		res.available_attributes_points += levels_jumped * PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL
+	if new_level <= level_before: return "Setlevel only advances levels; rewinding could replay progression rewards."
+	var amount: int=-res.experience
+	for old_level: int in range(level_before,new_level): amount += PlayerResource.LEVEL_XP_BASE*old_level
+	var result: Dictionary=res.add_experience(amount)
+	var levels_jumped: int=int(result.levels_gained)
+	ws.database.mark_progression_dirty(res)
+	ws.refresh_character_stats(target.peer_id)
 
 	ws.data_push.rpc_id(target.peer_id, &"combat.reward", {
 		"xp": 0,
 		"level": res.level,
 		"levels_gained": maxi(0, levels_jumped),
-		"points_gained": maxi(0, levels_jumped * PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL),
+		"points_gained": int(result.points_gained),
 		"experience": 0,
 		"xp_to_next": res.level_xp_to_next(),
 		"loot": [],
