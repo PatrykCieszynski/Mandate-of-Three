@@ -74,6 +74,14 @@ func credit_in_transaction(account_id: int, pending_income: int, amount: int) ->
 	if result.ok: result.wallet_state.pending_applied = pending_income
 	return result
 
+## Recipe-only vendor sales may credit zero Yang but must capture the same
+## pending prefix atomically with item mutations.
+func capture_income_in_transaction(account_id: int, pending_income: int) -> Dictionary:
+	if not db.in_transaction(): return {"ok":false,"error":"transaction"}
+	var result:=_apply_income(account_id,pending_income)
+	if result.ok: result.wallet_state.pending_applied=pending_income
+	return result
+
 func _apply_income(account_id: int, amount: int) -> Dictionary:
 	if amount < 0 or amount > MAX_YANG: return {"ok":false,"error":"request"}
 	var result: Dictionary = db.execute("UPDATE economy.account_wallets SET yang=yang+:amount WHERE account_id=:id;", {"id":account_id,"amount":amount})

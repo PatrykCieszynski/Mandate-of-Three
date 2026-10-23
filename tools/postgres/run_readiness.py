@@ -49,7 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "vendor-sell", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
     parser.add_argument("--load-seconds", type=int, default=8, choices=range(2,1801))
     parser.add_argument("--load-repeats", type=int, default=3, choices=(1,2,3))
     parser.add_argument("--load-faults", action="store_true", help="Inject fixture-only COMMIT failure and lost application reply under mixed load")
@@ -165,6 +165,7 @@ def main():
             "wallet": ("postgres_wallet", "POSTGRES_WALLET_OK"),
             "commit-failure": ("postgres_commit_failure", "POSTGRES_COMMIT_FAILURE_OK"),
             "npc-shop": ("postgres_npc_shop", "POSTGRES_NPC_SHOP_OK"),
+            "vendor-sell": ("postgres_vendor_sell", "POSTGRES_VENDOR_SELL_OK"),
             "inventory": ("postgres_inventory", "POSTGRES_INVENTORY_OK"),
             "storage": ("postgres_storage", "POSTGRES_STORAGE_OK"),
             "upgrade": ("postgres_upgrade", "POSTGRES_UPGRADE_OK"),

@@ -12,6 +12,7 @@ $taskCases = [ordered]@{
     stats_v1 = 'STATS_V1_OK'
     upgrade_transaction = 'UPGRADE_TRANSACTION_OK'
     shop_purchase = 'SHOP_PURCHASE_OK'
+    vendor_recipes = 'VENDOR_RECIPES_OK'
     npc_foundation = 'NPC_FOUNDATION_OK'
     item_instances = 'ITEM_INSTANCES_OK'
     inventory_grid = 'INVENTORY_GRID_OK'

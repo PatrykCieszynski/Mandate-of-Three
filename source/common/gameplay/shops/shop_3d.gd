@@ -10,15 +10,19 @@ var _published: Dictionary[int, Dictionary] = {}
 var _last_buy: Dictionary[int, int] = {}
 var _last_receipt: Dictionary[int, int] = {}
 var _postgres: RefCounted
+var _vendor: RefCounted
+signal vendor_result(request_id: String, result: Dictionary)
 
 func _ready() -> void:
 	_world = get_parent()
 	_world.npc_endpoint.context_changed.connect(_context_changed)
 	if GameMode.is_world_server() and services.npc_runtime()!=null:
 		_postgres=preload("res://source/common/gameplay/world3d/endpoints/npc_postgres_adapter.gd").new(self,services.npc_runtime(),"buy")
+		_vendor=preload("res://source/common/gameplay/world3d/endpoints/npc_postgres_adapter.gd").new(self,services.npc_runtime(),"sell")
 
 func _exit_tree() -> void:
 	if _postgres!=null: _postgres.dispose()
+	if _vendor!=null: _vendor.dispose()
 
 func _authorization(peer_id: int, instance_id: String, service_id: StringName) -> Dictionary:
 	var result: Dictionary = _world.npc_endpoint.resolve_npc_service(peer_id, instance_id, service_id, NpcServiceDefinition.Kind.SHOP)
@@ -122,6 +126,7 @@ func request_shop(action: String, instance_id: String, service_id: String, offer
 
 func remove_peer(peer_id: int) -> void:
 	if _postgres!=null: _postgres.remove_peer(peer_id)
+	if _vendor!=null: _vendor.remove_peer(peer_id)
 	_open.erase(peer_id)
 	_published.erase(peer_id)
 	_last_buy.erase(peer_id)
@@ -136,3 +141,41 @@ func receive_shop(snapshot: Dictionary) -> void:
 @rpc("authority", "call_remote", "reliable", 1)
 func receive_operation(command_id: String, result: Dictionary) -> void:
 	if not GameMode.is_world_server(): operation_finished.emit(command_id, result)
+
+## Backend contract only. Basket references do not leave authoritative Inventory.
+## Fresh quote/sell reauthorize NPC/service/range; recovery needs current session
+## authority but can read a receipt after leaving the vendor.
+@rpc("any_peer", "call_remote", "reliable", 1)
+func request_vendor(action: String, instance_id: String, service_id: String, payload: Dictionary, request_id: String) -> void:
+	if not GameMode.is_world_server() or request_id.is_empty() or request_id.length()>80 or instance_id.length()>80 or service_id.length()>64: return
+	var peer: int=multiplayer.get_remote_sender_id()
+	if not _world.characters.has(peer): return
+	if _vendor==null:
+		receive_vendor.rpc_id(peer,request_id,{"ok":false,"error":"unsupported_backend"});return
+	if action not in ["quote","sell","receipt"]: return
+	var valid: bool=false
+	if action=="quote": valid=payload.size()==1 and payload.get("items") is Array and not VendorResolver.cart(payload.items).is_empty()
+	elif action=="sell": valid=payload.size()==2 and payload.get("quote_id") is String and ItemInstance.valid_uid(payload.quote_id) and payload.get("command_id") is String and _vendor_command_id(payload.command_id)
+	else: valid=payload.size()==1 and payload.get("command_id") is String and _vendor_command_id(payload.command_id)
+	if not valid:
+		receive_vendor.rpc_id(peer,request_id,{"ok":false,"error":"request"});return
+	if _vendor.busy(peer) or Time.get_ticks_msec()-_last_buy.get(peer,-1000)<100:
+		receive_vendor.rpc_id(peer,request_id,{"ok":false,"error":"storage"});return
+	_last_buy[peer]=Time.get_ticks_msec()
+	if action=="receipt":
+		_vendor.receipt(peer,request_id,payload.command_id);return
+	var auth:=_authorization(peer,instance_id,StringName(service_id))
+	if not auth.ok or services.transfer_pending(peer):
+		receive_vendor.rpc_id(peer,request_id,{"ok":false,"error":auth.get("error","transfer_pending")});return
+	if action=="quote": receive_vendor.rpc_id(peer,request_id,services.npc_runtime().quote(peer,str(get_instance_id())+":"+instance_id,service_id,payload.items))
+	else: _vendor.sell(peer,request_id,payload.command_id,payload.quote_id,str(get_instance_id())+":"+instance_id,service_id)
+
+@rpc("authority", "call_remote", "reliable", 1)
+func receive_vendor(request_id: String, result: Dictionary) -> void:
+	if not GameMode.is_world_server(): vendor_result.emit(request_id,result)
+
+static func _vendor_command_id(value: String) -> bool:
+	if value.is_empty() or value.length()>96: return false
+	for letter: String in value:
+		if not "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-:".contains(letter): return false
+	return true

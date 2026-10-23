@@ -16,6 +16,10 @@ enum PrimaryAction {
 @export var stack_limit: int = 1
 @export var market_fungible: bool = false
 @export var tradeable: bool = true
+## -1 explicitly excludes an item from NPC sale (including recipe inputs).
+@export var vendor_price: int = -1
+@export var recipe_tags: Array[StringName] = []
+@export var recipe_category: StringName
 @export var base_stats: Dictionary[StringName, float] = {}
 @export var stats_per_upgrade: Dictionary[StringName, float] = {}
 
