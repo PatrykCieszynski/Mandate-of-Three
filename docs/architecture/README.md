@@ -14,4 +14,10 @@ Some local transaction/session/instance guarantees are implemented; distributed 
 - [Items and identity](item-instances.md) and [Yang wallet](yang-wallet.md).
 - [Current test contracts](../development/testing.md).
 
+## Audits and proposals — not accepted contracts
+
+- [Gameplay modularization audit V1](gameplay-modularization-audit.md): current
+  ownership/couplings, proposed Shared Core / Classic / Mandate boundaries and
+  a staged Vendor Recipes extraction. No gameplay or schema change is implied.
+
 **Authority rule:** where target contracts differ from the running prototype, the current persistence policy describes reality; accepted Economy/World ADRs describe future desired behavior. Historical implementation plans are retained in Git history; current code and accepted contracts determine behavior.
