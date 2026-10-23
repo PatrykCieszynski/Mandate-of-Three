@@ -348,7 +348,7 @@ test('production policies preserve exact routes, quick receive, slot drops and r
     drag: f.runtime,
     moveItem: (command) => result('inventory.move_item', command),
     activateItem: (command) => result('item.activate', command),
-    quickDeposit: (item) => storage.tryQuickDeposit(item),
+    quickTransfer: (item) => storage.tryQuickDeposit(item),
     withdrawItem: (item, position) =>
       storage.withdrawToInventory(item, position),
     receiveEquipped: (item, position) => equipment.unequip(item, position),

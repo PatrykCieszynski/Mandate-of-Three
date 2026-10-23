@@ -589,6 +589,91 @@ try {
       exact: true,
     })
     .waitFor();
+
+  await page
+    .getByRole('button', { name: 'Sample vendor', exact: true })
+    .click();
+  await ui.locator('#vendor-window').waitFor({ state: 'visible' });
+  await ui
+    .locator('#inventory')
+    .getByRole('tab', { name: 'I', exact: true })
+    .click();
+  const beforeBooks = await ui.locator('#inventory .inventory-item').count();
+  for (let i = 0; i < 5; i++) {
+    const source = await ui
+      .locator(`#inventory [data-id="preview-book-${i}"]`)
+      .boundingBox();
+    const destination = await ui
+      .locator('#vendor .vendor-basket')
+      .boundingBox();
+    assert.ok(source && destination);
+    await page.mouse.move(
+      source.x + source.width / 2,
+      source.y + source.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      destination.x + destination.width / 2,
+      destination.y + destination.height / 2,
+      { steps: 12 },
+    );
+    await page.mouse.up();
+    await ui.locator('#vendor .vendor-item').nth(i).waitFor();
+  }
+  assert.equal(
+    await ui.locator('#inventory .inventory-item').count(),
+    beforeBooks,
+    'basket assignment never removes Inventory items',
+  );
+  await ui
+    .getByRole('img', { name: 'Random Skill Book ×1', exact: true })
+    .waitFor();
+  await ui
+    .getByRole('img', { name: 'Random Skill Book ×1', exact: true })
+    .hover();
+  await ui
+    .locator('#vendor .item-tooltip')
+    .filter({ hasText: 'drawn only when the sale commits' })
+    .waitFor();
+  const offerOrder = await ui
+    .locator('#vendor .vendor-item')
+    .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('aria-label')));
+  await ui
+    .locator('#inventory [data-id="preview-book-0"]')
+    .click({ modifiers: ['Control'] });
+  assert.deepEqual(
+    await ui
+      .locator('#vendor .vendor-item')
+      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('aria-label'))),
+    offerOrder,
+  );
+  await ui
+    .locator('#vendor .vendor-item')
+    .first()
+    .click({ modifiers: ['Control'] });
+  assert.equal(await ui.locator('#vendor .vendor-item').count(), 4);
+  await ui
+    .locator('#inventory [data-id="preview-book-0"]')
+    .click({ modifiers: ['Control'] });
+  await ui.locator('#vendor .vendor-item').nth(4).waitFor();
+  await ui.getByRole('button', { name: 'Confirm sale', exact: true }).click();
+  await ui
+    .locator('#vendor [role=status]')
+    .filter({ hasText: 'preview_native_only' })
+    .waitFor();
+  await ui
+    .getByRole('button', { name: 'Offered Skill Book 1', exact: true })
+    .click({ button: 'right' });
+  assert.equal(await ui.locator('#vendor .vendor-item').count(), 4);
+  await ui
+    .locator('#inventory [data-id="preview-book-0"]')
+    .click({ modifiers: ['Control'] });
+  await ui.locator('#vendor .vendor-item').nth(4).waitFor();
+
+  assert.equal(
+    await ui.locator('#inventory .inventory-item').count(),
+    beforeBooks,
+  );
   if (screenshot) await page.screenshot({ path: screenshot, fullPage: true });
   await ui.locator('#bottom-hud').waitFor({ state: 'visible' });
   assert.deepEqual(errors, []);

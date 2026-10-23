@@ -22,6 +22,12 @@ shop or changing the runtime to recognize offers.
 - Storage sources/target preserve exact deposit, withdrawal and internal moves
   through `storage.transfer`. Ctrl-click deposit/withdrawal uses `quick: true`
   outside drag gestures. Capacity and operation status remain separate.
+- Inventory Ctrl-click targets the most recently opened receiving window among
+  Storage, Vendor Sell, Upgrade and Player Shop listing. Focus/Inventory clicks
+  do not change this order. Closing that destination restores the previous open
+  destination; a busy/rejecting destination never redirects to another window.
+  Vendor Sell adds a basket reference, Upgrade selects a candidate and Player
+  Shop selects a listing candidate through their existing commands.
 - Equipment uses real slot elements, with a whole-slot green/red highlight.
   Only the currently implemented weapon slot accepts Inventory drops and sends
   `equipment.equip`. Definition/slot compatibility is checked by World; the

@@ -19,6 +19,7 @@ var party = preload("res://source/client/ui_web/party_ui_adapter.gd").new()
 var npcs := NpcUiAdapter.new()
 var upgrades := UpgradeUiAdapter.new()
 var shop := ShopUiAdapter.new()
+var vendor = preload("res://source/client/ui_web/vendor_ui_adapter.gd").new()
 var exchange := ExchangeUiAdapter.new()
 var market_browser := MarketBrowserUiAdapter.new()
 var market := MarketUiAdapter.new()
@@ -72,6 +73,10 @@ func setup(game_world: GameWorld3D) -> void:
 	shop.attach(world.shop_endpoint, dispatcher, session, get_tree())
 	world.inventory_endpoint.state_changed.connect(shop.accept_context)
 	shop.accept_context(world.inventory_endpoint.state)
+	vendor.shown.connect(func()->void:opened=true;_layout())
+	vendor.attach(world.shop_endpoint,dispatcher,session,get_tree())
+	world.inventory_endpoint.state_changed.connect(vendor.accept_inventory)
+	vendor.accept_inventory(world.inventory_endpoint.state)
 	world.market_endpoint.operation_finished.connect(session.finish)
 	world.market_endpoint.query_finished.connect(session.finish)
 	market.attach(world.market_endpoint,dispatcher,session,get_tree())
@@ -197,6 +202,7 @@ func set_open(active: bool) -> void:
 # presentation input, never server RPCs or a request for keyboard focus.
 func _process(_delta: float) -> void:
 	stats.tick(_delta)
+	vendor.tick(_delta)
 	_npc_target_elapsed += _delta
 	if _npc_target_elapsed >= 0.1 and is_instance_valid(world) and is_instance_valid(dispatcher):
 		_npc_target_elapsed = 0.0
@@ -260,7 +266,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if market.active: market.close()
 		else: market.open()
 		get_viewport().set_input_as_handled()
-	elif event.keycode == KEY_ESCAPE and (stats.opened or exchange.active or market_browser.active or market.active or opened or equipment_opened or storage_opened or npcs.state().get("active", false)):
+	elif event.keycode == KEY_ESCAPE and (vendor.is_open() or stats.opened or exchange.active or market_browser.active or market.active or opened or equipment_opened or storage_opened or npcs.state().get("active", false)):
 		# Presentation shortcut only: web cancels carry first, otherwise requests close.
 		bridge.send("ui.shortcut", {"key": "Escape"})
 		get_viewport().set_input_as_handled()
@@ -313,6 +319,8 @@ func _stop(reason: String) -> void:
 	npcs.dispose()
 	upgrades.dispose()
 	shop.dispose()
+	vendor.dispose()
+	if is_instance_valid(world) and is_instance_valid(world.inventory_endpoint) and world.inventory_endpoint.state_changed.is_connected(vendor.accept_inventory): world.inventory_endpoint.state_changed.disconnect(vendor.accept_inventory)
 	market.dispose()
 	market_browser.dispose()
 	exchange.dispose()

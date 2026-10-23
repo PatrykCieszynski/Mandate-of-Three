@@ -1,3 +1,4 @@
+import { isVendor } from './screens/vendor/vendor-model.js';
 import { isHotbar } from './inventory/hotbar-model.js';
 import { isStats } from './screens/stats/stats-model.js';
 import { isChatSnapshot } from './screens/chat/chat-view.js';
@@ -48,10 +49,10 @@ export function isCommandResult(result) {
         (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message) {
-    return !message.id && ['ui.snapshot', 'hotbar.updated', 'stats.updated', 'chat.updated', 'party.updated', 'exchange.updated', 'market_browser.updated', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
+    return !message.id && ['ui.snapshot', 'vendor.updated', 'hotbar.updated', 'stats.updated', 'chat.updated', 'party.updated', 'exchange.updated', 'market_browser.updated', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
 }
 export function isDomainName(value) {
-    return ['hotbar', 'stats', 'chat', 'party', 'exchange', 'market_browser', 'market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
+    return ['vendor', 'hotbar', 'stats', 'chat', 'party', 'exchange', 'market_browser', 'market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
 }
 export function isRawDomainState(value) {
     return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -192,6 +193,7 @@ export function isValidDomainValue(domain, value) {
         case 'market': return isMarketSnapshot(value);
         case 'upgrade': return isUpgrade(value);
         case 'npc_targets': return isNpcTargets(value);
+        case 'vendor': return isVendor(value);
         case 'shop': return isShop(value);
         case 'npc': return isNpc(value);
         case 'storage': return isStorage(value);

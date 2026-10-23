@@ -117,6 +117,17 @@ function storageFixture(): StorageSnapshot {
 
 function fixture(): DomainSnapshot {
   return {
+    vendor: {
+      active: false,
+      ready: true,
+      busy: false,
+      quoting: false,
+      pending: false,
+      items: [],
+      quote: {},
+      error: '',
+      outcome: '',
+    },
     hotbar: hotbarFixture(),
     stats: statsFixture(),
     chat: chatFixture(),
@@ -270,6 +281,74 @@ window.sendIpcMessage = (raw) => {
   }
   if (!message.id) return;
   queueMicrotask(() => {
+    if (message.type.startsWith('vendor.') && state.vendor) {
+      const v = state.vendor,
+        p = message.payload;
+      let result = { ok: true, error: '' };
+      if (message.type === 'vendor.open') v.active = true;
+      if (message.type === 'vendor.close') v.active = false;
+      if (
+        message.type === 'vendor.edit' &&
+        typeof p.id === 'string' &&
+        typeof p.amount === 'number'
+      ) {
+        const item = state.inventory?.items.find((i) => i.id === p.id);
+        if (
+          item &&
+          Number.isInteger(p.amount) &&
+          p.amount >= 0 &&
+          p.amount <= item.quantity
+        ) {
+          const index = v.items.findIndex((i) => i.id === p.id);
+          if (p.amount > 0) {
+            const offered = {
+              ...item,
+              quantity: p.amount,
+              maximum: Math.min(200, item.quantity),
+              available: true,
+            };
+            if (index < 0) v.items.push(offered);
+            else v.items[index] = offered;
+          } else if (index >= 0) v.items.splice(index, 1);
+          const books = v.items.filter((i) =>
+            i.id.startsWith('preview-book-'),
+          ).length;
+          // Dev-only server stand-in; production CEF never values recipes.
+          v.quote = v.items.length
+            ? {
+                yang: String(
+                  v.items
+                    .filter((i) => !i.id.startsWith('preview-book-'))
+                    .reduce((sum, i) => sum + i.quantity * 2, 0) +
+                    (books % 5) * 10,
+                ),
+                rewards:
+                  books >= 5
+                    ? [
+                        {
+                          type: 'random_pool',
+                          pool: 'random_skill_book',
+                          quantity: 1,
+                          icon_id: 'mystery_skill_book',
+                        },
+                      ]
+                    : [],
+                expires_at: Math.floor(Date.now() / 1000) + 30,
+              }
+            : {};
+        } else result = { ok: false, error: 'request' };
+      }
+      if (message.type === 'vendor.refresh' && v.items.length === 0)
+        result = { ok: false, error: 'unavailable' };
+      if (
+        message.type === 'vendor.confirm' ||
+        message.type === 'vendor.recover'
+      )
+        result = { ok: false, error: 'preview_native_only' };
+      emit('vendor.updated', v);
+      emit('command.result', result, message.id);
+      return;
+    }
     if (message.type === 'hud.action') {
       const action = message.payload.action;
       if (action === 'inventory') {
@@ -524,6 +603,7 @@ export function decodePreviewAction(value: unknown): PreviewAction | null {
     (name === 'stats' ||
       name === 'inventory' ||
       name === 'equipment' ||
+      name === 'vendor' ||
       name === 'hotbar' ||
       name === 'storage' ||
       name === 'accept' ||
@@ -595,6 +675,31 @@ window.addEventListener('message', (event) => {
       state.hud = { ...state.hud, equipment_open: request.value };
       emit('hud.updated', state.hud);
       break;
+
+    case 'vendor':
+      state.vendor!.active = request.value;
+      state.hud = { ...state.hud, inventory_open: true };
+      emit('hud.updated', state.hud);
+      if (request.value && state.inventory) {
+        state.inventory.items = state.inventory.items.filter(
+          (i) => !i.id.startsWith('preview-book-'),
+        );
+        for (let i = 0; i < 5; i++)
+          state.inventory.items.push({
+            id: `preview-book-${i}`,
+            revision: 0,
+            name: `Skill Book ${i + 1}`,
+            icon_id: 'skill_book',
+            height: 1,
+            quantity: 1,
+            x: i,
+            y: 4,
+            page: 0,
+          });
+        emit('inventory.updated', state.inventory);
+      }
+      emit('vendor.updated', state.vendor!);
+      return;
     case 'hotbar':
       state.hotbar = hotbarFixture();
       if (!request.value)

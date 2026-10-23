@@ -1,3 +1,5 @@
+import { QuickItemTargets } from './quick-item-targets.js';
+import { mountVendor } from '../screens/vendor/vendor-view.js';
 import { mountStats } from '../screens/stats/stats-view.js';
 import { mountChat } from '../screens/chat/chat-view.js';
 import { mountBottomHud } from './bottom-hud.js';
@@ -44,6 +46,7 @@ const root = findElement(document, '#inventory', 'main'),
   storageRoot = findElement(document, '#storage', 'main'),
   equipmentRoot = findElement(document, '#equipment', 'main'),
   shopRoot = findElement(document, '#shop', 'main'),
+  vendorRoot = findElement(document, '#vendor', 'main'),
   exchangeRoot = findElement(document, '#exchange', 'main'),
   marketBrowserRoot = findElement(document, '#market-browser', 'main'),
   marketVisitorRoot = findElement(document, '#market-visitor', 'main'),
@@ -89,6 +92,7 @@ const bridge = new WebBridge({
       message.type === 'storage.updated' ||
       message.type === 'equipment.updated' ||
       message.type === 'upgrade.updated' ||
+      message.type === 'vendor.updated' ||
       message.type === 'shop.updated' ||
       message.type === 'npc.updated'
     )
@@ -182,6 +186,12 @@ const bridge = new WebBridge({
       );
     if (message.type === 'ui.snapshot' || message.type === 'shop.updated')
       shop.setState(state.shop ?? { active: false });
+    if (
+      (message.type === 'ui.snapshot' || message.type === 'vendor.updated') &&
+      state.vendor
+    )
+      vendor.setState(state.vendor);
+    quickTargets.sync();
   },
 });
 const drag = new ItemDragRuntime({
@@ -217,7 +227,7 @@ const worldDrop = mountNpcWorldDrop(
 const view = mountInventory(root, {
   retry: () => bridge.request('inventory.retry', {}),
   drag,
-  quickDeposit: (item) => storage.tryQuickDeposit(item),
+  quickTransfer: (item) => quickTargets.receive(item),
   withdrawItem: (item, position) => storage.withdrawToInventory(item, position),
   buyShopOffer: (subject, position) => shop.buyOffer(subject, position),
   receiveEquipped: (item, position) => equipment.unequip(item, position),
@@ -253,11 +263,26 @@ const storage = mountStorage(storageRoot, {
   },
   onRegionsChanged: () => regions?.refresh(),
 });
+const vendor = mountVendor(vendorRoot, {
+  manager,
+  drag,
+  resolveItemIcon,
+  command: (action, payload) =>
+    bridge.request(`vendor.${action}`, payload as never),
+  close: () => {
+    drag.cancel();
+    void bridge.request('vendor.close', {}).catch(() => {});
+  },
+  regions: () => regions?.refresh(),
+});
 const shop = mountShop(shopRoot, {
   manager,
   drag,
   resolveItemIcon,
   buy: (payload) => bridge.request('shop.buy', payload),
+  sell: () => {
+    void bridge.request('vendor.open', {}).catch(() => {});
+  },
   retry: () => bridge.request('shop.retry', {}),
   dismissRecovery: () => {
     void bridge.request('shop.dismiss_recovery', {}).catch(() => {});
@@ -382,6 +407,12 @@ const npc = mountNpcInteraction(npcRoot, npcServiceRoot, {
   },
   onRegionsChanged: () => regions?.refresh(),
 });
+const quickTargets = new QuickItemTargets([
+  { root: storageRoot, receive: (item) => storage.tryQuickDeposit(item) },
+  { root: upgradeRoot, receive: (item) => upgrade.selectItem(item) },
+  { root: marketRoot, receive: (item) => market.selectInventory(item) },
+  { root: vendorRoot, receive: (item) => vendor.offerItem(item) },
+]);
 regions = reportInteractiveRegions(
   bridge,
   [
@@ -389,6 +420,7 @@ regions = reportInteractiveRegions(
     ...party.regions,
     ...worldDrop.regions,
     ...shop.regions,
+    ...vendor.regions,
     ...exchange.regions,
     ...marketBrowser.regions,
     ...market.regions,
@@ -408,6 +440,7 @@ window.addEventListener('pagehide', () => {
   worldDrop.dispose();
   upgrade.dispose();
   shop.dispose();
+  vendor.dispose();
   exchange.dispose();
   marketBrowser.dispose();
   market.dispose();

@@ -109,13 +109,13 @@ routing through Godot, or real purchase persistence; the latter uses smoke/RPC.
 Higher upgrades, finite stock, sell UI, stacking into existing items and Player Shop remain
 later work; a purchased offer creates one new stack/footprint.
 
-## Vendor Sell Backend V1
+## Vendor Sell V1
 
 The selected existing NPC SHOP service also accepts a sale basket through
 `Shop3D.request_vendor(action, npc_instance_id, service_id, payload, request_id)`.
 This backend is PostgreSQL-only; SQLite reference worlds return
-`unsupported_backend` without attempting fallback. CEF Sell and its durable client
-intent journal are a separate follow-up; the normal Shop UI remains buy-only.
+`unsupported_backend` without attempting fallback. CEF now exposes **Sell items** from this Shop window; it opens one compact
+reference-only sale basket beside Inventory. Buy and Sell use the same NPC service.
 Client/server application version is 0.34.0 because the Shop RPC table changed.
 
 - `quote`: payload `{items: [{uid, revision, amount}]}`. Items remain in Inventory.
@@ -197,5 +197,51 @@ covers preview purity, partial/mixed/repeated baskets, receipt/reopen, concurren
 commands, statement faults, uncertain COMMIT, freed capacity, wallet overflow,
 backend absence and session revocation. `--suite npc-runtime` also covers real
 workers/projection barriers, lost vendor completion and same-character relog.
-Existing Shop RPC regression remains `tests/run-shop.ps1`. This backend evidence
-does not certify a CEF sale flow; that UI has not been implemented yet.
+Existing Shop RPC regression remains `tests/run-shop.ps1`. The worker/transaction fixtures and browser/native transport acceptance have
+separate boundaries, described below.
+
+### CEF basket and client recovery
+
+Shop's **Sell items** button opens a Sell window with the common frame,
+UiItemGrid and ItemTooltip. The vendor's output grid sits above the player's
+offered-item grid, with **Accept** and **Cancel** below. Closing the window keeps
+an unresolved sale available for receipt recovery. Inventory opens alongside it.
+Inventory-only drag adds a reference (default: the current stack, at most 200 units); clicking an
+offered item exposes its quantity editor; Ctrl-click or right-click removes that
+reference. Adding an already offered item from Inventory leaves its amount and
+position unchanged. Editing its quantity also preserves basket order.
+Storage/equipment subjects cannot enter this target. None of these gestures
+changes custody, amount, position or revision in authoritative Inventory.
+
+The native client owns the basket and fetches a server quote after a short
+coalescing delay. **Refresh offer** retries/renews it. Every edit invalidates the
+old quote, and late quote results cannot replace a newer basket. Item changes
+invalidate its quote without silently substituting a different revision. The
+window shows exact decimal Yang and mystery rewards with a `?` and explanatory
+tooltip; it neither computes prices/recipes nor draws results.
+
+**Confirm sale** writes an immutable `npc-sell-` intent to a per-authority/account/
+character journal before RPC. Pending sales freeze basket edits/confirmation but
+retain a **Check sale result** action independent of Inventory placement or NPC
+range. CEF reload keeps native state. Recreated adapters after relog restore the
+journal and query receipts only. A found receipt confirms the original rewards;
+`unknown_command` releases the old identity and requires a fresh explicit quote
+and confirmation. It never auto-replays an expired quote. Any unresolved transport,
+reconciliation or storage result keeps the journal; clearing failures fail closed.
+Revisions/amounts inside journal records are decimal strings, avoiding JSON float
+rounding. Existing server session and account locks remain the authority.
+
+The standalone browser preview has a **Sample vendor** control and five book
+fixtures. Its local native stand-in illustrates ordinary/recipe offers; confirming
+reports `preview_native_only` and cannot consume items or credit Yang. It is not
+a production valuation path.
+
+Verification: smoke includes `tests/vendor_ui.tscn` and Web vendor contracts.
+`--suite vendor-ui` uses the actual client adapter/journal, World owners and native
+PostgreSQL workers: committed Inventory arrives before a lost response, then a
+recreated adapter reads exactly one receipt and retains the original reward UID.
+Transport is controlled in that fixture. Existing `run-shop.ps1` remains the real
+network purchase regression. `run-core-ui-browser.ps1` performs real pointer
+book-to-basket drops, removal, mystery presentation and preview confirmation without
+Inventory mutation. Browser/worker coverage does not certify physical native CEF
+keyboard/IME/Alt-Tab behavior or a complete Gateway-to-CEF sale journey.
