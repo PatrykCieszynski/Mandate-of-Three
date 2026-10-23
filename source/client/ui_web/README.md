@@ -172,18 +172,20 @@ name lookup (`Yuna` / `Baek`), minimize/close/reopen and session mute mutate loc
 fixtures only, independently of the generic Accept checkbox. Incoming chat /
 whisper buttons test wrapping, scroll position and unread badges. Guild remains
 unavailable, as in the game. These controls do not contact Godot or a database.
-Hotbar sample/empty controls populate the existing passive eight-slot renderer
-through `hud.quick_slots`; labels are presentation fixtures, not executable
-Inventory/skill bindings. Icons, cooldowns and authenticated hotbar use are not
-introduced by the preview.
+Hotbar sample/empty controls populate the sixteen-slot production HUD through
+the validated `hotbar` domain, including item icons, quantities and HP/MP fixtures.
+Inventory-to-hotbar assignment and right-click clearing are local preview
+preferences; item activation and native Options report preview-only feedback.
+Native gameplay uses current Inventory revisions and existing server receipts.
 
 Public chat uses a transparent HUD log above compact channel/composer controls.
 Whisper name lookup opens from the Whisper button. Private conversations share
 one draggable window with tabs, per-conversation drafts/scroll position and a
-right-edge unread-conversation envelope. The passive hotbar uses a compact 4+4
-slot rail without a heading. These presentation changes do not add hotbar actions.
+right-edge unread-conversation envelope. The bottom HUD has 1–8 and F1–F8 banks, owner HP/MP bars and system buttons.
+See [hotbar contract](../../../docs/gameplay/hotbar-v1.md) for persistence, input
+ownership and the current EQUIP-only activation boundary.
 
-Character � V uses the production Stats view in both CEF and the preview. The
+Character · V uses the production Stats view in both CEF and the preview. The
 preview's Open/Hide Character controls provide level/EXP, STR/DEX/VIT/INT, points
 and combat fixtures; + changes fixture counters only when Accept is enabled.
 Native allocation is authenticated, journaled and recovered through the existing

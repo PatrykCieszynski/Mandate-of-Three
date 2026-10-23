@@ -1,3 +1,4 @@
+import type {HotbarSnapshot} from '../inventory/hotbar-model.js';
 import type {StatsSnapshot,Attribute} from '../screens/stats/stats-model.js';
 import type {ChatSnapshot,ChatSend} from '../screens/chat/chat-view.js';
 import type {PartySnapshot,PartyCommand} from '../screens/party/party-view.js';
@@ -17,11 +18,12 @@ export interface InventorySnapshot { recoveryPending?: boolean; columns: number;
 export interface StorageSnapshot { recoveryPending?: boolean; columns:typeof STORAGE_COLUMNS; rows:typeof STORAGE_ROWS; pages:typeof STORAGE_PAGES; items:InventoryItem[] }
 export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?: number } }
 export interface WalletSnapshot { balance?: number; ready?: boolean }
-export interface HudSnapshot { quick_slots?: Readonly<{label?:string}>[]; inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
+export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'hotbar'|'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
+  hotbar?: HotbarSnapshot;
   stats?: StatsSnapshot;
   chat?: ChatSnapshot;
   party?: PartySnapshot;
@@ -43,6 +45,10 @@ export interface MoveItemCommand extends ItemCommand { x: number; y: number; pag
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'hotbar.assign': {slot:number;id:string};
+  'hotbar.clear': {slot:number};
+  'hotbar.activate': {slot:number};
+  'hud.action': {action:'inventory'|'stats'|'options'};
   'stats.spend': {attribute:Attribute};
   'stats.retry': Record<string,never>;
   'stats.refresh': Record<string,never>;

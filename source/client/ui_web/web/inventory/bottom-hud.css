@@ -1,62 +1,29 @@
-/* Matches the existing Metin-inspired CEF chrome and optional slot.normal skin. */
-#bottom-hud {
-  position: fixed;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%) scale(var(--ui-scale, 1));
-  transform-origin: center bottom;
-  z-index: 5;
-  pointer-events: none;
-  color: var(--ink);
-}
-.bottom-hud-panel {
-  padding: 4px 8px 3px;
-  border: 1px solid var(--frame);
-  border-bottom: 0;
-  background: linear-gradient(180deg, #343024 0%, #1a1a16 42%, #0a0b0a 100%);
-  box-shadow:
-    0 -2px 8px #0009,
-    inset 0 1px #927e5680;
-}
-.bottom-hud-slots {
-  display: flex;
-  justify-content: center;
-  gap: 2px;
-}
-.bottom-hud-slot {
-  width: var(--hotbar-slot-size, 32px);
-  height: var(--hotbar-slot-size, 32px);
-  position: relative;
-  flex: none;
-  border: 1px solid #655946;
-  background-image:
-    var(--skin-slot-normal, none), linear-gradient(145deg, #24261f, #0c0e0d);
-  background-position: center;
-  background-size: 100% 100%;
-  box-shadow: inset 0 0 5px #000a;
-  overflow: hidden;
-}
-.bottom-hud-key {
-  position: absolute;
-  top: 1px;
-  left: 3px;
-  font:
-    10px/12px Georgia,
-    serif;
-  color: #d7c397;
-  text-shadow: 1px 1px #000;
-}
-.bottom-hud-item-name {
-  display: block;
-  margin: 12px 1px 0;
-  font:
-    9px/10px Georgia,
-    serif;
-  text-align: center;
-  color: #e5d1a0;
-  overflow-wrap: anywhere;
-}
-
-.bottom-hud-slot:nth-child(5) {
-  margin-left: 8px;
-}
+/* Persistent world HUD, using the current Metin-inspired skin. */
+#bottom-hud {position:fixed;left:50%;bottom:0;transform:translateX(-50%) scale(var(--ui-scale,1));transform-origin:center bottom;z-index:5;pointer-events:none;color:var(--ink)}
+.bottom-hud-panel {display:flex;align-items:center;gap:10px;padding:5px 8px 4px;border:1px solid var(--frame);border-bottom:0;background:linear-gradient(#343024,#171915 45%,#090b0a);box-shadow:0 -2px 8px #0009,inset 0 1px #927e5680;pointer-events:auto;position:relative}
+.bottom-hud-vitals {display:grid;grid-template-columns:28px 142px;gap:3px 5px;align-items:center}
+.bottom-hud-level {grid-row:span 2;font:10px Georgia;text-align:center;color:#dec991}
+.bottom-hud-meter {position:relative;height:15px;overflow:hidden;border:1px solid #6a5b45;background:#090b0b}
+.bottom-hud-meter progress {display:block;width:100%;height:100%;border:0;appearance:none}
+.bottom-hud-meter progress::-webkit-progress-bar {background:#151713}
+.bottom-hud-meter.hp progress::-webkit-progress-value {background:linear-gradient(#e36655,#a31e1c)}
+.bottom-hud-meter.mp progress::-webkit-progress-value {background:linear-gradient(#6dacf0,#244caa)}
+.bottom-hud-meter.hp {accent-color:#bd3330}.bottom-hud-meter.mp {accent-color:#477bcc}
+.bottom-hud-meter span {position:absolute;inset:0;text-align:center;font:10px/13px Georgia;text-shadow:1px 1px #000;pointer-events:none}
+.bottom-hud-slots {display:flex;gap:2px}
+.bottom-hud-slot {width:32px;height:36px;position:relative;flex:none;border:1px solid #655946;padding:0;background:var(--skin-slot-normal,none) center/100% 100%,linear-gradient(145deg,#24261f,#0c0e0d);box-shadow:inset 0 0 5px #000a;overflow:hidden;color:var(--ink);font:10px Georgia;cursor:pointer}
+.bottom-hud-slot:hover {border-color:#ccb377}.bottom-hud-slot:focus-visible {outline:1px solid #dec477;outline-offset:1px}
+.bottom-hud-slot.unavailable .bottom-hud-icon {opacity:.35;filter:grayscale(1)}
+.bottom-hud-key {position:absolute;top:0;left:2px;font:9px/11px Georgia;color:#e8d39f;text-shadow:1px 1px #000;pointer-events:none}
+.bottom-hud-icon {position:absolute;inset:5px 1px 0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.bottom-hud-icon .item-icon {max-width:100%;max-height:100%;object-fit:contain}
+.bottom-hud-icon .icon-fallback {font:8px/9px Georgia;overflow-wrap:anywhere;text-align:center}
+.bottom-hud-icon .quantity {position:absolute;bottom:0;right:1px;font:10px Georgia;text-shadow:1px 1px #000}
+.bottom-hud-system {display:flex;gap:4px;align-items:center}
+.bottom-hud-system button {display:grid;place-items:center;width:32px;height:36px;padding:4px;border:1px solid #655946;background:linear-gradient(#34352b,#161914);box-shadow:inset 0 0 5px #0008;cursor:pointer}
+.bottom-hud-system button:hover {border-color:#ccb377;background:linear-gradient(#494434,#20251c)}
+.bottom-hud-system button:focus-visible {outline:1px solid #dec477;outline-offset:1px}
+.bottom-hud-system img {width:24px;height:24px;pointer-events:none}
+.bottom-hud-feedback {position:absolute;bottom:100%;left:0;max-width:100%;padding:4px 8px;background:#131711ed;border:1px solid #786540;color:#ebcc8b;font:11px Georgia;pointer-events:none}
+.bottom-hud-panel {width:max-content;max-width:calc(100vw / var(--ui-scale,1));flex-wrap:wrap;justify-content:center}
+.bottom-hud-slots,.bottom-hud-vitals,.bottom-hud-system {flex:none}

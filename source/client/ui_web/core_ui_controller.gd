@@ -13,6 +13,7 @@ var items := ItemUiAdapter.new()
 const StorageAdapter = preload("res://source/client/ui_web/storage_ui_adapter.gd")
 var storage = StorageAdapter.new()
 var chat = preload("res://source/client/ui_web/chat_ui_adapter.gd").new()
+var hotbar = preload("res://source/client/ui_web/hotbar_ui_adapter.gd").new()
 var stats = preload("res://source/client/ui_web/stats_ui_adapter.gd").new()
 var party = preload("res://source/client/ui_web/party_ui_adapter.gd").new()
 var npcs := NpcUiAdapter.new()
@@ -90,6 +91,12 @@ func setup(game_world: GameWorld3D) -> void:
 		opened = true
 		_layout())
 	items.attach(world.inventory_endpoint, dispatcher, session, get_tree())
+	hotbar.attach(dispatcher,items._activate)
+	world.inventory_endpoint.state_changed.connect(hotbar.accept_inventory)
+	hotbar.accept_inventory(world.inventory_endpoint.state)
+	world.combat_endpoint.state_changed.connect(_hotbar_combat)
+	_hotbar_combat(world.combat_endpoint.state)
+	dispatcher.register_command("hud.action",func(p: Dictionary)->bool:return p.size()==1 and p.get("action") in ["inventory","stats","options"],_hud_action)
 	storage.recovery_needed.connect(func() -> void:
 		opened = true
 		storage_opened = true
@@ -110,6 +117,16 @@ func setup(game_world: GameWorld3D) -> void:
 	# Warm the browser/page on world entry. DOM stays hidden until inventory_open.
 	# UI_READY receives the current snapshot, including updates during startup.
 	host.open()
+
+func _hotbar_combat(snapshot: Dictionary) -> void:
+	hotbar.accept_combat(snapshot,world.local_peer)
+
+func _hud_action(p: Dictionary) -> Dictionary:
+	match p.action:
+		"inventory": set_open(not (opened or equipment_opened))
+		"stats": stats.toggle()
+		"options": world.show_options()
+	return {"ok":true}
 
 func _drop_on_npc(p: Dictionary) -> Dictionary:
 	if not world.begin_npc_approach(p.npc_instance_id,{"id":p.id,"revision":int(p.revision),"service_id":p.service_id}): return {"ok":false,"error":"unavailable"}
@@ -205,6 +222,13 @@ func _notification(what: int) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if ClientState.menu_open or not world.input_enabled: return
 	if not event is InputEventKey or not event.pressed or event.echo: return
+	var shortcut: int=-1
+	if event.physical_keycode>=KEY_1 and event.physical_keycode<=KEY_8: shortcut=event.physical_keycode-KEY_1
+	elif event.physical_keycode>=KEY_F1 and event.physical_keycode<=KEY_F8: shortcut=8+event.physical_keycode-KEY_F1
+	if shortcut>=0 and not event.ctrl_pressed and not event.alt_pressed and not event.meta_pressed:
+		hotbar.activate_slot(shortcut)
+		get_viewport().set_input_as_handled()
+		return
 	if event.keycode in [KEY_ENTER,KEY_KP_ENTER]:
 		if _stopped or not bridge.is_ready: return
 		host.set_keyboard_owner("web")
@@ -280,7 +304,10 @@ func _stop(reason: String) -> void:
 	chat.dispose()
 	party.dispose()
 	stats.dispose()
+	hotbar.dispose()
 	if is_instance_valid(world):
+		if is_instance_valid(world.inventory_endpoint) and world.inventory_endpoint.state_changed.is_connected(hotbar.accept_inventory): world.inventory_endpoint.state_changed.disconnect(hotbar.accept_inventory)
+		if is_instance_valid(world.combat_endpoint) and world.combat_endpoint.state_changed.is_connected(_hotbar_combat): world.combat_endpoint.state_changed.disconnect(_hotbar_combat)
 		if is_instance_valid(world.inventory_endpoint) and world.inventory_endpoint.state_changed.is_connected(stats.accept_context): world.inventory_endpoint.state_changed.disconnect(stats.accept_context)
 		if is_instance_valid(world.combat_endpoint) and world.combat_endpoint.state_changed.is_connected(stats.accept_vitals): world.combat_endpoint.state_changed.disconnect(stats.accept_vitals)
 	npcs.dispose()

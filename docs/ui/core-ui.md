@@ -115,7 +115,7 @@ Inventory filters its own page before rendering. ItemSlot accepts only
 EquipmentSlot takes its rectangle and enabled state
 from the screen. Equipment's silhouette and slot coordinates remain its own
 composition. Missing item images fall back to the item label without losing
-quantity. There are no hotbar/status widgets until a real screen needs them.
+quantity. The world HUD now consumes a dedicated `hotbar` projection for sixteen shortcuts, owner HP/MP and system actions; see [hotbar contract](../gameplay/hotbar-v1.md).
 
 ## Skin and icons
 
