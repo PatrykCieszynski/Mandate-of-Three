@@ -75,6 +75,7 @@ export function isItem(value: unknown): value is ItemPresentation {
     typeof value.name === 'string' && typeof value.icon_id === 'string' && integerRange(value.height, 1, MAX_ITEM_HEIGHT) &&
     integerRange(value.quantity, 1) && (!('description' in value) || typeof value.description === 'string') &&
     (!('definition_id' in value) || (typeof value.definition_id === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(value.definition_id))) && (!('upgrade_level' in value) || integerRange(value.upgrade_level,0,9)) &&
+    (!('primary_action' in value) || (typeof value.primary_action === 'string' && ['NONE','EQUIP','USE'].includes(value.primary_action))) &&
     (!('tooltip' in value) || isItemTooltipDetails(value.tooltip));
 }
 function isInventoryItem(value: unknown): value is InventoryItem {

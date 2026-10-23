@@ -28,11 +28,12 @@ func exercise_hotbar(uid: String) -> void:
 		var hud=Hud.new();hud.directory="res://.godot/verification/hotbar-network-"+Crypto.new().generate_random_bytes(8).hex_encode();_prefs=hud.directory
 		hud.attach(projection,items._activate);world.inventory_endpoint.state_changed.connect(hud.accept_inventory);hud.accept_inventory(world.inventory_endpoint.state)
 		var before: Dictionary=world.inventory_endpoint.state.duplicate(true)
-		check(hud._assign({"slot":8,"id":uid}).ok,"F1 preference saved")
+		check(not hud._assign({"slot":8,"id":uid}).ok,"EQUIP assignment rejected")
+		hud.bindings.assign_item(8,uid);check(hud._save(),"legacy preference fixture saved");hud.publish()
 		check(world.inventory_endpoint.state==before,"assignment never changes custody or placement")
-		check((await hud.activate_slot(8)).ok,"hotbar uses real Inventory receipt-backed activation")
+		check(not (await hud.activate_slot(8)).ok,"legacy EQUIP activation rejected")
 		await wait_until(func()->bool:return not projection.value.slots[8].available)
-		check(hud.bindings.binding(8).id==uid,"equipped item keeps its unavailable preference")
+		check(hud.bindings.binding(8).id==uid,"legacy EQUIP stays unavailable")
 		world.inventory_endpoint.state_changed.disconnect(hud.accept_inventory);hud.dispose();items.dispose();session.close("test");projection.bridge.free();projection.free()
 	stage.rpc_id(1,"equipped")
 
@@ -41,7 +42,9 @@ func native_hud() -> void:
 	await wait_until(func()->bool:return ui.bridge.is_ready and ui.hotbar._ready)
 	ui.set_open(true)
 	ui.host.browser.call("eval","window.sendIpcMessage(JSON.stringify({v:1,type:'hotbar.assign',id:'native-hud-bind',payload:{slot:8,id:'%s'}}));" % _uid)
-	await wait_until(func()->bool:return ui.hotbar.bindings.binding(8).get("id","")==_uid)
+	await get_tree().create_timer(0.3).timeout
+	check(ui.hotbar.bindings.binding(8).is_empty(),"CEF rejects EQUIP assignment")
+	ui.hotbar.bindings.assign_item(8,_uid);check(ui.hotbar._save(),"legacy native preference fixture");ui.hotbar.publish()
 	var activate: Callable=ui.items._activate
 	ui.hotbar.activate_item=func(payload: Dictionary)->Dictionary:_native_calls+=1;return await activate.call(payload)
 	world.input_enabled=true
@@ -51,9 +54,9 @@ func native_hud() -> void:
 	check(_native_calls==0,"typing/menu focus suppresses hotbar input")
 	ClientState.menu_open=false
 	Input.parse_input_event(key.duplicate())
-	await wait_until(func()->bool:return _native_calls==1 and not ui.hotbar._busy)
-	await wait_until(func()->bool:return not ui.hotbar._owned.has(_uid))
-	check(ui.hotbar.bindings.binding(8).id==_uid,"native F1 retains reference after equip")
+	await get_tree().create_timer(0.3).timeout
+	check(_native_calls==0 and ui.hotbar._owned.has(_uid),"F1 rejects saved EQUIP without Inventory activation")
+	check(ui.hotbar.bindings.binding(8).id==_uid,"native F1 retains disabled legacy reference")
 	world.input_enabled=false
 	ui.host.message_received.connect(func(raw: String)->void:
 		var value=JSON.parse_string(raw)
@@ -82,7 +85,7 @@ func after_transfer() -> void:
 		hud.accept_inventory(world.inventory_endpoint.state)
 		check(hud.bindings.binding(8).get("id","")==_uid,"replacement composition restores preferences after real CH transfer")
 		hud.dispose();projection.bridge.free();projection.free()
-	print("HOTBAR_CLIENT_OK bindings, authoritative equip and CH restoration")
+	print("HOTBAR_CLIENT_OK bindings, USE-only policy and CH restoration")
 	finished.rpc_id(1);await get_tree().create_timer(0.2).timeout;socket.close();get_tree().quit()
 
 @rpc("authority","call_remote","reliable",0)
@@ -106,7 +109,7 @@ func run_server() -> void:
 	endpoint.resynchronize(hero)
 	exercise_hotbar.rpc_id(hero,item.uid)
 	await wait_until(func()->bool:return progress.has("equipped"))
-	check(store.inventory(owner).equipment.get("weapon","")==item.uid,"real server equipped exactly the bound UID")
+	check(store.inventory(owner).equipment.get("weapon","")!=item.uid,"hotbar never equipped the rejected UID")
 	host.get_node("GameWorld").combat_endpoint.last_combat_ms.erase(hero)
 	check(manager.transfers.start(hero,target.identity.channel_id).ok,"real local CH handoff")
 	await wait_until(func()->bool:return target.get_node("GameWorld").characters.has(hero))
@@ -115,5 +118,5 @@ func run_server() -> void:
 	await wait_until(func()->bool:return done.has(hero))
 	finish_observer.rpc_id(other)
 	await wait_until(func()->bool:return done.size()==2)
-	print("HOTBAR_SERVER_OK actual Inventory activation and local channel transfer")
+	print("HOTBAR_SERVER_OK rejected EQUIP and local channel transfer")
 	db.close_db();get_tree().quit()

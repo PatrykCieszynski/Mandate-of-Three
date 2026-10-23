@@ -11,7 +11,7 @@ requires Godot and produces explicit preview-only feedback in the browser host.
 
 ## Assignment and activation
 
-Drag an Inventory item onto any slot to assign its UID. This never moves custody,
+Drag an Inventory item with primary action **USE** onto any slot to assign its UID. This never moves custody,
 changes its bag position or creates/copies an item. Storage, Equipment and shop
 subjects cannot be assigned through this drop target. Right click clears the
 preference. Reassign by dropping another Inventory item onto the same slot.
@@ -22,16 +22,17 @@ activation path, resolving the item's **current** bag UID/revision. Native input
 ignores repeats and modifier combinations; chat/text/menu ownership suppresses
 shortcut activation. Server authorization, ownership, revision and receipts remain
 unchanged. Missing/equipped/stored items retain an unavailable preference; returning
-the same UID to Inventory reactivates it. There is no automatic substitution by
+the same UID to Inventory reactivates it only if its current action is USE. There is no automatic substitution by
 item definition, no new ownership authority and no saved obsolete revision.
 An unavailable binding cannot activate an item in account Storage or Equipment.
 
-Current World3D activation supports **EQUIP**. Canonical materials have no action;
-USE consumables remain unsupported by the server. The HUD reports these errors,
-it does not simulate potion consumption/healing, reserve cooldowns or call the
-provisional H horn skill. An authoritative horn USE must validate the owned horn
-UID/tier before it can be connected. Active skills, potion transactions and
-cooldown overlays remain separate gameplay work.
+Hotbar rejects EQUIP, NONE and unknown definitions both at assignment and activation.
+Browser drop validation uses projected definition metadata; the native adapter independently
+checks canonical content, including shortcuts restored from older preference files.
+Old non-USE preferences remain visible but unavailable and can be cleared/replaced.
+No canonical USE content or new USE effects are introduced here. USE remains unsupported
+by the current server; existing Inventory EQUIP behavior is unchanged. Skill references
+remain a model seam, with no active skill assignment/use in this slice.
 
 Inventory activation reuses the existing stable operation journal/recovery.
 A lost response is never treated as proof of failure; pending Inventory operations
@@ -65,7 +66,7 @@ stays interactive. Drag behavior is shared with Inventory's existing runtime.
 - Web contracts cover sixteen keys, vitals validation, Inventory-only drop,
   assignment without relocation, clear/activate/system intentions and disposal.
 - `tests/run-combat.ps1 -Scene hotbar_network -MarkerPrefix HOTBAR` verifies real
-  receipt-backed equip and local CH restoration. `-NativeClient1` exercises the
+  EQUIP rejection (including restored shortcuts) and local CH restoration. `-NativeClient1` exercises the
   actual CEF adapter, F1, input ownership, Options, vitals and reload. Native keys
   are synthetic; physical keyboard/IME/Alt-Tab acceptance remains manual.
 - Existing browser preview tests use actual pointer drag to assign/clear a slot

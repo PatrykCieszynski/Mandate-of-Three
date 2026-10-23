@@ -53,6 +53,9 @@ func accept_inventory(snapshot: Dictionary) -> void:
 		_presented[str(item.uid)]=ItemUiAdapter.item_model(item)
 	publish()
 
+static func _usable(item: Dictionary) -> bool:
+	return item.get("primary_action", "NONE")=="USE"
+
 func _save() -> bool:
 	if not _ready: return false
 	var file:=FileAccess.open(_path+".tmp",FileAccess.WRITE)
@@ -64,6 +67,7 @@ func _save() -> bool:
 
 func _assign(p: Dictionary) -> Dictionary:
 	if _disposed or not _ready or not _owned.has(p.id): return {"ok":false,"error":"unavailable"}
+	if not _usable(_owned[p.id]): return {"ok":false,"error":"no_action"}
 	return _change(int(p.slot),str(p.id))
 
 func _clear(p: Dictionary) -> Dictionary:
@@ -84,6 +88,7 @@ func activate_slot(slot: int) -> Dictionary:
 	var binding: Dictionary=bindings.resolve(slot,_owned,{})
 	if binding.is_empty(): return {"ok":false,"error":"unavailable"}
 	var item: Dictionary=_owned[binding.id]
+	if not _usable(item): return {"ok":false,"error":"no_action"}
 	_busy=true;_error="";publish()
 	# Current revision, never a revision stored with the preference or supplied by JS.
 	var result: Dictionary=await activate_item.call({"id":binding.id,"revision":int(item.revision)})
@@ -104,7 +109,7 @@ func publish() -> void:
 		var binding: Dictionary=bindings.binding(i)
 		if binding.is_empty(): slots.append({});continue
 		var item: Dictionary=_presented.get(binding.id,{})
-		slots.append({"id":str(binding.id),"name":str(item.get("name","Unavailable item")),"icon_id":str(item.get("icon_id","")),"quantity":int(item.get("quantity",0)),"available":_owned.has(binding.id)})
+		slots.append({"id":str(binding.id),"name":str(item.get("name","Unavailable item")),"icon_id":str(item.get("icon_id","")),"quantity":int(item.get("quantity",0)),"available":_owned.has(binding.id) and _usable(_owned[binding.id])})
 	_dispatcher.set_domain("hotbar",{"slots":slots,"vitals":_vitals.duplicate(true),"busy":_busy,"ready":_ready,"error":_error})
 
 func dispose() -> void:

@@ -60,7 +60,7 @@ static func item_model(item: Dictionary) -> Dictionary:
 	var definition: ItemDefinition = ItemDefinitions.get_definition(StringName(item.definition_id))
 	var name_text: String = str(item.item_name)
 	if definition != null and not definition.stats_per_upgrade.is_empty(): name_text += " +%d" % int(item.upgrade_level)
-	return {"id":str(item.uid),"revision":int(item.revision),"definition_id":str(item.definition_id),"upgrade_level":int(item.upgrade_level),"name":name_text,"icon_id":str(item.get("icon_id","")),"height":int(item.inventory_height),"quantity":int(item.amount),"tooltip":tooltip_details(item)}
+	return {"primary_action":ItemDefinition.PrimaryAction.keys()[definition.primary_action] if definition != null else "NONE","id":str(item.uid),"revision":int(item.revision),"definition_id":str(item.definition_id),"upgrade_level":int(item.upgrade_level),"name":name_text,"icon_id":str(item.get("icon_id","")),"height":int(item.inventory_height),"quantity":int(item.amount),"tooltip":tooltip_details(item)}
 
 func publish(snapshot: Dictionary) -> void:
 	if _disposed or not snapshot.get("ok", false): return

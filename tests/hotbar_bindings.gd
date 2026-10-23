@@ -65,6 +65,17 @@ func adapter_contract() -> void:
 	var item: Dictionary={"uid":uid,"definition_id":"iron_sword","item_name":"Sword","inventory_height":2,"amount":1,"upgrade_level":0,"revision":1,"location":"bag"}
 	var inventory: Dictionary={"ok":true,"economic_context":context,"items":[item]}
 	adapter.accept_inventory(inventory)
+	assert(not adapter._assign({"slot":15,"id":uid}).ok,"EQUIP cannot assign")
+	adapter.bindings.assign_item(15,uid);adapter.publish()
+	assert(not projection.value.slots[15].available and not (await adapter.activate_slot(15)).ok and calls.is_empty(),"legacy EQUIP cannot activate")
+	item.definition_id="upgrade_ore";adapter.accept_inventory(inventory)
+	assert(not adapter._assign({"slot":15,"id":uid}).ok and not (await adapter.activate_slot(15)).ok and calls.is_empty(),"NONE cannot assign or activate")
+	# Test-only USE definition; no gameplay content or effect is introduced.
+	item.definition_id="iron_sword"
+	var use_definition: ItemDefinition=ItemDefinitions.IRON_SWORD
+	var previous_action: int=use_definition.primary_action
+	use_definition.primary_action=ItemDefinition.PrimaryAction.USE
+	adapter.accept_inventory(inventory)
 	assert(adapter._assign({"slot":15,"id":uid}).ok)
 	assert(adapter._assign({"slot":0,"id":uid}).ok,"atomic preference replacement supports repeated writes")
 	assert(not script.valid_slot({"slot":16},1) and not script.valid_slot({"slot":0.5},1))
@@ -90,5 +101,8 @@ func adapter_contract() -> void:
 	var rejected:=HudProjection.new();rejected.bridge=WebUiBridge.new();blocked.attach(rejected,activate);blocked.accept_inventory(inventory)
 	assert(not rejected.value.ready and not blocked._assign({"slot":0,"id":uid}).ok,"corrupt preferences fail closed")
 	assert(FileAccess.get_file_as_string(adapter._path)=="broken preferences","corrupt preferences are never overwritten silently")
+	use_definition.primary_action=previous_action
+	adapter.accept_inventory(inventory)
+	assert(not projection.value.slots[15].available and not (await adapter.activate_slot(15)).ok and calls.size()==1,"changed action invalidates a previously usable shortcut")
 	blocked.dispose();rejected.bridge.free();rejected.free()
 	adapter.dispose();replacement.dispose();projection.bridge.free();projection.free();restored.bridge.free();restored.free()

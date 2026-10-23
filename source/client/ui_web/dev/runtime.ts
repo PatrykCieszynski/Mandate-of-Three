@@ -27,29 +27,13 @@ const hotbarFixture =
     slots: Array.from({ length: 16 }, (_, i) =>
       i === 0
         ? {
-            id: 'preview-material',
-            name: 'Material',
-            icon_id: 'material',
+            id: 'preview-use',
+            name: 'Potion (preview)',
+            icon_id: 'red_potion',
             quantity: 12,
             available: true,
           }
-        : i === 1
-          ? {
-              id: 'preview-sword',
-              name: 'Iron sword',
-              icon_id: 'iron_sword',
-              quantity: 1,
-              available: true,
-            }
-          : i === 8
-            ? {
-                id: 'preview-armor',
-                name: 'Armor',
-                icon_id: 'armor',
-                quantity: 1,
-                available: true,
-              }
-            : {},
+        : {},
     ),
     vitals: {
       ready: true,
@@ -150,7 +134,20 @@ function fixture(): DomainSnapshot {
       pages: 4,
       items: [
         {
+          id: 'preview-use',
+          primary_action: 'USE',
+          revision: 1,
+          name: 'Potion (preview)',
+          icon_id: 'red_potion',
+          height: 1,
+          quantity: 12,
+          x: 4,
+          y: 0,
+          page: 0,
+        },
+        {
           id: 'preview-sword',
+          primary_action: 'EQUIP',
           revision: 1,
           name: 'Iron sword',
           icon_id: 'iron_sword',
@@ -311,7 +308,7 @@ window.sendIpcMessage = (raw) => {
           const item = state.inventory?.items.find(
             (item) => item.id === message.payload.id,
           );
-          if (item) {
+          if (item?.primary_action === 'USE') {
             state.hotbar.slots[index] = {
               id: item.id,
               name: item.name,
@@ -326,8 +323,18 @@ window.sendIpcMessage = (raw) => {
           state.hotbar.slots[index] = {};
           result = { ok: true, error: '' };
         }
-        if (message.type === 'hotbar.activate')
-          result = { ok: false, error: 'preview_native_only' };
+        if (message.type === 'hotbar.activate') {
+          const item = state.inventory?.items.find(
+            (item) => item.id === state.hotbar!.slots[index]?.id,
+          );
+          result = {
+            ok: false,
+            error:
+              item?.primary_action === 'USE'
+                ? 'preview_native_only'
+                : 'no_action',
+          };
+        }
       }
       emit('hotbar.updated', state.hotbar);
       emit('command.result', result, message.id);

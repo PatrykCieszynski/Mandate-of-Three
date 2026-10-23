@@ -107,14 +107,16 @@ export function mountBottomHud(
               !inFlight &&
               !!state?.ready &&
               payload.subject instanceof OwnedItemDragSubject &&
-              payload.subject.container === 'inventory',
+              payload.subject.container === 'inventory' &&
+              payload.subject.item.primary_action === 'USE',
             data: null,
           }),
           drop: (payload) => {
             const subject = payload.subject;
             if (
               subject instanceof OwnedItemDragSubject &&
-              subject.container === 'inventory'
+              subject.container === 'inventory' &&
+              subject.item.primary_action === 'USE'
             )
               return send(() => options.assign(index, subject.item.id));
           },
