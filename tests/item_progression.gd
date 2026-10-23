@@ -72,7 +72,7 @@ func run_server() -> void:
 	drop_uid = world.ground_loot.drops.keys()[0]
 	# Fix only the fixture's roll to guarantee the better-weapon branch. The
 	# production random range, receipt, pickup and equip code remain unchanged.
-	world.ground_loot.drops[drop_uid].bonus = 9
+	world.ground_loot.drops[drop_uid].affixes = [{"stat":"attack","value":9}]
 	await get_tree().create_timer(0.2).timeout
 	set_phase("PICKUP", hero)
 	await wait_until(func() -> bool: return replies.has(hero))

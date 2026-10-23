@@ -16,7 +16,8 @@ static func decode(row: Dictionary) -> PlayerResource:
 	player.profile_status = str(row.get("profile_status", ""))
 	player.profile_animation = str(row.get("profile_animation", ""))
 
-	player.attributes.assign(JSON.parse_string(str(row.get("attributes_json", "{}"))) as Dictionary)
+	var attribute_values: Dictionary=JSON.parse_string(str(row.get("attributes_json", "{}")))
+	for key: String in attribute_values: player.attributes[StringName(key)]=int(attribute_values[key])
 	player.inventory = Inventory.normalize(JSON.parse_string(str(row.get("inventory_json", "{}"))) as Dictionary)
 	# Equipment: { slot_key (StringName) -> item_id (int) }; JSON gives string keys/float values.
 	var equipment_raw: Dictionary = JSON.parse_string(str(row.get("equipment_json", "{}"))) as Dictionary
@@ -24,6 +25,8 @@ static func decode(row: Dictionary) -> PlayerResource:
 	for slot_key in equipment_raw:
 		player.equipment[StringName(slot_key)] = int(equipment_raw[slot_key])
 	player.available_attributes_points = int(row.get("available_attributes_points", 0))
+	var progression: Variant = JSON.parse_string(str(row.get("progression_json","{}")))
+	player.load_progression_state(progression if progression is Dictionary else {})
 
 	# Skills: { skill_name (StringName) -> {"level": int, "xp": int} }; JSON gives string
 	# keys and float numbers, so normalize back to StringName keys / int values.
@@ -150,3 +153,13 @@ static func decode(row: Dictionary) -> PlayerResource:
 	player.led_guild_id = int(row.get("led_guild_id", 0))
 
 	return player
+
+## Decimal counters avoid JSON double rounding above 2^53. Old numeric JSON remains readable.
+static func encode_attributes(attributes: Dictionary) -> String:
+	var values: Dictionary={}
+	for key: Variant in attributes: values[str(key)]=str(int(attributes[key]))
+	return JSON.stringify(values)
+static func encode_progression(progression: Dictionary) -> String:
+	var values:=progression.duplicate()
+	for key: String in ["skill_points","revision"]: values[key]=str(int(progression.get(key,0)))
+	return JSON.stringify(values)

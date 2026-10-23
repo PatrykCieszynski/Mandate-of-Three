@@ -5,7 +5,8 @@ static func ensure_schema(db: Object) -> bool:
 	var version: Dictionary=db.query("SELECT version FROM economy.schema_versions WHERE feature='realm_state';")
 	if not version.ok or (not version.rows.is_empty() and int(version.rows[0].version)!=1):
 		db.rollback();return false
-	if not version.rows.is_empty(): return db.commit()
+	if not version.rows.is_empty():
+		return db.commit() and preload("res://source/server/world/database/character_stats_schema.gd").postgres(db)
 	var columns: Array[String]=[
 		"player_id BIGINT PRIMARY KEY DEFAULT nextval('realm.player_ids')",
 		"account_name TEXT NOT NULL REFERENCES realm.accounts(account_name)",
@@ -39,7 +40,7 @@ static func ensure_schema(db: Object) -> bool:
 			db.rollback();return false
 	if not db.execute("INSERT INTO economy.meta(key,value) VALUES('world_profile_id',:id) ON CONFLICT DO NOTHING;",{"id":Crypto.new().generate_random_bytes(16).hex_encode()}).ok:
 		db.rollback();return false
-	if db.commit(): return true
+	if db.commit(): return preload("res://source/server/world/database/character_stats_schema.gd").postgres(db)
 	db.close();return false
 
 ## Small, explicit connection setup for profiles or Master credentials, never combat.
@@ -48,7 +49,7 @@ static func connect_store(settings: Dictionary) -> Object:
 	if not ClassDB.class_exists("GodotSociDatabase"): return null
 	var db: Object=ClassDB.instantiate("GodotSociDatabase")
 	if not db.open("postgresql",OS.get_environment(str(settings.connection_env))+" connect_timeout=3"): return null
-	var result: Dictionary=db.query("SELECT m.value FROM economy.meta m JOIN economy.schema_versions v ON v.feature='realm_state' AND v.version=1 WHERE m.key='economy_authority_id' AND m.value=:authority;",{"authority":settings.authority_id})
+	var result: Dictionary=db.query("SELECT m.value FROM economy.meta m JOIN economy.schema_versions v ON v.feature='realm_state' AND v.version=1 JOIN economy.schema_versions s ON s.feature='character_stats' AND s.version=1 WHERE m.key='economy_authority_id' AND m.value=:authority;",{"authority":settings.authority_id})
 	if not result.ok or result.rows.size()!=1 or not db.execute("SET search_path TO realm,pg_catalog;").ok or not db.execute("SET statement_timeout='3s';").ok or not db.execute("SET lock_timeout='1s';").ok:
 		db.close();return null
 	return db

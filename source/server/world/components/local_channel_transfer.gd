@@ -142,7 +142,7 @@ func tick(now: int = Time.get_ticks_msec()) -> void:
 			continue
 		var body: PlayerActor3D = world.characters[peer]
 		var combo := world.combat_endpoint.combo_state(peer)
-		a.actor={"position":body.position,"yaw":body.rotation.y,"hp":body.hp,"max_hp":body.max_hp,
+		a.actor={"position":body.position,"yaw":body.rotation.y,"hp":body.hp,"max_hp":body.max_hp,"mp":body.mp,
 			"skill":combo.combo_skill_level,"enabled":combo.combo_enabled,"weapon_mode":combo.weapon_mode}
 		a.phase="loading" # Fence before removing source; never roll back past here.
 		world.remove_peer(peer,true)

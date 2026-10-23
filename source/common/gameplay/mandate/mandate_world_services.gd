@@ -115,3 +115,8 @@ func interrupt_transfer(peer_id: int, reason: String) -> void:
 func hydrate_transfer(peer_id: int, host: ServerInstance) -> Dictionary:
 	var server := _server()
 	return {} if server==null or server.instance_manager==null else server.instance_manager.transfers.hydrate(peer_id,host)
+
+func runtime_combat_stats(owner_id: int) -> Dictionary:
+	return {} if _server()==null else _server().runtime_combat_stats(owner_id)
+func refresh_character_stats(peer: int) -> void:
+	if _server()!=null: _server().refresh_character_stats(peer)

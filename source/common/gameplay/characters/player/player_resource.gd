@@ -2,7 +2,7 @@ class_name PlayerResource
 extends Resource
 
 
-const ATTRIBUTE_POINTS_PER_LEVEL: int = 3
+const EXP_ATTRIBUTE_MILESTONES: int = 3
 
 ## Profile customization limits, shared by the client edit UI and server validator.
 const MAX_PROFILE_STATUS_LEN: int = 200
@@ -14,13 +14,12 @@ const BASE_STATS: Dictionary[StringName, float] = {
 	Stat.HEALTH_MAX: 50.0,
 	# Low innate attack power on purpose: most of your damage comes from your
 	# weapon's AD + the Strength attribute, so leveling and gear both matter and
-	# a fresh level-1 is meant to feel weak. See AttributeMap / the weapon items.
+	# a fresh level-1 is meant to feel weak. AttributeMap adds STR/DEX contributions.
 	Stat.AD: 10.0,
 	Stat.ARMOR: 15.0,
 	Stat.MR: 15.0,
 	# Mana gates SPECIAL abilities only (mana_cost on the AbilityResource);
-	# basic attacks stay free. Regen lives in Player (server tick). Spirit
-	# grows the pool.
+	# basic attacks stay free. INT grows the pool and regeneration.
 	Stat.MANA_MAX: 50.0,
 	Stat.MANA_REGEN: 0.5,
 	Stat.MOVE_SPEED: 90.0,
@@ -46,6 +45,11 @@ const HEALTH_PER_LEVEL: float = 5.0
 
 @export var attributes: Dictionary[StringName, int]
 @export var available_attributes_points: int
+@export var available_skill_points: int
+@export var exp_thresholds_claimed: int
+@export var stats_version: int = 1
+@export var stats_revision: int
+var stats_migrated: bool = false
 
 @export var level: int = 1
 ## Character experience toward the next level (resets to the overflow on level-up).
@@ -181,7 +185,8 @@ func init(
 
 
 func level_up() -> void:
-	available_attributes_points += ATTRIBUTE_POINTS_PER_LEVEL
+	available_skill_points += 1
+	exp_thresholds_claimed = 0
 	level += 1
 	level_gained.emit()
 
@@ -199,9 +204,6 @@ func level_xp_to_next() -> int:
 	return LEVEL_XP_BASE * maxi(1, level)
 
 
-## Adds character experience, applying any level-ups (each grants attribute points via
-## level_up). Returns {"level", "experience", "levels_gained", "points_gained"} so the
-## caller can report progress to the client.
 # --- Quests ---
 
 func quest_state(quest_id: int) -> StringName:
@@ -244,18 +246,44 @@ func set_quest_ready_notified(quest_id: int, value: bool) -> void:
 		quests[quest_id]["ready_notified"] = value
 
 
+## Milestones use integer arithmetic: ceil(required * quarter / 4).
+func attained_exp_thresholds() -> int:
+	var count: int = 0
+	for quarter: int in range(1,EXP_ATTRIBUTE_MILESTONES+1):
+		if experience >= (level_xp_to_next() * quarter + 3) / 4: count += 1
+	return count
+
+func progression_state() -> Dictionary:
+	return {"version":stats_version,"thresholds":exp_thresholds_claimed,"skill_points":available_skill_points,"revision":stats_revision}
+
+func load_progression_state(value: Dictionary) -> void:
+	stats_version = int(value.get("version",0))
+	available_skill_points = int(value.get("skill_points",0))
+	stats_revision = int(value.get("revision",0))
+	if stats_version == 0:
+		# Six old meanings cannot be translated safely. Refund ALL spent points.
+		for amount: int in attributes.values(): available_attributes_points += maxi(0,amount)
+		attributes.clear()
+		exp_thresholds_claimed = attained_exp_thresholds()
+		stats_version = 1
+		stats_migrated = true
+	else:
+		exp_thresholds_claimed = int(value.get("thresholds",0))
+
 func add_experience(amount: int) -> Dictionary:
-	if amount <= 0:
-		return {"level": level, "experience": experience, "levels_gained": 0, "points_gained": 0}
-	experience += amount
+	var points_before := available_attributes_points
+	var skills_before := available_skill_points
 	var levels_gained: int = 0
-	while experience >= level_xp_to_next():
-		experience -= level_xp_to_next()
-		level_up()
-		levels_gained += 1
-	return {
-		"level": level,
-		"experience": experience,
-		"levels_gained": levels_gained,
-		"points_gained": levels_gained * ATTRIBUTE_POINTS_PER_LEVEL,
-	}
+	while amount > 0:
+		var required := level_xp_to_next()
+		var accepted := mini(amount, required - experience)
+		experience += accepted
+		amount -= accepted
+		var attained := attained_exp_thresholds()
+		available_attributes_points += maxi(0,attained-exp_thresholds_claimed)
+		exp_thresholds_claimed = maxi(attained,exp_thresholds_claimed)
+		if experience >= required:
+			experience -= required
+			level_up()
+			levels_gained += 1
+	return {"level":level,"experience":experience,"levels_gained":levels_gained,"points_gained":available_attributes_points-points_before,"skill_points_gained":available_skill_points-skills_before}

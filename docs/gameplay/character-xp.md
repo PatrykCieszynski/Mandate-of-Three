@@ -1,68 +1,137 @@
-# Character XP and levels - 3D spike
+# Character progression and Stats V1
 
-Status: 2026-10-07, branch `codex/character-xp`. Server-side XP on Wild Dog death,
-level-up, HUD and persistence across relog. Combat and item parameters are unchanged.
+The current authoritative World3D path uses `PlayerResource.add_experience()`.
+EXP cost remains `70 × current level`; overflow crosses any number of levels.
+A kill/encounter grants one runtime EXP pool through existing solo/Party reward
+rules, independently of item pickup. No per-kill history or SQL write is added.
 
-## Rewards and levels
+## EXP milestones
 
-A Wild Dog awards 20 XP. For solo-only fights the full reward goes to the character with the highest
-actual damage contribution, as with loot reservation. Party fights aggregate
-competitors and split one conserved EXP pool through the [Party V1 rules](README.md#party-v1--open-world-runtime). Overkill does not increase
-contribution; ties use the lower persistent character ID. The last hit does not
-automatically take the reward. XP is granted on mob death regardless of item
-pickup; hits and pickup alone do not award experience.
+On each level, crossing 25%, 50% and 75% grants one unspent attribute point.
+Integer thresholds round upward: level 1 (70 EXP) uses 18, 35 and 53 EXP.
+Reaching 100% advances the level and grants one **skill point**, with no additional
+attribute-point grant. New characters start with zero allocated/unspent points.
+Skill points are stored only; skill spending and active skills are out of scope.
+There is no gameplay cap on attribute investment (runtime/SQL use signed 64-bit
+integers; JSON-backed counters use decimal strings to avoid rounding above 2^53).
 
-Reuse `PlayerResource.add_experience()` and the curve `70 x current level`.
-Excess XP carries into the next level. Four dogs from zero yield 80 XP: level 2
-and 10/140 XP. These are prototype values for later balancing. Existing unspent
-attribute-point storage retains +3 per level; allocation is not available in this
-3D slice and does not change attack or HP.
+`exp_thresholds_claimed` records the current level's reached milestones and
+resets only on level-up. Large rewards process every crossed level, including
+its three milestones, before continuing with overflow. Stored level, EXP,
+claimed milestones and point balances form one checkpoint state. Reconnect and
+checkpoint recovery never re-award that state's milestones. Party `equal`,
+`by_level` and `carry` still conserve and distribute EXP first; each recipient
+passes their share through this same authoritative progression procedure.
 
-The HUD shows level, XP to the next level, a progress bar and a reward/level-up
-notice for five seconds. The capsule's name label includes level. Levels are
-public; exact XP progress is owner-only. The client cannot request XP grants,
-experience amounts or an expected level.
+## Warrior coefficients
 
-## Persistence and idempotency
+`AttributeMap.WARRIOR` is the single V1 coefficient matrix. Values below are
+**additive contributions per allocated point**, rather than copies of the old
+six-attribute multipliers. `weighted(attributes, weights)` lets a future class or
+skill use an independent combination of the four attributes; no class/skill
+framework or additional playable class is introduced.
 
-XP and level change immediately in the authoritative PlayerResource in RAM.
-WorldDatabase marks character progression dirty and checkpoints dirty characters
-approximately every 60 seconds in one transaction updating only level, experience
-and unspent attribute points. Disconnect/logout, transfer and graceful shutdown
-force a save. Unclaimed loot remains runtime state; XP checkpoints do not depend
-on claiming it.
+| Attribute | Current Warrior contribution |
+| --- | --- |
+| STR | +1 physical basic attack damage |
+| DEX | +0.25 basic attack damage; +0.1 attack-speed percentage point |
+| VIT | +10 maximum HP; +0.25 armor |
+| INT | +5 maximum MP; +0.05 MP regeneration/second |
 
-WorldSchema v13 removes the earlier `kill_xp_rewards` table. No kill history or
-persistent kill ID is created. A mob's DEAD state prevents duplicate processing
-of that death in the single authoritative World Server. A crash may lose soft
-progression since the last checkpoint. Details and separation of items, XP and
-wallet state: [persistence policy](../architecture/persistence-policy.md).
+Final basic damage truncates to an integer after combining sources. Attack speed
+uses the existing ratio/timeline path, so both server timings and animation
+playback use the same derived speed. The existing timeline safety bounds remain;
+they do not cap attribute investment. No level-difference damage bonus exists.
+Positive armor mitigates incoming physical mob damage by `100 / (100 + armor)`.
+
+World3D retains its 100 HP base and the existing `HEALTH_PER_LEVEL = 5` grant per
+level past 1. Raising max HP/MP through allocation does not heal or resurrect;
+spawn/respawn retains its normal full-HP lifecycle. MP regeneration runs in RAM
+for living actors; no active skill, mana-spend mechanic or new HUD is added.
+
+Equipment stays in its existing committed runtime projection. Attribute and
+unexpired buff contributions compose on top without rewriting that projection.
+Thus equip/upgrade refresh cannot erase allocated attributes, and spending a
+point cannot erase a weapon or a buff. Combat reads RAM only. Stat buffs reuse
+existing `Stat` names and runtime expiration timestamps.
+
+## Persistence, allocation and retry
+
+XP is soft progression: RAM update, dirty character, approximately 60-second
+batch checkpoint. Logout/disconnect, local transfer and graceful shutdown force
+that checkpoint. The narrow update writes level, EXP, unspent attribute points,
+`attributes_json` and `progression_json` (version, milestone count, skill points,
+allocation revision). It does not serialize Inventory, quests or the full profile.
+A crash may lose progress after the last successful checkpoint.
+
+Allocating a point is immediate: authenticated admission, one native transaction
+that checkpoints pending progression, spends one point, updates attributes and
+revision, and inserts the successful command receipt. RAM changes follow COMMIT.
+Rejected requests do not create durable receipts. Successful receipts are retained
+for replay; the same character/command ID with a different attribute conflicts.
+The PG player row lock and allocation revision serialize competing allocations.
+This remains a single-World profile owner, not multi-World profile authority.
+
+A failed COMMIT is **outcome_unknown**. The PG profile writer closes/fails closed;
+no speculative RAM change or automatic replay is allowed. Recover through a fresh
+profile owner/load, then query the same command ID. A receipt replay reports the
+current snapshot and does not reapply an old attribute snapshot. This preserves
+the existing profile-writer failure policy, rather than adding an in-process
+reconnect or transaction-worker framework. The synchronous profile writer remains
+a limitation for future higher-frequency allocation/load work.
+
+## Existing-character migration
+
+Offline provisioning adds `progression_json` and `stats_commands`; selected PG
+startup requires `character_stats` schema version 1. Provision using the existing
+operator command before upgrading the server; runtime login does not perform DDL.
+SQLite parity fixtures provision the equivalent additive schema.
+
+Rows without Stats V1 metadata are decoded as legacy. All positive spent points
+across the six old keys are refunded to their existing unspent balance, and the
+old attribute allocation is cleared. No guessed STR/DEX/VIT/INT conversion occurs.
+Current EXP initializes the milestone marker **without paying those milestones**;
+old levels do not award retroactive skill or attribute points. The existing pool,
+including any old creation points, is preserved. The migrated version, cleared
+attributes and refund are committed together by checkpoint/allocation/profile
+save. Until commit, reloading repeats the same deterministic conversion from the
+unchanged old row; after commit it cannot refund again. Item/economy state is not
+part of the conversion.
+
+## Backend contract for a future CEF adapter
+
+Use existing authenticated World data requests with matching client/server build
+**0.33.0**. No Stats CEF window or speculative client mutation is implemented.
+
+- `attribute.spend`: `{ "command_id": "stable-intent-id", "attribute": "STR" }`.
+  Exactly one point; accepted keys are STR, DEX, VIT, INT. Identity and amounts
+  are never client-controlled. Keep the same ID/payload after a lost response.
+- Success: `{ "ok": true, "replay": false, "stats": { ... } }`.
+- `attribute.get` returns `{ "ok": true, "stats": { ... } }`.
+- `progression.get` retains top-level progression fields and also includes the
+  four attributes, skill points, allocation revision and derived combat values.
+- Snapshot keys: `version`, `revision`, `attributes`, `available_points`,
+  `available_skill_points`, `level`, `experience`, `xp_to_next`,
+  `thresholds_claimed`, `combat`.
+- Failures include `payload`, `points`, `command_conflict`, `stale`,
+  `rate_limited`, `storage`, `outcome_unknown`, plus existing session/transfer
+  admission failures. `[runtime].stats_attempts_per_second` defaults to eight attempts/second per
+  live peer. A bounded cache resolves the last 32 successful IDs/conflicts before
+  charging this limiter; cache misses/reconnect lookup still use durable receipts
+  and admission. Retrying later preserves the receipt identity.
+
+The legacy privileged `/setlevel` tool is forward-only and uses the same EXP
+milestone path; it cannot rewind EXP to mint previously earned points.
+Legacy `attribute.reset` is removed from generic RPC admission. Its old
+Inventory-gold mutation is not a supported Stats V1 respec path.
 
 ## Verification
 
-```powershell
-& .\tests\run-xp.ps1
-& .\tests\run-xp.ps1 -Preview
-```
-
-A server and two clients use isolated SQLite and port 18098. Run sequentially
-with PvE, combat and item progression tests. The fixture lowers dog HP to shorten
-the test without changing production attack or XP code.
-
-Verified: highest contribution rather than last hit, actual damage excluding
-overkill, no XP before death, duplicate death callback, multiple kills without DB
-XP writes, level 1 -> 2 with 10 excess XP, private progression, public level, HUD,
-no pickup XP, checkpoint/reopen and real disconnect with dirty progression.
-Checkpoint tests cover batching, rollback, narrow UPDATE, forced save and the
-accepted crash window without receipts. Markers: `CHECKPOINT_OK`, `XP_SERVER_OK`
-and two `XP_CLIENT_OK`.
-
-Full gateway/master/world sessions in `tests/pve_session.tscn` verify identical XP
-and level after relog along with the picked-up/equipped ItemInstance. The
-`--xp-levelup` variant fights to level 2 and verifies the level survives relog.
-Item, PvE, combat, progression and movement regressions also passed. The generated
-`character-xp-preview.png` in `.godot/verification` was visually inspected.
-
-The checkpoint test intentionally triggers an SQL error. Earlier engine
-certificate/exit-resource diagnostics remain in logs. Manual user verification
-of this stage is still pending.
+`tests/stats_v1.tscn` covers quarter thresholds, multi-level/small-versus-bulk
+rewards, no retroactive migration grants, all Party EXP modes, additive stat
+sources, revision races, replay/conflict, checkpoint/reload and rollback.
+The same persistence contract runs on real PostgreSQL in the existing
+`python tools/postgres/run_readiness.py --suite full-state` disposable runner.
+`tests/run-combat.ps1 -Scene stats_network -MarkerPrefix STATS` exercises two
+clients through actual World RPCs. Run port-18098 network suites sequentially.
+Existing XP, PvE, Metin, Party and economy suites remain regression gates.

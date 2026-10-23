@@ -88,6 +88,9 @@ static func ensure_schema(db: SQLite) -> void:
 	if not preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(db):
 		push_error("Could not initialize durable account item revisions.")
 
+	if not preload("res://source/server/world/database/character_stats_schema.gd").sqlite(db):
+		push_error("Could not provision character Stats V1.")
+
 static func migrate_account_identity(db: SQLite) -> bool:
 	if not db.query("BEGIN IMMEDIATE;"): return false
 	if not db.query("PRAGMA table_info(accounts);"):

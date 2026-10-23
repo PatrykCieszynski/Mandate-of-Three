@@ -79,8 +79,8 @@ func save_progression(players: Array[PlayerResource]) -> bool:
 	if players.is_empty(): return true
 	if not db.query("BEGIN IMMEDIATE;"): return false
 	for player: PlayerResource in players:
-		if not db.query_with_bindings("UPDATE players SET level=?,experience=?,available_attributes_points=? WHERE player_id=?;",
-			[player.level, player.experience, player.available_attributes_points, player.player_id]) \
+		if not db.query_with_bindings("UPDATE players SET level=?,experience=?,available_attributes_points=?,attributes_json=?,progression_json=? WHERE player_id=?;",
+			[player.level,player.experience,player.available_attributes_points,PlayerProfileCodec.encode_attributes(player.attributes),PlayerProfileCodec.encode_progression(player.progression_state()),player.player_id]) \
 			or not db.query("SELECT changes() AS n;") or int(db.query_result[0].n) != 1:
 			db.query("ROLLBACK;")
 			return false
@@ -91,7 +91,7 @@ func save_progression(players: Array[PlayerResource]) -> bool:
 
 
 func save_player(player: PlayerResource) -> bool:
-	var attributes_json: String = JSON.stringify(player.attributes)
+	var attributes_json: String = PlayerProfileCodec.encode_attributes(player.attributes)
 	var inventory_json: String = JSON.stringify(player.inventory)
 	var equipment_json: String = JSON.stringify(player.equipment)
 	var skills_json: String = JSON.stringify(player.skills)
@@ -126,8 +126,8 @@ func save_player(player: PlayerResource) -> bool:
 		+ "player_id, account_name, display_name, skin_id, level, experience, available_attributes_points, "
 		+ "profile_status, profile_animation, "
 		+ "attributes_json, inventory_json, equipment_json, skills_json, mastery_json, quests_json, friends_json, blocked_ids_json, owned_skins_json, server_roles_json, stats_json, titles_json, dailies_json, dungeon_lockouts_json, redeemed_codes_json, wardstones_json, "
-		+ "active_guild_id, joined_guild_ids_json, led_guild_id"
-		+ ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+		+ "active_guild_id, joined_guild_ids_json, led_guild_id, progression_json"
+		+ ") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
 		[
 			player.player_id,
 			player.account_name,
@@ -159,7 +159,8 @@ func save_player(player: PlayerResource) -> bool:
 
 			player.active_guild_id,
 			joined_guild_ids_json,
-			player.led_guild_id
+			player.led_guild_id,
+			PlayerProfileCodec.encode_progression(player.progression_state())
 		]
 	)
 
@@ -189,8 +190,8 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 	if economic_initialization:
 		Inventory.add_item(player.inventory, 1, 1) # health_potion
 		Inventory.add_item(player.inventory, Economy.gold_id(), 25)
-	# Starting attribute points so a new character has something to spend.
-	player.available_attributes_points = PlayerResource.ATTRIBUTE_POINTS_PER_LEVEL
+	# Stats V1 points are earned at EXP milestones.
+	player.available_attributes_points = 0
 	# Everyone who plays the alpha carries the badge for it.
 	player.titles_unlocked = PackedStringArray(["Alpha tester"])
 	player.display_title = "Alpha tester"
@@ -549,3 +550,33 @@ func get_guild_log(guild_id: int, limit: int = 100) -> Array:
 	return db.query_result
 
 #endregion
+
+
+## Flush pending soft progression and spend exactly one point in one transaction.
+## COMMIT uncertainty never mutates RAM or blindly repeats the write.
+func spend_attribute(player: PlayerResource, command_id: String, attribute: StringName) -> Dictionary:
+	if command_id.is_empty() or command_id.length()>80 or not AttributeMap.KEYS.has(attribute): return {"ok":false,"error":"payload"}
+	if not begin(): return {"ok":false,"error":"storage"}
+	if not db.query_with_bindings("SELECT attribute FROM stats_commands WHERE character_id=? AND command_id=?;",[player.player_id,command_id]):
+		rollback();return {"ok":false,"error":"storage"}
+	if not db.query_result.is_empty():
+		var matches: bool=str(db.query_result[0].attribute)==str(attribute)
+		rollback();return {"ok":true,"replay":true} if matches else {"ok":false,"error":"command_conflict"}
+	if player.available_attributes_points<=0:
+		rollback();return {"ok":false,"error":"points"}
+	if not db.query_with_bindings("SELECT progression_json FROM players WHERE player_id=?;",[player.player_id]) or db.query_result.size()!=1:
+		rollback();return {"ok":false,"error":"storage"}
+	var persisted: Dictionary=JSON.parse_string(str(db.query_result[0].progression_json))
+	if int(persisted.get("revision",0))!=player.stats_revision:
+		rollback();return {"ok":false,"error":"stale"}
+	var attributes: Dictionary=player.attributes.duplicate()
+	attributes[attribute]=int(attributes.get(attribute,0))+1
+	var progression: Dictionary=player.progression_state()
+	progression.revision=player.stats_revision+1
+	if not db.query_with_bindings("UPDATE players SET level=?,experience=?,available_attributes_points=?,attributes_json=?,progression_json=? WHERE player_id=?;",[player.level,player.experience,player.available_attributes_points-1,PlayerProfileCodec.encode_attributes(attributes),PlayerProfileCodec.encode_progression(progression),player.player_id]):
+		rollback();return {"ok":false,"error":"storage"}
+	if not db.query_with_bindings("INSERT INTO stats_commands(character_id,command_id,attribute) VALUES(?,?,?);",[player.player_id,command_id,str(attribute)]):
+		rollback();return {"ok":false,"error":"storage"}
+	if not commit():
+		db.close_db();return {"ok":false,"error":"outcome_unknown"}
+	return {"ok":true,"attributes":attributes,"points":player.available_attributes_points-1,"revision":progression.revision}

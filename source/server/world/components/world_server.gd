@@ -91,6 +91,7 @@ var player_id_to_peer_id: Dictionary[int, int]
 ## Minimal combat view, keyed by persistent character ID. Refreshed only after
 ## loading inventory or a committed item operation, never by a combat action.
 var runtime_equipment: Dictionary[int, Dictionary] = {}
+var character_stats = preload("res://source/server/world/components/character_stats_service.gd").new()
 var _equipment_versions: Dictionary[int, Dictionary] = {}
 const ItemStateVersion = preload("res://source/common/gameplay/items/domain/item_state_version.gd")
 ## UTC epoch gives restart/process continuity without a database write per tick.
@@ -119,19 +120,56 @@ func update_runtime_equipment(owner_id: int, snapshot: Dictionary) -> bool:
 		return runtime_equipment[owner_id].equipment==snapshot.equipment and runtime_equipment[owner_id].stats==snapshot.stats
 	_equipment_versions[owner_id] = version.duplicate(true)
 	runtime_equipment[owner_id] = {"equipment":snapshot.equipment.duplicate(true),"stats":snapshot.stats.duplicate(true),"item_state":version.duplicate(true)}
+	refresh_character_stats(player_id_to_peer_id.get(owner_id,0))
 	return true
 
 func runtime_attack(owner_id: int) -> int:
 	if not _inventory_combat_ready(owner_id): return -1
 	if not runtime_equipment.has(owner_id): return -1
-	return int(runtime_equipment[owner_id].stats.get("attack", 10))
+	return int(runtime_combat_stats(owner_id).get("attack",10))
 
 func runtime_attack_speed_ratio(owner_id: int) -> float:
 	if not _inventory_combat_ready(owner_id): return -1.0
 	if not runtime_equipment.has(owner_id): return -1.0
-	var speed := float(runtime_equipment[owner_id].stats.get("attack_speed",100.0))
+	var speed := float(runtime_combat_stats(owner_id).get("attack_speed",100.0))
 	if not is_finite(speed) or speed <= 0: return -1.0
 	return speed/100.0
+
+## Independent sources compose additively; no item cache rewrite on attribute spend.
+func runtime_combat_stats(owner_id: int) -> Dictionary:
+	var stats: Dictionary=runtime_equipment.get(owner_id,{}).get("stats",{"attack":10.0,"attack_speed":100.0}).duplicate(true)
+	var peer: int=player_id_to_peer_id.get(owner_id,0)
+	var player: PlayerResource=connected_players.get(peer)
+	stats[Stat.HEALTH_MAX]=float(stats.get(Stat.HEALTH_MAX,0))+100.0
+	stats[Stat.MANA_MAX]=float(stats.get(Stat.MANA_MAX,0))+PlayerResource.BASE_STATS[Stat.MANA_MAX]
+	stats[Stat.MANA_REGEN]=float(stats.get(Stat.MANA_REGEN,0))+PlayerResource.BASE_STATS[Stat.MANA_REGEN]
+	if player==null: return stats
+	stats[Stat.HEALTH_MAX]+=PlayerResource.HEALTH_PER_LEVEL*maxi(0,player.level-1)
+	var additions := AttributeMap.attr_to_stats(player.attributes)
+	for stat: StringName in additions:
+		var key: StringName=&"attack" if stat==Stat.AD else stat
+		stats[key]=float(stats.get(key,0))+additions[stat]
+	var now := Time.get_ticks_msec()
+	for buff: Dictionary in player.active_buffs:
+		if int(buff.get("expires_ms",0))<=now: continue
+		var stat := StringName(buff.get("stat",&""))
+		var key: StringName=&"attack" if stat==Stat.AD else stat
+		stats[key]=float(stats.get(key,0))+float(buff.get("amount",0))
+	return stats
+
+func refresh_character_stats(peer: int) -> void:
+	var player: PlayerResource=connected_players.get(peer)
+	if player==null or instance_manager==null: return
+	var instance: ServerInstance=instance_manager.find_instance_for_peer(peer)
+	if instance==null: return
+	var world := instance.get_node_or_null("GameWorld") as GameWorld3D
+	if world==null or not world.characters.has(peer): return
+	var body: PlayerActor3D=world.characters[peer]
+	var stats := runtime_combat_stats(player.player_id)
+	body.max_hp=maxi(1,int(stats[Stat.HEALTH_MAX]))
+	body.hp=mini(body.hp,body.max_hp) # Allocating VIT is not a heal or resurrection.
+	body.max_mp=maxf(0,float(stats[Stat.MANA_MAX]))
+	body.mp=minf(body.mp,body.max_mp)
 
 func _inventory_combat_ready(owner_id: int) -> bool:
 	if economy_bootstrap!=null and (not economy_bootstrap.ready() or database==null or not database.wallet_ready): return false
@@ -345,7 +383,7 @@ func _notification(what: int) -> void:
 func _connect_multiplayer_api_signals(api: SceneMultiplayer) -> void:
 	api.peer_connected.connect(_on_peer_connected)
 	api.peer_disconnected.connect(_on_peer_disconnected)
-	
+
 	api.peer_authenticating.connect(_on_peer_authenticating)
 	api.peer_authentication_failed.connect(_on_peer_authentication_failed)
 	api.set_auth_callback(_authentication_callback)
@@ -535,7 +573,7 @@ func is_valid_authentication_token(auth_token: String) -> bool:
 const DATA_REQUEST_TYPES: Array[StringName] = [
 	"action.perform",
 	"attribute.get",
-	"attribute.reset",
+
 	"attribute.spend",
 	"channel.cancel",
 	"dungeon.info",

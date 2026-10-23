@@ -109,7 +109,9 @@ func _build_navigation() -> void:
 func initialize_peer(peer_id: int, carried: Dictionary = {}) -> void:
 	if _mob_replication != null: _mob_replication.remove_peer(peer_id)
 	var body: PlayerActor3D = _world.characters[peer_id]
+	services.refresh_character_stats(peer_id)
 	body.hp = body.max_hp
+	body.mp = body.max_mp
 	body.set_alive(true)
 	body.respawn_at_ms = 0
 	attacks.attack_runtime(peer_id)
@@ -117,8 +119,8 @@ func initialize_peer(peer_id: int, carried: Dictionary = {}) -> void:
 		for arg: String in OS.get_cmdline_user_args():
 			if arg.begins_with("--dev-combo-skill="): set_combo_skill_level(peer_id,arg.get_slice("=",1).to_int())
 	if not carried.is_empty():
-		body.max_hp=carried.max_hp
 		body.hp=clampi(int(carried.hp),1,body.max_hp)
+		body.mp=clampf(float(carried.get("mp",body.mp)),0,body.max_mp)
 		body.position=carried.position
 		body.rotation.y=carried.yaw
 		set_combo_skill_level(peer_id,carried.skill)
@@ -189,6 +191,7 @@ func remember_next_facing(peer_id: int, direction: Vector2) -> void:
 func publish_experience(owner_id: int, amount: int, levels_gained: int, level: int) -> void:
 	for peer_id: int in _world.characters:
 		if services.owner_id_for_peer(peer_id)==owner_id:
+			services.refresh_character_stats(peer_id)
 			receive_experience.rpc_id(peer_id,amount,levels_gained,level)
 
 @rpc("authority", "call_remote", "reliable", 0)
@@ -254,6 +257,12 @@ func receive_feedback(result: Dictionary) -> void:
 func _physics_process(delta: float) -> void:
 	if not GameMode.is_world_server() or not services.item_domain_ready(): return
 	var now: int = Time.get_ticks_msec()
+	for peer: int in _world.characters:
+		services.refresh_character_stats(peer)
+		var actor: PlayerActor3D=_world.characters[peer]
+		if actor.alive:
+			var stats: Dictionary=services.runtime_combat_stats(services.owner_id_for_peer(peer))
+			actor.mp=minf(actor.max_mp,actor.mp+maxf(0,float(stats.get(Stat.MANA_REGEN,0)))*delta)
 	_world.ground_loot.expire(now)
 	_tick_player_lifecycle(now)
 	attacks.process_impacts(now)
@@ -271,7 +280,9 @@ func hurt_player(peer_id: int, damage: int, now: int, hit: AttackHitDefinition =
 	last_combat_ms[peer_id]=now
 	services.interrupt_transfer(peer_id,"damage")
 	var body: PlayerActor3D = _world.characters[peer_id]
-	var result := HitReactionResolver.resolve(hit,body.reaction_profile,damage,body.hp,body.hit_reaction.locked(now))
+	var armor: float=maxf(0,float(services.runtime_combat_stats(services.owner_id_for_peer(peer_id)).get(Stat.ARMOR,0)))
+	var mitigated: int=maxi(1,int(round(float(damage)*100.0/(100.0+armor)))) if damage>0 else 0
+	var result := HitReactionResolver.resolve(hit,body.reaction_profile,mitigated,body.hp,body.hit_reaction.locked(now))
 	body.hp -= result.damage
 	body.hit_reaction.apply(result,now)
 	body.apply_knockback(hit_direction,result.knockback_distance)
@@ -298,11 +309,13 @@ func _send_snapshot() -> void:
 	_mob_replication.begin_frame(_world.mob_system.mobs, now)
 	var combos: Dictionary = attacks.combo_snapshot()
 	var health: Dictionary = {}
+	var max_health: Dictionary = {}
 	var respawns: Dictionary = {}
 	var levels: Dictionary = {}
 	var hit_locks: Dictionary = {}
 	for id: int in _world.characters:
 		health[id] = _world.characters[id].hp
+		max_health[id] = _world.characters[id].max_hp
 		if _world.characters[id].respawn_at_ms > 0: respawns[id] = maxf(0,(_world.characters[id].respawn_at_ms-now)/1000.0)
 		levels[id] = services.player_for_peer(id).level
 		hit_locks[id] = _world.characters[id].hit_reaction.snapshot(now)
@@ -310,7 +323,8 @@ func _send_snapshot() -> void:
 		var mobs := _mob_replication.packet_for(peer_id, _world.characters[peer_id].position, now)
 		var drops: Dictionary = _world.ground_loot.snapshot_for_peer(peer_id,now)
 		var player: PlayerResource = services.player_for_peer(peer_id)
-		var delivery: Error = rpc_id(peer_id, &"receive_state", {"mobs": mobs.mobs, "mob_ids": mobs.mob_ids, "health": health.duplicate(), "drops": drops,
+		var delivery: Error = rpc_id(peer_id, &"receive_state", {"mobs": mobs.mobs, "mob_ids": mobs.mob_ids, "health": health.duplicate(), "max_health":max_health.duplicate(), "drops": drops,
+			"vitals":{"mana":_world.characters[peer_id].mp,"max_mana":_world.characters[peer_id].max_mp},
 			"combo_options":{"enabled":combo_state(peer_id).combo_enabled,"skill_level":combo_state(peer_id).combo_skill_level,"length":combo_state(peer_id).definition().steps.size()},
 			"combos": combos, "respawns": respawns, "levels": levels, "hit_locks":hit_locks,
 			"metin": {} if _world.metin_encounter == null else _world.metin_encounter.snapshot(now),
@@ -334,6 +348,10 @@ func receive_state(snapshot: Dictionary) -> void:
 		var body: PlayerActor3D = _world.characters.get(peer_id)
 		if body != null:
 			body.hp = int(snapshot.health[peer_id])
+			body.max_hp = int(snapshot.get("max_health",{}).get(peer_id,body.max_hp))
+			if peer_id==_world.local_peer:
+				body.mp=float(snapshot.get("vitals",{}).get("mana",body.mp))
+				body.max_mp=float(snapshot.get("vitals",{}).get("max_mana",body.max_mp))
 			body.set_alive(body.hp > 0)
 			var lock: Array = snapshot.hit_locks.get(peer_id,[0,0])
 			body.present_hit_lock(int(lock[0]),int(lock[1]))
@@ -390,7 +408,7 @@ func refresh_hud() -> void:
 	var combo: int = int(state.get("combos", {}).get(_world.local_peer, 0))
 	var options: Dictionary = state.get("combo_options",{"enabled":false,"skill_level":0,"length":4})
 	var status: String = "Odrodzenie za %.1f s" % float(state.get("respawns", {}).get(_world.local_peer, 0)) if hp == 0 else _notice
-	_hud.text = "HP: %d / 100 · Combo: %d / %d (%s, Lv%d)\nSpacja — combo · C — Combo ON/OFF · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, combo, int(options.length), "ON" if options.enabled else "OFF", int(options.skill_level), "wł." if client_combat.autoattack else "wył.", target, status]
+	_hud.text = "HP: %d / %d · Combo: %d / %d (%s, Lv%d)\nSpacja — combo · C — Combo ON/OFF · E — łup\nLPM — cel · F — autoatak (%s)\n%s · %s" % [hp, int(state.get("max_health",{}).get(_world.local_peer,100)), combo, int(options.length), "ON" if options.enabled else "OFF", int(options.skill_level), "wł." if client_combat.autoattack else "wył.", target, status]
 	var progression: Dictionary = state.get("progression", {"level": 1, "experience": 0, "next": PlayerResource.LEVEL_XP_BASE})
 	_experience_label.text = "Poziom %d · XP: %d / %d%s" % [int(progression.level), int(progression.experience), int(progression.next), "\n" + _xp_notice if _xp_notice != "" else ""]
 	_experience_bar.max_value = int(progression.next)

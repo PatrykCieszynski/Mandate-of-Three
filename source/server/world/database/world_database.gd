@@ -440,7 +440,9 @@ func _notification(what: int) -> void:
 
 func get_player_resource(id: int) -> PlayerResource:
 	if dirty_progression.has(id): return dirty_progression[id]
-	return store.get_player(id)
+	var player: PlayerResource=store.get_player(id)
+	if player!=null and player.stats_migrated: mark_progression_dirty(player)
+	return player
 
 
 func create_player_character(username: String, character_data: Dictionary) -> int:

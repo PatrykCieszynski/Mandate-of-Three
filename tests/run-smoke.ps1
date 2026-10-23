@@ -9,6 +9,7 @@ New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
 # Isolated databases. No servers, game windows, balances, exact DOM or geometry.
 $taskCases = [ordered]@{
     content_catalog = 'CONTENT_CATALOG_OK'
+    stats_v1 = 'STATS_V1_OK'
     upgrade_transaction = 'UPGRADE_TRANSACTION_OK'
     shop_purchase = 'SHOP_PURCHASE_OK'
     npc_foundation = 'NPC_FOUNDATION_OK'

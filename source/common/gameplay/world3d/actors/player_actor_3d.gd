@@ -5,6 +5,8 @@ extends Actor3D
 const SPEED: float = 5.0
 var hp: int = 100
 var max_hp: int = 100
+var mp: float = 50.0
+var max_mp: float = 50.0
 # Player lifecycle deadline; MobSystem owns pack replacements separately.
 var respawn_at_ms: int = 0
 var player_presentation: WarriorVisual3D

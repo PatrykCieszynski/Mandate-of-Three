@@ -18,7 +18,11 @@ the legacy fixture behavior; SQLite libraries and parity tests remain available.
 Profile upserts cannot change the account owning an existing character. The pure
 profile decoder is shared with the SQLite reference store; SQL/access remain
 separate. This introduces no generic database interface or ORM. Combat still
-reads RAM. XP checkpoints update only the three progression columns in one
+reads RAM. Stats V1 requires the additive `character_stats=1` schema feature; rerun the
+existing offline provisioning command before deploying build 0.33.0. Old six-stat
+allocations are refunded on decode and atomically persisted with the version;
+see [character progression](../gameplay/character-xp.md).
+XP checkpoints update only the narrow progression/attribute fields in one
 transaction; failure rolls back the batch and retains dirty references. Existing
 Yang checkpoint and immediate economic transaction policies are preserved.
 The legacy admin resource-renaming action is rejected for PG accounts; changing
