@@ -24,6 +24,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
       }
       send({ action });
     } else if (
+      action === 'stats' ||
       action === 'inventory' ||
       action === 'equipment' ||
       action === 'hotbar' ||

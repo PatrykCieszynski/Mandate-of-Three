@@ -1,3 +1,4 @@
+import type {StatsSnapshot,Attribute} from '../screens/stats/stats-model.js';
 import type {ChatSnapshot,ChatSend} from '../screens/chat/chat-view.js';
 import type {PartySnapshot,PartyCommand} from '../screens/party/party-view.js';
 import type {ExchangeSnapshot,ExchangeDeposit,ExchangeWithdraw,ExchangePlace,ExchangeCancel} from '../screens/market/exchange-model.js';
@@ -18,9 +19,10 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { quick_slots?: Readonly<{label?:string}>[]; inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
+  stats?: StatsSnapshot;
   chat?: ChatSnapshot;
   party?: PartySnapshot;
   exchange?: ExchangeSnapshot;
@@ -41,6 +43,10 @@ export interface MoveItemCommand extends ItemCommand { x: number; y: number; pag
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'stats.spend': {attribute:Attribute};
+  'stats.retry': Record<string,never>;
+  'stats.refresh': Record<string,never>;
+  'stats.close': Record<string,never>;
   'chat.send': ChatSend;
   'chat.open': {target:number;name:string};
   'chat.conversation': {target:number;mode:'open'|'closed'|'minimized'};

@@ -1,3 +1,4 @@
+import { statsFixture } from './stats-fixture.js';
 import {
   chatFixture,
   chatCommand,
@@ -101,6 +102,7 @@ function storageFixture(): StorageSnapshot {
 
 function fixture(): DomainSnapshot {
   return {
+    stats: statsFixture(),
     chat: chatFixture(),
     storage: storageFixture(),
     hud: {
@@ -240,6 +242,33 @@ window.sendIpcMessage = (raw) => {
   }
   if (!message.id) return;
   queueMicrotask(() => {
+    if (message.type.startsWith('stats.') && state.stats) {
+      if (message.type === 'stats.close') state.stats.opened = false;
+      if (
+        message.type === 'stats.spend' &&
+        accept &&
+        state.stats.data &&
+        ['STR', 'DEX', 'VIT', 'INT'].includes(String(message.payload.attribute))
+      ) {
+        const data = state.stats.data,
+          attribute = message.payload.attribute as keyof typeof data.attributes;
+        if (BigInt(data.available_points) > 0n) {
+          data.available_points = String(BigInt(data.available_points) - 1n);
+          data.attributes[attribute] = String(
+            BigInt(data.attributes[attribute]) + 1n,
+          );
+        }
+      }
+      emit('stats.updated', state.stats);
+      emit(
+        'command.result',
+        message.type !== 'stats.spend' || accept
+          ? { ok: true }
+          : { ok: false, error: 'preview_rejected' },
+        message.id,
+      );
+      return;
+    }
     if (message.type.startsWith('chat.') && state.chat) {
       const result = chatCommand(state.chat, message.type, message.payload);
       emit('chat.updated', state.chat);
@@ -394,7 +423,8 @@ export function decodePreviewAction(value: unknown): PreviewAction | null {
     return { action: name };
   if (!('value' in value)) return null;
   if (
-    (name === 'inventory' ||
+    (name === 'stats' ||
+      name === 'inventory' ||
       name === 'equipment' ||
       name === 'hotbar' ||
       name === 'storage' ||
@@ -448,6 +478,12 @@ window.addEventListener('message', (event) => {
         equipment: { items: [], stats: { attack: 0 } },
       };
       snapshot();
+      break;
+    case 'stats':
+      if (state.stats) {
+        state.stats.opened = request.value;
+        emit('stats.updated', state.stats);
+      }
       break;
     case 'inventory':
       state.hud = {

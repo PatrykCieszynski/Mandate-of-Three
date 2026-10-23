@@ -1,3 +1,4 @@
+import { mountStats } from '../screens/stats/stats-view.js';
 import { mountChat } from '../screens/chat/chat-view.js';
 import { mountBottomHud } from './bottom-hud.js';
 import { mountParty } from '../screens/party/party-view.js';
@@ -49,7 +50,8 @@ const bridge = new WebBridge({
             return;
         if (drag.cancel())
             return;
-        if (exchange.closeIfActive() ||
+        if ((manager.activeWindowId === 'stats' && stats.closeIfActive()) ||
+            exchange.closeIfActive() ||
             marketBrowser.closeIfActive() ||
             market.closeIfActive() ||
             upgrade.closeIfActive() ||
@@ -63,6 +65,8 @@ const bridge = new WebBridge({
             view.cancelOrClose();
         else if (!equipmentRoot.hidden)
             equipment.close();
+        else
+            stats.closeIfActive();
     },
     onState(message) {
         if (!store.apply(message))
@@ -123,6 +127,9 @@ const bridge = new WebBridge({
         if ((message.type === 'ui.snapshot' || message.type === 'chat.updated') &&
             state.chat)
             chat.setState(state.chat);
+        if ((message.type === 'ui.snapshot' || message.type === 'stats.updated') &&
+            state.stats)
+            stats.setState(state.stats);
         if (message.type === 'ui.snapshot' || message.type === 'npc.updated') {
             npc.setState(state.npc ?? { active: false });
             upgrade.setNpcState(state.npc ?? { active: false });
@@ -251,6 +258,16 @@ const market = mountMarket(marketRoot, {
         void bridge.request('market.close', {}).catch(() => { });
     },
     onRegionsChanged: () => regions?.refresh(),
+});
+const stats = mountStats(findElement(document, '#stats', 'main'), {
+    manager,
+    spend: (attribute) => bridge.request('stats.spend', { attribute }),
+    retry: () => bridge.request('stats.retry', {}),
+    refresh: () => bridge.request('stats.refresh', {}),
+    close: () => {
+        void bridge.request('stats.close', {}).catch(() => { });
+    },
+    regions: () => regions?.refresh(),
 });
 const party = mountParty(findElement(document, '#party', 'main'), {
     manager,

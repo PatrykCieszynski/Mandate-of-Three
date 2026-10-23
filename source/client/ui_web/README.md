@@ -182,3 +182,9 @@ Whisper name lookup opens from the Whisper button. Private conversations share
 one draggable window with tabs, per-conversation drafts/scroll position and a
 right-edge unread-conversation envelope. The passive hotbar uses a compact 4+4
 slot rail without a heading. These presentation changes do not add hotbar actions.
+
+Character · V uses the production Stats view in both CEF and the preview. The
+preview's Open/Hide Character controls provide level/EXP, STR/DEX/VIT/INT, points
+and combat fixtures; + changes fixture counters only when Accept is enabled.
+Native allocation is authenticated, journaled and recovered through the existing
+attribute RPC receipts. See docs/gameplay/character-xp.md for the current contract.

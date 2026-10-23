@@ -105,10 +105,11 @@ save. Until commit, reloading repeats the same deterministic conversion from the
 unchanged old row; after commit it cannot refund again. Item/economy state is not
 part of the conversion.
 
-## Backend contract for a future CEF adapter
+## Stats CEF and backend contract
 
 Use existing authenticated World data requests with matching client/server build
-**0.33.0**. No Stats CEF window or speculative client mutation is implemented.
+**0.33.0**. Character · V uses these existing RPCs; this UI adds no new network
+method, stat authority or speculative allocation.
 
 - `attribute.spend`: `{ "command_id": "stable-intent-id", "attribute": "STR" }`.
   Exactly one point; accepted keys are STR, DEX, VIT, INT. Identity and amounts
@@ -127,6 +128,29 @@ Use existing authenticated World data requests with matching client/server build
   charging this limiter; cache misses/reconnect lookup still use durable receipts
   and admission. Retrying later preserves the receipt identity.
 
+The compact, draggable CEF **Character · V** window shows level/EXP, the four
+attributes, unspent attribute/skill points and derived attack, defense, attack
+speed, HP, MP and MP regeneration. V toggles it (C remains the combo toggle).
+Each `+` sends one attribute intention; skill points are display-only. Escape and
+the close button hide the window without discarding pending allocations.
+
+The client saves one unresolved allocation before send using the existing local
+journal, scoped to authority/account/character from authenticated Inventory.
+Timeout, reload, local transfer or relog do not mint a new command ID. An explicit
+**Retry allocation** resends the stored ID/attribute; other allocations stay blocked
+until a terminal result is confirmed and the journal is cleared. Storage/session/
+unknown outcomes remain pending. Reopening/refreshing only reads state and never
+silently executes an allocation. A corrupt/unwritable journal fails closed.
+
+While open, the window refreshes the RAM-only `attribute.get` snapshot at most
+once per second, plus on open/manual refresh. HP/MP follow existing combat
+snapshots. Hidden windows do not poll. Late reads cannot overwrite allocation
+results; disposed adapters cannot publish to replacement UI. Decimal strings
+preserve 64-bit point/attribute counters across JSON/JavaScript without introducing
+a gameplay investment cap. Combat totals retain the existing floating-point model.
+The standalone preview supplies development-only stats fixtures and local command
+feedback; it is not an authoritative gameplay simulator.
+
 The legacy privileged `/setlevel` tool is forward-only and uses the same EXP
 milestone path; it cannot rewind EXP to mint previously earned points.
 Legacy `attribute.reset` is removed from generic RPC admission. Its old
@@ -142,3 +166,10 @@ The same persistence contract runs on real PostgreSQL in the existing
 `tests/run-combat.ps1 -Scene stats_network -MarkerPrefix STATS` exercises two
 clients through actual World RPCs. Run port-18098 network suites sequentially.
 Existing XP, PvE, Metin, Party and economy suites remain regression gates.
+
+`tests/run-combat.ps1 -Scene stats_ui_network -MarkerPrefix STATS_UI` verifies
+client journal recovery after deliberately losing a committed response, replacement
+adapter restoration and stable intent identity with actual World RPCs.
+Add `-NativeClient1` for real CEF `+` submission and UI reload. This uses synthetic
+browser actions, not physical keyboard/IME/Alt-Tab acceptance. Browser preview tests
+exercise the production view through the loopback fixture host.

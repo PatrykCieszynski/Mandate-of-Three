@@ -1,3 +1,4 @@
+import { mountStats } from '../screens/stats/stats-view.js';
 import { mountChat } from '../screens/chat/chat-view.js';
 import { mountBottomHud } from './bottom-hud.js';
 import { mountParty } from '../screens/party/party-view.js';
@@ -64,6 +65,7 @@ const bridge = new WebBridge({
     if (chat.escape()) return;
     if (drag.cancel()) return;
     if (
+      (manager.activeWindowId === 'stats' && stats.closeIfActive()) ||
       exchange.closeIfActive() ||
       marketBrowser.closeIfActive() ||
       market.closeIfActive() ||
@@ -77,6 +79,7 @@ const bridge = new WebBridge({
     }
     if (!root.hidden) view.cancelOrClose();
     else if (!equipmentRoot.hidden) equipment.close();
+    else stats.closeIfActive();
   },
   onState(message) {
     if (!store.apply(message)) return;
@@ -149,6 +152,11 @@ const bridge = new WebBridge({
       state.chat
     )
       chat.setState(state.chat);
+    if (
+      (message.type === 'ui.snapshot' || message.type === 'stats.updated') &&
+      state.stats
+    )
+      stats.setState(state.stats);
     if (message.type === 'ui.snapshot' || message.type === 'npc.updated') {
       npc.setState(state.npc ?? { active: false });
       upgrade.setNpcState(state.npc ?? { active: false });
@@ -291,6 +299,16 @@ const market = mountMarket(marketRoot, {
     void bridge.request('market.close', {}).catch(() => {});
   },
   onRegionsChanged: () => regions?.refresh(),
+});
+const stats = mountStats(findElement(document, '#stats', 'main'), {
+  manager,
+  spend: (attribute) => bridge.request('stats.spend', { attribute }),
+  retry: () => bridge.request('stats.retry', {}),
+  refresh: () => bridge.request('stats.refresh', {}),
+  close: () => {
+    void bridge.request('stats.close', {}).catch(() => {});
+  },
+  regions: () => regions?.refresh(),
 });
 const party = mountParty(findElement(document, '#party', 'main'), {
   manager,
