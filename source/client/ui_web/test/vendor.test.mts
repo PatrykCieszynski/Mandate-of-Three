@@ -23,6 +23,9 @@ test('vendor accepts Inventory references, rejects Storage, supports partial amo
  container='storage';await drop();assert.equal(commands.length,1);drag.cancel();
  s.items=[{...item,quantity:1,maximum:2,available:true}];s.quote={yang:'0',rewards:[{type:'random_pool',pool:'books',quantity:1,icon_id:'mystery'}],expires_at:123};view.setState(s);
  assert.ok(root.querySelector('.vendor-mystery')?.textContent?.includes('?'));
+ const existingCount=commands.length;assert.ok((await view.offerItem(item)).ok);assert.equal(commands.length,existingCount,'adding an existing reference preserves amount, order and quote');
+ root.querySelector<HTMLButtonElement>('.vendor-item')!.dispatchEvent(new env.host.MouseEvent('click',{ctrlKey:true,bubbles:true}));await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['edit',{id:item.id,amount:0}]);
+
  const offered=root.querySelector<HTMLButtonElement>('.vendor-item')!;offered.click();const amount=root.querySelector<HTMLInputElement>('input')!;amount.value='2';Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='Set quantity')!.click();await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['edit',{id:item.id,amount:2}]);
  s.pending=true;s.items[0]!.available=false;s.quote={};view.setState(s);const beforePending=commands.length;assert.equal((await view.offerItem(item)).ok,false);assert.equal(commands.length,beforePending);const recover=Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='Check sale result')!;recover.click();await new Promise(r=>setTimeout(r,0));assert.deepEqual(commands.at(-1),['recover',{}]);
  view.dispose();registration.dispose();drag.dispose();env.manager.dispose();

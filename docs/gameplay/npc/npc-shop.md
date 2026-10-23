@@ -207,7 +207,9 @@ UiItemGrid and ItemTooltip. The vendor's output grid sits above the player's
 offered-item grid, with **Accept** and **Cancel** below. Closing the window keeps
 an unresolved sale available for receipt recovery. Inventory opens alongside it.
 Inventory-only drag adds a reference (default: the current stack, at most 200 units); clicking an
-offered item exposes its quantity editor, and right-click removes that reference.
+offered item exposes its quantity editor; Ctrl-click or right-click removes that
+reference. Adding an already offered item from Inventory leaves its amount and
+position unchanged. Editing its quantity also preserves basket order.
 Storage/equipment subjects cannot enter this target. None of these gestures
 changes custody, amount, position or revision in authoritative Inventory.
 

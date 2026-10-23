@@ -299,14 +299,17 @@ window.sendIpcMessage = (raw) => {
           p.amount >= 0 &&
           p.amount <= item.quantity
         ) {
-          v.items = v.items.filter((i) => i.id !== p.id);
-          if (p.amount > 0)
-            v.items.push({
+          const index = v.items.findIndex((i) => i.id === p.id);
+          if (p.amount > 0) {
+            const offered = {
               ...item,
               quantity: p.amount,
               maximum: Math.min(200, item.quantity),
               available: true,
-            });
+            };
+            if (index < 0) v.items.push(offered);
+            else v.items[index] = offered;
+          } else if (index >= 0) v.items.splice(index, 1);
           const books = v.items.filter((i) =>
             i.id.startsWith('preview-book-'),
           ).length;

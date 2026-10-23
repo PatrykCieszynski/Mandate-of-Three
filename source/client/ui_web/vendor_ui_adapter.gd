@@ -95,11 +95,18 @@ func _selection_current() -> bool:
 
 func edit(p: Dictionary) -> Dictionary:
 	if not _ready or not _opened or not _intent.is_empty() or _busy: return {"ok":false,"error":"sale_pending"}
-	var next:=_basket.filter(func(line: Dictionary)->bool:return line.uid!=p.id)
+	var next:=_basket.duplicate(true)
+	var index: int=-1
+	for i: int in range(next.size()):
+		if next[i].uid==p.id: index=i;break
 	if int(p.amount)>0:
 		var item: Dictionary=_owned.get(p.id,{})
 		if item.is_empty() or item.amount<int(p.amount): return {"ok":false,"error":"unavailable"}
-		next.append({"uid":p.id,"revision":int(item.revision),"amount":int(p.amount)})
+		var line: Dictionary={"uid":p.id,"revision":int(item.revision),"amount":int(p.amount)}
+		if index<0: next.append(line)
+		else: next[index]=line
+	elif index>=0: next.remove_at(index)
+	if next==_basket: return {"ok":true}
 	if not next.is_empty() and VendorResolver.cart(next).is_empty(): return {"ok":false,"error":"basket_limit"}
 	_basket=next;_quote.clear();_quoting=false;_error="";_outcome="";_serial+=1;publish()
 	_debounce.call_deferred(_serial)

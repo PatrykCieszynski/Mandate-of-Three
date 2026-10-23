@@ -33,6 +33,13 @@ func _ready() -> void:
 	var before:=inventory.duplicate(true)
 	assert(client.edit({"id":uid,"amount":3}).ok)
 	assert(inventory==before and projection.value.items[0].quantity==3)
+	var other:=raw.duplicate(true)
+	other.uid=Crypto.new().generate_random_bytes(16).hex_encode()
+	inventory.items.append(other);client.accept_inventory(inventory)
+	assert(client.edit({"id":other.uid,"amount":1}).ok)
+	assert(client.edit({"id":uid,"amount":4}).ok)
+	assert(projection.value.items[0].id==uid and projection.value.items[1].id==other.uid,"editing an existing offer preserves order")
+	assert(client.edit({"id":other.uid,"amount":0}).ok)
 	client.hold_quote=true
 	client.responses=[{"ok":true,"quote_id":uid,"yang":"6","rewards":[],"expires_at":int(Time.get_unix_time_from_system())+30}]
 	var late: Array=[]

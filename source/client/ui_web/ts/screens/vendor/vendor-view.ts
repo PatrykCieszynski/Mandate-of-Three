@@ -59,7 +59,8 @@ export function mountVendor(
   });
   const hint = document.createElement('p');
   hint.className = 'vendor-hint';
-  hint.textContent = 'Drag from Inventory · Right-click to remove';
+  hint.textContent =
+    'Drag or Ctrl-click from Inventory · Ctrl/right-click to remove';
   const yourHeading = document.createElement('h2');
   yourHeading.className = 'vendor-heading';
   yourHeading.textContent = 'Your offer';
@@ -264,7 +265,11 @@ export function mountVendor(
       el.style.height = `${item.height * 40 - 2}px`;
       el.classList.toggle('unavailable', !item.available);
       paintItemIcon(el, item, { resolveItemIcon: options.resolveItemIcon });
-      el.onclick = () => {
+      el.onclick = (event) => {
+        if (event.ctrlKey) {
+          if (!state?.pending) void send('edit', { id: item.id, amount: 0 });
+          return;
+        }
         selected = item.id;
         amount.value = String(item.quantity);
         amount.max = String(item.maximum);
@@ -365,6 +370,8 @@ export function mountVendor(
     offerItem(item: ItemPresentation) {
       if (!state?.active || state.pending || state.busy || flight || disposed)
         return Promise.resolve({ ok: false, error: 'busy' });
+      if (state.items.some((offered) => offered.id === item.id))
+        return Promise.resolve({ ok: true });
       return send('edit', {
         id: item.id,
         amount: Math.min(200, item.quantity),
