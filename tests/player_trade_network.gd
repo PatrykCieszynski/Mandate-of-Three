@@ -8,6 +8,9 @@ const Sessions = preload("res://source/server/world/database/postgres/inventory_
 const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 const WalletStore = preload("res://source/server/world/database/postgres/wallet_store_postgres.gd")
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
+class SilentDispatcher extends UiCommandDispatcher:
+	func register_command(_type: String, _validator: Callable, _handler: Callable) -> void: pass
+	func set_domain(_domain: String, _state: Dictionary) -> void: pass
 class LostCompletion extends RefCounted:
 	var inner: RefCounted
 	var lost:=false
@@ -72,6 +75,15 @@ func _exit_tree() -> void:
 @rpc("authority","call_remote","reliable",0)
 func trade_action(payload: Dictionary) -> void:
 	await wait_until(func()->bool:return world!=null and world.trade_endpoint.state.get("self",0)>0)
+	if payload.action=="close_ui":
+		var dispatcher:=SilentDispatcher.new()
+		var adapter:=preload("res://source/client/ui_web/player_trade_ui_adapter.gd").new()
+		adapter.attach(world.trade_endpoint,dispatcher,UiCommandSession.new(),get_tree())
+		var closed: Dictionary=await adapter._close({})
+		check(closed.get("ok",false),"native X handler cancels over production RPC")
+		adapter.dispose();dispatcher.free()
+		report.rpc_id(1,"close_ui")
+		return
 	if not world.trade_endpoint.operation_finished.is_connected(_reply): world.trade_endpoint.operation_finished.connect(_reply)
 	var id: String="network-"+Crypto.new().generate_random_bytes(8).hex_encode()
 	world.trade_endpoint.request.rpc_id(1,id,payload)
@@ -99,6 +111,10 @@ func run_server() -> void:
 	var a: int=peers[0];var b: int=peers[1]
 	await wait_until(func()->bool:return server.inventory_runtime.mutations_allowed(a) and server.inventory_runtime.mutations_allowed(b) and server.wallet_runtime.settled(a) and server.wallet_runtime.settled(b))
 	var ca: int=server.connected_players[a].player_id;var cb: int=server.connected_players[b].player_id
+	await send(a,{"action":"invite","target":cb})
+	await send(b,{"action":"join","trade_id":server.trade_runtime.snapshot(a).id})
+	await send(a,{"action":"close_ui"})
+	check(server.trade_runtime.trades.is_empty(),"X cancels rather than leaving a hidden negotiation")
 	await send(a,{"action":"invite","target":cb})
 	var id: String=server.trade_runtime.snapshot(a).id
 	await send(b,{"action":"join","trade_id":id})

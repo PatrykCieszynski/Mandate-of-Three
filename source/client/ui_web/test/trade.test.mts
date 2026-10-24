@@ -27,7 +27,7 @@ test('trade sends versioned offers and confirmation, leaves partner read-only an
   assert.equal(sent[2]?.action,'offer');
   view.setState({...state,offers:[{name:'You',yang:'0',items:[{uid:'b'.repeat(32),revision:'3',name:'Sword',icon:'iron_sword',amount:'1'}]},state.offers![1]!]});
   assert.ok(await view.offerItem({...bagItem,id:'b'.repeat(32)}));assert.equal(sent.length,3,'duplicate offer does not reorder or resubmit');
-  assert.equal(root.querySelector('[aria-label="Partner offer"] .trade-grid')!.querySelectorAll('button:disabled').length,8);
+  assert.equal(root.querySelector('[aria-label="Partner offer"] .trade-grid')!.querySelectorAll('button:disabled').length,20);
   view.setState({...state,own_side:1});
   assert.equal(root.querySelector('[aria-label="Partner Yang"]')!.textContent,'0','side ownership follows own_side, not invitation order');
   view.setState({...state,phase:'settling'});assert.equal(await view.offerItem(bagItem),false);

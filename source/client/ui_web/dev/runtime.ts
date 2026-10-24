@@ -450,8 +450,10 @@ window.sendIpcMessage = (raw) => {
       const t = state.trade,
         p = message.payload,
         ownOffer = t.offers?.[0];
-      if (message.type === 'trade.close') t.opened = false;
-      else if (
+      if (message.type === 'trade.close') {
+        if (t.phase === 'invited' || t.phase === 'offer') t.phase = 'cancelled';
+        t.opened = false;
+      } else if (
         p.action === 'offer' &&
         Array.isArray(p.items) &&
         ownOffer &&

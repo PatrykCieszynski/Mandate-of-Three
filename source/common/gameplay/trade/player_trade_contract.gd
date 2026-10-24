@@ -1,8 +1,8 @@
 extends RefCounted
-const MAX_ITEMS: int=8
+const MAX_ITEMS: int=20
 const MAX_YANG: int=9000000000000000
 static func valid(p: Dictionary) -> bool:
-	if var_to_bytes(p).size()>4096 or not p.get("action") is String: return false
+	if var_to_bytes(p).size()>8192 or not p.get("action") is String: return false
 	if p.action=="invite": return p.size()==2 and p.get("target") is int and p.target>0
 	if p.action not in ["join","cancel","offer","confirm","recover"] or not p.get("trade_id") is String or not p.trade_id.begins_with("trade-") or not ItemInstance.valid_uid(p.trade_id.trim_prefix("trade-")): return false
 	if p.action in ["join","cancel","recover"]: return p.size()==2

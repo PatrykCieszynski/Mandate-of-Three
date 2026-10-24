@@ -27,7 +27,7 @@ func execute(id: String, participants: Array) -> Dictionary:
 	var selected: Array=[];var seen: Dictionary={};var incomes: Dictionary={}
 	for side: Dictionary in participants:
 		var account: int=side.context.account_id
-		if not side.get("yang") is int or side.yang<0 or side.yang>Wallet.MAX_YANG or side.items.size()>8: return tx.rollback("request")
+		if not side.get("yang") is int or side.yang<0 or side.yang>Wallet.MAX_YANG or side.items.size()>preload("res://source/common/gameplay/trade/player_trade_contract.gd").MAX_ITEMS: return tx.rollback("request")
 		var captured: Dictionary=Wallet.new(db).capture_income_in_transaction(account,side.income)
 		if not captured.ok: return tx.rollback(str(captured.error))
 		if side.yang>captured.balance-captured.reserved_yang: return tx.rollback("funds")

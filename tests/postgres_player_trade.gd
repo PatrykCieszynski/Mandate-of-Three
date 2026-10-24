@@ -84,13 +84,19 @@ func _ready() -> void:
 	assert(db.begin() and db.execute("DELETE FROM economy.item_custody;").ok and db.execute("DELETE FROM economy.item_instances;").ok and db.commit())
 	var seeds: Array=[]
 	for owner: int in [110000,110010]:
-		var first_uid: String=""
+		var offered_uids: Array=[]
 		for position: int in InventoryGrid.CAPACITY:
 			var uid:=seed_item(owner,ItemDefinitions.UPGRADE_ORE,position)
-			if position==0:first_uid=uid
-		seeds.append(first_uid)
-	assert(Store.new(db).execute("trade-full-swap",pair([line(seeds[0])],[line(seeds[1])])).ok)
-	assert(Store.new(db).execute("trade-full-reject",pair([line(seeds[1])],[])).error=="inventory_full")
+			if position<20: offered_uids.append(uid)
+		seeds.append(offered_uids)
+	var a_lines: Array=seeds[0].map(func(uid: String)->Dictionary:return line(uid))
+	var b_lines: Array=seeds[1].map(func(uid: String)->Dictionary:return line(uid))
+	var wire: Dictionary={"action":"offer","trade_id":"trade-"+"a".repeat(32),"version":1,"items":a_lines.map(func(i: Dictionary)->Dictionary:return {"uid":i.uid,"revision":str(i.revision)}),"yang":"0"}
+	assert(preload("res://source/common/gameplay/trade/player_trade_contract.gd").valid(wire),"all 20 slots fit the wire limit")
+	wire.items.append({"uid":"f".repeat(32),"revision":"0"})
+	assert(not preload("res://source/common/gameplay/trade/player_trade_contract.gd").valid(wire),"21st item rejected")
+	assert(Store.new(db).execute("trade-full-swap",pair(a_lines,b_lines)).ok,"twenty items per side swap atomically")
+	assert(Store.new(db).execute("trade-full-reject",pair([line(seeds[1][0])],[])).error=="inventory_full")
 	# Successful COMMIT with a lost acknowledgement: recover, never re-execute.
 	var before_a: int=balance(11000)
 	var lost: Dictionary=Store.new(LostCommit.new()).execute("trade-lost-commit",pair([],[],1))

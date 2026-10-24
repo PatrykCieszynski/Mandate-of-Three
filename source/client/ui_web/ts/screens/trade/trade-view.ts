@@ -90,7 +90,7 @@ export function isTrade(v: unknown): v is TradeSnapshot {
             typeof o.name === 'string' &&
             decimal(o.yang) &&
             Array.isArray(o.items) &&
-            o.items.length <= 8 &&
+            o.items.length <= 20 &&
             o.items.every(
               (i) =>
                 !!i &&
@@ -191,7 +191,7 @@ export function mountTrade(
     const lines =
       own()?.items.map((i) => ({ uid: i.uid, revision: i.revision })) ?? [];
     if (lines.some((i) => i.uid === item.id)) return true;
-    if (lines.length >= 8) return false;
+    if (lines.length >= 20) return false;
     offer([...lines, { uid: item.id, revision: String(item.revision) }]);
     return true;
   };
@@ -230,16 +230,13 @@ export function mountTrade(
       state.client_error ||
       state.error ||
       ({
-        offer: 'Changes clear both acceptances.',
-        invited: 'Waiting for the invitation to be accepted.',
         settling: 'Completing exchange…',
         reconcile: 'Updating inventories…',
         complete: 'Exchange complete.',
         cancelled: 'Exchange cancelled.',
         paused: 'Result not confirmed. Recover before trading again.',
-        idle: 'Choose a nearby player.',
       }[state.phase] ??
-        state.phase);
+        '');
     if (state.pending && state.recover_id)
       content.append(
         button('Recover result', {
@@ -297,7 +294,7 @@ export function mountTrade(
         const grid = mine ? ownGrid : document.createElement('div');
         grid.className = 'trade-grid';
         grid.replaceChildren();
-        for (let n = 0; n < 8; n++) {
+        for (let n = 0; n < 20; n++) {
           const cell = document.createElement('button');
           cell.className = 'trade-slot ui-slot';
           cell.disabled = flight || !mine || state!.phase !== 'offer';
@@ -409,18 +406,7 @@ export function mountTrade(
       });
       content.append(sides);
     }
-    if (state.phase === 'offer') {
-      const hint = document.createElement('p');
-      hint.className = 'trade-hint';
-      hint.textContent =
-        'Drag / Ctrl-click from Inventory · Click an offered item to remove';
-      content.append(hint);
-    }
-    content.append(status);
-    if (['invited', 'offer'].includes(state.phase))
-      content.append(
-        button('Cancel trade', { action: 'cancel', trade_id: state.id }),
-      );
+    if (status.textContent) content.append(status);
     shell.refresh();
     options.regions();
   }

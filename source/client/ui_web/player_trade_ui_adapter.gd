@@ -14,10 +14,17 @@ var _error: String=""
 func attach(endpoint: Node, dispatcher: UiCommandDispatcher, session: UiCommandSession, tree: SceneTree) -> void:
 	_endpoint=endpoint;_dispatcher=dispatcher;_session=session;_tree=tree
 	dispatcher.register_command("trade.command",_valid_ui,_submit)
-	dispatcher.register_command("trade.close",func(p: Dictionary)->bool:return p.is_empty(),func(_p: Dictionary)->Dictionary:_opened=false;publish(endpoint.state);return {"ok":true})
+	dispatcher.register_command("trade.close",func(p: Dictionary)->bool:return p.is_empty(),_close)
 	endpoint.state_changed.connect(publish)
 	endpoint.operation_finished.connect(session.finish)
 	publish(endpoint.state)
+func _close(_payload: Dictionary) -> Dictionary:
+	var snapshot: Dictionary=_endpoint.state
+	if snapshot.get("phase","") in ["invited","offer"]:
+		var result: Dictionary=await _submit({"action":"cancel","trade_id":snapshot.id})
+		if not result.get("ok",false): return result
+	_opened=false;publish(_endpoint.state)
+	return {"ok":true}
 static func _normalize(p: Dictionary) -> Dictionary:
 	var value:=p.duplicate(true)
 	for key: String in ["target","version"]:

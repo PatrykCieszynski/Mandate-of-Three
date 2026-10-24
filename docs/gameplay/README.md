@@ -14,8 +14,10 @@ For approved *future* design rather than current code, see [gameplay direction](
 ## Player Trade V1
 
 The CEF **Trade · T** window lists nearby players, accepts invitations, and
-exchanges up to eight whole item instances/stacks and Yang per participant.
+exchanges up to twenty whole item instances/stacks and Yang per participant.
 Drag or Ctrl-click from Inventory; clicking an offered item removes it.
+The two offers use 5×4 grids. X cancels an invitation/negotiation; after SQL
+submission it only hides the window, preserving pending outcome recovery.
 Both players must be alive in the same MapInstance within
 `[runtime] trade_range_cm=500`. Invitations expire after 30 seconds; negotiation
 expires after 60 seconds without an edit. Disconnect, death or leaving range
