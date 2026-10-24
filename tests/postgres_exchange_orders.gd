@@ -6,7 +6,7 @@ const Ledger = preload("res://source/server/world/database/postgres/exchange_led
 const Wallet = preload("res://source/server/world/database/postgres/wallet_store_postgres.gd")
 const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 var pg: Object
-var sqlite: SQLite
+var sqlite: SqliteSoci
 var connection: String
 var characters: Array[int]=[]
 var accounts: Array[int]=[]
@@ -18,7 +18,7 @@ func execute(native: bool, sql: String, bindings: Dictionary = {}) -> void:
 	if native:
 		var result: Dictionary=pg.execute(sql,bindings)
 		assert(result.ok,str(result))
-	else: assert(sqlite.query_with_bindings(sql,bindings.values()))
+	else: assert(sqlite.query_with_named_bindings(sql,bindings))
 
 func rows(native: bool, sql: String) -> Array:
 	if native:
@@ -153,7 +153,7 @@ func _ready() -> void:
 	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster")
 	var directory:=OS.get_environment("MANDATE_PG_FIXTURE_DIR")
 	assert(directory.begins_with("res://.godot/verification/postgres-readiness/run-") and not ".." in directory)
-	sqlite=SQLite.new()
+	sqlite=SqliteSoci.new()
 	sqlite.path=directory+"/exchange-orders.db"
 	assert(not FileAccess.file_exists(sqlite.path) and sqlite.open_db())
 	WorldSchema.ensure_schema(sqlite)

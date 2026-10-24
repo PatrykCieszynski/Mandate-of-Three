@@ -5,7 +5,7 @@ class SessionServer extends WorldServer:
 	func _notify_master_disconnected(account_name: String, _session_token: String = "") -> void:
 		master_disconnects.append(account_name)
 
-var db := SQLite.new()
+var db := SqliteSoci.new()
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://.godot/verification"))

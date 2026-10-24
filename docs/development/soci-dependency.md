@@ -1,7 +1,7 @@
 # Active SOCI dependency
 
-Mandate pins the official godot-soci **v0.4.3** prerelease, commit
-`ae96333eaf765bace372fee993454f7870e79ffe`. The release archive and every payload
+Mandate pins the official godot-soci **v0.4.4** prerelease, commit
+`e1128e3ebcbe5a5662714d268b1f89b165ac8fc8`. The release archive and every payload
 file are pinned in `tools/soci/release.json`. Native payloads remain ignored.
 
 ```powershell
@@ -9,9 +9,9 @@ python tools/soci/setup.py
 python tools/soci/setup.py --check
 ```
 
-Source: [official v0.4.3 release](https://github.com/PatrykCieszynski/godot-soci/releases/tag/v0.4.3).
+Source: [official v0.4.4 release](https://github.com/PatrykCieszynski/godot-soci/releases/tag/v0.4.4).
 ZIP SHA-256:
-`54ffd57acce47e4f18cab67d1b73414ce729dfac803eaa82bf0d02505127d94c`.
+`802d66fdef048d0a82c480f5881f21d48d7c753047933362e4113ba0f037e2ea`.
 
 v0.4.2 fixed the Windows MSVC exception-ABI mismatch exposed by deferred COMMIT
 failure in v0.4.1. v0.4.3 adds synchronous structured errors (`error_backend`,
@@ -19,7 +19,10 @@ category, backend code, SQLSTATE), sharing async naming. The installed official
 payload passes failure/rollback and conservative COMMIT-unknown/reconnect checks.
 The expanded native probe distinguishes a local transaction flag from PostgreSQL
 state and verifies that accepted COMMIT on an aborted transaction can mean rollback.
-No raw COMMIT SQL, locally rebuilt addon or C++ patch is installed in Mandate.
+v0.4.4 fixes SQLite runtime result types in both synchronous and asynchronous queries,
+including signed int64 and aggregates, without treating numeric TEXT as a number.
+This is required by the retained embedded fixtures. No raw COMMIT SQL, locally
+rebuilt addon or C++ patch is installed in Mandate.
 
 Only PostgreSQL Shop purchase/collect opt into bounded whole-use-case retry after
 confirmed statement-failure rollback. See [P2c policy and verification](postgres-transaction-retry.md).
@@ -28,9 +31,9 @@ are not automatically retried by this dependency update.
 
 Adoption verification uses PostgreSQL 18.6 binaries from
 `Y:/Software/PostgreSQL/bin` with fresh owned SCRAM loopback clusters only. The
-installed service/data are not used. The current runtime remains a single World
-and SQLite; PostgreSQL wallet parity is opt-in. This does not add a pool, runtime
-backend selector or distributed Economy.
+installed service/data are not used. Normal development uses Gateway/Master/one World with PostgreSQL accounts,
+profiles and Economy. Focused embedded SQLite fixtures use the same SOCI driver,
+not a separate godot-sqlite addon. This does not add a pool or distributed Economy.
 
 Verification commands:
 

@@ -8,6 +8,7 @@ $taskExe = Join-Path $taskRoot '.godot/Godot_v4.7.2-stable_win64_console.exe'
 New-Item -ItemType Directory -Path $taskLogs -Force | Out-Null
 # Isolated databases. No servers, game windows, balances, exact DOM or geometry.
 $taskCases = [ordered]@{
+    soci_embedded = 'SOCI_EMBEDDED_OK'
     content_catalog = 'CONTENT_CATALOG_OK'
     stats_v1 = 'STATS_V1_OK'
     upgrade_transaction = 'UPGRADE_TRANSACTION_OK'

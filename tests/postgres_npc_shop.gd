@@ -1,12 +1,12 @@
 extends Node
-## The existing NPC receipt/client journal suites remain on SQLite. This fixture
+## The existing NPC receipt/client journal suites remain on SqliteSoci. This fixture
 ## compares the same economic use case on native PG with authoritative snapshots.
 const Schema = preload("res://source/server/world/database/postgres/npc_shop_schema_postgres.gd")
 const PgItems = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 const PgShop = preload("res://source/server/world/database/postgres/npc_shop_store_postgres.gd")
 const PgWallet = preload("res://source/server/world/database/postgres/wallet_store_postgres.gd")
 const WATERMARK: int = 9007199254741033 # Above JSON's exact double integer range.
-var sqlite: SQLite
+var sqlite: SqliteSoci
 var pg: Object
 var buyer: int
 var alternate: int
@@ -152,7 +152,7 @@ func _ready() -> void:
 		offer.quantity=1 if key=="sword" else 3
 		shop.offers.append(offer)
 	assert(shop.validation_errors().is_empty())
-	sqlite=SQLite.new()
+	sqlite=SqliteSoci.new()
 	sqlite.path=directory+"/npc-shop.db"
 	assert(not FileAccess.file_exists(sqlite.path) and sqlite.open_db())
 	WorldSchema.ensure_schema(sqlite)

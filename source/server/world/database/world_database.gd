@@ -14,7 +14,7 @@ func award_experience(player: PlayerResource, amount: int) -> void:
 
 var economy_backend: String="sqlite" # Explicit bootstrap selection; never auto-fallback.
 var database_path: String
-var db: SQLite
+var db: SqliteSoci
 var store: RefCounted
 var mail_store: RefCounted
 var profile_pg: Object
@@ -413,11 +413,8 @@ func open_database() -> void:
 	if not OS.has_feature("editor"):
 		DirAccess.make_dir_recursive_absolute("user://db")
 
-	db = SQLite.new()
+	db = SqliteSoci.new()
 	db.path = database_path
-
-	# Optional: verbosity while you develop
-	# db.verbosity_level = SQLite.VerbosityLevel.NORMAL
 
 	db.open_db()
 	# One authoritative writer. FULL is the default now that player trading exists;

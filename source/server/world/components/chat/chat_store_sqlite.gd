@@ -1,9 +1,9 @@
 class_name ChatStoreSqlite
 extends RefCounted
 
-var db: SQLite
+var db: SqliteSoci
 
-func _init(_db: SQLite) -> void:
+func _init(_db: SqliteSoci) -> void:
 	db = _db
 
 func ensure_conversation(conversation_id: String, type: String, meta_json: String = "{}") -> void:

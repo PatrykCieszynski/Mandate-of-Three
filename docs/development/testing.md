@@ -4,8 +4,11 @@ Full-state PostgreSQL acceptance:
 `python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite full-state`.
 This owns disposable data and real Gateway/Master/World/client processes,
 backup/restore and restart. See [full-state setup](postgres-full-state.md).
-SQLite parity fixtures are reference coverage; they do not select the normal
-deployment backend or prove PostgreSQL concurrency.
+The only native SQL addon is godot-soci. Embedded SQLite fixtures use
+`SqliteSoci` for focused local correctness/network tests; they do not select the
+normal deployment backend or prove PostgreSQL concurrency. Historical comparisons
+against godot-sqlite and locally patched driver benchmarks are retired.
+Run `python tools/soci/setup.py` before the first clean import or smoke.
 
 Accepted 2026-10-09: keep a small set of stable regression contracts during rapid
 prototyping. A tiny UI/style or balance change should not require repairing a

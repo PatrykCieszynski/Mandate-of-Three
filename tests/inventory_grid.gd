@@ -12,7 +12,7 @@ func _ready() -> void:
 		check(not InventoryGrid.fits(0, height, {0: true}), "overlap")
 	check(InventoryGrid.cells(135, 3) == [135,140,145], "fourth page")
 	check(not InventoryGrid.fits(-1, 1, {}) and not InventoryGrid.fits(180, 1, {}), "bounds")
-	var db := SQLite.new()
+	var db := SqliteSoci.new()
 	db.path = "res://.godot/verification/grid-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode()
 	check(db.open_db(), "open isolated DB")
 	WorldSchema.ensure_schema(db)

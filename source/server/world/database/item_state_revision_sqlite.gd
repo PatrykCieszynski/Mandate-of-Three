@@ -1,7 +1,7 @@
 extends RefCounted
 ## Durable account item watermark. Row changes, not business-command counts.
 ## Triggers share every writer's transaction, including trusted grants and custody.
-static func ensure_schema(db: SQLite) -> bool:
+static func ensure_schema(db: SqliteSoci) -> bool:
 	if not db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='item_custody';"): return false
 	var canonical := not db.query_result.is_empty()
 	var feature_version := "2" if canonical else "1"
@@ -43,7 +43,7 @@ static func ensure_schema(db: SQLite) -> bool:
 			return false
 	return true
 
-static func read(db: SQLite, character_id: int) -> Dictionary:
+static func read(db: SqliteSoci, character_id: int) -> Dictionary:
 	if not db.query_with_bindings("SELECT m.value AS authority_id,a.master_account_id AS account_id,COALESCE(r.revision,0) AS revision FROM players p JOIN accounts a ON a.account_name=p.account_name LEFT JOIN account_item_revisions r ON r.account_name=p.account_name JOIN meta m ON m.key='economy_authority_id' WHERE p.player_id=?;",[character_id]) or db.query_result.is_empty(): return {}
 	var row: Dictionary = db.query_result[0]
 	return {"authority_id":str(row.authority_id),"account_id":int(row.account_id),"character_id":character_id,"revision":int(row.revision)}

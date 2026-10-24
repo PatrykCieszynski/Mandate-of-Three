@@ -6,7 +6,8 @@ cutover. This does not authorize discarding future real-player data.
 
 Normal Master/World configs select `backend="postgresql"`, `realm_state=true`.
 No automatic SQLite fallback exists. Configs without an Economy section retain
-the legacy fixture behavior; SQLite libraries and parity tests remain available.
+the explicit embedded fixture behavior through godot-soci; the retired
+godot-sqlite addon is not a supported dependency.
 
 | Owner | PostgreSQL state |
 | --- | --- |

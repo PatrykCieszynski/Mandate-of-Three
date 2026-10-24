@@ -67,6 +67,9 @@ jobs:
       - name: Install pinned Terrain3D native dependency
         shell: pwsh
         run: python ./tools/terrain3d/setup.py
+      - name: Install pinned SOCI database dependency
+        shell: pwsh
+        run: python ./tools/soci/setup.py
       - name: Import clean checkout
         shell: pwsh
         run: |

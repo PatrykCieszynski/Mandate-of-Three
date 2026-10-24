@@ -157,7 +157,7 @@ func run_server() -> void:
 	var backup_prefix:=db.path.get_file().get_basename()+"_"
 	var backups:=Array(backup_dir.get_files()).filter(func(name: String)->bool:return name.begins_with(backup_prefix))
 	check(not backups.is_empty(),"backup file actually created")
-	var copy:=SQLite.new();copy.path=ProjectSettings.globalize_path("user://db_backups/"+backups[-1])
+	var copy:=SqliteSoci.new();copy.path=ProjectSettings.globalize_path("user://db_backups/"+backups[-1])
 	check(copy.open_db(),"backup can be opened independently")
 	check(copy.query("PRAGMA integrity_check;") and copy.query_result[0].values()[0]=="ok","backup integrity")
 	check(copy.query("SELECT COUNT(*) AS n FROM shop_offers;") and int(copy.query_result[0].n)==10000,"backup contains settled catalogue")

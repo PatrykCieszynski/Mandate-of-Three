@@ -13,7 +13,8 @@ Architecture references:
 
 Distinguish **accepted future architecture** from **currently implemented behavior**.
 Normal development uses Gateway, Master, a single World Process and PostgreSQL,
-including accounts/profiles. SQLite remains a reference/legacy fixture backend.
+including accounts/profiles. The pinned godot-soci addon is the only native SQL driver. Embedded SQLite
+through SOCI remains for focused local fixtures/reference contracts.
 See docs/development/postgres-full-state.md. This does not imply a distributed
 Economy Service or multi-World hosting.
 
@@ -76,7 +77,7 @@ behavior over speculative abstractions or large structural rewrites.
 - Reconcile runtime state and publish committed changes only after successful transactions. Do not confuse receipt replay with a new commit.
 - Combat must not perform database or network round trips per hit.
 - Soft progression and eligible grinding Yang may continue using the documented bounded checkpoint policy.
-- Preserve SQLite reference/parity fixtures; never fall back to SQLite when a selected PostgreSQL deployment fails startup or a write.
+- Do not restore the retired godot-sqlite addon or historical driver benchmarks. Retain only useful embedded fixtures through godot-soci, preserving critical behavioral coverage; never fall back to SQLite when a PostgreSQL deployment fails startup or a write.
 
 ### Refactoring
 

@@ -4,7 +4,7 @@
 
 ## Current running prototype
 
-- Godot 4.7.2; Gateway/Master/one World Process; PostgreSQL Economy, accounts and profiles. SQLite remains a reference/legacy fixture backend. See [full-state cutover](../development/postgres-full-state.md). **One process today** is not the same as the future multi-process topology.
+- Godot 4.7.2; Gateway/Master/one World Process; PostgreSQL Economy, accounts and profiles. Embedded SQLite fixtures use the same godot-soci dependency; the godot-sqlite addon and its historical driver benchmarks are retired. See [full-state cutover](../development/postgres-full-state.md). **One process today** is not the same as the future multi-process topology.
 - Server-authoritative 3D movement, hit/target resolution, mobs and respawns. Warrior basic combos have authored timing and combat geometry; combat uses RAM equipment-derived values and does not query SQL on every hit.
 - Unique ItemInstances, item ownership/revisions, transactional pickup/inventory/equip and critical spend. XP/soft progress checkpoints and farming Yang batches remain covered by the [runtime persistence policy](../architecture/persistence-policy.md).
 - First Region graybox with Metins, mixed mob packs and the Blacksmith NPC. [Gameplay index](../gameplay/README.md), [combat details](../gameplay/combat/README.md), [NPC](../gameplay/npc/README.md).

@@ -1,5 +1,5 @@
 extends Node
-var db:=SQLite.new()
+var db:=SqliteSoci.new()
 var load_service: AuctionQueryService
 var load_next_ms := 0
 var load_sequence := 0
@@ -65,7 +65,7 @@ func _ready() -> void:
 			assert(market.configure(owner,"benchmark_"+sync+str(index),index+1+(50 if sync=="FULL" else 0),"Recovery","active").ok)
 			times.append(Time.get_ticks_usec()-before)
 		times.sort();timings[sync]={"p50_ms":times[25]/1000.0,"p95_ms":times[47]/1000.0}
-	var reader:=SQLite.new();reader.path=ProjectSettings.globalize_path(db.path);assert(reader.open_db())
+	var reader:=SqliteSoci.new();reader.path=ProjectSettings.globalize_path(db.path);assert(reader.open_db())
 	assert(reader.query("BEGIN;") and reader.query("SELECT value FROM meta;"))
 	assert(market.configure(owner,"blocked_backup",101,"Recovery","active").ok)
 	var persistence:=WorldDatabase.new();add_child(persistence);persistence.db=db;persistence.database_path=db.path

@@ -5,15 +5,15 @@ extends RefCounted
 
 const BAG_CAPACITY: int = InventoryGrid.CAPACITY
 const ITEM_SELECT: String = "SELECT i.*, p.location, p.bag_position, p.equipment_slot FROM item_instances i JOIN item_placements p ON p.item_uid=i.uid "
-var db: SQLite
+var db: SqliteSoci
 # Last standalone transaction outcome; successful no-ops do not mutate items.
 var committed := false
 var receipt_replay := false
 
-func _init(database: SQLite) -> void:
+func _init(database: SqliteSoci) -> void:
 	db = database
 
-static func ensure_schema(database: SQLite) -> bool:
+static func ensure_schema(database: SqliteSoci) -> bool:
 	if not database.query("BEGIN IMMEDIATE;"):
 		return false
 	var statements: Array[String] = [
@@ -56,7 +56,7 @@ func initialize_character(owner_id: int) -> Dictionary:
 		return _rollback("storage")
 	return _commit()
 
-static func ensure_ground_claim_schema(database: SQLite) -> bool:
+static func ensure_ground_claim_schema(database: SqliteSoci) -> bool:
 	return database.query("CREATE TABLE IF NOT EXISTS ground_item_claims (drop_uid TEXT PRIMARY KEY NOT NULL, owner_character_id INTEGER NOT NULL);")
 
 func claim_ground_item(owner_id: int, drop_uid: String, item: ItemInstance) -> Dictionary:
@@ -313,7 +313,7 @@ func _free_bag_position(owner_id: int, height: int = 1, excluded: Array = []) ->
 	if result.ok: return int(result.position)
 	return -1 if result.error == "inventory_full" else -2
 
-static func migrate_grid(database: SQLite) -> bool:
+static func migrate_grid(database: SqliteSoci) -> bool:
 	if not database.query("BEGIN IMMEDIATE;"): return false
 	if not database.query(ITEM_SELECT + "ORDER BY p.owner_character_id,p.bag_position,i.uid;"):
 		database.query("ROLLBACK;")

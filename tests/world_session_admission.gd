@@ -33,7 +33,7 @@ class LoadingClient extends InstanceManagerClient:
 	func charge_new_instance(_map_path: String, _instance_id: String, identity: Dictionary = {}) -> void:
 		assignment=identity
 
-var db := SQLite.new()
+var db := SqliteSoci.new()
 var database := WorldDatabase.new()
 var server := Session.new()
 var master := WorldManagerServer.new()

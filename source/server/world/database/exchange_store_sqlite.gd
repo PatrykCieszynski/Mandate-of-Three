@@ -1,7 +1,7 @@
 class_name ExchangeStoreSqlite
 extends RefCounted
 ## Ledger/orderbook SQL. No Shop inheritance or shop-specific APIs/state.
-var db: SQLite
+var db: SqliteSoci
 var _transaction: EconomyCommandSqlite
 var committed: bool:
 	get: return _transaction.committed
@@ -9,14 +9,14 @@ var commit_usec: int:
 	get: return _transaction.commit_usec
 var rejected: MarketRejectedCommands:
 	get: return _transaction.rejected
-func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
+func _init(database: SqliteSoci, rejected_commands: MarketRejectedCommands = null) -> void:
 	db = database
 	_transaction = EconomyCommandSqlite.new(db,rejected_commands)
 
 func receipt(character_id: int, command_id: String) -> Dictionary:
 	return _transaction.receipt(character_id,command_id)
 
-static func ensure_ledger_schema(database: SQLite) -> bool:
+static func ensure_ledger_schema(database: SqliteSoci) -> bool:
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
 	if int(database.query_result[0].value)>=21: return preload("res://source/server/world/database/wallet_state_sqlite.gd").ensure_schema(database)
 	if int(database.query_result[0].value)!=20 or not database.query("BEGIN IMMEDIATE;"): return false
@@ -101,7 +101,7 @@ func release_in_transaction(account: int,asset: String,amount: int) -> bool:
 const MAX_RATIO_UNIT := 1000000000 # products <= 1e18, below signed int64 limit
 const MAX_PAIR_ORDERS := 2048
 const MAX_ACCOUNT_ORDERS := 20
-static func ensure_orders_schema(database: SQLite) -> bool:
+static func ensure_orders_schema(database: SqliteSoci) -> bool:
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
 	if int(database.query_result[0].value)>=22: return true
 	if int(database.query_result[0].value)!=21 or not database.query("BEGIN IMMEDIATE;"): return false

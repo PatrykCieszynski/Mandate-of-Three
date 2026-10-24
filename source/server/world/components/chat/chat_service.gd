@@ -7,7 +7,7 @@ extends Node
 var store: RefCounted
 
 
-func setup_with_db(db: SQLite) -> void:
+func setup_with_db(db: SqliteSoci) -> void:
 	store = ChatStoreSqlite.new(db)
 
 
@@ -116,7 +116,7 @@ func get_guild_history(guild_id: int, limit: int) -> Array:
 
 func _handle_send_world(instance: ServerInstance, player: PlayerResource, text: String) -> Dictionary:
 	# Broadcast to everyone in the same instance/map. World chat is EPHEMERAL and
-	# live-only — never written to SQLite, never replayed on join.
+	# live-only — never written to SqliteSoci, never replayed on join.
 	return _broadcast_world_to_instance(
 		instance,
 		player,
@@ -190,7 +190,7 @@ func _handle_send_guild(instance: ServerInstance, player: PlayerResource, text: 
 const RECENT_MAX: int = 100
 var recent_channel_messages: Array = []
 
-## World (public) + System chat are EPHEMERAL and LIVE-ONLY — never written to SQLite
+## World (public) + System chat are EPHEMERAL and LIVE-ONLY — never written to SqliteSoci
 ## and never replayed on join (zone chat in every MMO starts from when you arrive; a
 ## newly-joined player just sees messages from here on). Guild + DM keep their DB
 ## history. These monotonic counters mint ids for the unpersisted messages — unique

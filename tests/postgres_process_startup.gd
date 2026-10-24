@@ -118,7 +118,7 @@ func run() -> void:
 		assert(pg.query("SELECT experience FROM realm.players;").rows[0].experience==41)
 		assert(pg.query("SELECT password_hash FROM realm.accounts;").rows[0].password_hash!="Fixture-only-strong-password-1")
 	else:
-		var profiles:=SQLite.new();profiles.path=directory+"/profiles.db";assert(profiles.open_db())
+		var profiles:=SqliteSoci.new();profiles.path=directory+"/profiles.db";assert(profiles.open_db())
 		assert(profiles.query("SELECT name FROM sqlite_master WHERE type='table' AND name='account_wallets';") and profiles.query_result.is_empty())
 		assert(profiles.query("SELECT COUNT(*) AS n FROM item_instances;") and profiles.query_result[0].n==0)
 		assert(profiles.query("SELECT COUNT(*) AS n FROM players;") and profiles.query_result[0].n==1)

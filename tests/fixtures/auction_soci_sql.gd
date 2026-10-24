@@ -18,7 +18,7 @@ static func build(p: Dictionary) -> Dictionary:
 	params["row_limit"] = int(p.limit)+1
 	return {"sql":"SELECT i.*,c.location,c.position AS bag_position,'' AS equipment_slot,o.offer_id,o.shop_id,o.price_yang,o.revision AS offer_revision,s.display_name AS shop_name FROM shop_offers o JOIN account_shops s ON s.shop_id=o.shop_id JOIN item_instances i ON i.uid=o.item_uid JOIN item_custody c ON c.uid=i.uid WHERE "+where+" ORDER BY o.price_yang "+("DESC" if descending else "ASC")+",o.offer_id ASC LIMIT :row_limit;","params":params}
 
-static func project(rows: Array, p: Dictionary, db: SQLite) -> Dictionary:
+static func project(rows: Array, p: Dictionary, db: SqliteSoci) -> Dictionary:
 	assert(OS.get_thread_caller_id()==OS.get_main_thread_id())
 	var results: Array = []
 	var view := MarketStoreSqlite.new(db)

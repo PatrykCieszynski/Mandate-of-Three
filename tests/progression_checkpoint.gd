@@ -22,7 +22,7 @@ func check(ok: bool, message: String) -> void:
 		get_tree().quit(1)
 
 func _ready() -> void:
-	var db := SQLite.new()
+	var db := SqliteSoci.new()
 	db.path = "res://.godot/verification/checkpoint-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode()
 	check(db.open_db(), "open isolated SQLite")
 	WorldSchema.ensure_schema(db)

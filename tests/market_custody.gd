@@ -1,6 +1,6 @@
 extends Node
 ## Uncovered contract: SQL-exclusive custody + account-scoped command receipts.
-var db := SQLite.new()
+var db := SqliteSoci.new()
 var store: WorldStoreSqlite
 var market: MarketStoreSqlite
 var items: ItemStoreSqlite

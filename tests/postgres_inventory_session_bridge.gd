@@ -50,7 +50,7 @@ class WireClient extends BaseMultiplayerEndpoint:
 
 var pg: Object
 var database:=WorldDatabase.new()
-var sqlite:=SQLite.new()
+var sqlite:=SqliteSoci.new()
 var master:=Master.new()
 var world:=World.new()
 var link:=ControlLink.new()

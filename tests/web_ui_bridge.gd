@@ -107,8 +107,8 @@ func _run() -> void:
 	remove_child(host)
 	host.free()
 	if OS.has_feature("client"):
-		assert(not ClassDB.class_exists("SQLite"), "Exported client validation must work without SQLite")
-	# Run the real client validator; this also runs in an exported client without SQLite.
+		assert(not ClassDB.class_exists("GodotSociDatabase") and not ClassDB.class_exists("SociQueryDispatcher"), "Exported client validation must work without native SQL drivers")
+	# Run the real client validator; this also runs in an exported client without SqliteSoci.
 	var item_uid := "0123456789abcdef0123456789abcdef"
 	assert(ItemUiAdapter.valid_item_identity({"id":item_uid,"revision":0}))
 	for invalid: Variant in ["", item_uid.left(31), item_uid.to_upper(), "g".repeat(32), 42]:

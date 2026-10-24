@@ -1,6 +1,6 @@
 extends RefCounted
 ## Additive offline PG / disposable SQLite provisioning. Old rows stay v0 until decoded.
-static func sqlite(db: SQLite) -> bool:
+static func sqlite(db: SqliteSoci) -> bool:
 	if not db.query("PRAGMA table_info(players);"): return false
 	var found := false
 	for row: Dictionary in db.query_result:

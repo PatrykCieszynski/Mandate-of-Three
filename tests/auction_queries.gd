@@ -3,7 +3,7 @@ extends Node
 ## signal delivery, deadlines including queue wait, and safe native reader drain.
 const P := {"definition_id":"iron_sword","upgrade_min":0,"upgrade_max":9,"price_min":0,"price_max":9000000000000000,"affix_filters":[],"sort":"price_asc","cursor":"","limit":50}
 var persistence: WorldDatabase
-var db:=SQLite.new()
+var db:=SqliteSoci.new()
 var results: Dictionary={}
 var delivered: Array[String]=[]
 var ticks:=0
@@ -55,7 +55,7 @@ func _ready() -> void:
 		var p: Dictionary=cases[index]
 		for page: int in 2:
 			var built:=preload("res://tests/fixtures/auction_soci_sql.gd").build(p)
-			assert(db.query_with_bindings(built.sql,built.params.values()))
+			assert(db.query_with_named_bindings(built.sql,built.params))
 			var expected:=preload("res://tests/fixtures/auction_soci_sql.gd").project(db.query_result.duplicate(true),p,db)
 			var key:="parity%d_%d" % [index,page]
 			send(2000+index,key,p);assert(not results.has(key),"submit returns before SQL/result")

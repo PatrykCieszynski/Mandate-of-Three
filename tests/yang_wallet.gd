@@ -18,13 +18,13 @@ func check(ok: bool, message: String) -> void:
 		push_error("WALLET_FAILED: " + message)
 		get_tree().quit(1)
 
-func persisted(db: SQLite, owner: int) -> int:
+func persisted(db: SqliteSoci, owner: int) -> int:
 	check(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);", [owner]), "read balance")
 	return int(db.query_result[0].yang)
 
 func _ready() -> void:
 	test_account_migration()
-	var db := SQLite.new()
+	var db := SqliteSoci.new()
 	db.path = "res://.godot/verification/yang-wallet-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode()
 	check(db.open_db(), "open")
 	WorldSchema.ensure_schema(db)
@@ -97,7 +97,7 @@ func _ready() -> void:
 
 # Transaction contract fixture with a server-defined item and test cost. Real
 # Shop validates its offer/price inside this transaction and publishes RAM after commit.
-func purchase_fixture(db: SQLite, owner: int, pending: int, cost: int, requested: int = -1) -> Dictionary:
+func purchase_fixture(db: SqliteSoci, owner: int, pending: int, cost: int, requested: int = -1) -> Dictionary:
 	var items := ItemStoreSqlite.new(db)
 	var wallets := WalletStoreSqlite.new(db)
 	var item: ItemInstance = ItemInstance.create(ItemDefinitions.IRON_SWORD, owner, [])
@@ -117,7 +117,7 @@ func purchase_fixture(db: SQLite, owner: int, pending: int, cost: int, requested
 		return {"ok": false, "error": "storage"}
 	return result
 
-func test_purchase_contract(db: SQLite, owner: int) -> void:
+func test_purchase_contract(db: SqliteSoci, owner: int) -> void:
 	var items := ItemStoreSqlite.new(db)
 	check(db.query_with_bindings("UPDATE account_wallets SET yang=100 WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);", [owner]), "purchase wallet fixture")
 	check(items.resolve_inventory_position(owner, 2, 40).error == "request", "exact footprint cannot cross page")
@@ -153,7 +153,7 @@ func test_purchase_contract(db: SQLite, owner: int) -> void:
 # New contract: sum old wallets once, share account state, reject orphan/overflow,
 # preserve pending income across critical online/offline credits and reentry.
 func test_account_migration() -> void:
-	var db := SQLite.new()
+	var db := SqliteSoci.new()
 	db.path = "res://.godot/verification/yang-wallet-migration-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode()
 	assert(db.open_db())
 	WorldSchema.ensure_schema(db)
@@ -209,7 +209,7 @@ func test_account_migration() -> void:
 
 # Existing checkpoint tests do not cover newer RAM income arriving between SQL
 # completion and reconciliation, or stale/duplicate versioned commit results.
-func _check_versioned_reconciliation(db: SQLite, store: WorldStoreSqlite) -> void:
+func _check_versioned_reconciliation(db: SqliteSoci, store: WorldStoreSqlite) -> void:
 	var owner := EconomyFixture.create_character(store,"wallet_versions",{"name":"WalletVersions","skin":1})
 	var alternate := EconomyFixture.create_character(store,"wallet_versions",{"name":"WalletAlt","skin":1})
 	var offline := EconomyFixture.create_character(store,"wallet_offline",{"name":"OfflineWallet","skin":1})
@@ -267,7 +267,7 @@ func _check_versioned_reconciliation(db: SQLite, store: WorldStoreSqlite) -> voi
 	persistence.free()
 
 func _check_wallet_revision_migration() -> void:
-	var db := SQLite.new()
+	var db := SqliteSoci.new()
 	db.path="res://.godot/verification/wallet-version-migration-"+Crypto.new().generate_random_bytes(8).hex_encode()+".db"
 	check(db.open_db(),"wallet migration open")
 	WorldSchema.ensure_schema(db)

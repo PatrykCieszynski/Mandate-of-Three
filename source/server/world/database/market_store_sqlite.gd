@@ -6,7 +6,7 @@ const COLUMNS := Grid.COLUMNS
 const ROWS := Grid.ROWS
 const CAPACITY := Grid.CAPACITY
 const MAX_REVENUE := 9223372036854775807 # SQLite integer storage ceiling, not wallet capacity.
-var db: SQLite
+var db: SqliteSoci
 var _transaction: EconomyCommandSqlite
 var committed: bool:
 	get: return _transaction.committed
@@ -14,11 +14,11 @@ var commit_usec: int:
 	get: return _transaction.commit_usec
 var rejected: MarketRejectedCommands:
 	get: return _transaction.rejected
-func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
+func _init(database: SqliteSoci, rejected_commands: MarketRejectedCommands = null) -> void:
 	db = database
 	_transaction = EconomyCommandSqlite.new(db,rejected_commands)
 
-static func ensure_schema(database: SQLite) -> bool:
+static func ensure_schema(database: SqliteSoci) -> bool:
 	database.foreign_keys = true
 	if not database.query("PRAGMA foreign_keys=ON;"): return false
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
@@ -73,7 +73,7 @@ static func ensure_schema(database: SQLite) -> bool:
 			return false
 	return preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(database) and _ensure_offer_only_column(database) and _ensure_projection_indexes(database) and _ensure_revenue_schema(database)
 
-static func _ensure_revenue_schema(database: SQLite) -> bool:
+static func _ensure_revenue_schema(database: SqliteSoci) -> bool:
 	# Old sale receipts already credited wallets. Never reconstruct/backfill them.
 	return database.query("CREATE TABLE IF NOT EXISTS account_shop_revenue(account_id INTEGER PRIMARY KEY REFERENCES accounts(master_account_id),yang INTEGER NOT NULL DEFAULT 0 CHECK(typeof(yang)='integer' AND yang>=0));")
 
@@ -107,7 +107,7 @@ func claim_revenue(character_id: int, command_id: String, pending_income: int) -
 
 ## Local account projections must not scan the realm-wide catalogue. Additive,
 ## idempotent startup work; no custody/receipt/schema-version semantics change.
-static func _ensure_projection_indexes(database: SQLite) -> bool:
+static func _ensure_projection_indexes(database: SqliteSoci) -> bool:
 	if not database.query("BEGIN IMMEDIATE;"): return false
 	for statement: String in [
 		"CREATE INDEX IF NOT EXISTS shop_offers_shop_position ON shop_offers(shop_id,position);",
@@ -120,7 +120,7 @@ static func _ensure_projection_indexes(database: SQLite) -> bool:
 	return true
 
 ## Explicit no-price mode without rebuilding the FK-linked shop_offers table.
-static func _ensure_offer_only_column(database: SQLite) -> bool:
+static func _ensure_offer_only_column(database: SqliteSoci) -> bool:
 	if not database.query("PRAGMA table_info(shop_offers);"): return false
 	for column: Dictionary in database.query_result:
 		if column.name == "offer_only": return true
@@ -133,7 +133,7 @@ static func _ensure_offer_only_column(database: SQLite) -> bool:
 		return false
 	return true
 
-static func ensure_offer_only_schema(database: SQLite) -> bool:
+static func ensure_offer_only_schema(database: SqliteSoci) -> bool:
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';") or database.query_result.is_empty(): return false
 	var version := int(database.query_result[0].value)
 	if version >= 24: return _ensure_offer_only_column(database)

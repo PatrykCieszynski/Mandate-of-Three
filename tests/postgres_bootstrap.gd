@@ -96,7 +96,7 @@ func _ready() -> void:
 	assert(await master_owner.start_master(master,config) and master.inventory_session_issuer!=null)
 	assert(await master_owner.shutdown_master() and master_owner.status().stopped)
 	var world:=make_world()
-	world.database.db=SQLite.new()
+	world.database.db=SqliteSoci.new()
 	world.database.db.path=OS.get_environment("MANDATE_PG_FIXTURE_DIR")+"/bootstrap-profile.db"
 	assert(world.database.db.open_db())
 	WorldSchema.ensure_schema(world.database.db)

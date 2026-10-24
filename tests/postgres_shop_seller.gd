@@ -9,7 +9,7 @@ const PgItems = preload("res://source/server/world/database/postgres/item_store_
 const PgWallet = preload("res://source/server/world/database/postgres/wallet_store_postgres.gd")
 const PgStorage = preload("res://source/server/world/database/postgres/account_storage_postgres.gd")
 const SqliteState = preload("res://source/server/world/database/item_state_revision_sqlite.gd")
-var sqlite: SQLite
+var sqlite: SqliteSoci
 var pg: Object
 var buyer: int
 var alternate: int
@@ -197,7 +197,7 @@ func _ready() -> void:
 	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster")
 	var directory:=OS.get_environment("MANDATE_PG_FIXTURE_DIR")
 	assert(directory.begins_with("res://.godot/verification/postgres-readiness/run-") and not ".." in directory)
-	sqlite=SQLite.new()
+	sqlite=SqliteSoci.new()
 	sqlite.path=directory+"/shop-seller.db"
 	assert(not FileAccess.file_exists(sqlite.path) and sqlite.open_db())
 	WorldSchema.ensure_schema(sqlite)

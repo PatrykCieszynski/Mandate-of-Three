@@ -1,5 +1,5 @@
 extends Node
-var db:=SQLite.new()
+var db:=SqliteSoci.new()
 func _ready() -> void:
 	db.path="res://.godot/verification/exchange-ledger.db";DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path))
 	assert(db.open_db());WorldSchema.ensure_schema(db)

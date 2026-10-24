@@ -5,7 +5,7 @@ func check(ok: bool, message: String) -> void:
 		failed = true
 		push_error("SHOP_FAILED: " + message)
 		get_tree().quit(1)
-func balance(db: SQLite, owner: int) -> int:
+func balance(db: SqliteSoci, owner: int) -> int:
 	check(db.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=(SELECT a.master_account_id FROM accounts a JOIN players p ON p.account_name=a.account_name WHERE p.player_id=?);",[owner]), "balance query")
 	return int(db.query_result[0].yang)
 func _ready() -> void:
@@ -18,7 +18,7 @@ func _ready() -> void:
 	bad.price = offer.price
 	bad.quantity = ItemDefinitions.IRON_SWORD.stack_limit + 1
 	check("invalid_quantity" in bad.validation_errors(), "offer cannot exceed stack limit")
-	var db := SQLite.new()
+	var db := SqliteSoci.new()
 	db.path = "res://.godot/verification/shop-purchase-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode()
 	check(db.open_db(), "open fixture")
 	WorldSchema.ensure_schema(db)

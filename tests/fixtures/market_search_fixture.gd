@@ -1,6 +1,6 @@
 extends RefCounted
 ## Shared legal 10k-offer fixture for SQL and live-World measurements.
-static func seed(db: SQLite, owner: int, distributed_owners: bool = false) -> void:
+static func seed(db: SqliteSoci, owner: int, distributed_owners: bool = false) -> void:
 	# 500 account shops x 20 two-cell swords, inserted atomically in fixture batches.
 	# Historical SQL parity cases retain one legacy character owner. Live D2
 	# distributes it as well as canonical custody; otherwise refreshing the hero's

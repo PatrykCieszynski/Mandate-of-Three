@@ -9,7 +9,7 @@ class_name Inventory
 ## without another migration. Stackable items merge into one slot; non-stackable
 ## items each get their own slot.
 ##
-## Note: stored as JSON in SQLite, which turns int keys into strings and ints into
+## Note: stored as JSON in SqliteSoci, which turns int keys into strings and ints into
 ## floats on load. Always run loaded data through normalize() first.
 
 

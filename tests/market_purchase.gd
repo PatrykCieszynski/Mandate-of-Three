@@ -1,6 +1,6 @@
 extends Node
 ## Uncovered economy contract: atomic two-wallet settlement, offline seller and retry.
-var db := SQLite.new()
+var db := SqliteSoci.new()
 var store: WorldStoreSqlite
 var market: MarketStoreSqlite
 var items: ItemStoreSqlite
@@ -81,7 +81,7 @@ func _ready() -> void:
 		assert(EconomyFixture.insert_item(items,ItemInstance.create(ItemDefinitions.IRON_SWORD,rival,[]),items._free_bag_position(rival,2)))
 	assert(market.purchase(rival,"full",listed.shop_id,listed.offer_id,0,100,{}).error=="inventory_full")
 	assert(balance(store.resolve_account_id(rival))==1500 and market.mine(seller).offers.size()==1,"full bag does not charge or consume offer")
-	var reader:=SQLite.new();reader.path=ProjectSettings.globalize_path(db.path);assert(reader.open_db())
+	var reader:=SqliteSoci.new();reader.path=ProjectSettings.globalize_path(db.path);assert(reader.open_db())
 	persistence.market_account_changed.connect(func(account: int)->void:
 		assert(reader.query_with_bindings("SELECT yang FROM account_wallets WHERE account_id=?;",[account]) and not reader.query_result.is_empty(),"observer connection sees committed ledger")
 		fact_wallets.append(persistence.runtime_wallets.duplicate(true))

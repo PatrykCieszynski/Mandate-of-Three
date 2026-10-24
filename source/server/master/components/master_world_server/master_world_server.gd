@@ -8,7 +8,7 @@ extends BaseMultiplayerEndpoint
 var connected_worlds: Dictionary[int, Dictionary]
 ## Latest issued World ticket also fences delayed disconnect notifications.
 var _world_sessions: Dictionary[String, Dictionary] = {}
-## Injected only by an opt-in PostgreSQL realm bootstrap/fixture. Default is SQLite.
+## Injected only by an opt-in PostgreSQL realm bootstrap/fixture. Default is SqliteSoci.
 var economy_bootstrap: RefCounted
 var inventory_session_issuer: RefCounted
 var maintenance: RefCounted

@@ -1,6 +1,6 @@
 extends RefCounted
 ## Additive wallet revision feature; keeps identity-gated v18-v23 migration order.
-static func ensure_schema(db: SQLite) -> bool:
+static func ensure_schema(db: SqliteSoci) -> bool:
 	if not db.query("PRAGMA table_info(account_wallets);"): return false
 	var columns: Array = db.query_result.map(func(row: Dictionary) -> String: return str(row.name))
 	if columns.is_empty(): return false
@@ -22,7 +22,7 @@ static func ensure_schema(db: SQLite) -> bool:
 			return false
 	return true
 
-static func read(db: SQLite, account: int, applied_pending: int = 0) -> Dictionary:
+static func read(db: SqliteSoci, account: int, applied_pending: int = 0) -> Dictionary:
 	if not db.query_with_bindings("SELECT w.*,m.value AS authority_id FROM account_wallets w JOIN meta m ON m.key='economy_authority_id' WHERE account_id=?;",[account]): return {"ok":false,"error":"storage"}
 	if db.query_result.is_empty(): return {"ok":false,"error":"owner"}
 	var row: Dictionary = db.query_result[0]

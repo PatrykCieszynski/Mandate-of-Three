@@ -8,13 +8,13 @@ const PAGES: int = Grid.PAGES
 const PAGE_CELLS: int = Grid.PAGE_CELLS
 const CAPACITY: int = Grid.CAPACITY
 const SELECT: String = "SELECT i.*, 'storage' AS location,s.position AS bag_position,'' AS equipment_slot FROM item_instances i JOIN account_storage s ON s.item_uid=i.uid "
-var db: SQLite
+var db: SqliteSoci
 # Last transfer mutated durable custody/placement, excluding same-cell success.
 var committed := false
 var receipt_replay := false
-func _init(database: SQLite) -> void:
+func _init(database: SqliteSoci) -> void:
 	db = database
-static func ensure_schema(database: SQLite) -> bool:
+static func ensure_schema(database: SqliteSoci) -> bool:
 	if not database.query("BEGIN IMMEDIATE;"): return false
 	for statement: String in ["CREATE TABLE IF NOT EXISTS account_storage (item_uid TEXT PRIMARY KEY NOT NULL,account_name TEXT NOT NULL,position INTEGER NOT NULL CHECK(position BETWEEN 0 AND 269));", "CREATE UNIQUE INDEX IF NOT EXISTS account_storage_position ON account_storage(account_name,position);", "INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version','16');"]:
 		if not database.query(statement):

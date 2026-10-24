@@ -3,7 +3,8 @@
 Normal development uses PostgreSQL for Economy, Master accounts and World
 profiles/social services. The owner approved a clean test-data start on
 2026-10-21. [Full-state setup](../development/postgres-full-state.md) is the
-canonical deployment runbook. SQLite is a reference/legacy fixture backend;
+canonical deployment runbook. Embedded SQLite through godot-soci is used only
+for focused reference/local fixtures; the godot-sqlite addon is retired;
 selecting PostgreSQL never permits fallback after startup or write failure.
 
 An active character's simulation state and committed-state projections live in

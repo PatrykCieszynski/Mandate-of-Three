@@ -2,7 +2,7 @@ extends Node
 func _ready() -> void:
 	var contract=preload("res://tests/support/character_stats_contract.gd")
 	contract.model()
-	var db:=SQLite.new();db.path="res://.godot/verification/stats-v1.db"
+	var db:=SqliteSoci.new();db.path="res://.godot/verification/stats-v1.db"
 	# Fixed disposable fixture, no real profile data.
 	if FileAccess.file_exists(db.path): DirAccess.remove_absolute(db.path)
 	assert(db.open_db());WorldSchema.ensure_schema(db)

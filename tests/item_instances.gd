@@ -15,7 +15,7 @@ func check(ok: bool, message: String) -> void:
 func run() -> void:
 	var directory: String = ProjectSettings.globalize_path("res://.godot/verification")
 	DirAccess.make_dir_recursive_absolute(directory)
-	var db := SQLite.new()
+	var db := SqliteSoci.new()
 	db.path = directory.path_join("items-unit-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode())
 	check(db.open_db(), "open isolated database")
 	WorldSchema.ensure_schema(db)
@@ -145,7 +145,7 @@ func _find(snapshot: Dictionary, uid: String) -> Dictionary:
 		if item.uid == uid: return item
 	return {}
 
-func _check_storage(database: SQLite, legacy: WorldStoreSqlite, store: ItemStoreSqlite) -> void:
+func _check_storage(database: SqliteSoci, legacy: WorldStoreSqlite, store: ItemStoreSqlite) -> void:
 	var first: int = EconomyFixture.create_character(legacy,"storage_account",{"name":"StorageA","skin":1})
 	var second: int = EconomyFixture.create_character(legacy,"storage_account",{"name":"StorageB","skin":1})
 	var foreign: int = EconomyFixture.create_character(legacy,"foreign_storage",{"name":"Foreign","skin":1})
@@ -202,7 +202,7 @@ func _check_storage(database: SQLite, legacy: WorldStoreSqlite, store: ItemStore
 
 # Protect the commit/no-op distinction: existing swap/rollback cases alone cannot
 # detect duplicate change facts or a no-op incorrectly labelled receipt replay.
-func _check_inventory_boundary(database: SQLite, legacy: WorldStoreSqlite) -> void:
+func _check_inventory_boundary(database: SqliteSoci, legacy: WorldStoreSqlite) -> void:
 	var persistence := WorldDatabase.new()
 	persistence.db = database
 	persistence.store = legacy
@@ -235,7 +235,7 @@ func _check_inventory_boundary(database: SQLite, legacy: WorldStoreSqlite) -> vo
 	persistence.free()
 
 # Receipt, replay and lost-response risks are additional to legacy placement tests.
-func _check_inventory_receipts(database: SQLite, legacy: WorldStoreSqlite) -> void:
+func _check_inventory_receipts(database: SqliteSoci, legacy: WorldStoreSqlite) -> void:
 	var persistence := WorldDatabase.new()
 	persistence.db = database
 	persistence.store = legacy
@@ -319,7 +319,7 @@ func _check_inventory_client_journal() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(directory))
 
 # Shared-account custody plus durable receipts is not covered by the character-local tests.
-func _check_storage_receipts(database: SQLite, legacy: WorldStoreSqlite) -> void:
+func _check_storage_receipts(database: SqliteSoci, legacy: WorldStoreSqlite) -> void:
 	var persistence := WorldDatabase.new()
 	persistence.db = database
 	persistence.store = legacy
@@ -397,7 +397,7 @@ func _check_storage_client_journal() -> void:
 
 # A durable account watermark must survive rollback/restart and include both sides
 # of custody. Existing UID revisions cannot express removal or shared Storage.
-func _check_item_state_versions(database: SQLite, legacy: WorldStoreSqlite) -> void:
+func _check_item_state_versions(database: SqliteSoci, legacy: WorldStoreSqlite) -> void:
 	var first := EconomyFixture.create_character(legacy,"revision_account",{"name":"RevisionA","skin":1})
 	var second := EconomyFixture.create_character(legacy,"revision_account",{"name":"RevisionB","skin":1})
 	var foreign := EconomyFixture.create_character(legacy,"revision_foreign",{"name":"RevisionC","skin":1})
@@ -437,7 +437,7 @@ func _check_item_state_versions(database: SQLite, legacy: WorldStoreSqlite) -> v
 	check(database.query("ROLLBACK;") and items.inventory(foreign).item_state==other_before and items.inventory(second).item_state==sender_before,"rollback restores both ownership revision scopes")
 
 func _check_revision_migration() -> void:
-	var database := SQLite.new()
+	var database := SqliteSoci.new()
 	database.path="res://.godot/verification/item-revision-migration-"+Crypto.new().generate_random_bytes(8).hex_encode()+".db"
 	check(database.open_db(),"revision migration fixture open")
 	WorldSchema.ensure_schema(database)
