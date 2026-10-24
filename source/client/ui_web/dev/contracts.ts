@@ -4,6 +4,7 @@ export type PreviewAction =
     }
   | {
       action:
+        | 'trade'
         | 'vendor'
         | 'stats'
         | 'inventory'

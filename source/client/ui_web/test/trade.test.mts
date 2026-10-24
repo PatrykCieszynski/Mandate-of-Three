@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { environment, target, bagItem } from './fixtures.mjs';
+import { ItemDragRuntime } from '../web/game-ui/drag/item-drag-runtime.js';
+import { isTrade, mountTrade, type TradeSnapshot, type TradeCommand } from '../web/screens/trade/trade-view.js';
+const fixture = (): TradeSnapshot => ({id:'trade-'+ 'a'.repeat(32),phase:'offer',version:3,self:1,candidates:[],opened:true,own_side:0,accepted:[false,false],offers:[{name:'You',items:[],yang:'0'},{name:'Other',items:[],yang:'9000000000000000'}]});
+test('trade rejects malformed snapshots and preserves decimal wallet values',()=>{
+  assert.ok(isTrade(fixture()));
+  for (const bad of [null,{...fixture(),accepted:{}},{...fixture(),offers:[null,null]},{...fixture(),candidates:[null]},{...fixture(),error:{}},{...fixture(),offers:[{name:'a',yang:1,items:[]},fixture().offers![1]]}]) assert.equal(isTrade(bad),false);
+});
+test('trade sends versioned offers and confirmation, leaves partner read-only and preserves a Yang draft across updates',async()=>{
+  const {manager,host}=environment(),root=target();Object.assign(globalThis,{HTMLElement:host.HTMLElement,getComputedStyle:host.getComputedStyle.bind(host)});
+  const drag=new ItemDragRuntime({scale:()=>1,onRegionsChanged:()=>{}}),sent:TradeCommand[]=[];
+  const view=mountTrade(root,{manager,drag,resolveItemIcon:()=>null,command:async p=>{sent.push(p);return {ok:true};},close:()=>{},regions:()=>{}});
+  const state=fixture();view.setState(state);
+  const input=root.querySelector<HTMLInputElement>('[aria-label="Yang offered"]')!;input.value='9000000000000000';input.dispatchEvent(new host.Event('input'));
+  view.setState({...state,accepted:[false,true]});
+  assert.equal(root.querySelector<HTMLInputElement>('input')!.value,'9000000000000000');
+  const click=(name:string)=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent===name)!.click();
+  click('Set Yang');await new Promise(r=>setTimeout(r,0));
+  assert.deepEqual(sent[0],{action:'offer',trade_id:state.id,version:3,items:[],yang:'9000000000000000'});
+  click('Accept current offer');await new Promise(r=>setTimeout(r,0));
+  assert.deepEqual(sent[1],{action:'confirm',trade_id:state.id,version:3});
+  await view.offerItem({...bagItem,id:'b'.repeat(32)});await new Promise(r=>setTimeout(r,0));
+  assert.equal(sent[2]?.action,'offer');
+  view.setState({...state,offers:[{name:'You',yang:'0',items:[{uid:'b'.repeat(32),revision:'3',name:'Sword',icon:'iron_sword',amount:'1'}]},state.offers![1]!]});
+  assert.ok(await view.offerItem({...bagItem,id:'b'.repeat(32)}));assert.equal(sent.length,3,'duplicate offer does not reorder or resubmit');
+  assert.equal(Array.from(root.querySelectorAll('.trade-grid'))[1]!.querySelectorAll('button:disabled').length,8);
+  view.setState({...state,phase:'settling'});assert.equal(await view.offerItem(bagItem),false);
+  view.dispose();drag.dispose();manager.dispose();
+});

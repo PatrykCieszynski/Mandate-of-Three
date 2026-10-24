@@ -11,6 +11,39 @@ Gameplay rules and server-authoritative player interactions. These describe the 
 
 For approved *future* design rather than current code, see [gameplay direction](../decisions/gameplay-direction.md). Account-wide economic ownership and durable loot contracts live in [Economy C1–C5](../architecture/economy/README.md).
 
+## Player Trade V1
+
+The CEF **Trade · T** window lists nearby players, accepts invitations, and
+exchanges up to eight whole item instances/stacks and Yang per participant.
+Drag or Ctrl-click from Inventory; clicking an offered item removes it.
+Both players must be alive in the same MapInstance within
+`[runtime] trade_range_cm=500`. Invitations expire after 30 seconds; negotiation
+expires after 60 seconds without an edit. Disconnect, death or leaving range
+cancels negotiation; an open trade blocks local channel transfer.
+
+Every offer edit clears both acceptances. Changes to offered item custody or
+revision also remove stale lines and clear acceptances. Final confirmation names
+the exact offer version. There is no stack splitting or trading fee in V1.
+The server checks both sessions, bag custody, tradeability, revisions, reserved
+Yang and final capacity. It frees outgoing footprints before placing incoming
+items, permitting full-bag swaps. Each UID and its rolls survive the transfer.
+
+One PostgreSQL transaction locks both accounts in stable order, settles both
+captured pending-income prefixes, moves items and Yang, and writes a receipt for
+each participant. Negotiation stays in World RAM; no items are escrowed before
+settlement. Existing Inventory/Wallet owners hold mutations during settlement
+and refresh committed projections before publishing completion. One additional
+bounded native executor worker owns trade SQL (nine World workers in total).
+
+The client journals the trade ID before confirmation. Lost responses and client
+reload/relogin recover that original ID with a receipt lookup; they never repeat
+the exchange under a new ID. After World restart, unfinished negotiation is
+cancelled, while a committed trade remains discoverable from either account's
+receipt. Unknown outcomes retain holds and expose recovery; after three failed
+automatic reads graceful drain stays blocked until recovery succeeds. V1 has no
+cross-World trade, partial stacks or remote trading. Headless RPC tests do not
+establish physical CEF input behavior.
+
 ## Party V1 — open-world runtime
 
 Party is owned by the single World Process, keyed by persistent character IDs,

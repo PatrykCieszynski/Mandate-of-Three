@@ -39,6 +39,7 @@ var metin_encounter: MetinEncounter
 var region: FirstRegionGraybox
 var currency_endpoint: CurrencyEndpoint3D
 var chat_endpoint: Node
+var trade_endpoint: Node
 var party_endpoint: Node
 var world_time: WorldTimeSync3D
 
@@ -55,6 +56,9 @@ func _ready() -> void:
 	party_endpoint = preload("res://source/common/gameplay/party/party_endpoint.gd").new()
 	party_endpoint.name = "Party"
 	add_child(party_endpoint)
+	trade_endpoint = preload("res://source/common/gameplay/trade/player_trade_endpoint.gd").new()
+	trade_endpoint.name = "Trade"
+	add_child(trade_endpoint)
 	_build_arena()
 	ground_loot.setup(self,services)
 	inventory_endpoint = InventoryEndpoint3D.new()

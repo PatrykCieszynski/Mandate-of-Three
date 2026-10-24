@@ -48,6 +48,10 @@ func check(value: bool, message: String) -> void:
 func wait_until(predicate: Callable) -> void:
 	while not failed and not predicate.call(): await get_tree().physics_frame
 
+## Extension points for focused real-network contracts sharing this host fixture.
+func make_world_server() -> WorldServer: return WorldServer.new()
+func entry_channel(index: int) -> int: return index
+
 func _ready() -> void:
 	BaseMultiplayerEndpoint.configure_peer(socket)
 	var api := multiplayer as SceneMultiplayer
@@ -55,7 +59,7 @@ func _ready() -> void:
 	if GameMode.is_world_server():
 		check(socket.create_server(18098,"127.0.0.1")==OK,"loopback server")
 		api.multiplayer_peer=socket
-		server=WorldServer.new();server.name="Session";server.multiplayer_api=api;add_child(server)
+		server=make_world_server();server.name="Session";server.multiplayer_api=api;add_child(server)
 		database_path="res://.godot/verification/local-map-"+Crypto.new().generate_random_bytes(8).hex_encode()+".db"
 		db.path=database_path
 		check(db.open_db(),"disposable SQLite")
@@ -86,7 +90,7 @@ func _ready() -> void:
 		client_manager.channels_changed.connect(func(catalogue: Dictionary)->void:
 			check(catalogue.get("ok",false),"authenticated public catalogue")
 			check(catalogue.channels.size()==2 and catalogue.channels.all(func(row: Dictionary)->bool:return row.keys().size()==4 and row.channel_id in [1,2]),"public catalogue excludes reserved IDs, sessions and host metadata")
-			client_manager.select_initial_channel(number))
+			client_manager.select_initial_channel(entry_channel(number)))
 		client_manager.instance_changed.connect(func(instance: WorldInstanceClient3D)->void:
 			if recovery_items!=null:
 				recovery_session.close("teardown")

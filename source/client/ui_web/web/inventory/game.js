@@ -1,3 +1,4 @@
+import { mountTrade } from '../screens/trade/trade-view.js';
 import { QuickItemTargets } from './quick-item-targets.js';
 import { mountVendor } from '../screens/vendor/vendor-view.js';
 import { mountStats } from '../screens/stats/stats-view.js';
@@ -124,6 +125,9 @@ const bridge = new WebBridge({
         if (message.type === 'ui.snapshot' || message.type === 'hud.updated') {
             bottomHud.setScale(manager.scale);
         }
+        if ((message.type === 'ui.snapshot' || message.type === 'trade.updated') &&
+            state.trade)
+            trade.setState(state.trade);
         if ((message.type === 'ui.snapshot' || message.type === 'party.updated') &&
             state.party)
             party.setState(state.party);
@@ -300,6 +304,16 @@ const stats = mountStats(findElement(document, '#stats', 'main'), {
     },
     regions: () => regions?.refresh(),
 });
+const trade = mountTrade(findElement(document, '#trade', 'main'), {
+    manager,
+    drag,
+    resolveItemIcon,
+    command: (p) => bridge.request('trade.command', p),
+    close: () => {
+        void bridge.request('trade.close', {});
+    },
+    regions: () => regions?.refresh(),
+});
 const party = mountParty(findElement(document, '#party', 'main'), {
     manager,
     command: (p) => bridge.request('party.command', p),
@@ -359,10 +373,15 @@ const quickTargets = new QuickItemTargets([
     { root: storageRoot, receive: (item) => storage.tryQuickDeposit(item) },
     { root: upgradeRoot, receive: (item) => upgrade.selectItem(item) },
     { root: marketRoot, receive: (item) => market.selectInventory(item) },
+    {
+        root: findElement(document, '#trade', 'main'),
+        receive: (item) => trade.offerItem(item),
+    },
     { root: vendorRoot, receive: (item) => vendor.offerItem(item) },
 ]);
 regions = reportInteractiveRegions(bridge, [
     ...bottomHud.regions,
+    ...trade.regions,
     ...party.regions,
     ...worldDrop.regions,
     ...shop.regions,
@@ -381,6 +400,7 @@ window.addEventListener('pagehide', () => {
     chat.dispose();
     bottomHud.dispose();
     party.dispose();
+    trade.dispose();
     worldDrop.dispose();
     upgrade.dispose();
     shop.dispose();
