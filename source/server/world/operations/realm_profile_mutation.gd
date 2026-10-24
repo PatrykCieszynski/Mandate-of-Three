@@ -1,6 +1,6 @@
 extends RefCounted
 class_name RealmProfileMutation
-## Short synchronous legacy profile use cases. No retry, queue or publication.
+## Short synchronous social/profile use cases. No retry, queue or publication.
 ## Preserve live Resource identities on rollback, including dirty references.
 var store: RefCounted
 var started:=false
@@ -43,6 +43,3 @@ func failure() -> Dictionary:
 
 func save_player(player: PlayerResource) -> bool:
 	return started and store.save_player(player)
-
-func save_guild(guild: Guild) -> bool:
-	return started and store.save_guild(guild)

@@ -24,7 +24,6 @@ func rollback() -> bool:
 	return db.query("ROLLBACK;")
 
 
-#region Players
 ## Bind legacy world names only from a verified Master handoff. Never invent IDs.
 func bind_account_identity(account_name: String, account_id: int, create_verified: bool = false) -> bool:
 	if account_name.is_empty() or account_id <= 0 or not db.query("BEGIN IMMEDIATE;"): return false
@@ -92,14 +91,11 @@ func save_progression(players: Array[PlayerResource]) -> bool:
 
 func save_player(player: PlayerResource) -> bool:
 	var attributes_json: String = PlayerProfileCodec.encode_attributes(player.attributes)
-	var inventory_json: String = JSON.stringify(player.inventory)
-	var equipment_json: String = JSON.stringify(player.equipment)
-	var skills_json: String = JSON.stringify(player.skills)
-	var mastery_json: String = JSON.stringify({
-		"masteries": player.masteries,
-		"loadout": player.ability_loadout,
-	})
-	var quests_json: String = JSON.stringify(player.quests)
+	var inventory_json: String = str(player.retired_profile_fields.get("inventory_json", "{}"))
+	var equipment_json: String = str(player.retired_profile_fields.get("equipment_json", "{}"))
+	var skills_json: String = str(player.retired_profile_fields.get("skills_json", "{}"))
+	var mastery_json: String = str(player.retired_profile_fields.get("mastery_json", "{}"))
+	var quests_json: String = str(player.retired_profile_fields.get("quests_json", "{}"))
 
 	var friends_json: String = JSON.stringify(player.friends)
 	var blocked_ids_json: String = JSON.stringify(player.blocked_ids)
@@ -111,15 +107,12 @@ func save_player(player: PlayerResource) -> bool:
 		"display": player.display_title,
 		"trophies": player.displayed_trophies,
 	})
-	var dailies_json: String = JSON.stringify({
-		"quests": player.daily_quests,
-		"refresh_at_ms": player.dailies_refresh_at_ms,
-	})
-	var dungeon_lockouts_json: String = JSON.stringify(player.dungeon_lockouts)
-	var redeemed_codes_json: String = JSON.stringify(player.redeemed_codes)
+	var dailies_json: String = str(player.retired_profile_fields.get("dailies_json", "{}"))
+	var dungeon_lockouts_json: String = str(player.retired_profile_fields.get("dungeon_lockouts_json", "{}"))
+	var redeemed_codes_json: String = str(player.retired_profile_fields.get("redeemed_codes_json", "[]"))
 	var wardstones_json: String = JSON.stringify(player.wardstones)
 
-	var joined_guild_ids_json: String = JSON.stringify(player.joined_guild_ids)
+	var joined_guild_ids_json: String = str(player.retired_profile_fields.get("joined_guild_ids_json", "[]"))
 
 	return db.query_with_bindings(
 		"INSERT OR REPLACE INTO players("
@@ -157,9 +150,9 @@ func save_player(player: PlayerResource) -> bool:
 			redeemed_codes_json,
 			wardstones_json,
 
-			player.active_guild_id,
+			int(player.retired_profile_fields.get("active_guild_id", 0)),
 			joined_guild_ids_json,
-			player.led_guild_id,
+			int(player.retired_profile_fields.get("led_guild_id", 0)),
 			PlayerProfileCodec.encode_progression(player.progression_state())
 		]
 	)
@@ -182,14 +175,6 @@ func create_player_character(account_name: String, character_data: Dictionary) -
 	# The chosen creation skin is owned from the start, so it's equippable in the wardrobe.
 	player.owned_skins = PackedInt64Array([player.skin_id])
 
-	# Starting kit: ONE potion + gold, no weapon — a fresh character's first
-	# decision is choosing a weapon at the starter shop (sword / bow / wand /
-	# hammer, 6-8g), which seeds build identity and teaches the economy. 25g
-	# covers a weapon + a potion or a cheap armor piece.
-	player.inventory = {}
-	if economic_initialization:
-		Inventory.add_item(player.inventory, 1, 1) # health_potion
-		Inventory.add_item(player.inventory, Economy.gold_id(), 25)
 	# Stats V1 points are earned at EXP milestones.
 	player.available_attributes_points = 0
 	# Everyone who plays the alpha carries the badge for it.
@@ -295,204 +280,8 @@ func get_player_account_name(player_id: int) -> String:
 		return ""
 
 	return str(db.query_result[0].get("account_name", ""))
-#endregion
 
 
-#region Guilds
-func get_guild(guild_id: int) -> Guild:
-	db.query_with_bindings("SELECT * FROM guilds WHERE guild_id=?;", [guild_id])
-	if db.query_result.is_empty():
-		return null
-
-	var row: Dictionary = db.query_result[0]
-	var guild: Guild = Guild.new()
-
-	guild.guild_id = int(row.get("guild_id", 0))
-	guild.guild_name = str(row.get("guild_name", ""))
-	guild.leader_id = int(row.get("leader_id", 0))
-
-	var data: Variant = JSON.parse_string(str(row.get("data_json", "{}")))
-	if data is Dictionary:
-		guild.motd = str(data.get("motd", ""))
-		guild.description = str(data.get("description", ""))
-		guild.logo_id = int(data.get("logo_id", 0))
-
-		var ranks: Array = data.get("ranks", Guild.DEFAULT_RANKS)
-		guild.ranks.assign(ranks)
-
-		# JSON numbers parse as float, so coerce back to int ids.
-		guild.pending_invites.clear()
-		for pid: Variant in data.get("pending_invites", []):
-			guild.pending_invites.append(int(pid))
-
-		# JSON object keys are strings — coerce back to int player ids.
-		guild.member_perms.clear()
-		var perms_raw: Variant = data.get("member_perms", {})
-		if perms_raw is Dictionary:
-			for key: Variant in perms_raw:
-				guild.member_perms[int(key)] = int(perms_raw[key])
-
-		# Glory state — defaults to 0 for guilds that pre-dated this column.
-		guild.seasonal_glory = int(data.get("seasonal_glory", 0))
-		guild.eternal_glory = int(data.get("eternal_glory", 0))
-		guild.total_sg_ever = int(data.get("total_sg_ever", 0))
-		guild.kill_counter_for_glory = int(data.get("kill_counter_for_glory", 0))
-		guild.total_kills = int(data.get("total_kills", 0))
-		guild.territory_seconds = int(data.get("territory_seconds", 0))
-		guild.spar_score = int(data.get("spar_score", 0))
-		guild.treasury = int(data.get("treasury", 0))
-		# JSON object keys are strings & values floats — coerce to StringName/int.
-		var ups_raw: Variant = data.get("upgrades", {})
-		if ups_raw is Dictionary:
-			for key: Variant in ups_raw:
-				guild.upgrades[StringName(key)] = int(ups_raw[key])
-
-		# Owned cosmetic logos — the free default (0) is always present so a
-		# pre-feature guild can never lose its current look.
-		guild.owned_logos.clear()
-		for lid: Variant in data.get("owned_logos", []):
-			guild.owned_logos.append(int(lid))
-		if not guild.owned_logos.has(0):
-			guild.owned_logos.append(0)
-
-		# Trophies + banner color (JSON strings -> StringName ids).
-		guild.trophies_unlocked.clear()
-		for tid: Variant in data.get("trophies_unlocked", []):
-			guild.trophies_unlocked.append(StringName(str(tid)))
-		guild.displayed_trophies.clear()
-		for tid: Variant in data.get("displayed_trophies", []):
-			guild.displayed_trophies.append(StringName(str(tid)))
-		guild.banner_color = str(data.get("banner_color", ""))
-
-	# members
-	db.query_with_bindings("SELECT player_id, rank FROM guild_members WHERE guild_id=?;", [guild_id])
-	guild.members = {}
-	for m: Dictionary in db.query_result:
-		guild.members[int(m.get("player_id", 0))] = int(m.get("rank", 0))
-
-	return guild
-
-
-func save_guild(guild: Guild) -> bool:
-	var data_json: String = JSON.stringify({
-		"motd": guild.motd,
-		"description": guild.description,
-		"logo_id": guild.logo_id,
-		"ranks": guild.ranks,
-		"pending_invites": guild.pending_invites,
-		"member_perms": guild.member_perms,
-		"seasonal_glory": guild.seasonal_glory,
-		"eternal_glory": guild.eternal_glory,
-		"total_sg_ever": guild.total_sg_ever,
-		"kill_counter_for_glory": guild.kill_counter_for_glory,
-		"total_kills": guild.total_kills,
-		"territory_seconds": guild.territory_seconds,
-		"spar_score": guild.spar_score,
-		"treasury": guild.treasury,
-		"upgrades": guild.upgrades,
-		"owned_logos": guild.owned_logos,
-		"trophies_unlocked": guild.trophies_unlocked,
-		"displayed_trophies": guild.displayed_trophies,
-		"banner_color": guild.banner_color,
-	})
-
-	if not db.query_with_bindings(
-		"INSERT OR REPLACE INTO guilds(guild_id, guild_name, leader_id, data_json) VALUES(?, ?, ?, ?);",
-		[guild.guild_id, guild.guild_name, guild.leader_id, data_json]
-	): return false
-
-	if not db.query_with_bindings("DELETE FROM guild_members WHERE guild_id=?;", [guild.guild_id]): return false
-	for pid in guild.members.keys():
-		if not db.query_with_bindings(
-			"INSERT INTO guild_members(guild_id, player_id, rank) VALUES(?, ?, ?);",
-			[guild.guild_id, int(pid), int(guild.members[pid])]
-		): return false
-	return true
-
-
-## Returns new guild_id or -1 if name exists
-func create_guild(guild_name: String, leader_id: int) -> int:
-	db.query_with_bindings("SELECT guild_id FROM guilds WHERE guild_name=?;", [guild_name])
-	if not db.query_result.is_empty():
-		return -1
-
-	db.query_with_bindings(
-		"INSERT INTO guilds(guild_name, leader_id, data_json) VALUES(?, ?, ?);",
-		[guild_name, leader_id, JSON.stringify({})]
-	)
-
-	db.query("SELECT last_insert_rowid() AS id;")
-	if db.query_result.is_empty():
-		return -1
-
-	return int(db.query_result[0].get("id", -1))
-
-
-func get_guild_name(guild_id: int) -> String:
-	if guild_id <= 0:
-		return ""
-
-	db.query_with_bindings("SELECT guild_name FROM guilds WHERE guild_id=?;", [guild_id])
-	if db.query_result.is_empty():
-		return ""
-
-	return str(db.query_result[0].get("guild_name", ""))
-
-
-## Every guild id in the DB (online + offline). Added for the admin Glory-reset command; the basing
-## tick only iterates flag-owning guilds, so a full enumeration was never needed before.
-func get_all_guild_ids() -> Array[int]:
-	db.query_with_bindings("SELECT guild_id FROM guilds;", [])
-	var ids: Array[int] = []
-	for row: Dictionary in db.query_result:
-		ids.append(int(row.get("guild_id", 0)))
-	return ids
-
-
-func get_guild_id_by_name(guild_name: String) -> int:
-	db.query_with_bindings(
-		"SELECT guild_id FROM guilds WHERE guild_name=?;",
-		[guild_name]
-	)
-
-	if db.query_result.is_empty():
-		return 0
-
-	return int(db.query_result[0].get("guild_id", 0))
-
-
-## Permanently delete a guild: its row, membership rows, and its event log.
-## Player-side references (joined/active/led ids) and live flag ownership are
-## the DISBAND HANDLER's job — this only clears guild-owned tables.
-func delete_guild(guild_id: int) -> void:
-	db.query_with_bindings("DELETE FROM guilds WHERE guild_id=?;", [guild_id])
-	db.query_with_bindings("DELETE FROM guild_members WHERE guild_id=?;", [guild_id])
-	db.query_with_bindings("DELETE FROM guild_log WHERE guild_id=?;", [guild_id])
-
-
-func search_guilds_by_name(query: String, limit: int) -> Array:
-	var q: String = query.strip_edges()
-	if q.is_empty():
-		return []
-
-	var like: String = "%" + q + "%"
-
-	db.query_with_bindings(
-		"SELECT guild_id, guild_name "
-		+ "FROM guilds "
-		+ "WHERE guild_name LIKE ? COLLATE NOCASE "
-		+ "ORDER BY guild_name ASC "
-		+ "LIMIT ?;",
-		[like, limit]
-	)
-
-	return db.query_result
-
-
-## Search players by name. With [param by_account] true the query matches the
-## stable account_name (@handle); otherwise it matches the character display_name.
-## [param column] is a fixed internal string (not user input), so it's safe to
-## interpolate. Returns rows of {player_id, account_name, display_name}.
 func search_players(query: String, limit: int, by_account: bool) -> Array:
 	var q: String = query.strip_edges()
 	if q.is_empty():
@@ -512,48 +301,7 @@ func search_players(query: String, limit: int, by_account: bool) -> Array:
 
 	return db.query_result
 
-#endregion
 
-
-#region Guild log
-
-## Newest guild-log rows kept per guild — older rows are pruned on every write.
-const MAX_GUILD_LOG_ROWS: int = 200
-
-
-## Append one event to a guild's log and prune that guild to the newest
-## MAX_GUILD_LOG_ROWS. Names are snapshotted at write time (renames don't
-## rewrite history). [param data] is a small event-specific payload (amounts,
-## rank names, territory names) serialized as JSON.
-func add_guild_log(guild_id: int, event: String, actor_name: String = "", target_name: String = "", data: Dictionary = {}) -> void:
-	if guild_id <= 0:
-		return
-	db.query_with_bindings(
-		"INSERT INTO guild_log(guild_id, time_ms, event, actor_name, target_name, data_json) VALUES(?, ?, ?, ?, ?, ?);",
-		[guild_id, int(Time.get_unix_time_from_system() * 1000.0), event, actor_name, target_name, JSON.stringify(data)]
-	)
-	db.query_with_bindings(
-		"DELETE FROM guild_log WHERE guild_id=? AND log_id NOT IN "
-		+ "(SELECT log_id FROM guild_log WHERE guild_id=? ORDER BY log_id DESC LIMIT ?);",
-		[guild_id, guild_id, MAX_GUILD_LOG_ROWS]
-	)
-
-
-## Newest-first log rows for a guild. Each row: {log_id, time_ms, event,
-## actor_name, target_name, data_json}.
-func get_guild_log(guild_id: int, limit: int = 100) -> Array:
-	db.query_with_bindings(
-		"SELECT log_id, time_ms, event, actor_name, target_name, data_json "
-		+ "FROM guild_log WHERE guild_id=? ORDER BY log_id DESC LIMIT ?;",
-		[guild_id, mini(limit, MAX_GUILD_LOG_ROWS)]
-	)
-	return db.query_result
-
-#endregion
-
-
-## Flush pending soft progression and spend exactly one point in one transaction.
-## COMMIT uncertainty never mutates RAM or blindly repeats the write.
 func spend_attribute(player: PlayerResource, command_id: String, attribute: StringName) -> Dictionary:
 	if command_id.is_empty() or command_id.length()>80 or not AttributeMap.KEYS.has(attribute): return {"ok":false,"error":"payload"}
 	if not begin(): return {"ok":false,"error":"storage"}

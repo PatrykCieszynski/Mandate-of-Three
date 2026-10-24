@@ -28,8 +28,19 @@ checkout, recover sources from upstream commit
 `f4ed04f20963c3285117e58b1149fa1117658d3c` or Mandate commit
 `de8774741d958f6ed4ec836801ea3c7b5129f96d` in Git history.
 
-Legacy profile JSON fields and item metadata helpers still needed by profile,
-mail, social and SQLite compatibility are preserved; their presence is not an
-active 2D gameplay implementation. No schema/data migration is performed. Account
-moderation remains, but the old spatial jail/recall/warper transfer is retired;
-there is no authored 3D jail/lobby replacement in this cleanup.
+Legacy guilds and mailbox execution, related admin commands and persistent chat
+history stores are also retired. Chat V1 remains ephemeral; its Guild option is
+unavailable. Friends, blocks, profile customization and moderation notices remain.
+The admin dashboard chat-history view currently receives an empty list from
+`ChatService.recent()`: live chat monitoring is temporarily unavailable. Restoring
+that view should consume public-channel messages from the current `WorldChat`,
+without reviving the old messaging stores or exposing private whispers.
+The old profile-JSON Inventory RPCs are retired; live Inventory/Wallet use their
+existing UID/custody and account-wallet owners. Profile views no longer expose
+legacy JSON gold or guild membership.
+
+Retired profile columns are copied as opaque values through normal profile saves.
+They are not normalized, migrated into gameplay, or published on login. Existing
+SQL tables/data are retained with no schema migration. The static item registry
+still provides legacy display metadata; its unused 2D UI helpers are removed.
+Account moderation remains, but there is no authored 3D jail/lobby replacement.

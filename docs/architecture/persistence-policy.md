@@ -86,11 +86,11 @@ spendable wallet or pending income. Manual collection takes only what fits,
 counting pending income and reservations, and retains the remainder. Values cross
 the browser boundary as decimal strings. See [revenue policy](../development/shop-revenue.md).
 
-Profile/guild/mail/social writes check transaction start, each write and COMMIT;
+Profile/social writes check transaction start, each write and COMMIT;
 client success and live-state publication follow confirmed commit. Unknown profile
 COMMIT outcomes fail closed and require authoritative reload/operator recovery,
-not automatic mutation retry. This path does not claim durable guild-command
-receipts. Details: [full-state failure behavior](../development/postgres-full-state.md).
+not automatic mutation retry. Retired guild/mail/chat tables are retained without active services; opaque profile
+columns survive saves without granting gameplay state. Details: [full-state failure behavior](../development/postgres-full-state.md).
 
 ## Deployment, verification and limits
 

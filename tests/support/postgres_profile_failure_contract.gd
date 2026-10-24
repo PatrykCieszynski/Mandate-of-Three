@@ -25,79 +25,51 @@ static func run(db: Object, player: PlayerResource) -> void:
 	assert(OS.get_environment("MANDATE_PG_FIXTURE")=="owned-local-cluster")
 	var connection:=Connection.new()
 	var store:=WorldStorePostgres.new(connection)
-	player.active_guild_id=0;player.led_guild_id=0;player.joined_guild_ids=PackedInt64Array()
-	player.inventory={}
-	var starting_gold: int=maxi(1,Guild.CREATION_COST*3)
-	Inventory.add_item(player.inventory,Economy.gold_id(),starting_gold)
+	player.blocked_ids=PackedInt64Array()
+	player.friends=PackedInt64Array([999999])
 	assert(store.save_player(player))
-	var before: Dictionary=player.inventory.duplicate(true)
 	var world:=WorldServer.new()
-	var database:=WorldDatabase.new()
-	world.database=database;database.store=store
+	var database:=WorldDatabase.new();database.store=store;world.database=database
 	world.connected_players[77]=player
-	var previous: Variant=ServerInstance.world_server
+	world.player_id_to_peer_id[player.player_id]=77
+	var instance:=ServerInstance.new();var previous: Variant=ServerInstance.world_server
 	ServerInstance.world_server=world
-	var instance:=ServerInstance.new()
-	var create:=preload("res://source/server/world/components/data_request_handlers/guild.create.gd").new()
-	# BEGIN refusal: no mutation and no attempted COMMIT.
+	var block:=preload("res://source/server/world/components/data_request_handlers/social.block.add.gd").new()
+	BlockList.clear_player(player.player_id)
+	var profile: Dictionary=preload("res://source/server/world/components/data_request_handlers/profile.get.gd").new().data_request_handler(77,instance,{})
+	assert(not profile.has("guild_name") and not profile.has("can_guild_invite") and not profile.stats.has("money"),"retired guild/JSON currency cannot become live profile presentation")
 	connection.refuse_begin=true
-	var result: Dictionary=create.data_request_handler(77,instance,{"name":"P1 rejected"})
-	assert(not result.get("ok",true) and connection.commits==0 and player.inventory==before)
+	var result: Dictionary=block.data_request_handler(77,instance,{"id":999999})
+	assert(not result.ok and connection.commits==0 and player.blocked_ids.is_empty())
 	connection.refuse_begin=false
-	# Fail after guild rows were written and live player gold was deducted.
 	assert(db.execute("CREATE FUNCTION realm.reject_profile() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture profile failure'; END $$;").ok)
 	assert(db.execute("CREATE TRIGGER reject_profile BEFORE UPDATE ON realm.players FOR EACH ROW EXECUTE FUNCTION realm.reject_profile();").ok)
-	result=create.data_request_handler(77,instance,{"name":"P1 rejected"})
-	assert(not result.get("ok",true) and player.inventory==before and player.led_guild_id==0 and player.joined_guild_ids.is_empty())
-	assert(db.query("SELECT guild_id FROM realm.guilds WHERE guild_name='P1 rejected';").rows.is_empty())
-	# Even an ignored failed write cannot turn an aborted transaction into success.
+	result=block.data_request_handler(77,instance,{"id":999999})
+	assert(not result.ok and player.blocked_ids.is_empty() and player.friends.has(999999))
+	assert(not BlockList.is_blocked(player.player_id,999999))
+	assert(store.get_player(player.player_id).blocked_ids.is_empty())
 	assert(store.begin())
 	assert(not store.save_player(player))
-	assert(not store.commit())
-	assert(not connection.in_transaction())
-	# Social state/cache must not move ahead of the failed profile transaction.
-	BlockList.clear_player(player.player_id)
-	var block:=preload("res://source/server/world/components/data_request_handlers/social.block.add.gd").new()
-	result=block.data_request_handler(77,instance,{"id":999999})
-	assert(not result.ok and player.blocked_ids.is_empty() and not BlockList.is_blocked(player.player_id,999999))
+	assert(not store.commit() and not connection.in_transaction())
 	assert(db.execute("DROP TRIGGER reject_profile ON realm.players;").ok)
-	# Mail grant + claim flag are all-or-nothing; do not emit grants in live RAM.
-	var mail:=MailStorePostgres.new(connection)
-	database.mail_store=mail
-	var mail_id: int=mail.send(player.player_id,"Fixture","Claim","Body",JSON.stringify([{"type":"title","title":"P1 mail reward"}]))
-	assert(mail_id>0)
-	assert(db.execute("CREATE TRIGGER reject_mail BEFORE INSERT OR UPDATE ON realm.mail_state FOR EACH ROW EXECUTE FUNCTION realm.reject_profile();").ok)
-	var claim:=preload("res://source/server/world/components/data_request_handlers/mail.claim.gd").new()
-	result=claim.data_request_handler(77,instance,{"mail_id":mail_id})
-	assert(not result.ok and not player.titles_unlocked.has("P1 mail reward"))
-	assert(not store.get_player(player.player_id).titles_unlocked.has("P1 mail reward"))
-	assert(db.query("SELECT mail_id FROM realm.mail_state WHERE mail_id=:id;",{"id":mail_id}).rows.is_empty())
-	var read:=preload("res://source/server/world/components/data_request_handlers/mail.read.gd").new()
-	assert(not read.data_request_handler(77,instance,{"mail_id":mail_id}).ok)
-	assert(db.execute("DROP TRIGGER reject_mail ON realm.mail_state;").ok)
-	assert(claim.data_request_handler(77,instance,{"mail_id":mail_id}).ok)
-	assert(player.titles_unlocked.has("P1 mail reward"))
-	assert(not claim.data_request_handler(77,instance,{"mail_id":mail_id}).ok)
-	# A deferred SQL error reaches the actual COMMIT, not just the write call.
 	assert(db.execute("CREATE CONSTRAINT TRIGGER reject_commit AFTER UPDATE ON realm.players DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION realm.reject_profile();").ok)
-	result=create.data_request_handler(77,instance,{"name":"P1 rejected commit"})
+	result=block.data_request_handler(77,instance,{"id":999999})
 	assert(not result.ok and result.reason=="outcome_unknown" and not result.retryable)
-	assert(player.inventory==before and player.led_guild_id==0)
-	assert(db.query("SELECT guild_id FROM realm.guilds WHERE guild_name='P1 rejected commit';").rows.is_empty())
+	assert(player.blocked_ids.is_empty() and player.friends.has(999999))
+	assert(not BlockList.is_blocked(player.player_id,999999))
+	assert(db.query("SELECT blocked_ids_json FROM realm.players WHERE player_id=:id;",{"id":player.player_id}).rows[0].blocked_ids_json=="[]")
 	assert(db.execute("DROP TRIGGER reject_commit ON realm.players;").ok)
 	assert(db.execute("DROP FUNCTION realm.reject_profile();").ok)
-	# Successful COMMIT, lost acknowledgement: return unknown, close and do not
-	# repeat the mutation. A fresh owner must reload the durable player state.
 	connection=Connection.new();connection.lose_commit=true
 	store=WorldStorePostgres.new(connection);database.store=store
-	result=create.data_request_handler(77,instance,{"name":"P1 lost commit"})
+	result=block.data_request_handler(77,instance,{"id":999999})
 	assert(not result.ok and result.reason=="outcome_unknown" and not result.retryable)
-	assert(player.inventory==before and player.led_guild_id==0)
-	assert(db.query("SELECT guild_id FROM realm.guilds WHERE guild_name='P1 lost commit';").rows.size()==1)
+	assert(player.blocked_ids.is_empty() and player.friends.has(999999))
+	assert(not BlockList.is_blocked(player.player_id,999999))
 	var committed: PlayerResource=WorldStorePostgres.new(db).get_player(player.player_id)
-	assert(committed.led_guild_id>0 and Inventory.count(committed.inventory,Economy.gold_id())==starting_gold-Guild.CREATION_COST)
-	assert(not create.data_request_handler(77,instance,{"name":"P1 lost commit"}).ok and connection.commits==1)
+	assert(committed.blocked_ids.has(999999) and not committed.friends.has(999999))
+	assert(not block.data_request_handler(77,instance,{"id":999999}).ok and connection.commits==1)
 	instance.free();world.free();database.free()
 	ServerInstance.world_server=previous
 	BlockList.clear_player(player.player_id)
-	print("POSTGRES_PROFILE_FAILURE_OK: BEGIN/write/deferred-COMMIT failures, RAM and block-cache rollback, atomic mail, lost committed result without replay")
+	print("POSTGRES_PROFILE_FAILURE_OK: BEGIN/write/deferred-COMMIT failures, RAM and block-cache rollback, lost committed result without replay")

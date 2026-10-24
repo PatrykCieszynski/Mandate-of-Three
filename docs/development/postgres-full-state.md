@@ -13,7 +13,7 @@ godot-sqlite addon is not a supported dependency.
 | --- | --- |
 | Master | `realm.accounts`: sequence-assigned IDs, salted password hashes, last World/character |
 | World | `realm.players`: sequence-assigned IDs, profile/social data, level/XP/attribute points |
-| Legacy services | `realm.guilds`, memberships/logs, mail/read state, persistent DM/guild chat |
+| Retired tables (no active services) | Existing guild, mail and persistent chat tables remain on disk; no runtime stores or RPCs |
 | Existing Economy owners | `economy.*`: UIDs, custody, equipment, wallets, Storage, shops, Exchange, grants, intents and receipts |
 
 Profile upserts cannot change the account owning an existing character. The pure
@@ -29,23 +29,21 @@ Yang checkpoint and immediate economic transaction policies are preserved.
 The legacy admin resource-renaming action is rejected for PG accounts; changing
 an authenticated handle needs its own session/profile migration flow.
 
-Guild/social profile mutations check BEGIN, each write and COMMIT. Failed writes
-restore the affected live resources in place; block-cache changes, tag cooldowns,
-trophy announcements and client pushes follow confirmed commit. Guild writes are
-atomic even when called without an outer transaction. A failed SQL statement
-taints the transaction: a later COMMIT cannot report success merely because PG
-accepted it as a rollback of an aborted transaction.
+Social profile mutations check BEGIN, each write and COMMIT. Failed writes restore
+the affected live resources in place; block-cache changes follow confirmed commit.
+A failed SQL statement taints the transaction, so COMMIT cannot report success
+merely because PostgreSQL accepted it as rollback of an aborted transaction.
 
-Mail claims lock the mail row and commit the staged profile grant and claim flag
-together. Level signals/grants do not touch the live character before commit.
-Read/delete acknowledgements also check persistence results.
+Guilds, mailbox grants and the old persistent chat services have been retired.
+No SQL tables or saved data are dropped. The profile codec copies retired JSON and
+guild-ID columns verbatim in `retired_profile_fields`; these values grant no live
+inventory, currency or membership. Current ItemInstances/Wallet stay authoritative.
 
 COMMIT failure returns `outcome_unknown`, marks the result non-retryable and
 closes/blocks the profile writer. There is no automatic reconnect or replay.
 Restored pre-command RAM is not proof of a database rollback: a replacement
 owner must load committed state from PG before resuming this profile's writes.
-This patch does not add durable guild-command receipts or in-process recovery of
-an uncertain profile writer. Do not force a stale full-profile checkpoint during
+There is no in-process recovery of an uncertain profile writer. Do not force a stale full-profile checkpoint during
 operator recovery.
 
 This port preserves the existing profile payload. It does **not** introduce
@@ -104,7 +102,7 @@ This uses an owned disposable cluster and real Gateway/Master/World/client
 processes: creation, stale mapping denial, grant, equip, relog, XP checkpoint,
 drain, all-state backup/restore into another DB, then normal login after restart.
 It asserts no normal `profiles.db`/`accounts.tres` is created. Focused contracts
-cover hashes/IDs/reopen, profile ownership, batch rollback and guild/chat/mail.
+cover hashes/IDs/reopen, profile ownership, batch rollback, retired-payload preservation and social transaction failures.
 
 The fixture permits 16 DB connections (previous composition: 14), for the two
 new credential/profile sessions. Economic worker/queue/session limits are

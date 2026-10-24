@@ -27,11 +27,6 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 	#Step 2: if online, overlay some fields from memory (optional)
 	var target_peer_id: int = ws.player_id_to_peer_id.get(target_id, 0)
 	var target_player: PlayerResource = ws.connected_players.get(target_peer_id) if target_peer_id != 0 else null
-	# Gold is a currency item: balance = amount held in inventory (RAM if online, else DB json).
-	var money: int = Inventory.count(
-		JSON.parse_string(str(row.get("inventory_json", "{}"))) as Dictionary,
-		Economy.gold_id()
-	)
 	# Resolve the leaderboard counters: live dict in RAM for online, parsed from
 	# stats_json on disk for offline. Defaults to empty so missing keys read as 0.
 	var lb: Dictionary = {}
@@ -41,10 +36,8 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 		row["account_name"] = target_player.account_name
 		row["skin_id"] = target_player.skin_id
 		row["level"] = target_player.level
-		money = Inventory.count(target_player.inventory, Economy.gold_id())
 		row["profile_status"] = target_player.profile_status
 		row["profile_animation"] = target_player.profile_animation
-		row["active_guild_id"] = target_player.active_guild_id
 		row["display_title"] = target_player.display_title
 		lb = target_player.lb_stats
 	else:
@@ -53,9 +46,6 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 			lb = lb_parsed
 
 	# Step 3 build final response once
-	var guild_id: int = int(row.get("active_guild_id", 0))
-	var guild_name: String = ws.database.store.get_guild_name(guild_id)if guild_id > 0 else ""
-
 	# Account name is the public "main" handle (like a Discord username); the
 	# character display name is just a nickname and may not be unique. The
 	# permanent player_id is shown only to staff (moderator and up).
@@ -68,7 +58,6 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 		"account_name": str(row.get("account_name", "")),
 		"skin_id": int(row.get("skin_id", 1)),
 		"stats": {
-			"money": money,
 			"character_class": "???",
 			"level": int(row.get("level", 1)),
 			# Live played-time for the target. Banked seconds in lb_stats + the
@@ -96,12 +85,6 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 		# this to flip the "Block" item to "Unblock" without an extra fetch.
 		"blocked": (not is_self) and BlockList.is_blocked(from_player.player_id, target_id),
 	}
-
-	if not guild_name.is_empty():
-		profile["guild_name"] = guild_name
-
-	#Step 4: can_guild_invite (uses inviter's active guild)
-	profile["can_guild_invite"] = _can_invite(ws, from_player, target_id, is_self)
 
 	# Public trophy strip — the up-to-3 titles the target pinned to their
 	# profile. Shipped to everyone so any viewer sees the same picks.
@@ -162,20 +145,3 @@ func _hours_for(target_player: PlayerResource, lb: Dictionary) -> int:
 	if target_player != null and target_player.session_start_ms > 0:
 		live = (Time.get_ticks_msec() - target_player.session_start_ms) / 1000
 	return (banked + live) / 3600
-
-
-func _can_invite(ws: WorldServer, from_player: PlayerResource, target_id: int, is_self: bool) -> bool:
-	if is_self:
-		return false
-	if from_player.active_guild_id <= 0:
-		return false
-
-	# Load guild on demand (can add cache later)
-	var g: Guild = ws.database.get_guild(from_player.active_guild_id)
-	if g == null:
-		return false
-
-	if not g.has_permission(from_player.player_id, Guild.Permissions.INVITE):
-		return false
-
-	return not g.members.has(target_id)
