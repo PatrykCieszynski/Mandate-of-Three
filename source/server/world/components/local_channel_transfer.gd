@@ -26,6 +26,7 @@ func _world(host: ServerInstance) -> GameWorld3D:
 	return host.get_node_or_null("GameWorld") as GameWorld3D if is_instance_valid(host) else null
 
 func _eligibility(peer: int, source: ServerInstance, now: int) -> String:
+	if manager.world_server.trade_runtime!=null and manager.world_server.trade_runtime.busy(peer): return "trade"
 	var world := _world(source)
 	if world==null or not world.characters.has(peer): return "source"
 	var intent: Dictionary = world.intentions.get(peer,{})

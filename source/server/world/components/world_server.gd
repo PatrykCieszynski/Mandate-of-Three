@@ -26,6 +26,7 @@ var _session_tokens: Dictionary[int, String] = {}
 var economy_bootstrap: RefCounted
 var inventory_runtime: RefCounted
 var wallet_runtime: RefCounted
+var trade_runtime: RefCounted
 var npc_runtime: RefCounted
 var storage_runtime: RefCounted
 var ground_item_runtime: RefCounted
@@ -56,6 +57,7 @@ func _process(_delta: float) -> void:
 	if inventory_runtime!=null: inventory_runtime.poll()
 	if wallet_runtime!=null: wallet_runtime.poll(_delta)
 	if npc_runtime!=null: npc_runtime.poll()
+	if trade_runtime!=null: trade_runtime.poll()
 	if storage_runtime!=null: storage_runtime.poll()
 	if ground_item_runtime!=null: ground_item_runtime.poll()
 	if seller_runtime!=null: seller_runtime.poll()
@@ -68,6 +70,7 @@ func flush_postgres_wallets(shutdown: bool = false) -> bool:
 	if shutdown and ground_item_runtime!=null: ground_item_runtime.begin_drain()
 	if shutdown and seller_runtime!=null: seller_runtime.begin_drain()
 	if shutdown and npc_runtime!=null: npc_runtime.begin_drain()
+	if shutdown and trade_runtime!=null: trade_runtime.begin_drain()
 	if wallet_runtime!=null:
 		if shutdown: wallet_runtime.begin_drain()
 		else: wallet_runtime.checkpoint_all()
@@ -82,7 +85,8 @@ func _postgres_economy_settled(shutdown: bool) -> bool:
 	var storage_ok: bool=storage_runtime==null or (storage_runtime.shutdown_complete() if shutdown else storage_runtime.drained())
 	var ground_ok: bool=ground_item_runtime==null or (ground_item_runtime.shutdown_complete() if shutdown else ground_item_runtime.drained())
 	var seller_ok: bool=seller_runtime==null or (seller_runtime.shutdown_complete() if shutdown else seller_runtime.drained())
-	return npc_ok and wallet_ok and storage_ok and ground_ok and seller_ok
+	var trade_ok: bool=trade_runtime==null or trade_runtime.drained()
+	return npc_ok and wallet_ok and storage_ok and ground_ok and seller_ok and trade_ok
 
 ## {peer_id: PlayerResource}
 var connected_players: Dictionary[int, PlayerResource]

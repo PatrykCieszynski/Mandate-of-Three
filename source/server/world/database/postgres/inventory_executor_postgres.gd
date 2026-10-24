@@ -7,6 +7,7 @@ const Commands = preload("res://source/server/world/database/postgres/economy_co
 const Intents = preload("res://source/server/world/database/postgres/inventory_intent_postgres.gd")
 const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
 const WalletSession = preload("res://source/server/world/database/postgres/wallet_session_postgres.gd")
+const TradeStore = preload("res://source/server/world/database/postgres/player_trade_store_postgres.gd")
 const NpcSession = preload("res://source/server/world/database/postgres/npc_session_postgres.gd")
 const StorageSession = preload("res://source/server/world/database/postgres/storage_session_postgres.gd")
 const GroundSession = preload("res://source/server/world/database/postgres/ground_item_session_postgres.gd")
@@ -101,6 +102,7 @@ class SessionWorker extends RefCounted:
 				elif intent in ["seller_execute","seller_receipt","seller_snapshot","seller_visit","seller_prepare"]: store=SellerSession.new(database)
 				elif intent in ["item_initialize","ground_claim","ground_receipt"]: store=GroundSession.new(database)
 				elif intent in ["storage_execute","storage_receipt"]: store=StorageSession.new(database)
+				elif intent in ["trade_execute","trade_receipt","trade_recover"]: store=TradeStore.new(database)
 				elif intent in ["npc_execute","npc_receipt"]: store=NpcSession.new(database)
 				elif intent in ["wallet_snapshot","wallet_batch"]: store=WalletSession.new(database)
 				elif intent.is_empty(): store=Items.new(database)
@@ -120,6 +122,9 @@ class SessionWorker extends RefCounted:
 				elif intent=="ground_receipt": result=store.receipt(job.session,job.operation_id)
 				elif intent=="storage_execute": result=store.execute(job.session,job.operation_id,job.body)
 				elif intent=="storage_receipt": result=store.receipt(job.session,job.operation_id)
+				elif intent=="trade_execute": result=store.execute(job.operation_id,job.participants)
+				elif intent=="trade_recover": result=store.recover(job.operation_id,job.accounts)
+				elif intent=="trade_receipt": result=store.receipt(job.session,job.operation_id)
 				elif intent=="npc_execute": result=store.execute(job.session,job.npc_kind,job.operation_id,job.body,job.income,job.income_token)
 				elif intent=="npc_receipt": result=store.receipt(job.session,job.issuer,job.npc_kind,job.operation_id)
 				elif intent=="wallet_snapshot": result=store.snapshot(job.session)
@@ -299,6 +304,13 @@ func submit_wallet_batch(context: Dictionary, issuer: int, operation_id: String,
 	if issuer<=0 or income<0 or income>9000000000000000 or cost<0 or cost>9000000000000000 or (income==0 and cost==0): return {"queued":false,"error":"request"}
 	return _session_job(context,"wallet_batch",operation_id,{"issuer":issuer,"income":income,"cost":cost})
 
+func submit_trade(context: Dictionary, id: String, participants: Array) -> Dictionary:
+	return _session_job(context,"trade_execute",id,{"participants":participants.duplicate(true)})
+func submit_trade_recover(context: Dictionary, id: String, accounts: Array) -> Dictionary:
+	return _session_job(context,"trade_recover",id,{"accounts":accounts.duplicate()})
+func submit_trade_receipt(context: Dictionary, id: String) -> Dictionary:
+	return _session_job(context,"trade_receipt",id,{})
+
 func submit_npc(context: Dictionary, kind: String, operation_id: String, body: Dictionary, income: int, token: String) -> Dictionary:
 	if kind not in ["buy","upgrade","sell"] or income<0 or income>9000000000000000 or token.length()!=32: return {"queued":false,"error":"request"}
 	return _session_job(context,"npc_execute",operation_id,{"npc_kind":kind,"body":body.duplicate(true),"income":income,"income_token":token})
@@ -310,7 +322,7 @@ func submit_npc_receipt(context: Dictionary, issuer: int, kind: String, operatio
 func _session_job(context: Dictionary, mode: String, operation_id: String, fields: Dictionary) -> Dictionary:
 	if not Sessions.valid_identity(context) or not context.get("epoch") is int or context.epoch<=0: return {"queued":false,"error":"request"}
 	var safe: Dictionary={"account_id":context.account_id,"character":context.character,"session_fingerprint":context.session_fingerprint,"epoch":context.epoch}
-	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["session_admit","session_resume","wallet_batch","npc_execute","storage_execute","item_initialize","ground_claim","seller_execute"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_pending","session_snapshot","wallet_snapshot","item_initialize","seller_snapshot","seller_visit","auction_search"]}
+	var job: Dictionary={"character":safe.character,"session":safe,"operation_id":operation_id,"lookup":mode not in ["trade_execute","session_admit","session_resume","wallet_batch","npc_execute","storage_execute","item_initialize","ground_claim","seller_execute"],"intent":mode,"control":mode in ["session_ready","session_revoke","session_discover","session_pending","session_snapshot","wallet_snapshot","item_initialize","seller_snapshot","seller_visit","auction_search"]}
 	job.merge(fields)
 	return _submit(job)
 

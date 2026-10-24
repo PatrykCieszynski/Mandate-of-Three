@@ -1,3 +1,4 @@
+import type {TradeSnapshot,TradeCommand} from '../screens/trade/trade-view.js';
 import type {VendorSnapshot} from '../screens/vendor/vendor-model.js';
 import type {HotbarSnapshot} from '../inventory/hotbar-model.js';
 import type {StatsSnapshot,Attribute} from '../screens/stats/stats-model.js';
@@ -21,9 +22,10 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'vendor'|'hotbar'|'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'trade'|'vendor'|'hotbar'|'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
+  trade?: TradeSnapshot;
   hotbar?: HotbarSnapshot;
   stats?: StatsSnapshot;
   chat?: ChatSnapshot;
@@ -58,6 +60,8 @@ export interface CommandPayloads {
   'chat.open': {target:number;name:string};
   'chat.conversation': {target:number;mode:'open'|'closed'|'minimized'};
   'chat.mute': {target:number;muted:boolean};
+  'trade.command': TradeCommand;
+  'trade.close': Record<string,never>;
   'party.command': PartyCommand;
   'party.close': Record<string,never>;
   'exchange.deposit': ExchangeDeposit;

@@ -1,6 +1,6 @@
 extends RefCounted
 ## Validated immutable runtime limits/ranges. Credentials and reward formulas stay elsewhere.
-const DEFAULTS: Dictionary = {
+const DEFAULTS: Dictionary = {"trade_range_cm":500,"trade_invite_timeout_ms":30000,"trade_idle_timeout_ms":60000,
 	"version": 1,
 	"inventory_bindings": 64,
 	"wallet_accounts": 64,

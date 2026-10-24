@@ -129,6 +129,33 @@ function fixture(): DomainSnapshot {
       outcome: '',
     },
     hotbar: hotbarFixture(),
+    trade: {
+      id: 'trade-' + 'a'.repeat(32),
+      phase: 'offer',
+      version: 1,
+      self: 1,
+      candidates: [],
+      own_side: 0,
+      accepted: [false, false],
+      opened: false,
+      pending: false,
+      offers: [
+        { name: 'You', items: [], yang: '0' },
+        {
+          name: 'Yuna',
+          items: [
+            {
+              uid: 'b'.repeat(32),
+              revision: '0',
+              name: 'Upgrade Ore',
+              amount: '12',
+              icon: 'upgrade_ore',
+            },
+          ],
+          yang: '500',
+        },
+      ],
+    },
     stats: statsFixture(),
     chat: chatFixture(),
     storage: storageFixture(),
@@ -419,6 +446,50 @@ window.sendIpcMessage = (raw) => {
       emit('command.result', result, message.id);
       return;
     }
+    if (message.type.startsWith('trade.') && state.trade) {
+      const t = state.trade,
+        p = message.payload,
+        ownOffer = t.offers?.[0];
+      if (message.type === 'trade.close') {
+        if (t.phase === 'invited' || t.phase === 'offer') t.phase = 'cancelled';
+        t.opened = false;
+      } else if (
+        p.action === 'offer' &&
+        Array.isArray(p.items) &&
+        ownOffer &&
+        state.inventory
+      ) {
+        ownOffer.items = p.items.map(
+          (line: { uid: string; revision: string }) => {
+            const previewUid = (id: string, index: number) =>
+              /^[0-9a-f]{32}$/.test(id)
+                ? id
+                : (index + 1).toString(16).padStart(32, '0');
+            const index = state.inventory!.items.findIndex(
+              (i, n) => i.id === line.uid || previewUid(i.id, n) === line.uid,
+            );
+            const i = state.inventory!.items[index];
+            const previous = ownOffer.items.find((i) => i.uid === line.uid);
+            return {
+              uid: index >= 0 ? previewUid(i!.id, index) : String(line.uid),
+              revision: String(line.revision),
+              name: i?.name ?? previous?.name ?? 'Preview item',
+              icon: i?.icon_id ?? previous?.icon ?? 'iron_sword',
+              amount: String(i?.quantity ?? previous?.amount ?? 1),
+            };
+          },
+        );
+        ownOffer.yang = String(p.yang);
+        t.version++;
+        t.accepted = [false, false];
+      } else if (p.action === 'confirm') {
+        t.accepted = [true, true];
+        t.phase = 'complete';
+      } else if (p.action === 'cancel') t.phase = 'cancelled';
+      emit('trade.updated', t);
+      emit('command.result', { ok: true }, message.id);
+      return;
+    }
     if (message.type.startsWith('stats.') && state.stats) {
       if (message.type === 'stats.close') state.stats.opened = false;
       if (
@@ -600,7 +671,8 @@ export function decodePreviewAction(value: unknown): PreviewAction | null {
     return { action: name };
   if (!('value' in value)) return null;
   if (
-    (name === 'stats' ||
+    (name === 'trade' ||
+      name === 'stats' ||
       name === 'inventory' ||
       name === 'equipment' ||
       name === 'vendor' ||
@@ -656,6 +728,12 @@ window.addEventListener('message', (event) => {
         equipment: { items: [], stats: { attack: 0 } },
       };
       snapshot();
+      break;
+    case 'trade':
+      if (state.trade) {
+        state.trade.opened = request.value;
+        emit('trade.updated', state.trade);
+      }
       break;
     case 'stats':
       if (state.stats) {

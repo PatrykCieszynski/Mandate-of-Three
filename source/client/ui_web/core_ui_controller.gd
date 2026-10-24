@@ -15,6 +15,7 @@ var storage = StorageAdapter.new()
 var chat = preload("res://source/client/ui_web/chat_ui_adapter.gd").new()
 var hotbar = preload("res://source/client/ui_web/hotbar_ui_adapter.gd").new()
 var stats = preload("res://source/client/ui_web/stats_ui_adapter.gd").new()
+var trade = preload("res://source/client/ui_web/player_trade_ui_adapter.gd").new()
 var party = preload("res://source/client/ui_web/party_ui_adapter.gd").new()
 var npcs := NpcUiAdapter.new()
 var upgrades := UpgradeUiAdapter.new()
@@ -60,6 +61,9 @@ func setup(game_world: GameWorld3D) -> void:
 	dispatcher.attach(bridge)
 	chat.attach(world.chat_endpoint,dispatcher,session,get_tree())
 	party.attach(world.party_endpoint,dispatcher,session,get_tree())
+	trade.attach(world.trade_endpoint,dispatcher,session,get_tree())
+	world.inventory_endpoint.state_changed.connect(trade.accept_inventory)
+	trade.accept_inventory(world.inventory_endpoint.state)
 	stats.attach(dispatcher)
 	world.inventory_endpoint.state_changed.connect(stats.accept_context)
 	stats.accept_context(world.inventory_endpoint.state)
@@ -243,6 +247,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	elif event.physical_keycode == KEY_V:
 		stats.toggle()
 		get_viewport().set_input_as_handled()
+	elif event.physical_keycode == KEY_T:
+		trade.toggle()
+		get_viewport().set_input_as_handled()
 	elif event.physical_keycode == KEY_P:
 		party.toggle()
 		get_viewport().set_input_as_handled()
@@ -309,6 +316,7 @@ func _stop(reason: String) -> void:
 	storage.dispose()
 	chat.dispose()
 	party.dispose()
+	trade.dispose()
 	stats.dispose()
 	hotbar.dispose()
 	if is_instance_valid(world):
