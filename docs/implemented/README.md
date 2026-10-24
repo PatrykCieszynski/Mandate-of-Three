@@ -31,6 +31,10 @@ checkout, recover sources from upstream commit
 Legacy guilds and mailbox execution, related admin commands and persistent chat
 history stores are also retired. Chat V1 remains ephemeral; its Guild option is
 unavailable. Friends, blocks, profile customization and moderation notices remain.
+The admin dashboard chat-history view currently receives an empty list from
+`ChatService.recent()`: live chat monitoring is temporarily unavailable. Restoring
+that view should consume public-channel messages from the current `WorldChat`,
+without reviving the old messaging stores or exposing private whispers.
 The old profile-JSON Inventory RPCs are retired; live Inventory/Wallet use their
 existing UID/custody and account-wallet owners. Profile views no longer expose
 legacy JSON gold or guild membership.
