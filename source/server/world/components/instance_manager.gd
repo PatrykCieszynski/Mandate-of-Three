@@ -8,7 +8,6 @@ const GLOBAL_COMMANDS_PATH: String = "res://source/server/world/components/chat_
 ## instance_name = "jail" to enable the jail system.
 const JAIL_INSTANCE_NAME: String = "jail"
 ## Production First Region entry/recall resource.
-const RECALL_INSTANCE_NAME: String = "FirstRegion"
 const DEFAULT_INSTANCE_NAME: String = "FirstRegion"
 const CHANNEL_CHOICE_TIMEOUT_MS: int = 30000
 
@@ -461,99 +460,6 @@ func find_public_instance(resource: InstanceResource) -> ServerInstance:
 	return null
 
 
-## Recall travel: send the peer to the town hub (RECALL_INSTANCE_NAME) at its
-## default spawn (index 0). A faithful copy of send_player_to_jail — resolve the
-## current instance authoritatively, charge the hub if it isn't live yet, then
-## switch. Rolling our own current-instance lookup is what crashed recall before.
-func recall_player(peer_id: int) -> void:
-	var res: InstanceResource = instance_collection.get(RECALL_INSTANCE_NAME, null)
-	if res == null:
-		return
-	var current_inst: ServerInstance = find_instance_for_peer(peer_id)
-	if current_inst == null:
-		return
-	var player: Player = current_inst.get_player(peer_id)
-	if player == null:
-		return
-	# Already in the hub — recall still yanks you to its spawn point (the hub is a
-	# big map), via the same same-instance teleport /goto uses.
-	if current_inst.instance_resource == res:
-		teleport_peer_to(peer_id, current_inst, current_inst.instance_map.get_spawn_position(0))
-		return
-	var target := find_public_instance(res)
-	if target == null:
-		queue_charge_instance(res, player_switch_instance.bind(0, player, current_inst))
-	else:
-		player_switch_instance(target, 0, player, current_inst)
-
-
-func queue_charge_instance(instance_resource: InstanceResource, callback: Callable) -> void:
-	if instance_resource == null or not instance_resource.use_3d:
-		return
-	for pending: ServerInstance in loading_instances.values():
-		if pending.instance_resource==instance_resource and pending.access_policy == ServerInstance.AccessPolicy.PUBLIC and pending.admission_state == ServerInstance.AdmissionState.ACCEPTING and not pending.is_queued_for_deletion():
-			pending.ready.connect(callback.bind(pending),CONNECT_ONE_SHOT)
-			return
-	var new_instance: ServerInstance = prepare_instance(instance_resource)
-	if new_instance==null: return
-	new_instance.ready.connect(callback.bind(new_instance), CONNECT_ONE_SHOT)
-	add_child(new_instance, true)
-
-
-func player_switch_instance(
-	target_instance: ServerInstance,
-	warper_target_id: int,
-	player: Player,
-	current_instance: ServerInstance,
-) -> bool:
-	if not _can_legacy_transfer(target_instance, player, current_instance):
-		return false
-	var peer_id: int = player.name.to_int()
-	if not world_server.database.flush_character(player.player_resource.player_id):
-		push_error("Instance transfer cancelled: character checkpoints could not be saved.")
-		return false
-	if current_instance.connected_peers.has(peer_id):
-		current_instance.despawn_player(peer_id, false)
-	else:
-		return false
-	# Leaving a dungeon run drops this peer from its group.
-	DungeonService.on_player_left(peer_id, current_instance)
-	charge_new_instance.rpc_id(
-		peer_id,
-		target_instance.instance_resource.map_path,
-		target_instance.name
-	)
-	target_instance.awaiting_peers[peer_id] = {
-		"player": player,
-		"session": player.player_resource,
-		"target_id": warper_target_id
-	}
-	return true
-
-
-## Legacy Player/Map handoff is not the future 3D transfer state machine.
-## Reject unsupported or inaccessible targets before checkpoint or despawn.
-func _can_legacy_transfer(target: ServerInstance, player: Player, source: ServerInstance) -> bool:
-	if not is_instance_valid(target) or not is_instance_valid(source) or not is_instance_valid(player):
-		return false
-	if target.get_parent() != self or source.get_parent() != self or not target.is_node_ready():
-		return false
-	if target.is_queued_for_deletion() or source.is_queued_for_deletion():
-		return false
-	if target.instance_resource == null or source.instance_resource == null:
-		return false
-	if target.instance_resource.use_3d or source.instance_resource.use_3d:
-		return false
-	if target.access_policy != ServerInstance.AccessPolicy.PUBLIC or target.admission_state != ServerInstance.AdmissionState.ACCEPTING:
-		return false
-	var peer_id := str(player.name).to_int()
-	if not _is_current_session(peer_id, player.player_resource) or source.get_player(peer_id) != player or not source.connected_peers.has(peer_id):
-		return false
-	if target != source and (target.connected_peers.has(peer_id) or target.awaiting_peers.has(peer_id)):
-		return false
-	return target.instance_resource.can_join_instance(player)
-
-
 func charge_instance(instance_resource: InstanceResource, channel_id: int = 0) -> ServerInstance:
 	if instance_resource == null or not instance_resource.use_3d:
 		return null
@@ -647,9 +553,7 @@ func set_instance_collection() -> void:
 		if loaded == null or not (loaded is InstanceResource):
 			continue
 		var instance_resource: InstanceResource = loaded
-		# Authored production maps are 3D-only. Keep legacy ServerInstance
-		# compatibility for isolated fixtures, but never register a 2D map
-		# from the production content directory.
+		# Authored maps and test hosts use the same 3D-only admission boundary.
 		if not instance_resource.use_3d:
 			push_error("Unsupported legacy 2D map configuration: " + file_path)
 			continue
@@ -684,67 +588,7 @@ func find_instance_for_peer(peer_id: int) -> ServerInstance:
 	return null
 
 
-## Move an online player straight to the jail instance. Mirrors the warper
-## handler: synchronous switch if jail is already charged, else queue until
-## the instance is ready. Silently no-ops if the jail map isn't authored yet.
-## Returns true if a teleport was scheduled.
-func send_player_to_jail(peer_id: int) -> bool:
-	var jail_res: InstanceResource = instance_collection.get(JAIL_INSTANCE_NAME, null)
-	if jail_res == null:
-		push_warning("send_player_to_jail: no '%s' instance in collection." % JAIL_INSTANCE_NAME)
-		return false
-
-	var current_inst: ServerInstance = find_instance_for_peer(peer_id)
-	if current_inst == null:
-		return false
-	var player: Player = current_inst.get_player(peer_id)
-	if player == null:
-		return false
-
-	# Already in jail — nothing to do.
-	if current_inst.instance_resource == jail_res:
-		return false
-
-	var target := find_public_instance(jail_res)
-	if target == null:
-		queue_charge_instance(
-			jail_res,
-			player_switch_instance.bind(0, player, current_inst)
-		)
-	else:
-		return player_switch_instance(target, 0, player, current_inst)
-	return true
-
-
-## Teleport an online player to an absolute position, in their current instance
-## or another one. Used by /goto and /summon. Returns true if scheduled.
-##
-## Same instance: move server-side state (so other viewers see it) AND push an
-## explicit teleport to the moved client — its LocalPlayer owns its position, so
-## a state delta alone won't move it (it'd overwrite next input frame).
-## Cross instance: despawn here and respawn at the position over there; the fresh
-## spawn places the LocalPlayer correctly with no extra push.
-func teleport_peer_to(peer_id: int, dest_instance: ServerInstance, dest_position: Vector2) -> bool:
-	if dest_instance == null:
-		return false
-	var current_inst: ServerInstance = find_instance_for_peer(peer_id)
-	if current_inst == null:
-		return false
-	var player: Player = current_inst.get_player(peer_id)
-	if player == null:
-		return false
-
-	if current_inst == dest_instance:
-		player.mark_just_teleported()
-		player.state_synchronizer.set_by_path(^":position", dest_position)
-		world_server.data_push.rpc_id(peer_id, &"player.teleport", {"position": dest_position})
-		return true
-
-	if not _can_legacy_transfer(dest_instance, player, current_inst):
-		return false
-	if not world_server.database.flush_character(player.player_resource.player_id):
-		return false
-	current_inst.despawn_player(peer_id, false)
-	charge_new_instance.rpc_id(peer_id, dest_instance.instance_resource.map_path, dest_instance.name)
-	dest_instance.awaiting_peers[peer_id] = {"player": player, "session": player.player_resource, "target_position": dest_position}
-	return true
+## Moderation data remains supported; spatial jail transfer requires a future 3D map.
+func send_player_to_jail(_peer_id: int) -> bool:
+	# 2D jail transfer retired. Account moderation remains; no 3D jail is authored.
+	return false

@@ -5,7 +5,6 @@ extends DataRequestHandler
 
 
 func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictionary) -> Dictionary:
-	var legacy_players: Dictionary = instance.players_by_peer_id
 	var world_server: WorldServer = instance.world_server
 	var store: RefCounted = world_server.database.store
 
@@ -54,9 +53,6 @@ func data_request_handler(peer_id: int, instance: ServerInstance, args: Dictiona
 
 	# May have been auto-tagged — keep the client's cached active_guild_id current.
 	world_server.data_push.rpc_id(peer_id, &"active_guild_id.set", {"active_guild_id": accepter.active_guild_id})
-	var pnode: Player = legacy_players.get(peer_id)
-	if pnode != null:
-		pnode.state_synchronizer.set_by_path(^":active_guild_id", accepter.active_guild_id)
 
 	world_server.chat_service.push_system_to_player(
 		instance, accepter.player_id, "Joined guild %s!" % guild.guild_name

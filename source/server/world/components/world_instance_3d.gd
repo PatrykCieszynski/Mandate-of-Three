@@ -1,6 +1,5 @@
 extends ServerInstance
 ## 3D runtime host: inherits only identity, admission and lifecycle contracts.
-## Legacy Player/Map/synchronizer implementation lives in LegacyServerInstance2D.
 
 var map_3d: GameWorld3D
 

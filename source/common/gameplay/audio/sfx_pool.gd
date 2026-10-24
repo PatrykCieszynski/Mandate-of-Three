@@ -20,7 +20,6 @@ func play_stream(sound: AudioStream, position: Vector2, override_max_distance: f
 	if not sound: return false
 
 	var max_range: float = override_max_distance if override_max_distance > 0.0 else max_distance
-	if not _can_play_at_position(position, max_range): return false
 
 	var player: AudioStreamPlayer2D = get_available_player()
 	if not player: return false
@@ -74,10 +73,3 @@ func _create_player() -> AudioStreamPlayer2D:
 	player.finished.connect(mark_player_ready.bind(player))
 	add_child(player, true)
 	return player
-
-
-func _can_play_at_position(position: Vector2, max_range: float) -> bool:
-	var local_player: LocalPlayer = ClientState.local_player
-	if not is_instance_valid(local_player): return true
-
-	return local_player.global_position.distance_to(position) <= max_range

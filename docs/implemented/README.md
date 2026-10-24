@@ -11,3 +11,25 @@ This is a *navigation index*, not a claim of public-production or Linux readines
 - **Performance:** W0 and W1 produced *synthetic* controls; experiments do not prove real player capacity. [Evidence](../evidence/README.md).
 
 Historical `shop` / PR #1 branch descriptions are superseded by the integrated Marketplace. Do not infer all experimental controller, AOI or multi-World features have shipped.
+
+## Retired 2D gameplay
+
+The TinyMMO 2D actor/synchronization runtime, abilities and effects, trade tables,
+dungeon lobby/GroupService, quests and dailies are retired, including their generic
+RPC handlers and editor registration hooks. Open-world Party, World3D combat,
+NPC Shop/Sell/Vendor Recipes, Inventory and PostgreSQL Economy remain the current
+implementations. This retirement also includes later Mandate additions built on
+the old 2D runtime; provenance is not inferred from directory names.
+
+For local inspiration, `.godot/references/tinymmo-2d/` contains separate upstream
+and pre-retirement Mandate archives plus extracted sources and a SHA/hash manifest.
+It is ignored, outside Godot resource scanning and absent from exports. On another
+checkout, recover sources from upstream commit
+`f4ed04f20963c3285117e58b1149fa1117658d3c` or Mandate commit
+`de8774741d958f6ed4ec836801ea3c7b5129f96d` in Git history.
+
+Legacy profile JSON fields and item metadata helpers still needed by profile,
+mail, social and SQLite compatibility are preserved; their presence is not an
+active 2D gameplay implementation. No schema/data migration is performed. Account
+moderation remains, but the old spatial jail/recall/warper transfer is retired;
+there is no authored 3D jail/lobby replacement in this cleanup.

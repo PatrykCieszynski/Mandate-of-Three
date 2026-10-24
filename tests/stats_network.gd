@@ -59,12 +59,10 @@ func run_server() -> void:
 	check(body.max_hp==initial_max+10 and body.hp<=initial_hp,"VIT changes max HP without healing")
 	# Real physics regeneration consumes the projection, including buff changes and
 	# expiry, without depending on the legacy instance StatusTick.
-	var buff_target:=Player.new();buff_target.player_resource=player
-	var buff_stats:=StatsComponent.new();buff_target.add_child(buff_stats);buff_target.stats_component=buff_stats
 	var base_mp: float=body.max_mp
 	var base_regen: float=server.runtime_combat_stats(player.player_id)[Stat.MANA_REGEN]
-	BuffService.apply(buff_target,Stat.MANA_MAX,10.0,0.5)
-	BuffService.apply(buff_target,Stat.MANA_REGEN,10.0,0.5)
+	BuffService.apply(player,Stat.MANA_MAX,10.0,0.5)
+	BuffService.apply(player,Stat.MANA_REGEN,10.0,0.5)
 	check(body.max_mp==base_mp+10,"buff application refreshes live maximum MP")
 	body.mp=0
 	await wait_until(func()->bool:return body.mp>0)
@@ -73,9 +71,8 @@ func run_server() -> void:
 	await wait_until(func()->bool:return body.max_mp==base_mp)
 	check(body.mp<=base_mp,"expiry refreshes and clamps MP without StatusTick")
 	await wait_until(func()->bool:return server.runtime_combat_stats(player.player_id)[Stat.MANA_REGEN]==base_regen)
-	BuffService.tick(buff_target)
-	check(player.active_buffs.is_empty(),"legacy expiry cleanup remains compatible")
-	buff_target.free()
+	BuffService.tick(player)
+	check(player.active_buffs.is_empty(),"expired buff data is pruned")
 	check(not server.database.dirty_progression.has(player.player_id),"allocation committed pending EXP in same transaction")
 	var restored: PlayerResource=server.database.store.get_player(player.player_id)
 	check(restored.attributes==player.attributes and restored.available_skill_points==1 and restored.exp_thresholds_claimed==1,"relogin/checkpoint state persisted together")

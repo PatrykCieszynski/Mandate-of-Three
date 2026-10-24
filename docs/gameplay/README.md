@@ -14,7 +14,7 @@ For approved *future* design rather than current code, see [gameplay direction](
 ## Party V1 — open-world runtime
 
 Party is owned by the single World Process, keyed by persistent character IDs,
-independently of MapInstance/CH and the legacy dungeon-only `GroupService`.
+independently of MapInstance/CH. The old dungeon-only `GroupService` is retired.
 Neither party membership nor invitations are persisted across World restart.
 CEF's draggable **Party · P** window provides invite/accept/decline, members and
 levels/HP, leader transfer/kick/leave, and leader-only EXP/drop mode selection.

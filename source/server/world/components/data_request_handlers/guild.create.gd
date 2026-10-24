@@ -6,7 +6,6 @@ func data_request_handler(
 	instance: ServerInstance,
 	args: Dictionary
 ) -> Dictionary:
-	var legacy_players: Dictionary = instance.players_by_peer_id
 	var world_server: WorldServer = instance.world_server
 	var store: RefCounted = world_server.database.store
 
@@ -64,9 +63,6 @@ func data_request_handler(
 
 	# Creator is auto-tagged into the new guild — sync the client's cached value.
 	instance.world_server.data_push.rpc_id(peer_id, &"active_guild_id.set", {"active_guild_id": player.active_guild_id})
-	var pnode: Player = legacy_players.get(peer_id)
-	if pnode != null:
-		pnode.state_synchronizer.set_by_path(^":active_guild_id", player.active_guild_id)
 
 	var guild_info: Dictionary = {
 		"id": guild.guild_id,

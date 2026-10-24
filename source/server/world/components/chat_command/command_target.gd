@@ -107,15 +107,6 @@ static func resolve(token: String, caller_peer_id: int, instance: ServerInstance
 	return r
 
 
-## The live Player NODE for an online target. Searches across instances because
-## the target may be in a different map than the caller. null if offline / gone.
-static func player_node(r: Result, instance: ServerInstance) -> Player:
-	if not r.online or r.peer_id == 0:
-		return null
-	var inst: ServerInstance = instance.world_server.instance_manager.find_instance_for_peer(r.peer_id)
-	return inst.get_player(r.peer_id) if inst != null else null
-
-
 static func _fill_online(r: Result, peer_id: int, res: PlayerResource) -> void:
 	r.ok = true
 	r.online = true

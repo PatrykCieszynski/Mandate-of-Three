@@ -11,7 +11,7 @@ class Session extends WorldServer:
 	func _data_response(id: int, _type: String, data: Dictionary) -> void:
 		answers[id] = data
 
-class Instance extends LegacyServerInstance2D:
+class Instance extends "res://source/server/world/components/world_instance_3d.gd":
 	func _ready() -> void:
 		pass
 
@@ -28,7 +28,6 @@ var own_instance := ""
 var sequence := 0
 var assignments: Dictionary = {}
 var finished_peers: Dictionary = {}
-var actors: Array[Player] = []
 var elapsed := 0.0
 
 func _ready() -> void:
@@ -79,12 +78,7 @@ func set_context(mode: String) -> void:
 		player.account_name = "alpha" if id == "One" else "beta"
 		player.level = 3 if id == "One" else 7
 		session.connected_players[peer] = player
-		var actor := Player.new()
-		actor.player_resource = player
-		actors.append(actor)
-		instance.players_by_peer_id[peer] = actor
 	var player: PlayerResource = session.connected_players[peer]
-	instance.players_by_peer_id[peer].player_resource = PlayerResource.new() if mode == "wrong_actor" else player
 	player.current_instance = id
 	player.current_peer_id = 0 if mode == "wrong_peer" else peer
 	session.player_id_to_peer_id[player.player_id] = 0 if mode == "wrong_owner" else peer
@@ -92,7 +86,7 @@ func set_context(mode: String) -> void:
 	instance.awaiting_peers.erase(peer)
 	if mode == "awaiting": instance.awaiting_peers[peer] = {}
 	else: instance.connected_peers.append(peer)
-	instance.instance_resource.use_3d = mode.begins_with("3d_")
+	instance.instance_resource.use_3d = true
 	if instance.instance_resource.use_3d:
 		var world := instance.get_node_or_null("GameWorld") as GameWorld3D
 		if world == null:
@@ -101,7 +95,7 @@ func set_context(mode: String) -> void:
 			world.process_mode = Node.PROCESS_MODE_DISABLED
 			instance.add_child(world)
 		world.characters.clear()
-		if mode == "3d_joined":
+		if mode not in ["wrong_actor", "3d_missing_actor"]:
 			var body := PlayerActor3D.new()
 			bodies.append(body)
 			world.characters[peer] = body
@@ -126,12 +120,14 @@ func set_context(mode: String) -> void:
 		player.current_peer_id = peer
 		session.player_id_to_peer_id[player.player_id] = peer
 		session.runtime_equipment[player.player_id] = {"stats": {"attack": 37}}
+		session.refresh_character_stats(peer)
+		var expected_attack := session.runtime_attack(player.player_id)
 		var disconnect_count := session.master_disconnects.size()
 		session._on_peer_disconnected(old_peer)
 		session._on_peer_disconnected(old_peer) # duplicate/unknown disconnect is safe.
 		assert(not session.connected_players.has(old_peer))
 		assert(session.party_service.membership.get(player.player_id,0)==party_id and session.party_service.peer_for(player.player_id)==peer,"old disconnect cannot invalidate the current party seat")
-		assert(session.runtime_attack(player.player_id) == 37, "old disconnect invalidated new combat stats")
+		assert(session.runtime_attack(player.player_id) == expected_attack and session.runtime_equipment[player.player_id].stats.attack == 37, "old disconnect invalidated new combat stats")
 		assert(session.master_disconnects.size() == disconnect_count, "old peer disconnected the new account session at Master")
 	context_ready.rpc_id(peer, mode, id)
 
@@ -187,6 +183,9 @@ func run_client() -> void:
 	assert(result.get("level")==expected_level, "valid 3D member should reach the real world-scoped handler")
 	result = await query(&"chat.message.send")
 	assert(result.get("error")==ERR_INVALID_PARAMETER,"retired persistent chat cannot bypass Chat V1 admission")
+	for retired: StringName in [&"quest.accept", &"dungeon.queue", &"trade.accept", &"action.perform", &"shop.buy.item"]:
+		result = await query(retired)
+		assert(result.get("error") == ERR_INVALID_PARAMETER, "retired 2D operation remains reachable")
 	# Legacy entry RPC must not spawn into a different replicated instance.
 	var other := manager.get_instance_server_by_id("Two" if own_instance == "One" else "One")
 	other.ready_to_enter_instance.rpc_id(1)
@@ -204,7 +203,8 @@ func finished() -> void:
 	var own := manager.get_instance_server_by_id(id)
 	var other := manager.get_instance_server_by_id("Two" if id == "One" else "One")
 	var player: PlayerResource = session.connected_players[peer]
-	assert(not other.players_by_peer_id.has(peer), "unauthorized legacy spawn created a foreign actor")
+	var foreign_world := other.get_node_or_null("GameWorld") as GameWorld3D
+	assert(foreign_world == null or not foreign_world.characters.has(peer), "unauthorized entry created a foreign actor")
 	assert(not other.connected_peers.has(peer) and not other.awaiting_peers.has(peer), "denied entry changed foreign membership/assignment")
 	assert(own.connected_peers.has(peer) and not own.awaiting_peers.has(peer), "denied entry changed the legitimate assignment")
 	assert(player.current_instance == id, "denied entry changed the character's assigned instance")
@@ -213,7 +213,6 @@ func finished() -> void:
 	context_ready.rpc_id(peer, "entry_denied_confirmed", id)
 	finished_peers[peer] = true
 	if finished_peers.size() != 2: return
-	for actor: Player in actors: actor.free()
 	for body: PlayerActor3D in bodies: body.free()
 	print("WORLD_RPC_SERVER_OK two isolated clients, real production ingress/handlers")
 	await get_tree().create_timer(0.3).timeout

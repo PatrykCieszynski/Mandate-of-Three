@@ -112,21 +112,6 @@ entries = Array[Dictionary]([{
 &"id": 61,
 &"path": "res://source/common/gameplay/items/materials/metals/iron_ore.tres",
 &"slug": &"iron_ore"
-}, {
-&"hash": "37c82d2c9074631abd01329ecc43b2108fdd3e3a588fad49c5a8f7cfced7264b",
-&"id": 48,
-&"path": "res://source/common/gameplay/items/weapons/sword/sword_animations.tres",
-&"slug": &"sword_animations"
-}, {
-&"hash": "a1f6e8dbb698935c6200353798ef2e6e382906381bf23e477303081b9a6ce0ac",
-&"id": 52,
-&"path": "res://source/common/gameplay/items/weapons/tools/pickaxe.tres",
-&"slug": &"pickaxe"
-}, {
-&"hash": "a57b02d59a6b76095cdc02e16c59302e5a3bb782ea76c83c1774bec108d3db0f",
-&"id": 66,
-&"path": "res://source/common/gameplay/items/weapons/tools/sickle.tres",
-&"slug": &"sickle"
-}])
+}, ])
 scan_path = "res://source/common/gameplay/items"
 filters = PackedStringArray("*.tres", "*.tscn")

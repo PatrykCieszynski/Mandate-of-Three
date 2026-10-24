@@ -1,6 +1,5 @@
 extends ChatCommand
-## Grant experience to a player. Triggers the same level-up + milestone flow as a
-## kill or quest turn-in, so it's a clean way to fast-forward through quest gates.
+## Privileged XP grant through current PlayerResource progression.
 
 
 func _init() -> void:
@@ -25,7 +24,6 @@ func execute(args: PackedStringArray, peer_id: int, server_instance: ServerInsta
 
 	var ws: WorldServer = server_instance.world_server
 	var res: PlayerResource = target.resource
-	var level_before: int = res.level
 	var progress: Dictionary = res.add_experience(amount)
 
 	# Push the same combat.reward payload a kill/quest does so the client gets
@@ -40,9 +38,6 @@ func execute(args: PackedStringArray, peer_id: int, server_instance: ServerInsta
 		"loot": [],
 	})
 
-	if int(progress.get("levels_gained", 0)) > 0:
-		var inst: ServerInstance = ws.instance_manager.find_instance_for_peer(target.peer_id)
-		LevelMilestoneService.on_levels_gained(res, level_before, int(progress.get("level", 1)), inst)
 
 	return "Granted %d XP to %s (now level %d, %d/%d)." % [
 		amount, target.label(), res.level, res.experience, res.level_xp_to_next()

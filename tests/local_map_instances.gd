@@ -140,7 +140,7 @@ func run_server() -> void:
 	var a:=manager.find_instance_for_peer(first)
 	var b:=manager.find_instance_for_peer(second)
 	check(a!=null and b!=null and a!=b,"initial admission distributes players between configured copies")
-	check(not (a is LegacyServerInstance2D) and not (b is LegacyServerInstance2D), "production 3D hosts do not inherit legacy 2D gameplay")
+	check(a.get_script() == preload("res://source/server/world/components/world_instance_3d.gd") and b.get_script() == preload("res://source/server/world/components/world_instance_3d.gd"), "production 3D hosts do not inherit legacy 2D gameplay")
 	check(a.get_node_or_null("StateSynchronizerManager") == null and b.get_node_or_null("StateSynchronizerManager") == null, "3D instance hosts never start the 2D state synchronizer")
 	check(a.instance_resource==b.instance_resource and a.identity.map_id==b.identity.map_id,"two copies of one map definition")
 	check(a.identity.instance_id!=b.identity.instance_id and a.identity.channel_id!=b.identity.channel_id,"instance/channel identities distinct")

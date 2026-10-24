@@ -1,5 +1,5 @@
 extends RefCounted
-## World-process runtime, independent of dungeon GroupService and MapInstance ownership.
+## World-process runtime, independent of MapInstance ownership.
 const Exp = preload("res://source/common/gameplay/party/party_exp.gd")
 const Drop = preload("res://source/common/gameplay/party/party_drop.gd")
 const MAX_MEMBERS = 8

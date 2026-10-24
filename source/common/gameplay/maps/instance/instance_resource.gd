@@ -77,12 +77,6 @@ func can_join_character(player: PlayerResource) -> bool:
 	return player != null and player.wardstones.has(String(required_wardstone))
 
 
-@warning_ignore("unused_parameter")
-func can_join_instance(player: Player, index: int = -1) -> bool:
-	# Legacy 2D adapter kept until the old warper/Player APIs are removed.
-	return can_join_character(player.player_resource if player != null else null)
-
-
 func get_instance(index: int = -1) -> Node:
 	if charged_instances.is_empty() or charged_instances.size() <= index:
 		return null
