@@ -224,9 +224,22 @@ export function mountTrade(
       return;
     }
     const status = document.createElement('p');
+    status.className = 'trade-status';
     status.textContent =
-      error || state.client_error || state.error || state.phase;
-    content.append(status);
+      error ||
+      state.client_error ||
+      state.error ||
+      ({
+        offer: 'Changes clear both acceptances.',
+        invited: 'Waiting for the invitation to be accepted.',
+        settling: 'Completing exchange…',
+        reconcile: 'Updating inventories…',
+        complete: 'Exchange complete.',
+        cancelled: 'Exchange cancelled.',
+        paused: 'Result not confirmed. Recover before trading again.',
+        idle: 'Choose a nearby player.',
+      }[state.phase] ??
+        state.phase);
     if (state.pending && state.recover_id)
       content.append(
         button('Recover result', {
@@ -267,18 +280,27 @@ export function mountTrade(
         );
     }
     if (state.offers) {
-      state.offers.forEach((o, index) => {
+      const sides = document.createElement('div');
+      sides.className = 'trade-sides';
+      const self = state.own_side ?? 0;
+      // Counterparty left, own offer right, regardless of who sent the invite.
+      [1 - self, self].forEach((index) => {
+        const o = state!.offers![index]!;
+        const mine = index === self;
+        const side = document.createElement('section');
+        side.className = 'trade-side';
+        side.setAttribute('aria-label', mine ? 'Your offer' : 'Partner offer');
+        side.dataset.accepted = String(!!state!.accepted?.[index]);
         const heading = document.createElement('h3');
-        heading.textContent = `${index === state!.own_side ? 'Your offer' : o.name} ${state!.accepted?.[index] ? '✓ Accepted' : ''}`;
-        const grid =
-          index === state!.own_side ? ownGrid : document.createElement('div');
+        heading.textContent = mine ? 'You' : o.name;
+        heading.title = o.name;
+        const grid = mine ? ownGrid : document.createElement('div');
         grid.className = 'trade-grid';
         grid.replaceChildren();
         for (let n = 0; n < 8; n++) {
           const cell = document.createElement('button');
-          cell.className = 'trade-slot';
-          cell.disabled =
-            flight || index !== state!.own_side || state!.phase !== 'offer';
+          cell.className = 'trade-slot ui-slot';
+          cell.disabled = flight || !mine || state!.phase !== 'offer';
           const item = o.items[n];
           if (item) {
             cell.title = item.name;
@@ -307,46 +329,94 @@ export function mountTrade(
           }
           grid.append(cell);
         }
-        content.append(heading, grid);
-        const money = document.createElement('p');
-        money.textContent = `Yang: ${o.yang}`;
-        content.append(money);
+        side.append(heading, grid);
+        const money = document.createElement('div');
+        money.className = 'trade-money';
+        const currency = document.createElement('span');
+        currency.className = 'trade-currency';
+        currency.textContent = 'Yang';
+        money.append(currency);
+        if (mine && state!.phase === 'offer') {
+          const yang = document.createElement('input');
+          yang.inputMode = 'numeric';
+          yang.value = yangDraft ?? o.yang;
+          yang.disabled = flight;
+          yang.oninput = () => {
+            yangDraft = yang.value;
+            const confirm = content.querySelector<HTMLButtonElement>(
+              '[aria-label="Accept current offer"]',
+            );
+            if (confirm)
+              confirm.disabled =
+                flight || !!state!.accepted?.[index] || yang.value !== o.yang;
+          };
+          yang.setAttribute('aria-label', 'Yang offered');
+          const update = document.createElement('button');
+          update.className = 'ui-button trade-set-yang';
+          update.textContent = '✓';
+          update.title = 'Set Yang';
+          update.setAttribute('aria-label', 'Set Yang');
+          update.disabled = flight;
+          update.onclick = () => {
+            if (/^\d{1,16}$/.test(yang.value))
+              offer(
+                o.items.map((i) => ({ uid: i.uid, revision: i.revision })),
+                yang.value,
+              );
+          };
+          yang.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              update.click();
+            }
+          };
+          money.append(yang, update);
+        } else {
+          const amount = document.createElement('output');
+          amount.textContent = o.yang;
+          amount.setAttribute(
+            'aria-label',
+            mine ? 'Your Yang' : 'Partner Yang',
+          );
+          money.append(amount);
+        }
+        side.append(money);
+        const acceptance = document.createElement('div');
+        acceptance.className = 'trade-acceptance';
+        const ready = document.createElement('span');
+        ready.className = 'trade-ready';
+        ready.textContent = state!.accepted?.[index]
+          ? '✓ Accepted'
+          : 'Not accepted';
+        acceptance.append(ready);
+        if (mine && state!.phase === 'offer') {
+          const confirm = button('Accept', {
+            action: 'confirm',
+            trade_id: state!.id,
+            version: state!.version,
+          });
+          confirm.setAttribute('aria-label', 'Accept current offer');
+          confirm.disabled =
+            flight ||
+            !!state!.accepted?.[index] ||
+            (yangDraft !== undefined && yangDraft !== o.yang);
+          confirm.title =
+            'Set Yang before accepting this version of both offers';
+          acceptance.append(confirm);
+        }
+        side.append(acceptance);
+        sides.append(side);
       });
+      content.append(sides);
     }
     if (state.phase === 'offer') {
-      const yang = document.createElement('input');
-      yang.inputMode = 'numeric';
-      yang.value = yangDraft ?? own()?.yang ?? '0';
-      yang.oninput = () => {
-        yangDraft = yang.value;
-      };
-      yang.setAttribute('aria-label', 'Yang offered');
-      const update = document.createElement('button');
-      update.className = 'ui-button';
-      update.textContent = 'Set Yang';
-      update.disabled = flight;
-      update.onclick = () => {
-        if (/^\d{1,16}$/.test(yang.value))
-          offer(
-            own()?.items.map((i) => ({ uid: i.uid, revision: i.revision })) ??
-              [],
-            yang.value,
-          );
-      };
-      content.append(
-        yang,
-        update,
-        button('Accept current offer', {
-          action: 'confirm',
-          trade_id: state.id,
-          version: state.version,
-        }),
-      );
       const hint = document.createElement('p');
+      hint.className = 'trade-hint';
       hint.textContent =
-        'Drag or Ctrl-click items from Inventory. Whole stacks only. Any change clears both acceptances.';
+        'Drag / Ctrl-click from Inventory · Click an offered item to remove';
       content.append(hint);
     }
+    content.append(status);
     if (['invited', 'offer'].includes(state.phase))
       content.append(
         button('Cancel trade', { action: 'cancel', trade_id: state.id }),
