@@ -4,6 +4,7 @@ class StatsSession extends WorldServer:
 	@rpc("authority","call_remote","reliable",1)
 	func _data_response(id: int, _type: String, result: Dictionary) -> void: replies[id]=result
 var reports: Dictionary={}
+var xp_reports: Dictionary={}
 func _ready() -> void:
 	super._ready()
 	if not GameMode.is_world_server(): get_node("Session").set_script(StatsSession)
@@ -34,6 +35,17 @@ func spend_batch(funded: bool) -> void:
 func stats_report() -> void:
 	if GameMode.is_world_server(): reports[multiplayer.get_remote_sender_id()]=true
 @rpc("authority","call_remote","reliable",0)
+func verify_command_xp(funded: bool) -> void:
+	if funded:
+		await wait_until(func()->bool:return int(world.combat_endpoint.state.get("progression",{}).get("level",0))==2 and "+105 XP" in world.combat_endpoint._experience_label.text)
+		check(world.combat_endpoint.state.progression.experience==35,"command XP snapshot includes overflow")
+	else:
+		check(world.combat_endpoint.state.progression.level==1 and world.combat_endpoint._xp_notice.is_empty(),"other character receives no command XP or notification")
+	xp_report.rpc_id(1)
+@rpc("any_peer","call_remote","reliable",0)
+func xp_report() -> void:
+	if GameMode.is_world_server(): xp_reports[multiplayer.get_remote_sender_id()]=true
+@rpc("authority","call_remote","reliable",0)
 func finish_stats() -> void:
 	check(world.characters[world.local_peer].max_hp==int(world.combat_endpoint.state.max_health[world.local_peer]),"client actor consumes authoritative maximum HP")
 	print("STATS_CLIENT_OK actual generic World RPC, receipt replay and owner isolation")
@@ -45,7 +57,16 @@ func run_server() -> void:
 	var peers: Array=ready_peers.keys();peers.sort()
 	var hero: int=peers[0];var other: int=peers[1]
 	var player: PlayerResource=server.connected_players[hero]
-	server.database.award_experience(player,105)
+	var command=preload("res://source/server/world/components/chat_command/global_commands/xp_command.gd").new()
+	var host: ServerInstance=manager.find_instance_for_peer(hero)
+	check(command.execute(PackedStringArray(["xp","self","105"]),hero,host).begins_with("Granted"),"real /xp handler accepts online target")
+	check(player.level==2 and player.experience==35 and player.available_attributes_points==4 and player.available_skill_points==1,"command crosses milestones and level with overflow")
+	check(server.database.dirty_progression.get(player.player_id)==player,"command progression is checkpoint eligible")
+	for invalid: String in ["0","-5","oops"]:
+		check(command.execute(PackedStringArray(["xp","self",invalid]),hero,host)=="Invalid XP amount.","invalid grant cannot mutate progression")
+	check(player.experience==35 and player.available_attributes_points==4,"invalid grants preserve points")
+	verify_command_xp.rpc_id(hero,true);verify_command_xp.rpc_id(other,false)
+	await wait_until(func()->bool:return xp_reports.size()==2)
 	var initial_attack: int=server.runtime_attack(player.player_id)
 	var map: GameWorld3D=manager.find_instance_for_peer(hero).get_node("GameWorld")
 	var body: PlayerActor3D=map.characters[hero]
