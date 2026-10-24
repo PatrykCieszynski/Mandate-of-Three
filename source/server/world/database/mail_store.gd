@@ -12,10 +12,10 @@ extends RefCounted
 ## See docs/mailbox.md.
 const BROADCAST_TTL_MS: int = 10 * 24 * 60 * 60 * 1000 # 10 days
 
-var db: SQLite
+var db: SqliteSoci
 
 
-func _init(_db: SQLite) -> void:
+func _init(_db: SqliteSoci) -> void:
 	db = _db
 
 

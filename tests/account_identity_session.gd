@@ -3,7 +3,7 @@ extends Node
 var request := HTTPRequest.new()
 var world_ready := false
 var elapsed := 0.0
-var db := SQLite.new()
+var db := SqliteSoci.new()
 var game_world: GameWorld3D
 
 func _ready() -> void:

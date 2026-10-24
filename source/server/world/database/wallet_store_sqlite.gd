@@ -2,16 +2,16 @@ class_name WalletStoreSqlite
 extends RefCounted
 ## Fungible Yang only. Unique items keep their own immediate transactions.
 const MAX_YANG: int = 9000000000000000
-var db: SQLite
+var db: SqliteSoci
 
-func _init(database: SQLite) -> void:
+func _init(database: SqliteSoci) -> void:
 	db = database
 
-static func ensure_schema(database: SQLite) -> bool:
+static func ensure_schema(database: SqliteSoci) -> bool:
 	return database.query("CREATE TABLE IF NOT EXISTS wallets (character_id INTEGER PRIMARY KEY NOT NULL, yang INTEGER NOT NULL DEFAULT 0 CHECK(typeof(yang)='integer' AND yang>=0 AND yang<=9000000000000000));")
 
 ## Run offline before economic actions, using a full trusted Master manifest.
-static func migrate_accounts(database: SQLite, master_ids: Dictionary) -> Dictionary:
+static func migrate_accounts(database: SqliteSoci, master_ids: Dictionary) -> Dictionary:
 	var audit := WorldStoreSqlite.new(database).audit_account_identities(master_ids)
 	if not audit.ok or not audit.orphaned.is_empty() or not audit.mismatched.is_empty(): return {"ok":false,"error":"identity","audit":audit}
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return {"ok":false,"error":"storage"}

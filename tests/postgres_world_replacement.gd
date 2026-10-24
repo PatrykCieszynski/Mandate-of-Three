@@ -57,7 +57,7 @@ func close_roles(world: int, gateway: int, master: int) -> void:
 	assert(int(pg.query("SELECT yang FROM economy.account_wallets WHERE account_id=:id;",{"id":int(report.account)}).rows[0].yang)==balance+37)
 	await wait_revoked(int(report.account))
 	assert(int(pg.query("SELECT count(*) AS n FROM pg_stat_activity WHERE application_name LIKE 'mandate-inventory-executor-%';").rows[0].n)==1,"only the live Master's control worker remains")
-	var profiles:=SQLite.new();profiles.path=directory+"/profiles.db";assert(profiles.open_db())
+	var profiles:=SqliteSoci.new();profiles.path=directory+"/profiles.db";assert(profiles.open_db())
 	assert(profiles.query_with_bindings("SELECT level,experience,available_attributes_points FROM players WHERE player_id=?;",[int(report.character)]))
 	assert(profiles.query_result[0].level==expected.level and profiles.query_result[0].experience==expected.experience and profiles.query_result[0].available_attributes_points==expected.points)
 	profiles.close_db()

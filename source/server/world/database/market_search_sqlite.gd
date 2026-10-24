@@ -3,10 +3,10 @@ extends RefCounted
 ## Bounded indexed reads. Rolled affixes are projected on mutation, never parsed per search.
 const STATS := ItemAffixLabels.STATS
 const LOOKUP_SCHEMA_VERSION := 23
-var db: SQLite
+var db: SqliteSoci
 var last_db_usec := 0
-func _init(database: SQLite) -> void: db=database
-static func ensure_schema(database: SQLite) -> bool:
+func _init(database: SqliteSoci) -> void: db=database
+static func ensure_schema(database: SqliteSoci) -> bool:
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
 	if int(database.query_result[0].value)>=20: return MarketStoreSqlite._ensure_offer_only_column(database)
 	if int(database.query_result[0].value)!=19 or not database.query("BEGIN IMMEDIATE;"): return false
@@ -24,7 +24,7 @@ static func ensure_schema(database: SQLite) -> bool:
 		if not database.query(statement):
 			database.query("ROLLBACK;");return false
 	return MarketStoreSqlite._ensure_offer_only_column(database)
-static func ensure_lookup_schema(database: SQLite) -> bool:
+static func ensure_lookup_schema(database: SqliteSoci) -> bool:
 	# Run after Exchange v22 and before World admits players/starts any reader.
 	if not database.query("SELECT value FROM meta WHERE key='schema_version';"): return false
 	if database.query_result.is_empty(): return false
@@ -61,12 +61,12 @@ func search(p: Dictionary) -> Dictionary:
 	var built:=build_query(p)
 	if not built.ok: return {"ok":false,"error":built.error}
 	var started:=Time.get_ticks_usec()
-	if not db.query_with_bindings(built.sql,built.params.values()): return {"ok":false,"error":"storage"}
+	if not db.query_with_named_bindings(built.sql,built.params): return {"ok":false,"error":"storage"}
 	last_db_usec=Time.get_ticks_usec()-started
 	return project_rows(db.query_result.duplicate(true),p,db)
 
 static func build_query(p: Dictionary) -> Dictionary:
 	return preload("res://source/server/world/database/auction_search_contract.gd").build_query(p)
 
-static func project_rows(rows: Array, p: Dictionary, _database: SQLite) -> Dictionary:
+static func project_rows(rows: Array, p: Dictionary, _database: SqliteSoci) -> Dictionary:
 	return preload("res://source/server/world/database/auction_search_contract.gd").project_rows(rows,p)

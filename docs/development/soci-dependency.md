@@ -28,9 +28,9 @@ are not automatically retried by this dependency update.
 
 Adoption verification uses PostgreSQL 18.6 binaries from
 `Y:/Software/PostgreSQL/bin` with fresh owned SCRAM loopback clusters only. The
-installed service/data are not used. The current runtime remains a single World
-and SQLite; PostgreSQL wallet parity is opt-in. This does not add a pool, runtime
-backend selector or distributed Economy.
+installed service/data are not used. Normal development uses Gateway/Master/one World with PostgreSQL accounts,
+profiles and Economy. Focused embedded SQLite fixtures use the same SOCI driver,
+not a separate godot-sqlite addon. This does not add a pool or distributed Economy.
 
 Verification commands:
 

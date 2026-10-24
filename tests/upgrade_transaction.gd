@@ -1,5 +1,5 @@
 extends Node
-var db: SQLite
+var db: SqliteSoci
 var persistence: WorldDatabase
 var character_id: int
 var recipe: UpgradeDefinition = UpgradeDefinitions.BASIC
@@ -20,7 +20,7 @@ func _ready() -> void:
 	var bad: UpgradeDefinition = recipe.duplicate(true)
 	bad.to_level = 2
 	assert("unsupported_upgrade" in bad.validation_errors())
-	db = SQLite.new()
+	db = SqliteSoci.new()
 	db.path = "res://.godot/verification/upgrade-%s.db" % Crypto.new().generate_random_bytes(8).hex_encode()
 	assert(db.open_db())
 	WorldSchema.ensure_schema(db)

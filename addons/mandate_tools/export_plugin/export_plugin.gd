@@ -4,7 +4,7 @@ extends EditorExportPlugin
 ## CLIENT exports — server-class stubbing:
 ## Godot force-exports every .gd in the project regardless of preset filters, so
 ## the real `source/server/*` scripts always ended up in client builds — where
-## they fail to parse (SQLite GDExtension absent) and cascade-break every
+## they fail to parse (server database dependency absent) and cascade-break every
 ## dependent script. This plugin REPLACES each server script at export time with
 ## a reflection-generated stub:
 ##   - class_name + extends preserved → the global class cache resolves, so
@@ -12,7 +12,7 @@ extends EditorExportPlugin
 ##   - constants/enums copied VERBATIM (faithful values — no silent divergence).
 ##   - signals/vars declared, untyped.
 ##   - methods keep name/arity but drop ALL type annotations (this is what makes
-##     `_init(_db: SQLite)` safe — stubs never name SQLite); public bodies
+##     `_init(_db: SqliteSoci)` safe — stubs never name SqliteSoci); public bodies
 ##     push_error if a client ever calls one (a missing is_server() gate is a
 ##     screaming log line, not silence).
 ##
@@ -26,7 +26,6 @@ extends EditorExportPlugin
 ## via `OS.has_feature("client")`.
 
 const SERVER_ROOT: String = "res://source/server/"
-const SQLITE_ADDON_ROOT: String = "res://addons/godot-sqlite/"
 const SOCI_ADDON_ROOT: String = "res://addons/godot_soci/"
 
 var _stub_count: int = 0
@@ -57,8 +56,8 @@ func _export_file(path: String, _type: String, features: PackedStringArray) -> v
 		return
 	if not features.has("client"):
 		return
-	# The sqlite GDExtension never ships to clients (server-only dependency).
-	if path.begins_with(SQLITE_ADDON_ROOT) or path.begins_with(SOCI_ADDON_ROOT):
+	# SOCI is a server/test dependency and never ships to clients.
+	if path.begins_with(SOCI_ADDON_ROOT):
 		skip()
 		return
 	if not path.begins_with(SERVER_ROOT):
@@ -95,7 +94,7 @@ func _get_name() -> String:
 
 
 ## Builds the stub source for one server script using reflection — no text
-## parsing (the editor context has every class loaded, including SQLite).
+## parsing (the editor context has every class loaded, including SqliteSoci).
 func _generate_stub(path: String) -> String:
 	var script: GDScript = load(path) as GDScript
 	if script == null:

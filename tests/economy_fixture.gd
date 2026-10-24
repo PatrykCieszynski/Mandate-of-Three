@@ -26,7 +26,7 @@ static func insert_item(store: ItemStoreSqlite, item: ItemInstance, position: in
 	store.db.query("ROLLBACK;")
 	return false
 
-static func destroy_item(db: SQLite, uid: String) -> bool:
+static func destroy_item(db: SqliteSoci, uid: String) -> bool:
 	if not db.query("BEGIN IMMEDIATE;"): return false
 	if db.query_with_bindings("DELETE FROM item_placements WHERE item_uid=?;",[uid]) and db.query_with_bindings("DELETE FROM item_instances WHERE uid=?;",[uid]) and db.query("COMMIT;"): return true
 	db.query("ROLLBACK;")

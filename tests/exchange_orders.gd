@@ -1,5 +1,5 @@
 extends Node
-var db:=SQLite.new()
+var db:=SqliteSoci.new()
 var store: WorldStoreSqlite
 var exchange: ExchangeStoreSqlite
 var persistence: WorldDatabase

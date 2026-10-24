@@ -5,10 +5,10 @@ extends RefCounted
 const STARTING_YANG: int = 1500
 
 var economic_initialization: bool=true # Profile-only PG bootstrap disables legacy starter currency.
-var db: SQLite
+var db: SqliteSoci
 
 
-func _init(_db: SQLite) -> void:
+func _init(_db: SqliteSoci) -> void:
 	db = _db
 
 

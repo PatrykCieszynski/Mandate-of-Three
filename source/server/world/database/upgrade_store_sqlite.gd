@@ -1,11 +1,11 @@
 class_name UpgradeStoreSqlite
 extends RefCounted
 ## One connection/transaction for material, pending income, spend and item mutation.
-var db: SQLite
+var db: SqliteSoci
 var _transaction: EconomyCommandSqlite
 var committed: bool:
 	get: return _transaction.committed
-func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
+func _init(database: SqliteSoci, rejected_commands: MarketRejectedCommands = null) -> void:
 	db = database
 	_transaction = EconomyCommandSqlite.new(db, rejected_commands)
 

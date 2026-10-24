@@ -6,7 +6,7 @@ const PgItems = preload("res://source/server/world/database/postgres/item_store_
 const PgWallet = preload("res://source/server/world/database/postgres/wallet_store_postgres.gd")
 const PgStorage = preload("res://source/server/world/database/postgres/account_storage_postgres.gd")
 const PgUpgrade = preload("res://source/server/world/database/postgres/upgrade_store_postgres.gd")
-var sqlite: SQLite
+var sqlite: SqliteSoci
 var pg: Object
 var buyer: int
 var alternate: int
@@ -177,7 +177,7 @@ func _ready() -> void:
 	recipe.material_amount=3
 	recipe.yang_cost=2000
 	assert(recipe.validation_errors().is_empty())
-	sqlite=SQLite.new()
+	sqlite=SqliteSoci.new()
 	sqlite.path=directory+"/upgrade.db"
 	assert(not FileAccess.file_exists(sqlite.path) and sqlite.open_db())
 	WorldSchema.ensure_schema(sqlite)

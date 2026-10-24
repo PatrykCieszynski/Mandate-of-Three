@@ -2,7 +2,7 @@ class_name EconomyCommandSqlite
 extends RefCounted
 ## Explicit SQLite command boundary shared by composition, not a database interface.
 ## Caller writes domain data between begin and commit on this same connection.
-var db: SQLite
+var db: SqliteSoci
 var account_id := 0
 var _character_id := 0
 var _command := ""
@@ -14,7 +14,7 @@ var committed := false
 # only; never included in receipts or used to decide transaction success.
 var commit_usec := 0
 var rejected: MarketRejectedCommands
-func _init(database: SQLite, rejected_commands: MarketRejectedCommands = null) -> void:
+func _init(database: SqliteSoci, rejected_commands: MarketRejectedCommands = null) -> void:
 	db = database
 	rejected = rejected_commands if rejected_commands!=null else MarketRejectedCommands.new()
 

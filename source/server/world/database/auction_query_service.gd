@@ -5,7 +5,7 @@ const MAX_PENDING := 64
 const ACCOUNT_PER_SECOND := 8
 const DEADLINE_MS := 2000
 var reader := AuctionSociReader.new()
-var writer: SQLite
+var writer: SqliteSoci
 var path := ""
 var admissions := false
 var starting := false
@@ -20,7 +20,7 @@ var rates: Dictionary = {}
 # Worker round-trip includes scheduling/poll delivery; it is NOT native SQL time.
 signal observation(sample: Dictionary)
 
-func start(database: SQLite, database_path: String) -> bool:
+func start(database: SqliteSoci, database_path: String) -> bool:
 	if starting or draining or reader.dispatcher!=null: return false
 	writer=database; path=database_path; starting=true
 	var ok: bool=await reader.start(path)

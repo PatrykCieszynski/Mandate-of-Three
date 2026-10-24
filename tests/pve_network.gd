@@ -1,5 +1,5 @@
 extends Node
-## Production RPC + physics + isolated real SQLite. Fixture-only commands below
+## Production RPC + physics + isolated real SqliteSoci. Fixture-only commands below
 ## coordinate assertions; gameplay commands go through CombatEndpoint3D unchanged.
 
 const PORT: int = 18098
@@ -11,7 +11,7 @@ var fixture_shared_account := false
 var peer := WebSocketMultiplayerPeer.new()
 var world: GameWorld3D
 var server: WorldServer
-var db: SQLite
+var db: SqliteSoci
 var client_number: int = 0
 var elapsed: float = 0
 var phase_name: String = "WAIT"
@@ -51,7 +51,7 @@ func _ready() -> void:
 		server.multiplayer_api = api
 		add_child(server)
 		ServerInstance.world_server = server
-		db = SQLite.new()
+		db = SqliteSoci.new()
 		db.path = "%s/pve-network-%s.db" % [database_directory,Crypto.new().generate_random_bytes(8).hex_encode()]
 		check(db.open_db(), "SQLite open")
 		WorldSchema.ensure_schema(db)

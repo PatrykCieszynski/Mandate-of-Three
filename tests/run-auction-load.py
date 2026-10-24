@@ -1,7 +1,7 @@
 """D2's existing World/network fixture on Windows or Linux; no live services.
 
 Usage: python tests/run-auction-load.py --godot /absolute/path/to/godot
-Requires installed pinned SOCI and godot-sqlite for the current OS.
+Requires the pinned godot-soci payload for the current OS.
 """
 import argparse
 import json

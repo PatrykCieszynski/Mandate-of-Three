@@ -1,6 +1,6 @@
 extends Node
 ## Uncovered search contract: base catalog, rolled AND predicates and bounded 10k reads.
-var db:=SQLite.new()
+var db:=SqliteSoci.new()
 func _ready() -> void:
 	db.path="res://.godot/verification/market-search.db"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(db.path));assert(db.open_db());WorldSchema.ensure_schema(db)

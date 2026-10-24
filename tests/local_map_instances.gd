@@ -19,7 +19,7 @@ var socket := WebSocketMultiplayerPeer.new()
 var server: WorldServer
 var manager: InstanceManagerServer
 var client_manager: InstanceManagerClient
-var db := SQLite.new()
+var db := SqliteSoci.new()
 var world: GameWorld3D
 var hosts: Dictionary = {}
 var ready_peers: Dictionary = {}

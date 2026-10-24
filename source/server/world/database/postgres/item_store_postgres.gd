@@ -1,5 +1,5 @@
 extends RefCounted
-## Opt-in character Inventory port. World endpoints remain on SQLite.
+## Opt-in character Inventory port. World endpoints remain on SqliteSoci.
 ## Every mutation and receipt is owned by one native transaction/session.
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
 const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")

@@ -70,7 +70,7 @@ var master:=Master.new()
 var world:=World.new()
 var link:=Link.new()
 var database:=WorldDatabase.new()
-var db:=SQLite.new()
+var db:=SqliteSoci.new()
 var characters: Array[int]=[]
 var world_id: int
 

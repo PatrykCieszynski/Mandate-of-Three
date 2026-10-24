@@ -23,7 +23,7 @@ func receive(request: Object) -> Dictionary:
 	return request.get_result()
 
 func capture_sqlite() -> void:
-	var db:=SQLite.new()
+	var db:=SqliteSoci.new()
 	db.path=directory+"/source.db"
 	if not check(not FileAccess.file_exists(db.path),"only create a new disposable SQLite fixture"): return
 	if not check(db.open_db(),"open disposable SQLite"): return

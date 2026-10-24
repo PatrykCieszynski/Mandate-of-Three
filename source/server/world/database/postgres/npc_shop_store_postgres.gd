@@ -1,6 +1,6 @@
 extends RefCounted
 ## Opt-in NPC purchase port only. Caller must authorize current NPC/service/range
-## before invoking the store, exactly as on SQLite. No client price is accepted.
+## before invoking the store, exactly as on SqliteSoci. No client price is accepted.
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
 const Items = preload("res://source/server/world/database/postgres/item_store_postgres.gd")
 const Wallet = preload("res://source/server/world/database/postgres/wallet_store_postgres.gd")
