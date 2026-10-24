@@ -440,11 +440,6 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	var session_token: String = _session_tokens.get(peer_id, "")
 	_session_tokens.erase(peer_id)
 	ServerLog.info("Peer %d disconnected." % peer_id)
-	# Sparring: if mid-match, end it before we tear down so the survivor gets
-	# the win + teleport instead of being stranded in the arena.
-	# Dungeon: sweep them from any lobby queue / live run so the group + run maps
-	# don't keep a phantom member (and the private instance can free when empty).
-	DungeonService.on_peer_disconnected(peer_id)
 	# Drop rate-limit counters so a reconnect starts with a clean window.
 	RateLimiter.forget(peer_id)
 
@@ -576,7 +571,6 @@ func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
 func _publish_authenticated_state(peer_id: int, player: PlayerResource) -> void:
 	data_push.rpc_id.call_deferred(peer_id, &"player_id.set", {"player_id": player.player_id})
 	data_push.rpc_id.call_deferred(peer_id, &"active_guild_id.set", {"active_guild_id": player.active_guild_id})
-	QuestService.backfill_wardstones(player)
 	data_push.rpc_id.call_deferred(peer_id, &"wardstones.set", {"wardstones": player.wardstones})
 
 
@@ -591,15 +585,9 @@ func is_valid_authentication_token(auth_token: String) -> bool:
 # Public operation names are a protocol allowlist, never arbitrary resource paths.
 # New handlers require explicit admission here; the base class is not an operation.
 const DATA_REQUEST_TYPES: Array[StringName] = [
-	"action.perform",
 	"attribute.get",
 
 	"attribute.spend",
-	"channel.cancel",
-	"dungeon.info",
-	"dungeon.leave",
-	"dungeon.queue",
-	"dungeon.rooms",
 	"friend.accept",
 	"friend.list",
 	"friend.remove",
@@ -622,47 +610,24 @@ const DATA_REQUEST_TYPES: Array[StringName] = [
 	"guild.quit",
 	"guild.rank",
 	"guild.search",
-	"guild.tag",
 	"guild.transfer",
 	"guild.treasury.deposit",
 	"guild.trophies.display",
 	"guild.trophies.get",
 	"inventory.get",
-	"item.equip",
 	"item.pin",
-	"item.unequip",
 	"mail.claim",
 	"mail.delete",
 	"mail.list",
 	"mail.read",
 	"mail.send",
 	"mail.unread_count",
-	"name.change",
-	"npc.interact",
 	"profile.get",
 	"profile.update",
 	"progression.get",
-	"quest.accept",
-	"quest.board.claim",
-	"quest.board.info",
-	"quest.list",
-	"quest.turn_in",
-	"recall.start",
-	"redeem.code",
-	"shop.buy.item",
-	"shop.open",
-	"shop.trade.item",
 	"social.block.add",
 	"social.block.list",
 	"social.block.remove",
-	"trade.accept",
-	"trade.join",
-	"trade.leave",
-	"trade.offer",
-	"trade.state",
-	"wardrobe.buy",
-	"wardrobe.equip",
-	"wardrobe.state",
 ]
 
 var data_handlers: Dictionary[StringName, DataRequestHandler]
@@ -685,16 +650,6 @@ func propagate_rpc(callable: Callable, instance_id: String = "") -> void:
 	else:
 		for peer_id: int in instance_manager.world_server.connected_players:
 			callable.rpc_id(peer_id)
-
-
-## Recall payoff (called via WorldServer.curr from RecallAbility.channel_complete): send
-## [param player] home to the town hub. Delegates to the InstanceManager by peer,
-## which resolves the current instance authoritatively and reuses the warper/jail
-## travel path.
-func recall_player(player: Player) -> void:
-	if player == null or player.player_resource == null:
-		return
-	instance_manager.recall_player(int(player.player_resource.current_peer_id))
 
 
 @rpc("any_peer", "call_remote", "reliable", 1)
@@ -726,14 +681,11 @@ func request_instance(peer_id: int, instance_id: String = "") -> ServerInstance:
 	var instance: ServerInstance = instance_manager.find_instance_for_peer(peer_id) if instance_id.is_empty() else instance_manager.get_instance_server_by_id(instance_id)
 	if instance == null or instance.instance_resource == null or not instance.connected_peers.has(peer_id):
 		return null
-	if instance.instance_resource.use_3d:
-		var world := instance.get_node_or_null("GameWorld") as GameWorld3D
-		if world == null or not world.characters.has(peer_id):
-			return null
-	else:
-		var actor: Player = instance.players_by_peer_id.get(peer_id, null)
-		if actor == null or actor.player_resource != player:
-			return null
+	if not instance.instance_resource.use_3d:
+		return null
+	var world := instance.get_node_or_null("GameWorld") as GameWorld3D
+	if world == null or not world.characters.has(peer_id):
+		return null
 	return instance
 
 ## Initial 3D join must match both the current session and its server assignment.

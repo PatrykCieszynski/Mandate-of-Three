@@ -1,5 +1,6 @@
 class_name GearItem
 extends Item
+## Legacy profile/item metadata compatibility. Runtime items use ItemDefinition/ItemInstance.
 
 # Armor renders in body order, not alphabetically.
 const _SLOT_ORDER: Dictionary = {
@@ -51,29 +52,3 @@ static func _format_modifier(modifier: StatModifier) -> String:
 	var value: float = modifier.value
 	var number: String = ("%+d" % int(value)) if is_equal_approx(value, roundf(value)) else ("%+.1f" % value)
 	return "%s %s" % [number, Stat.display_name(modifier.stat_name)]
-
-
-func can_equip(player: Player) -> bool:
-	if player.player_resource:
-		return slot.is_unlocked_for(player.player_resource) and player.player_resource.level >= required_level
-	return false
-
-
-func equip(character: Character) -> void:
-	if not character.multiplayer.is_server():
-		# Client side logic - visual
-		return
-	for modifier: StatModifier in base_modifiers:
-		character.stats_component.modify_stat(
-			modifier.stat_name, modifier.value
-		)
-
-
-func unequip(character: Character) -> void:
-	if not character.multiplayer.is_server():
-		# Client side logic - visual
-		return
-	for modifier: StatModifier in base_modifiers:
-		character.stats_component.modify_stat(
-			modifier.stat_name, modifier.value * -1
-		)

@@ -18,7 +18,7 @@ const BASE_STATS: Dictionary[StringName, float] = {
 	Stat.AD: 10.0,
 	Stat.ARMOR: 15.0,
 	Stat.MR: 15.0,
-	# Mana gates SPECIAL abilities only (mana_cost on the AbilityResource);
+	# Baseline MP pool; active World3D combat projects this through character stats.
 	# basic attacks stay free. INT grows the pool and regeneration.
 	Stat.MANA_MAX: 50.0,
 	Stat.MANA_REGEN: 0.5,
@@ -61,9 +61,7 @@ var stats_migrated: bool = false
 @export var masteries: Dictionary
 @export var ability_loadout: Dictionary
 
-## Quests: quest_id (int) -> {"state": StringName, "progress": Dictionary(obj_index:int -> count:int)}.
-## state is &"active" or &"turned_in". COLLECT objectives are derived from inventory live,
-## so only KILL/CRAFT counts live in "progress". Persisted as JSON.
+## Retired 2D quest payload; preserved by profile codecs without execution hooks.
 @export var quests: Dictionary
 
 ## The guild currently selected as the player's active guild.
@@ -93,9 +91,7 @@ var stats_migrated: bool = false
 ## Legacy statistics payload; also retains general played-time accounting.
 @export var lb_stats: Dictionary
 
-## Vanity titles ever earned by this character. Quest turn-ins can add to this
-## list via QuestResource.grant_title. Player chooses which one is displayed via
-## display_title.
+## Vanity titles retained in the character profile; display_title selects one.
 @export var titles_unlocked: PackedStringArray
 ## Currently active title (shown on profile under display_name). Empty = no
 ## title displayed. Auto-set to a newly-granted title only if no title is
@@ -110,17 +106,11 @@ var stats_migrated: bool = false
 ## one shown under their name) — these are the "achievement flex" picks.
 @export var displayed_trophies: PackedStringArray
 
-## Daily quest board state: the 3 rolled quests for today and when they expire.
-## Each entry is a Dictionary {template_id, count_so_far, claimed}.
-## dailies_refresh_at_ms is the unix-ms of the next UTC midnight;
-## DailyQuestService rerolls when now crosses it. Empty array = never rolled
-## (first board click generates).
+## Retired daily-board payload; retained for saved-profile compatibility.
 @export var daily_quests: Array
 @export var dailies_refresh_at_ms: int
 
-## Soft dungeon lockout: dungeon_name -> unix-SECONDS of the last completion
-## reward. A clear within the dungeon's lockout window grants no reward (you can
-## still run it to help a group). Persisted as dungeon_lockouts_json.
+## Retired dungeon lockouts; retained for saved-profile compatibility.
 @export var dungeon_lockouts: Dictionary = {}
 
 ## Redeem codes this character has already claimed (upper-cased code strings).
@@ -159,10 +149,7 @@ var active_buffs: Array[Dictionary] = []
 ## Per-node gather cooldowns (node_id -> next-ready time in ms). Runtime only, not persisted.
 var gather_cooldowns: Dictionary
 
-## Character story/progress flags (flag StringName -> true) — the slot quest
-## prerequisites (QuestResource.requires_flag) and the v1 wardstone key-gate
-## read. RUNTIME-ONLY for now: nothing sets flags yet; when the wardstone
-## system ships, persist via a new _migration_vN JSON column (mirrors friends).
+## Legacy runtime story flags; no active quest runtime or persistence.
 var character_flags: Dictionary
 
 
@@ -204,48 +191,6 @@ const LEVEL_XP_BASE: int = 70
 
 func level_xp_to_next() -> int:
 	return LEVEL_XP_BASE * maxi(1, level)
-
-
-# --- Quests ---
-
-func quest_state(quest_id: int) -> StringName:
-	return (quests.get(quest_id, {}) as Dictionary).get("state", &"")
-
-
-func accept_quest(quest_id: int) -> void:
-	if not quests.has(quest_id):
-		quests[quest_id] = {"state": &"active", "progress": {}}
-
-
-func quest_progress(quest_id: int, objective_index: int) -> int:
-	var entry: Dictionary = quests.get(quest_id, {})
-	return int((entry.get("progress", {}) as Dictionary).get(objective_index, 0))
-
-
-## Increments a KILL/CRAFT objective's counter (only while the quest is active).
-func advance_quest(quest_id: int, objective_index: int, amount: int = 1) -> void:
-	var entry: Dictionary = quests.get(quest_id, {})
-	if entry.get("state", &"") != &"active":
-		return
-	var progress: Dictionary = entry["progress"]
-	progress[objective_index] = int(progress.get(objective_index, 0)) + amount
-
-
-func set_quest_turned_in(quest_id: int) -> void:
-	if quests.has(quest_id):
-		quests[quest_id]["state"] = &"turned_in"
-
-
-## Whether the "ready to turn in" nudge has been pushed for this quest, so a
-## passive (COLLECT/inventory) completion toasts exactly once instead of on every
-## tracker refresh. Persisted inside the quests blob; defaults false.
-func quest_ready_notified(quest_id: int) -> bool:
-	return bool((quests.get(quest_id, {}) as Dictionary).get("ready_notified", false))
-
-
-func set_quest_ready_notified(quest_id: int, value: bool) -> void:
-	if quests.has(quest_id):
-		quests[quest_id]["ready_notified"] = value
 
 
 ## Milestones use integer arithmetic: ceil(required * quarter / 4).

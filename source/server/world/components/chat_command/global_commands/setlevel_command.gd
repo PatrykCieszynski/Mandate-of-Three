@@ -43,8 +43,5 @@ func execute(args: PackedStringArray, peer_id: int, server_instance: ServerInsta
 		"loot": [],
 	})
 
-	if levels_jumped > 0:
-		var inst: ServerInstance = ws.instance_manager.find_instance_for_peer(target.peer_id)
-		LevelMilestoneService.on_levels_gained(res, level_before, new_level, inst)
 
 	return "Set %s to level %d." % [target.label(), new_level]

@@ -5,6 +5,10 @@ EXP cost remains `70 × current level`; overflow crosses any number of levels.
 A kill/encounter grants one runtime EXP pool through existing solo/Party reward
 rules, independently of item pickup. No per-kill history or SQL write is added.
 
+Admin `/xp` grants use `WorldDatabase.award_experience()` like live rewards:
+positive integer amounts update milestone/skill balances, mark progression dirty
+and publish the owner World3D EXP notification. They do not use legacy quest gates.
+
 ## EXP milestones
 
 On each level, crossing 25%, 50% and 75% grants one unspent attribute point.

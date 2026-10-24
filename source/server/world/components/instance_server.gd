@@ -1,7 +1,6 @@
 class_name ServerInstance
 extends SubViewport
-## Neutral instance session/admission host. Runtime worlds may be 3D or
-## legacy fixtures; this class does not instantiate Player, Map or 2D sync.
+## Neutral instance session/admission host for the authoritative 3D world.
 
 static var world_server
 static var global_chat_commands: Dictionary[String, ChatCommand]
@@ -25,11 +24,6 @@ var opened_at_ms: int = 0
 var idle_since_ms: int = -1
 var is_overflow_copy: bool = false
 
-## Temporary, data-only bridge for old RPC handlers and isolated 2D fixtures.
-## No 3D gameplay consults these fields; remove once legacy dispatch is retired.
-var players_by_peer_id: Dictionary = {}
-var instance_map: Variant = null
-
 func population() -> int:
 	return connected_peers.size() + awaiting_peers.size()
 
@@ -44,11 +38,7 @@ func accepts_reservation() -> bool:
 func load_map(_map_path: String) -> void:
 	push_error("Concrete world host must implement load_map")
 
-func get_player(peer_id: int) -> Variant:
-	return players_by_peer_id.get(peer_id)
-
-## Retained to preserve the legacy transfer call surface while the 3D manager
-## replaces its old 2D admin handlers. Actual 2D despawn lives in the adapter.
+## Client counterpart keeps this RPC signature for instance lifecycle compatibility.
 @rpc("authority", "call_remote", "reliable", 0)
 func despawn_player(_peer_id: int, _delete: bool = false) -> void:
 	pass

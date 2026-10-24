@@ -4,7 +4,7 @@ extends CanvasLayer
 ## Today it covers the gateway → world hand-off: the gateway calls
 ## `Transition.start_world_load(...)` and frees itself; this overlay hard-cuts in to
 ## hide the grey gap, then fades out when the world is actually playable
-## (`ClientState.local_player_ready`). On a failed / auth-rejected connect it shows
+## (`ClientState.world_ready`). On a failed / auth-rejected connect it shows
 ## Retry / Back-to-login instead of the old black-screen hang.
 ##
 ## Built in code (like Toaster) so it stays one self-contained file — intended to
@@ -40,7 +40,6 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS  # buttons stay live even if the tree pauses
 	_build_ui()
 	visible = false
-	ClientState.local_player_ready.connect(_on_world_ready)
 	ClientState.world_ready.connect(_on_world_ready)
 	Client.connection_changed.connect(_on_connection_changed)
 	Client.instance_manager.channels_changed.connect(_show_channels)
@@ -48,7 +47,7 @@ func _ready() -> void:
 
 
 ## Connect to a world and cover the load. Call from the gateway, then free it.
-## Dismisses on local_player_ready; shows the error panel on a failed connect.
+## Dismisses on world_ready; shows the error panel on a failed connect.
 func start_world_load(address: String, port: int, token: String, background: Texture2D = null) -> void:
 	_address = address
 	_port = port
@@ -73,7 +72,7 @@ func _on_world_ready(_local_player: Node) -> void:
 
 func _on_connection_changed(connected: bool) -> void:
 	# Only during a load. connected == true → socket up, world still loading (wait for
-	# local_player_ready). false → the connect failed or auth was rejected.
+	# world_ready). false → the connect failed or auth was rejected.
 	if not _active or connected:
 		return
 	_show_error()
@@ -166,7 +165,7 @@ func show_disconnected() -> void:
 	_buttons.visible = true
 
 
-## The reveal. Runs on local_player_ready — the world's loaded, so the main thread is
+## The reveal. Runs on world_ready — the world's loaded, so the main thread is
 ## free and these tweens actually animate (a bloom at the START is frozen by the
 ## synchronous world load, hence the static "white filter" look). The cover fades
 ## while a warm-white bloom dissolves over it, so the world appears through a soft

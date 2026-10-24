@@ -83,7 +83,7 @@ func _ready() -> void:
 	pass
 
 
-## Free the live world and clear InstanceClient statics before returning to the
+## Free the live world before returning to the
 ## gateway. The instance lives under persistent Client; GameWorld owns its UI.
 ## Scene reload alone does not free the world. Transition calls this first.
 func teardown() -> void:
@@ -92,9 +92,6 @@ func teardown() -> void:
 	if current_instance and is_instance_valid(current_instance):
 		current_instance.queue_free()
 	current_instance = null
-	InstanceClient.current = null
-	InstanceClient.local_player = null
-	ClientState.local_player = null
 	ClientState.menu_open = false
 
 
@@ -124,8 +121,6 @@ func charge_new_instance(map_path: String, instance_id: String, identity: Dictio
 func _charge_3d_instance(map: Node3D, instance_id: String, identity: Dictionary = {}) -> void:
 	if current_instance != null:
 		current_instance.queue_free()
-	InstanceClient.local_player = null
-	ClientState.local_player = null
 	ClientState.menu_open = false
 	var instance: WorldInstanceClient3D = preload("res://source/client/network/world_instance_3d.gd").new()
 	instance.name = instance_id

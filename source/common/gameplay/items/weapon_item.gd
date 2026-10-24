@@ -1,5 +1,6 @@
 class_name WeaponItem
 extends GearItem
+## Legacy profile/item metadata compatibility. Runtime items use ItemDefinition/ItemInstance.
 
 
 ## Mastery category this weapon belongs to (&"sword", &"bow", &"wand",
@@ -43,36 +44,3 @@ func stat_lines() -> Array[Dictionary]:
 		lines.append({"text": "%s · Capacity %d" % [String(category).capitalize(), capacity], "kind": &"weapon"})
 	lines.append_array(super())
 	return lines
-
-
-func equip(character: Character) -> void:
-	super.equip(character)
-
-	if right_hand_scene:
-		var right_hand_weapon: Weapon = right_hand_scene.instantiate()
-		right_hand_weapon.character = character
-		character.equipment_component.mounted_nodes[slot.key] = right_hand_weapon
-		character.right_hand_spot.add_child(right_hand_weapon)
-		# Skin the in-hand sprite from this item's icon, so one type-scene
-		# (sword.tscn) serves every sword skin (fire, rustic, ...).
-		right_hand_weapon.apply_skin(item_icon, sprite_offset)
-	
-	if left_hand_scene:
-		var left_hand_weapon: Weapon = left_hand_scene.instantiate()
-		left_hand_weapon.character = character
-		character.left_hand_spot.add_child(left_hand_weapon)
-	else:
-		if character.left_hand_spot.get_child_count():
-			character.left_hand_spot.get_child(0).queue_free()
-			#character.left_hand_spot.remove_child(character.left_hand_spot.get_child(0))
-
-
-func unequip(character: Character) -> void:
-	super.unequip(character)
-
-	var weapon: Node = character.equipment_component.mounted_nodes.get(slot.key, null)
-	if weapon:
-		weapon.queue_free()
-	character.equipment_component.mounted_nodes.erase(slot.key)
-	for child in character.left_hand_spot.get_children():
-		child.queue_free()

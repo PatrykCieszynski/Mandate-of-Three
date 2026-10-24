@@ -9,6 +9,10 @@ The system bar opens Inventory/Equipment, Character · V and the existing native
 Options menu. Browser preview can exercise the two CEF windows; native Options
 requires Godot and produces explicit preview-only feedback in the browser host.
 
+Timed stat buffs affect authoritative World3D stats, but the current CEF HUD has
+no buff/debuff icon synchronization contract. The retired 2D `status.sync` producer
+is not part of this HUD; `BuffService` does not provide a replacement icon stream.
+
 ## Assignment and activation
 
 Drag an Inventory item with primary action **USE** onto any slot to assign its UID. This never moves custody,

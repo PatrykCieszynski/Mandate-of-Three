@@ -17,15 +17,17 @@ It preserves RPC signatures and existing handler domain validation.
 - An omitted ID resolves the peer's own joined instance. Unknown IDs never fall
   back to the default map. Pending/awaiting membership alone does not admit
   generic data requests before entry completes.
-- Legacy actor/resource identity must match the authenticated session. A 3D
-  instance must also contain that peer in its GameWorld characters.
+- Only 3D instances are admitted; the peer must also have an actor in the
+  instance's GameWorld characters. Retired 2D actor bindings are not an alternative.
 - Invalid context returns the existing numeric `ERR_UNAUTHORIZED` error in a
   correlated `{ok:false,error:...}` response. Unlisted operations return
   `ERR_INVALID_PARAMETER`; no arbitrary script is loaded first.
 - Legacy `ready_to_enter_instance` requires authenticated current-peer identity
   and the server's awaiting assignment for that specific instance before spawn.
 
-The allowlist retains the existing public handler names. It is not a new role or
+The allowlist excludes retired 2D quest, dungeon, trade table, ability, item equip,
+shop and wardrobe handlers. Their active World3D replacements use their existing
+endpoints. Retained social/profile operations remain explicitly allowlisted. It is not a new role or
 service permission system; handler checks for ownership, staff permissions,
 range, targets and economic invariants remain necessary. Authenticated requests
 before actual instance entry now fail closed instead of using the default map.
@@ -62,7 +64,7 @@ uncovered cross-instance and script-path risks:
 - unknown operations, base-class invocation and resource-path traversal;
 - restored legitimate access after rejected context;
 - missing/present 3D actor membership and a legitimate world-scoped handler;
-- attempted legacy spawn through another instance RPC path.
+- rejected retired 2D operations and attempted entry through another instance RPC path.
 
 The test constructs session bindings directly. It does not prove real Master
 handoff/reconnect; A1 identity/session coverage and the existing authentication
