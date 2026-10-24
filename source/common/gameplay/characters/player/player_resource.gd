@@ -26,10 +26,7 @@ const BASE_STATS: Dictionary[StringName, float] = {
 	Stat.ATTACK_SPEED: 100.0
 }
 
-## Free max HP per level past 1 — the PvP durability floor: levels buy baseline,
-## attributes buy specialization, so no build can opt into being one-tapped
-## (docs/pvp_balance.md). Composed into spawn stats (instance_server) and applied
-## live on level-up (leveled_up signal). L20 glass = 145 HP ≈ 3 basics to kill.
+## Existing free maximum HP per level, composed by the World3D stat projection.
 const HEALTH_PER_LEVEL: float = 5.0
 
 @export var player_id: int
@@ -38,10 +35,8 @@ const HEALTH_PER_LEVEL: float = 5.0
 @export var display_name: String = "Player"
 @export var skin_id: int = 1 # Default skin
 
-@export var inventory: Dictionary
-## Equipped gear: gear-slot key (&"weapon", &"torso", ...) -> item_id. Equipped items
-## live here, NOT in inventory (they're moved out on equip, back on unequip).
-@export var equipment: Dictionary
+## Opaque persistence compatibility only; never gameplay or economic authority.
+@export var retired_profile_fields: Dictionary = {}
 
 @export var attributes: Dictionary[StringName, int]
 @export var available_attributes_points: int
@@ -55,23 +50,6 @@ var stats_migrated: bool = false
 ## Character experience toward the next level (resets to the overflow on level-up).
 @export var experience: int
 
-## Legacy persisted payloads retained for SQLite compatibility.
-## Jobs, mastery and their ability loadout have no active runtime.
-@export var skills: Dictionary
-@export var masteries: Dictionary
-@export var ability_loadout: Dictionary
-
-## Retired 2D quest payload; preserved by profile codecs without execution hooks.
-@export var quests: Dictionary
-
-## The guild currently selected as the player's active guild.
-@export var active_guild_id: int
-## All guilds the player is a member of.
-## A player may belong to multiple guilds, but only one can be active at a time.
-@export var joined_guild_ids: PackedInt64Array
-## The guild in which the player holds the leader role.
-@export var led_guild_id: int
-
 @export var server_roles: Dictionary
 
 @export var friends: PackedInt64Array
@@ -82,10 +60,7 @@ var stats_migrated: bool = false
 ## persisted (JSON column on the players row, see world_store_sqlite.gd).
 @export var blocked_ids: PackedInt64Array
 
-## Skins this character has purchased and may switch between (skin ids from the `sprites`
-## registry). The currently EQUIPPED one is [member skin_id]; this is everything owned. The
-## creation skin is seeded on character creation and backfilled on load, so the equipped
-## skin is always in here. Persisted as owned_skins_json (mirrors [member friends]).
+## Owned cosmetic skin IDs retained by profile persistence; creation skin is owned.
 @export var owned_skins: PackedInt64Array
 
 ## Legacy statistics payload; also retains general played-time accounting.
@@ -97,26 +72,12 @@ var stats_migrated: bool = false
 ## title displayed. Auto-set to a newly-granted title only if no title is
 ## currently active — so players don't lose their chosen banner.
 @export var display_title: String
-## Earned wardstones — the biome-progression keys (docs/wardstones.md). Slugs
-## like "woodland"; granted the moment a biome's finale-quest climax completes,
-## checked by InstanceResource.can_join_instance. Character-wide by design.
+## Map-admission keys. Currently managed by staff through /wardstone.
 @export var wardstones: PackedStringArray
 ## Up to 3 trophies the player pins to their profile's right-side chip strip.
 ## Each entry must also be in titles_unlocked. Separate from display_title (the
 ## one shown under their name) — these are the "achievement flex" picks.
 @export var displayed_trophies: PackedStringArray
-
-## Retired daily-board payload; retained for saved-profile compatibility.
-@export var daily_quests: Array
-@export var dailies_refresh_at_ms: int
-
-## Retired dungeon lockouts; retained for saved-profile compatibility.
-@export var dungeon_lockouts: Dictionary = {}
-
-## Redeem codes this character has already claimed (upper-cased code strings).
-## Per-character by design — see docs/redeem_codes.md. Persisted as
-## redeemed_codes_json. Stops re-claiming the same code on this character.
-@export var redeemed_codes: PackedStringArray
 
 # Profile
 @export var profile_status: String = "Hello I'am new!"
@@ -125,9 +86,7 @@ var stats_migrated: bool = false
 @export var last_position: Vector2 = Vector2.ZERO
 @export var current_instance: String
 
-## Fired once per level gained (see level_up). The live server Player listens and
-## applies the per-level grants (HEALTH_PER_LEVEL) — one hook instead of touching
-## every add_experience call site (kills, quests, dailies, /xp, redeems).
+## World3D refreshes derived character stats when the authoritative level changes.
 signal level_gained
 ## Runtime source notification; no persistence or network work in listeners.
 signal combat_stats_changed

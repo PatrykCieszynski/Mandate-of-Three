@@ -183,7 +183,7 @@ func run_client() -> void:
 	assert(result.get("level")==expected_level, "valid 3D member should reach the real world-scoped handler")
 	result = await query(&"chat.message.send")
 	assert(result.get("error")==ERR_INVALID_PARAMETER,"retired persistent chat cannot bypass Chat V1 admission")
-	for retired: StringName in [&"quest.accept", &"dungeon.queue", &"trade.accept", &"action.perform", &"shop.buy.item"]:
+	for retired: StringName in [&"quest.accept", &"dungeon.queue", &"trade.accept", &"action.perform", &"shop.buy.item", &"guild.create", &"guild.invite", &"guild.treasury.deposit", &"mail.claim", &"mail.send", &"inventory.get", &"item.pin"]:
 		result = await query(retired)
 		assert(result.get("error") == ERR_INVALID_PARAMETER, "retired 2D operation remains reachable")
 	# Legacy entry RPC must not spawn into a different replicated instance.

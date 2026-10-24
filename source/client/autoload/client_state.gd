@@ -39,20 +39,9 @@ var menu_open: bool = false
 ## to talk doesn't ALSO fire your weapon — the world-space mirror of the GUI gate.
 ## Counter, so overlapping NPCs balance; each NPC clears its own contribution on free.
 var world_interactables_hovered: int = 0
-## Fired when the local player's tagged guild changes (login / tag / create /
-## join / leave). Ally-aware visuals (e.g. guild guard health bars) listen so
-## they re-evaluate without a relog.
-signal active_guild_id_changed(value: int)
-var active_guild_id: int:
-	set(value):
-		if value == active_guild_id:
-			return
-		active_guild_id = value
-		active_guild_id_changed.emit(value)
 var stats: DataDict = DataDict.new()
 var settings: Settings = Settings.new()
 var quick_slots: DataDict = DataDict.new()
-var guilds: DataDict = DataDict.new()
 
 ## Set of player_ids the local user has blocked. Used by chat_menu to drop
 ## incoming messages from blocked senders (server already filters too, but
@@ -82,8 +71,6 @@ func _ready() -> void:
 		queue_free()
 	Client.subscribe(&"player_id.set", func(payload: Dictionary):
 		player_id = payload.get("player_id", 0))
-	Client.subscribe(&"active_guild_id.set", func(payload: Dictionary):
-		active_guild_id = payload.get("active_guild_id", 0))
 	Client.subscribe(&"wardstones.set", func(payload: Dictionary):
 		wardstones = PackedStringArray(payload.get("wardstones", []))
 		wardstones_changed.emit())

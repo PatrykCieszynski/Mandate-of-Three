@@ -72,6 +72,26 @@ static func model() -> void:
 	world.free()
 
 static func persistence(store: RefCounted, player: PlayerResource) -> void:
+	# Retired data is opaque: preserve unknown fields and full-width JSON integers.
+	var retired: Dictionary={
+		"inventory_json": "{ \"old-slot\": {\"id\": 7, \"a\": 9007199254740993} }",
+		"equipment_json": "{\"weapon\":7}",
+		"skills_json": "{\"tailoring\":{\"future\":true}}",
+		"mastery_json": "{\"unknown\":[1,2]}",
+		"quests_json": "{\"old\":{\"unknown\":7}}",
+		"dailies_json": "{\"refresh_at_ms\":9007199254740993}",
+		"dungeon_lockouts_json": "{\"retired\":123}",
+		"redeemed_codes_json": "[\"OLD\"]",
+		"joined_guild_ids_json": "[7,8]",
+		"active_guild_id": 7,
+		"led_guild_id": 8,
+	}
+	player.retired_profile_fields=retired.duplicate(true)
+	assert(store.save_player(player))
+	var raw: PlayerResource=store.get_player(player.player_id)
+	assert(raw.retired_profile_fields==retired,"retired payloads survive without lossy normalization")
+	var row: Dictionary=store.get_player_profile_row(player.player_id)
+	assert(row.inventory_json==retired.inventory_json,"retired inventory is preserved on disk")
 	player.level=1;player.experience=0;player.attributes.clear();player.available_attributes_points=0
 	player.available_skill_points=0;player.exp_thresholds_claimed=0;player.stats_version=1;player.stats_revision=0
 	assert(store.save_player(player))
@@ -96,6 +116,7 @@ static func persistence(store: RefCounted, player: PlayerResource) -> void:
 	loaded.add_experience(70)
 	assert(checkpoint(store,loaded))
 	var reloaded: PlayerResource=store.get_player(player.player_id)
+	assert(reloaded.retired_profile_fields==retired,"allocation and narrow checkpoints preserve retired columns")
 	var points:=reloaded.available_attributes_points
 	assert(reloaded.add_experience(1).points_gained==0 and reloaded.available_attributes_points==points,"checkpoint/relog cannot re-award milestones")
 	# Old profile JSON roundtrip, followed by durable one-time refund.

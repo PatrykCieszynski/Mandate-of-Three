@@ -16,7 +16,6 @@ var economy_backend: String="sqlite" # Explicit bootstrap selection; never auto-
 var database_path: String
 var db: SqliteSoci
 var store: RefCounted
-var mail_store: RefCounted
 var profile_pg: Object
 var item_store: ItemStoreSqlite
 var wallet_store: WalletStoreSqlite
@@ -353,7 +352,6 @@ func start_postgres_profiles(settings: Dictionary) -> bool:
 		profile_pg.close();return false
 	economy_profile_id=identity.rows[0].value
 	store=preload("res://source/server/world/database/postgres/world_store_postgres.gd").new(profile_pg)
-	mail_store=preload("res://source/server/world/database/postgres/mail_store_postgres.gd").new(profile_pg)
 	return true
 
 func profile_store_ready() -> bool:
@@ -382,7 +380,6 @@ func start_profile_database(path: String) -> bool:
 	if not ItemInstance.valid_uid(economy_profile_id): return false
 	store=WorldStoreSqlite.new(db)
 	store.economic_initialization=false
-	mail_store=MailStore.new(db)
 	return true
 
 func start_database(world_info: Dictionary) -> void:
@@ -393,7 +390,6 @@ func start_database(world_info: Dictionary) -> void:
 	open_database()
 	WorldSchema.ensure_schema(db)
 	store = WorldStoreSqlite.new(db)
-	mail_store = MailStore.new(db)
 	item_store = ItemStoreSqlite.new(db)
 	wallet_store = WalletStoreSqlite.new(db)
 
@@ -450,25 +446,13 @@ func get_account_characters(account_name: String) -> Dictionary:
 	return store.get_account_characters(account_name)
 
 
-func get_guild(id: int) -> Guild:
-	return store.get_guild(id)
-
-
 func save_player(p: PlayerResource) -> void:
 	# A session/profile save has its own legacy payload. XP checkpoints themselves
-	# only use the three-column batch above, never this full serializer.
+	# only use the narrow progression batch above, never this full serializer.
 	flush_character(p.player_id)
 	store.save_player(p)
 
 
-func save_guild(g: Guild) -> void:
-	store.save_guild(g)
-
-
-## Flush every still-connected player to disk. Called from the periodic save
-## tick AND from the console's `save` / `shutdown` commands — previously the
-## console called a method that didn't exist, so shutdowns silently lost
-## anyone who hadn't disconnected yet. Returns the count actually saved.
 func save_all_connected(connected_players: Dictionary) -> int:
 	# Includes dirty characters whose peers have already disconnected.
 	if not flush_character(): return -1

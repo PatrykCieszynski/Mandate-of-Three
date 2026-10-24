@@ -104,7 +104,7 @@ by the change; this is not a checklist to run every extended suite for each PR.
 | Movement and PvE | `tests/run-spike3d.ps1`, `tests/run-pve.ps1`, `tests/run-first-region.ps1` | Authoritative speed/collision/death, cleanup, ground pickup/rights and playable content |
 | Combat / hit traces / BODY contacts | `tests/run-combat.ps1`; `-Scene combat_trace_network -MarkerPrefix TRACE`; `-Scene warrior_action_polish -MarkerPrefix ACTION` | Server damage once, hit geometry, locks, interruption, knockback and player overlap escape |
 | Inventory / Wallet / Storage / NPC / Marketplace / Exchange | Relevant PostgreSQL suites below; retained `tests/run-items.ps1`, `tests/run-yang.ps1`, `tests/run-market.ps1` reference cases | Ownership/custody, revisions, capacity, atomic money/item mutations, replay and restart recovery |
-| Profile/guild/mail and complete deployment | PostgreSQL `--suite full-state` | No success before COMMIT, profile ownership, checkpoint failure, login/relog and full-state backup/restore |
+| Profile/social persistence and complete deployment | PostgreSQL `--suite full-state` | No success before COMMIT, profile ownership, checkpoint failure, login/relog and full-state backup/restore |
 | Web UI bridge / TypeScript | `tests/run-web-ui.ps1`; [UI build/test commands](../../source/client/ui_web/README.md) | Explicit command boundary, request correlation, UI_READY snapshot recovery, retained uncertain intentions |
 | Native CEF / export / GPU integration | `tests/run-cef-export.ps1`, relevant `tests/run-visual-v0.ps1` scenario | Client addon resources, CEF-free server exports, renderer/input/lifecycle boundary; physical input/release packaging remain separate |
 

@@ -307,10 +307,6 @@ func start_world_server() -> void:
 	else:
 		create(Role.SERVER, configuration.bind_address, configuration.port)
 
-	if database.profile_pg!=null:
-		chat_service.store=preload("res://source/server/world/database/postgres/chat_store_postgres.gd").new(database.profile_pg)
-	else:
-		chat_service.setup_with_db(database.db)
 	$InstanceManager.start_instance_manager()
 
 	# Periodic save + backup. 5 minutes balances "low data loss on crash"
@@ -570,7 +566,6 @@ func _authentication_callback(peer_id: int, data: PackedByteArray) -> void:
 
 func _publish_authenticated_state(peer_id: int, player: PlayerResource) -> void:
 	data_push.rpc_id.call_deferred(peer_id, &"player_id.set", {"player_id": player.player_id})
-	data_push.rpc_id.call_deferred(peer_id, &"active_guild_id.set", {"active_guild_id": player.active_guild_id})
 	data_push.rpc_id.call_deferred(peer_id, &"wardstones.set", {"wardstones": player.wardstones})
 
 
@@ -593,35 +588,6 @@ const DATA_REQUEST_TYPES: Array[StringName] = [
 	"friend.remove",
 	"friend.request",
 	"friend.search",
-	"guild.banner.color",
-	"guild.create",
-	"guild.disband",
-	"guild.edit",
-	"guild.get",
-	"guild.get.joined_guilds",
-	"guild.get.members",
-	"guild.hall.upgrade",
-	"guild.invite",
-	"guild.invite.accept",
-	"guild.kick",
-	"guild.log.get",
-	"guild.logo.buy",
-	"guild.perms",
-	"guild.quit",
-	"guild.rank",
-	"guild.search",
-	"guild.transfer",
-	"guild.treasury.deposit",
-	"guild.trophies.display",
-	"guild.trophies.get",
-	"inventory.get",
-	"item.pin",
-	"mail.claim",
-	"mail.delete",
-	"mail.list",
-	"mail.read",
-	"mail.send",
-	"mail.unread_count",
 	"profile.get",
 	"profile.update",
 	"progression.get",
