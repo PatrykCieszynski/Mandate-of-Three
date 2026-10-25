@@ -120,6 +120,10 @@ Affix C1: `--suite affix-generation` persists generated and legacy affixes throu
 the real PostgreSQL item store, reopens the connection, and checks UID, resolved
 stats, sockets, upgrade level and the existing Auction stat/value index. The pure
 generator/embedded compatibility coverage is in the standard smoke suite.
+Natural drops C2 add smoke `natural_affix_loot`: quality counts, eligible tiers,
+material/KU exclusions and unchanged production item/Luck RNG stream. Existing
+`--suite ground-runtime` also persists/reconciles a six-affix UID after losing
+the claim completion, preserving all rolls through receipt recovery and replay.
 
 Player Trade V1: `--suite player-trade` covers atomic two-account settlement,
 UID/roll preservation, capacity/full-bag swaps, concurrent UID attempts, rollback,

@@ -11,6 +11,7 @@ $taskCases = [ordered]@{
     soci_embedded = 'SOCI_EMBEDDED_OK'
     content_catalog = 'CONTENT_CATALOG_OK'
     affix_generation = 'AFFIX_GENERATION_OK'
+    natural_affix_loot = 'NATURAL_AFFIX_LOOT_OK'
     stats_v1 = 'STATS_V1_OK'
     upgrade_transaction = 'UPGRADE_TRANSACTION_OK'
     shop_purchase = 'SHOP_PURCHASE_OK'

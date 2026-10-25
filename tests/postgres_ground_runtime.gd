@@ -230,6 +230,26 @@ func _ready() -> void:
 	assert(items(98001).size()==2 and items(98000).any(func(row: Dictionary) -> bool: return row.uid==uid and row.amount==7))
 	assert(not map.ground_loot.drops.has(uid) and not map.ground_loot.pending_claims.has(uid))
 	assert((await claim(101,uid)).ok and items(98001).size()==2)
+	# C2 natural equipment freezes six versioned affixes before pickup. Losing
+	# completion must recover the same UID/effects instead of drawing again.
+	var profile: Resource=preload("res://source/common/gameplay/loot/natural_affix_loot.gd").DEFAULT.duplicate(true)
+	profile.bands.clear();profile.bands.append({"quality":"test","weight":1,"prefixes":3,"suffixes":3})
+	var quality_rng:=RandomNumberGenerator.new();quality_rng.seed=74
+	var generated: Dictionary=preload("res://source/common/gameplay/loot/natural_affix_loot.gd").resolve([{"definition_id":&"iron_sword","amount":1,"affixes":[]}],quality_rng,profile)
+	assert(generated.ok and generated.items[0].affixes.size()==6)
+	var frozen: Array=generated.items[0].affixes.duplicate(true)
+	uid=map.ground_loot.spawn_resolved_item(Vector3.ZERO,98010,"fixture",Time.get_ticks_msec(),&"iron_sword",1,frozen)
+	assert(not uid.is_empty())
+	profile.pool.clear() # Future authoring changes cannot reinterpret a frozen drop.
+	pools[1].lose_claim=true
+	assert((await claim(200,uid)).error=="outcome_unknown")
+	assert(world.ground_item_runtime.receipt(200,uid).queued)
+	await wait_for(func()->bool:return world.ground_item_runtime.drained() and ready(200))
+	var saved: Dictionary=items(98010).filter(func(i: Dictionary)->bool:return i.uid==uid)[0]
+	assert(saved.affixes==frozen and not map.ground_loot.drops.has(uid),"lost completion retains all resolved affix metadata")
+	assert((await claim(200,uid)).ok and (await claim(101,uid)).error=="claimed")
+	assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.item_instances WHERE uid=:uid;",{"uid":uid}).rows[0].n)==1)
+	assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.ground_item_claims WHERE drop_uid=:uid;",{"uid":uid}).rows[0].n)==1)
 	assert(await world.flush_postgres_wallets(true))
 	pools[0].begin_drain()
 	await wait_for(func() -> bool: return pools.all(func(pool: RefCounted) -> bool: return pool.is_stopped()))

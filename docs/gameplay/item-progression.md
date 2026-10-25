@@ -5,8 +5,8 @@
 The shared, pure `items/affixes/affix_generator.gd` accepts an ItemDefinition,
 requested prefix/suffix counts, an authored pool and an explicit RNG. It returns
 a complete decision or an error, never mutates an item, writes SQL or awards loot.
-It is **not yet wired into production drops or crafting**; existing drop bonuses
-and the independent +0…+9 upgrade state remain unchanged.
+It is used by C2 ordinary equipment drops below; crafting actions are not yet
+implemented. The independent +0…+9 upgrade state remains unchanged.
 
 - Resource definitions specify identity, prefix/suffix kind, group,
   symmetric exclusion groups within the same kind, allowed base families/slots and integer-valued tiers.
@@ -52,6 +52,37 @@ slot restrictions, exclusions, 3+3, bad definitions, legacy interpretation and
 SOCI embedded reopen). PostgreSQL `--suite affix-generation` covers UID/effects/
 sockets/+level preservation after reopen, both JSON formats and the existing
 auction index. No schema migration, new currency or crafting UI is part of C1.
+
+## Natural equipment drops C2
+
+Ordinary Loot V2 in authored regions now decorates selected equipment through
+the same C1 generator. Solo and party use `KillRewardResolver.resolve_ordinary()`;
+table entries, per-spawn attempts, Luck, item identities/amounts and the item RNG
+stream (also used for party recipient selection) are unchanged. Quality and
+affix choices use a separate per-instance World RNG. Materials, stackable items,
+KU, event-specific grants, starters, NPC purchases and the legacy arena/Metin
+guaranteed reward keep their previous behavior.
+
+`loot/tables/natural_affix_profile.tres` defines provisional alpha weights:
+normal 60 (0+0 affixes), magic 30 (1+1), rare 9 (2+2), legendary 1 (3+3).
+These are tuning values, not finalized economy odds. Quality changes counts,
+never eligibility or tier weights: a two-affix item can roll any tier its base
+allows. Iron Sword remains eligibility level 1, so its currently legal tiers
+remain level-1 tiers. Higher eligibility is exercised in fixtures, not silently
+granted to live bases. Honed and Rhythmic extend the natural pool to three
+definitions per kind; their shared `precision` group name is independent by kind.
+
+The resolver produces a whole decorated batch or an error, without partial
+awards or retries of a failed quality roll. Ground custody assigns one UID after
+generation and freezes all six possible affixes. Pickup/retry validates stored
+structure, never rerolls or resolves current profile values. Existing protection,
+expiry, capacity, atomic PostgreSQL claims and receipts remain authoritative.
+No SQL schema, new currency, mob rarity or crafting action is introduced.
+
+Smoke adds `natural_affix_loot` for normal/magic/rare/legendary counts, eligible
+top-tier access, frozen UID, material/KU exclusions and production Loot V2 RNG
+parity. PostgreSQL `--suite ground-runtime` additionally covers a six-affix
+pickup with lost completion, read-only recovery, replay and exactly one UID.
 
 ## Historical first progression slice
 

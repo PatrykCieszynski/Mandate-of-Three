@@ -60,6 +60,7 @@ func protection_allows(drop: Dictionary, owner: int, now: int) -> bool:
 static func valid_affixes(definition: ItemDefinition, affixes: Array) -> bool:
 	if affixes.size() > MAX_AFFIXES:
 		return false
+	if affixes.any(func(r: Variant)->bool:return r is Dictionary and r.has("affix_version")) and not preload("res://source/common/gameplay/items/affixes/affix_roll.gd").valid_stored(affixes): return false
 	for value: Variant in affixes:
 		if not value is Dictionary:
 			return false
