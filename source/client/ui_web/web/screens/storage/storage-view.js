@@ -127,7 +127,7 @@ export function mountStorage(root, options) {
                 sourceBindings.push(options.drag.registerSource({
                     element: node,
                     payload: (event) => {
-                        if (pending || state.recoveryPending)
+                        if (pending || state.recoveryPending || options.blockCarry?.())
                             return null;
                         shell.handle.activate();
                         tooltip.hide();

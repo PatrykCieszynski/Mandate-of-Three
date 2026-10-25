@@ -32,6 +32,7 @@ import { UiItemGrid } from '../../game-ui/items/ui-item-grid.js';
 import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 interface StorageOptions {
+  blockCarry?: () => boolean;
   manager: WindowManager;
   resolveItemIcon: ResolveItemIcon;
   onClose: () => void;
@@ -164,7 +165,8 @@ export function mountStorage(root: HTMLElement, options: StorageOptions) {
             options.drag.registerSource({
               element: node,
               payload: (event) => {
-                if (pending || state.recoveryPending) return null;
+                if (pending || state.recoveryPending || options.blockCarry?.())
+                  return null;
                 shell.handle.activate();
                 tooltip.hide();
                 if (event.ctrlKey) {

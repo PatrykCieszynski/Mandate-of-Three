@@ -223,6 +223,7 @@ const view = mountInventory(root, {
     onRegionsChanged: () => regions?.refresh(),
 });
 const craft = mountCraft(root, {
+    storageRoot,
     resolveItemIcon,
     execute: (p) => bridge.request('craft.execute', p),
     retry: () => bridge.request('craft.retry', {}),
@@ -242,6 +243,7 @@ const equipment = mountEquipment(equipmentRoot, {
     onRegionsChanged: () => regions?.refresh(),
 });
 const storage = mountStorage(storageRoot, {
+    blockCarry: () => craft.engaged(),
     drag,
     transfer: (payload) => bridge.request('storage.transfer', payload),
     retry: () => bridge.request('storage.retry', {}),

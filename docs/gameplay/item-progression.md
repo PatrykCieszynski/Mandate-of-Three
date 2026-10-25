@@ -119,7 +119,9 @@ to use exactly one unit. Normal carrying/dragging only moves items and never
 crafts. Without Shift, a successful use exits targeting; Shift retains the stack
 for another deliberate click after authoritative reconciliation. Pending requests
 block new uses; each repeat reads current item/currency revisions. Invalid targets
-are dimmed and explain the restriction. RMB/Escape/blur cancel targeting; closing
+are dimmed and explain the restriction. Decorations survive Inventory/Storage
+page changes; Storage targets explain that crafting requires moving to the bag.
+Storage carry/quick-transfer is blocked while targeting. RMB/Escape/blur cancel targeting; closing
 Inventory also cancels. There is no crafting panel or dropdown. Recovery is a
 small Inventory notice/button, and never automatically executes an unsent intent.
 The standalone preview has a non-economic Use crafting currency fixture.

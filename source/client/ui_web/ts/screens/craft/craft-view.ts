@@ -41,6 +41,7 @@ export function mountCraft(
   root: HTMLElement,
   options: {
     resolveItemIcon: ResolveItemIcon;
+    storageRoot?: HTMLElement;
     execute: (p: ItemCommand) => Promise<CommandResult>;
     retry: () => Promise<CommandResult>;
     close: () => void;
@@ -100,17 +101,38 @@ export function mountCraft(
     return '';
   }
   function refreshTargets() {
-    for (const node of root.querySelectorAll<HTMLElement>('.inventory-item')) {
-      const target = state.targets.find((i) => i.id === node.dataset.id);
+    const decorate = (node: HTMLElement, why: string) => {
       if (armed) {
-        node.dataset.craftTarget = reason(target) ? 'invalid' : 'valid';
-        node.title = reason(target);
+        node.dataset.craftTarget = why ? 'invalid' : 'valid';
+        node.title = why;
       } else {
         delete node.dataset.craftTarget;
         node.removeAttribute('title');
       }
+    };
+    for (const node of root.querySelectorAll<HTMLElement>('.inventory-item')) {
+      decorate(
+        node,
+        reason(state.targets.find((i) => i.id === node.dataset.id)),
+      );
+    }
+    for (const node of options.storageRoot?.querySelectorAll<HTMLElement>(
+      '.storage-grid .ui-item-slot',
+    ) ?? []) {
+      decorate(node, 'Przenieś przedmiot ze Storage do torby');
     }
   }
+  // Page changes replace slot nodes without a domain snapshot. Observe only
+  // child replacement; decorations change attributes and cannot retrigger this.
+  const slotsChanged = new doc.defaultView!.MutationObserver(() => {
+    if (!disposed) refreshTargets();
+  });
+  slotsChanged.observe(root, { subtree: true, childList: true });
+  if (options.storageRoot)
+    slotsChanged.observe(options.storageRoot, {
+      subtree: true,
+      childList: true,
+    });
   function render() {
     surface.hidden = !armed;
     icon.replaceChildren();
@@ -179,7 +201,8 @@ export function mountCraft(
     if (event.button !== 0) return;
     if (
       event.target instanceof doc.defaultView!.Element &&
-      root.contains(event.target) &&
+      (root.contains(event.target) ||
+        options.storageRoot?.contains(event.target)) &&
       event.target.closest('button,[role=tab]')
     )
       return;
@@ -197,6 +220,15 @@ export function mountCraft(
       event.target instanceof doc.defaultView!.Element
         ? event.target.closest<HTMLElement>('.inventory-item')
         : null;
+    if (
+      event.target instanceof doc.defaultView!.Element &&
+      options.storageRoot?.contains(event.target) &&
+      event.target.closest('.ui-item-slot')
+    ) {
+      notice = 'Przenieś przedmiot ze Storage do torby';
+      render();
+      return;
+    }
     if (node && root.contains(node)) {
       const item = state.targets.find((i) => i.id === node.dataset.id);
       if (item) void use(item, event.shiftKey);
@@ -260,6 +292,7 @@ export function mountCraft(
     },
     dispose() {
       disposed = true;
+      slotsChanged.disconnect();
       armed = false;
       doc.removeEventListener('pointerdown', pointer, true);
       doc.removeEventListener('pointermove', move, true);

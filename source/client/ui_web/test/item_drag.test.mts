@@ -687,3 +687,27 @@ test('armed currency clicks cannot start Inventory carrying and normal carrying 
  craft.setState({active:true,pending:false,busy:false,currency:{...item,id:'b'.repeat(32),definition_id:'change_spark'},effect:'transform',targets:[item]});f.pointer(node,'pointerdown');assert.equal(attempts,1);assert.equal(f.runtime.active,false);
  craft.dispose();view.dispose();f.runtime.dispose();f.manager.dispose();f.dom.window.close();
 });
+
+test('currency preview survives Inventory/Storage page replacement and Storage cannot craft or quick-transfer',async()=>{
+ const f=fixture(),root=target(),storageRoot=target();f.doc.body.append(root,storageRoot);
+ let craft:ReturnType<typeof mountCraft>;let attempts=0,transfers=0;
+ const first={...bagItem,id:'a'.repeat(32),quantity:1,tooltip:{rarity:'normal' as const,affixes:[]}};
+ const second={...first,id:'c'.repeat(32),page:1};
+ const stored={...first,id:'d'.repeat(32)};const storedSecond={...stored,id:'e'.repeat(32),page:1};
+ const view=mountInventory(root,{manager:f.manager,drag:f.runtime,blockCarry:()=>craft?.engaged()??false,moveItem:async()=>({ok:true}),resolveItemIcon:()=>null});
+ const storage=mountStorage(storageRoot,{manager:f.manager,drag:f.runtime,blockCarry:()=>craft?.engaged()??false,transfer:async()=>{transfers++;return {ok:true};},resolveItemIcon:()=>null,onClose:()=>{}});
+ view.setState({inventory:{columns:5,rows:9,pages:4,items:[first,second]}});
+ storage.setState({columns:15,rows:9,pages:2,items:[stored,storedSecond]});
+ craft=mountCraft(root,{storageRoot,resolveItemIcon:()=>null,execute:async()=>{attempts++;return {ok:true};},retry:async()=>({ok:true}),close:()=>{},cancelCarry:()=>f.runtime.cancel(),regions:()=>{}});
+ craft.setState({active:true,pending:false,busy:false,currency:{...first,id:'b'.repeat(32),definition_id:'change_spark'},effect:'transform',targets:[first,second]});
+ const slot=(host:HTMLElement)=>host.querySelector<HTMLElement>('.ui-item-slot')!;
+ assert.equal(slot(root).dataset.craftTarget,'valid');assert.equal(slot(storageRoot).dataset.craftTarget,'invalid');assert.match(slot(storageRoot).title,/Storage/);
+ root.querySelectorAll<HTMLButtonElement>('[role=tab]')[1]!.click();await flush();
+ assert.ok(craft.engaged());assert.equal(slot(root).dataset.id,second.id);assert.equal(slot(root).dataset.craftTarget,'valid');
+ root.querySelectorAll<HTMLButtonElement>('[role=tab]')[0]!.click();await flush();assert.equal(slot(root).dataset.craftTarget,'valid');
+ storageRoot.querySelectorAll<HTMLButtonElement>('[role=tab]')[1]!.click();await flush();assert.ok(craft.engaged());assert.equal(slot(storageRoot).dataset.id,storedSecond.id);assert.equal(slot(storageRoot).dataset.craftTarget,'invalid');
+ storageRoot.querySelectorAll<HTMLButtonElement>('[role=tab]')[0]!.click();await flush();assert.equal(slot(storageRoot).dataset.craftTarget,'invalid');
+ capture(slot(storageRoot));f.pointer(slot(storageRoot),'pointerdown',10,10,0,7,true);await flush();assert.equal(attempts,0);assert.equal(transfers,0);assert.equal(f.runtime.active,false);
+ craft.cancel();assert.equal(slot(root).dataset.craftTarget,undefined);assert.equal(slot(storageRoot).dataset.craftTarget,undefined);
+ craft.dispose();storage.dispose();view.dispose();f.runtime.dispose();f.manager.dispose();f.host.close();
+});
