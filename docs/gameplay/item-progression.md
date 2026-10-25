@@ -1,4 +1,59 @@
-# Item Progression Slice - first step
+# Item progression
+
+## Affix generation C1 — current foundation
+
+The shared, pure `items/affixes/affix_generator.gd` accepts an ItemDefinition,
+requested prefix/suffix counts, an authored pool and an explicit RNG. It returns
+a complete decision or an error, never mutates an item, writes SQL or awards loot.
+It is **not yet wired into production drops or crafting**; existing drop bonuses
+and the independent +0…+9 upgrade state remain unchanged.
+
+- Resource definitions specify identity, prefix/suffix kind, group,
+  symmetric exclusion groups within the same kind, allowed base families/slots and integer-valued tiers.
+  Each eligible definition/tier pair competes by its explicit positive weight.
+  One chosen group excludes all its other definitions/tiers on that item.
+  The cap is three prefixes and three suffixes, with no duplicate groups within
+  each kind. Prefixes and suffixes have independent group namespaces: the same
+  group name may appear once in each, and exclusions never cross the two kinds.
+- C1 eligibility uses authored `ItemDefinition.affix_family` and `affix_level`,
+  not character level or upgrade level. Empty family opts out. Iron Sword opts
+  into the illustrative sword pool at base eligibility level 1. A future rolled,
+  per-instance item level remains a separate design/content decision; no SQL
+  column or implicit inference from old items has been introduced.
+- Requested counts must be satisfiable along the selected path. A depleted or
+  mutually excluded pool returns `insufficient_pool`, with no partial award,
+  automatic retries or backtracking that would silently change probabilities.
+  Candidate identities and tiers are sorted so authoring order does not affect
+  seeded results. The caller owns RNG seeding/lifetime; tests use fixed seeds.
+- The illustrative catalogue has four definitions: Keen/Tempered prefixes add
+  attack; Swift/Balanced suffixes add attack speed. Each has a tier at level 1
+  (weight 80) and a stronger eligible tier at level 5 (weight 20). Values are
+  examples, not approved balance. C1 supports these two already projected stats;
+  new stat effects need their own actual combat/projection implementation.
+
+New stored rolls retain `stat` and the resolved `value` plus `affix_version=1`,
+`affix_id`, `kind`, `group`, `tier` and the eligibility `level` used at creation.
+They use the existing affixes JSON field and auction stat/value projection.
+Loading validates structure, caps and duplicate groups per kind, normalizes JSON integer
+metadata, and reads the **saved effect**, without looking up current tier values.
+Changing/removing a catalogue entry therefore cannot reroll an existing item.
+Live `validate()` additionally checks the current definition, tier, restrictions
+and resolved value before a future mutation is allowed.
+
+Legacy `{stat,value}` rolls remain unclassified and retain their old calculation
+and tooltip behavior; no invented prefix, tier, item level or refund is applied.
+Mixed legacy/versioned arrays are rejected: converting a legacy item for future
+crafting needs an explicit policy in C3. UID, sockets, placement, revision and
+upgrade level are independent of the new metadata. Existing CEF tooltips show
+the real prefix/suffix kind for versioned rolls through the existing Alt labels.
+
+Verification: smoke includes `affix_generation` (seeded selection, tier/family/
+slot restrictions, exclusions, 3+3, bad definitions, legacy interpretation and
+SOCI embedded reopen). PostgreSQL `--suite affix-generation` covers UID/effects/
+sockets/+level preservation after reopen, both JSON formats and the existing
+auction index. No schema migration, new currency or crafting UI is part of C1.
+
+## Historical first progression slice
 
 Status: 2026-10-07, branch `codex/item-progression-slice`. A small loop on the
 existing instance model: kill a dog -> see its ground weapon -> pick up -> compare

@@ -116,6 +116,11 @@ for complete login/restart acceptance on the normal backend.
 
 ## PostgreSQL runner
 
+Affix C1: `--suite affix-generation` persists generated and legacy affixes through
+the real PostgreSQL item store, reopens the connection, and checks UID, resolved
+stats, sockets, upgrade level and the existing Auction stat/value index. The pure
+generator/embedded compatibility coverage is in the standard smoke suite.
+
 Player Trade V1: `--suite player-trade` covers atomic two-account settlement,
 UID/roll preservation, capacity/full-bag swaps, concurrent UID attempts, rollback,
 COMMIT uncertainty, replay and stale sessions. `--suite player-trade-network`

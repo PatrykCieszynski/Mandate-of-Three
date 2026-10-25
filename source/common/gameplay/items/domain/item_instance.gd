@@ -61,11 +61,7 @@ static func from_row(row: Dictionary) -> ItemInstance:
 	var stones: Variant = JSON.parse_string(str(row.sockets_json))
 	if not rolls is Array or not stones is Array:
 		return null
-	for roll: Variant in rolls:
-		if not roll is Dictionary or not roll.has_all(["stat", "value"]):
-			return null
-		if not roll.stat is String or not (roll.value is int or roll.value is float) or not is_finite(float(roll.value)):
-			return null
-	item.affixes = rolls
+	if not preload("res://source/common/gameplay/items/affixes/affix_roll.gd").valid_stored(rolls): return null
+	item.affixes = preload("res://source/common/gameplay/items/affixes/affix_roll.gd").canonical(rolls)
 	item.sockets = stones
 	return item

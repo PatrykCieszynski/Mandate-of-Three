@@ -22,5 +22,9 @@ enum PrimaryAction {
 @export var recipe_category: StringName
 @export var base_stats: Dictionary[StringName, float] = {}
 @export var stats_per_upgrade: Dictionary[StringName, float] = {}
+## C1 eligibility is a property of the base, independent of player/+level.
+## Empty family opts out. Future per-instance item level is a separate decision.
+@export var affix_family: StringName
+@export_range(1, 1000000) var affix_level: int = 1
 
 @export_range(1, 3) var inventory_height: int = 1
