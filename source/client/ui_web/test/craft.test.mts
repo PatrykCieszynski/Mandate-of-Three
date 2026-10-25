@@ -69,3 +69,17 @@ test('Rare currencies use the same explicit cursor with correct rarity targets a
  assert.equal(sent.length,3,'creation cannot repeat on a newly Rare target; reforge can repeat with the latest revision');
  view.dispose();manager.dispose();host.close();
 });
+
+test('awakening uses Magic targets only and cannot repeat on the promoted Rare item',async()=>{
+ const {manager,doc,host}=environment(),root=target();doc.body.append(root);
+ let attempts=0;
+ const view=mountCraft(root,{resolveItemIcon:()=>null,execute:async()=>{attempts++;return {ok:true};},retry:async()=>({ok:true}),close:()=>{},cancelCarry:()=>{},regions:()=>{}});
+ assert.ok(CRAFT_CURRENCIES.includes('awakening_seal'));
+ const snapshot={...state(),currency:{...(state().currency as ItemPresentation),definition_id:'awakening_seal'}};
+ view.setState(snapshot);assert.equal(view.reason(sword),'');await view.use(sword,true);assert.equal(attempts,1);assert.ok(view.engaged());
+ for(const rarity of ['rare','normal'] as const) {
+   view.setState({...snapshot,targets:[{...sword,revision:8,tooltip:{rarity,affixes:[]}}]});
+   assert.ok(view.reason(sword));await view.use(sword,true);assert.equal(attempts,1);
+ }
+ view.dispose();manager.dispose();host.close();
+});

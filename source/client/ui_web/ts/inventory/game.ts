@@ -39,6 +39,8 @@ await applySkin(document.documentElement, legacy.skin);
 uiIcons.replace(legacy.uiIcons, new URL('./', import.meta.url));
 const itemIcons = new ItemIconResolver({
   ...legacy.itemIcons,
+  awakening_seal: new URL('../content/awakening_seal.svg', import.meta.url)
+    .href,
   ascension_ember: new URL('../content/ascension_ember.svg', import.meta.url)
     .href,
   renewal_prism: new URL('../content/renewal_prism.svg', import.meta.url).href,

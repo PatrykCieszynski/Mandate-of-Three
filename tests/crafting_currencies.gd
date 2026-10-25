@@ -62,5 +62,33 @@ func _ready() -> void:
 	var tiny_pool: Array=Rules.PROFILE.pool.slice(0,1)
 	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"ascension_ember",rng,tiny_pool).error=="insufficient_pool","no downgrade or retry if the authored pool cannot supply Rare")
 	assert(Rules.resolve(currency,"ascension_ember",rng).error=="unsupported_item")
-	print("CRAFTING_CURRENCIES_OK explicit rarity, one/two rolls, preserved augmentation, legacy refusal, caps")
+	var added_kinds: Dictionary={}
+	for prefixes: int in 2:
+		for suffixes: int in 2:
+			for seed_value: int in 40:
+				rng.seed=seed_value
+				var retained: Array=Generator.generate(ItemDefinitions.IRON_SWORD,prefixes,suffixes,Rules.PROFILE.pool,rng).affixes
+				var initial:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,retained)
+				initial.rarity="magic" # Explicit rarity can legally have no rolls.
+				initial.upgrade_level=5;initial.sockets=[{"definition_id":"preserve-awaken"}]
+				var before:=initial.to_snapshot()
+				rng.seed=seed_value
+				var awakened:=Rules.resolve(initial,"awakening_seal",rng)
+				assert(awakened.ok and awakened.rarity=="rare" and awakened.affixes.size()==retained.size()+1)
+				assert(awakened.affixes.slice(0,retained.size())==retained and initial.to_snapshot()==before)
+				assert(Generator.validate(awakened.affixes,ItemDefinitions.IRON_SWORD,Rules.PROFILE.pool))
+				added_kinds[awakened.affixes[-1].kind]=true
+				rng.seed=seed_value
+				assert(Rules.resolve(initial,"awakening_seal",rng)==awakened)
+	assert(added_kinds.size()==2)
+	assert(Rules.resolve(rare,"awakening_seal",rng).error=="rarity")
+	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"awakening_seal",rng).error=="rarity")
+	assert(Rules.resolve(legacy,"awakening_seal",rng).error=="invalid_affixes")
+	# Existing rolls exhaust both kinds. A failed decision must not replace them,
+	# silently pick another layout, or promote the original item.
+	var restricted: Array=Rules.PROFILE.pool.filter(func(d: Resource)->bool:return d.affix_id in [&"keen",&"swift"])
+	var restricted_magic:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,Generator.generate(ItemDefinitions.IRON_SWORD,1,1,restricted,rng).affixes)
+	var restricted_before:=restricted_magic.to_snapshot()
+	assert(Rules.resolve(restricted_magic,"awakening_seal",rng,restricted).error=="insufficient_pool" and restricted_magic.to_snapshot()==restricted_before)
+	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, Magic to Rare, legacy refusal, caps")
 	get_tree().quit()

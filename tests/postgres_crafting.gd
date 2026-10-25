@@ -15,7 +15,7 @@ func _ready() -> void:
 	var target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[])
 	target.upgrade_level=4;target.sockets=[{"definition_id":"preserved"}]
 	var currencies: Array=[]
-	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM]:
+	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL]:
 		var item:=ItemInstance.create(definition,OWNER,[]);item.amount=20;currencies.append(item)
 	assert(db.begin())
 	for item: ItemInstance in [target]+currencies: assert(Items.new(db).receive_item_in_transaction(item).ok)
@@ -52,6 +52,7 @@ func _ready() -> void:
 	var generator=preload("res://source/common/gameplay/items/affixes/affix_generator.gd")
 	var one: Array=generator.generate(ItemDefinitions.IRON_SWORD,1,0,Rules.PROFILE.pool,rng).affixes
 	var augment_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,one)
+	augment_target.upgrade_level=2;augment_target.sockets=[{"definition_id":"kept-magic"}]
 	var full:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,generator.generate(ItemDefinitions.IRON_SWORD,3,3,Rules.PROFILE.pool,rng).affixes)
 	var legacy:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[{"stat":"attack","value":7}])
 	assert(db.begin())
@@ -104,6 +105,29 @@ func _ready() -> void:
 	var final_target: Dictionary=final_state.filter(func(i: Dictionary)->bool:return i.uid==rare_target.uid)[0]
 	assert(final_target.revision==2 and final_target.upgrade_level==5 and final_target.sockets==rare_target.sockets and final_target.affixes==reforged.affixes)
 	assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":rare_target.uid}).rows.size()==reforged.affixes.size())
+	# Promotion starts with the completed Magic item. Original ordered affixes,
+	# values and identity survive; only the appended roll and rarity are new.
+	var promote_before:=state()
+	var magic_before: Dictionary=promote_before.filter(func(i: Dictionary)->bool:return i.uid==augment_target.uid)[0]
+	assert(db.execute("CREATE TRIGGER craft_fault BEFORE UPDATE OF affixes_json ON economy.item_instances FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+	assert(store.execute(OWNER,0,augment_target.uid,1,currencies[5].uid,0,"awaken-write-fault").error=="storage" and state()==promote_before)
+	assert(db.execute("DROP TRIGGER craft_fault ON economy.item_instances;").ok)
+	assert(db.execute("CREATE CONSTRAINT TRIGGER craft_fault AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+	assert(store.execute(OWNER,0,augment_target.uid,1,currencies[5].uid,0,"awaken-unknown").get("outcome_unknown",false))
+	assert(db.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) and state()==promote_before)
+	assert(db.execute("DROP TRIGGER craft_fault ON economy.market_commands;").ok)
+	store=Craft.new(db)
+	var awakened:=store.execute(OWNER,0,augment_target.uid,1,currencies[5].uid,0,"awaken-paid")
+	assert(awakened.ok and store.committed and awakened.rarity=="rare" and awakened.affixes.size()==magic_before.affixes.size()+1)
+	assert(awakened.affixes.slice(0,magic_before.affixes.size())==magic_before.affixes)
+	var promoted_state:=state()
+	var promoted: Dictionary=promoted_state.filter(func(i: Dictionary)->bool:return i.uid==augment_target.uid)[0]
+	assert(promoted.upgrade_level==magic_before.upgrade_level and promoted.sockets==magic_before.sockets and promoted.bag_position==magic_before.bag_position and promoted.revision==2)
+	assert(promoted_state.filter(func(i: Dictionary)->bool:return i.uid==currencies[5].uid)[0].amount==19)
+	assert(store.execute(OWNER,0,augment_target.uid,1,currencies[5].uid,0,"awaken-paid")==awakened and store.receipt_replay and state()==promoted_state)
+	assert(store.execute(OWNER,0,augment_target.uid,2,currencies[5].uid,1,"awaken-twice").error=="rarity" and state()==promoted_state)
+	assert(store.execute(OWNER,0,augment_target.uid,1,currencies[5].uid,0,"awaken-stale").error=="stale" and state()==promoted_state)
+	assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":augment_target.uid}).rows.size()==awakened.affixes.size())
 	db.close()
 	print("POSTGRES_CRAFTING_OK rollback, uncertain COMMIT, replay/conflict, stale race, UID/+level/sockets, migration and auction index")
 	get_tree().quit()

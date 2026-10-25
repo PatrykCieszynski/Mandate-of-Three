@@ -23,6 +23,7 @@ export const CRAFT_CURRENCIES = [
     'completion_shard',
     'ascension_ember',
     'renewal_prism',
+    'awakening_seal',
 ];
 // Explicit currency-use mode, separate from ordinary item carrying/placement.
 export function mountCraft(root, options) {

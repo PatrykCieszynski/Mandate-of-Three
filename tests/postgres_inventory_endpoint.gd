@@ -397,8 +397,13 @@ func run() -> void:
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	# Craft uses the actual endpoint, UI journal and separate native client
 	# process. It must recover a committed random outcome without redrawing.
-	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.ASCENSION_EMBER]:
+	var crafting_definitions: Array[ItemDefinition]=[ItemDefinitions.CHANGE_SPARK,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.AWAKENING_SEAL]
+	for definition: ItemDefinition in crafting_definitions:
 		var craft_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,character,[])
+		if definition==ItemDefinitions.AWAKENING_SEAL:
+			var rng:=RandomNumberGenerator.new();rng.seed=17
+			craft_target.affixes=preload("res://source/common/gameplay/items/affixes/affix_generator.gd").generate(ItemDefinitions.IRON_SWORD,1,1,preload("res://source/common/gameplay/items/crafting/crafting_rules.gd").PROFILE.pool,rng).affixes
+			craft_target.rarity="magic"
 		craft_target.upgrade_level=3;craft_target.sockets=[{"definition_id":"preserve"}]
 		var craft_material:=ItemInstance.create(definition,character,[])
 		craft_material.amount=2
@@ -409,10 +414,12 @@ func run() -> void:
 		assert((await phase(actor,"craft-lost",craft_payload)).error=="timeout")
 		var frozen: Dictionary=Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_target.uid)[0]
 		assert(frozen.rarity==craft_payload.rarity and frozen.revision==1 and frozen.upgrade_level==3 and frozen.sockets==craft_target.sockets)
+		if definition==ItemDefinitions.AWAKENING_SEAL:
+			assert(frozen.affixes.size()==3 and frozen.affixes.slice(0,2)==craft_target.affixes)
 		await phase(actor,"exit")
 		await wait_for(func()->bool:return not world.connected_players.has(actor))
 		map.reports.erase("craft-restored-ready")
-		await start_client(211 if definition==ItemDefinitions.CHANGE_SPARK else 212,"alpha","craft-restored")
+		await start_client(211+crafting_definitions.find(definition),"alpha","craft-restored")
 		await wait_for(func()->bool:return map.reports.has("craft-restored-ready"))
 		actor=map.reports["craft-restored-ready"].peer
 		assert((await phase(actor,"craft-restored",craft_payload)).ok)
