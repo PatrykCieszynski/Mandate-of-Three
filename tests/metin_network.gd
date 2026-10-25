@@ -65,6 +65,10 @@ func run_server() -> void:
 		world.characters[id].position = encounter.stone.position + Vector3(-0.2+index*0.4,0,1.7)
 		world.characters[id].rotation.y = 0
 		server.runtime_equipment[server.connected_players[id].player_id].stats[&"attack"] = 300
+		# Direct fixture writes bypass normal equipment-change notifications.
+		# Combat reads the derived projection, not this gear dictionary per hit.
+		server.refresh_character_stats(id)
+		check(server.runtime_attack(server.connected_players[id].player_id)>=300,"fixture attack boost reaches authoritative combat projection")
 		index += 1
 	await get_tree().create_timer(0.2).timeout
 	initial_stone_id = encounter.runtime.stone_instance_id
