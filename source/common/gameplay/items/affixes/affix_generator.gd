@@ -26,9 +26,12 @@ static func compatible(d: Resource, selected: Array, pool: Array) -> bool:
 			if existing.kind==d.kind and str(existing.affix_id)==roll.affix_id and d.group in existing.excludes: return false
 	return true
 
-static func generate(base: ItemDefinition, prefixes: int, suffixes: int, pool: Array, rng: RandomNumberGenerator) -> Dictionary:
+static func generate(base: ItemDefinition, prefixes: int, suffixes: int, pool: Array, rng: RandomNumberGenerator, retained: Array = []) -> Dictionary:
 	if base==null or base.affix_level<1 or base.affix_level>1000000 or rng==null or prefixes<0 or prefixes>3 or suffixes<0 or suffixes>3 or not valid_pool(pool): return {"ok":false,"error":"request"}
-	var result: Array=[]
+	if not retained.is_empty() and not validate(retained,base,pool): return {"ok":false,"error":"invalid_affixes"}
+	var retained_prefixes: int=retained.filter(func(r: Dictionary)->bool:return r.kind=="prefix").size()
+	if retained_prefixes+prefixes>3 or retained.size()-retained_prefixes+suffixes>3: return {"ok":false,"error":"request"}
+	var result: Array=retained.duplicate(true)
 	# Authoring order does not change seeded results.
 	var sorted: Array=pool.duplicate()
 	sorted.sort_custom(func(a: Resource,b: Resource)->bool:return str(a.affix_id)<str(b.affix_id))

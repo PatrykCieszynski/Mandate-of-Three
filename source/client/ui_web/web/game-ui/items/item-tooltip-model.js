@@ -3,9 +3,7 @@ export function itemRarity(affixCount) {
         return 'normal';
     if (affixCount <= 2)
         return 'magic';
-    if (affixCount <= 4)
-        return 'rare';
-    return 'legendary';
+    return 'rare';
 }
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = (value) => typeof value === 'string' && value.length > 0 && value.length <= 256;
@@ -13,7 +11,9 @@ const lines = (value, max) => Array.isArray(value) && value.length <= max && val
 // IPC metadata is still untrusted. Bound DOM work and enforce 3 prefixes/3 suffixes.
 export function isItemTooltipDetails(value) {
     if (!object(value) ||
-        Object.keys(value).some((key) => !['category', 'properties', 'requirements', 'affixes'].includes(key)))
+        Object.keys(value).some((key) => !['rarity', 'category', 'properties', 'requirements', 'affixes'].includes(key)))
+        return false;
+    if ('rarity' in value && !['normal', 'magic', 'rare'].includes(String(value.rarity)))
         return false;
     if ('category' in value && !text(value.category))
         return false;

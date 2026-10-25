@@ -22,14 +22,18 @@ var _next_projection_version := 0
 var _inventory_version := 0
 var _weapon_versions: Dictionary[int, int] = {}
 var _world: Node
+var _craft: RefCounted
 var _postgres: RefCounted
 func _ready() -> void:
 	_world = get_parent()
+	if GameMode.is_world_server() and services.npc_runtime()!=null:
+		_craft=preload("res://source/common/gameplay/world3d/endpoints/npc_postgres_adapter.gd").new(self,services.npc_runtime(),"craft")
 	inventory_changed.connect(_inventory_changed)
 	if GameMode.is_world_server() and services.inventory_runtime()!=null:
 		_postgres=preload("res://source/common/gameplay/world3d/endpoints/inventory_postgres_adapter.gd").new(self,services.inventory_runtime())
 
 func _exit_tree() -> void:
+	if _craft!=null: _craft.dispose()
 	if _postgres!=null: _postgres.dispose()
 
 func _store() -> ItemStoreSqlite:
@@ -54,6 +58,7 @@ func initialize_peer(peer_id: int) -> void:
 		receive_weapon.rpc_id(peer_id, other_id, public_weapons[other_id], _weapon_versions[other_id])
 
 func remove_peer(peer_id: int) -> void:
+	if _craft!=null: _craft.remove_peer(peer_id)
 	if _postgres!=null: _postgres.remove_peer(peer_id)
 	_authoritative_snapshots.erase(peer_id)
 	public_weapons.erase(peer_id)
@@ -339,3 +344,22 @@ func weapon_comparison(item: Dictionary) -> Dictionary:
 			previous_attack = int(equipped.stats.get("attack", 0))
 	var attack: int = current_attack - previous_attack + int(item.stats.get("attack", 0))
 	return {"attack": attack, "delta": attack - current_attack}
+
+@rpc("any_peer", "call_remote", "reliable", 1)
+func request_craft(action: String, body: Dictionary, command: String, operation: String) -> void:
+	if not GameMode.is_world_server() or command.length()>80 or operation.length()>96 or body.size()>4: return
+	var peer: int=multiplayer.get_remote_sender_id()
+	if not _world.characters.has(peer) or services.player_for_peer(peer)==null: return
+	if _craft==null:
+		receive_operation.rpc_id(peer,command,{"ok":false,"error":"unsupported"});return
+	# Receipt lookup followed by explicit execution is one recovery flow.
+	# Do not charge the read against the mutation admission clock.
+	var attempts: Dictionary=_last_receipt_ms if action=="receipt" else _last_action_ms
+	if _craft.busy(peer) or Time.get_ticks_msec()-attempts.get(peer,-1000)<100:
+		receive_operation.rpc_id(peer,command,{"ok":false,"error":"storage"});return
+	attempts[peer]=Time.get_ticks_msec()
+	if action=="receipt":
+		_craft.receipt(peer,command,operation);return
+	if action!="execute" or services.transfer_pending(peer) or not _world.combat_endpoint.is_player_alive(peer):
+		receive_operation.rpc_id(peer,command,{"ok":false,"error":"unavailable"});return
+	_craft.craft(peer,command,operation,body)

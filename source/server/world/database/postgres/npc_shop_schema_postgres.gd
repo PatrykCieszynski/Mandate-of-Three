@@ -6,10 +6,12 @@ const WalletSchema = preload("res://source/server/world/database/postgres/wallet
 static func ensure_schema(db: Object) -> bool:
 	if not WalletSchema.ensure_schema(db) or not db.begin(): return false
 	var result: Dictionary = db.query("SELECT version FROM economy.schema_versions WHERE feature='npc_shop';")
-	if not result.ok or (not result.rows.is_empty() and int(result.rows[0].version)!=1):
+	if not result.ok or (not result.rows.is_empty() and int(result.rows[0].version) not in [1,2]):
 		db.rollback()
 		return false
 	if not result.rows.is_empty():
+		if int(result.rows[0].version)==1 and not _rarity(db):
+			db.rollback();return false
 		if db.commit(): return true
 		db.close()
 		return false
@@ -47,6 +49,23 @@ END; $$;""",
 		if not db.execute(sql).ok:
 			db.rollback()
 			return false
+	if not _rarity(db):
+		db.rollback();return false
 	if db.commit(): return true
 	db.close()
 	return false
+
+## Offline migration. Preserve affixes/UID/revision; legacy bonuses remain opaque.
+static func _rarity(db: Object) -> bool:
+	for sql: String in [
+		"ALTER TABLE economy.item_instances ADD COLUMN rarity TEXT NOT NULL DEFAULT 'normal' CHECK(rarity IN ('normal','magic','rare'));",
+		"""UPDATE economy.item_instances SET rarity=CASE
+ WHEN jsonb_array_length(affixes_json::jsonb)=0 THEN 'normal'
+ WHEN jsonb_array_length(affixes_json::jsonb)<=2
+ AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(affixes_json::jsonb) a WHERE a->>'affix_version' IS DISTINCT FROM '1' OR COALESCE(a->>'kind','') NOT IN ('prefix','suffix'))
+ AND (SELECT count(*) FROM jsonb_array_elements(affixes_json::jsonb) a WHERE a->>'kind'='prefix')<=1
+ AND (SELECT count(*) FROM jsonb_array_elements(affixes_json::jsonb) a WHERE a->>'kind'='suffix')<=1 THEN 'magic' ELSE 'rare' END;""",
+		"UPDATE economy.schema_versions SET version=2 WHERE feature='npc_shop';"
+	]:
+		if not db.execute(sql).ok: return false
+	return true

@@ -1,5 +1,5 @@
 extends RefCounted
-## Map-local correlation/publication shared only by NPC Shop and Upgrade.
+## Map-local correlation/publication for the existing economic worker lane.
 var _endpoint: Node
 var _runtime: RefCounted
 var _kind: String
@@ -28,6 +28,9 @@ func upgrade(peer: int, command: String, operation: String, recipe: UpgradeDefin
 func sell(peer: int, command: String, operation: String, quote_id: String, npc: String, service: String) -> void:
 	_capture(peer,command,operation,_runtime.sell(peer,operation,quote_id,npc,service))
 
+func craft(peer: int, command: String, operation: String, body: Dictionary) -> void:
+	_capture(peer,command,operation,_runtime.craft(peer,operation,body))
+
 func receipt(peer: int, command: String, operation: String) -> void:
 	_capture(peer,command,operation,_runtime.receipt(peer,_kind,operation))
 
@@ -45,7 +48,8 @@ func _finished(peer: int, kind: String, operation: String, result: Dictionary) -
 	var pending: Dictionary=_pending.get(peer,{})
 	if pending.is_empty() or pending.operation!=operation: return
 	_pending.erase(peer)
-	if _kind=="upgrade": _endpoint.publish(peer)
+	if _kind=="craft": pass
+	elif _kind=="upgrade": _endpoint.publish(peer)
 	else: _endpoint._publish(peer)
 	_reply(peer,pending.command,result)
 

@@ -1,11 +1,12 @@
 extends RefCounted
-## Explicit NPC Shop/Upgrade worker boundary. Only server-authored definitions
+## Explicit NPC Shop/Upgrade/consumable-crafting worker boundary. Only server-authored definitions
 ## cross as copied primitive data; no live NPC/World objects or client prices.
 const Sessions = preload("res://source/server/world/database/postgres/inventory_session_postgres.gd")
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
 const Shop = preload("res://source/server/world/database/postgres/npc_shop_store_postgres.gd")
 const Vendor = preload("res://source/server/world/database/postgres/vendor_sell_store_postgres.gd")
 const Upgrade = preload("res://source/server/world/database/postgres/upgrade_store_postgres.gd")
+const Craft=preload("res://source/server/world/database/postgres/crafting_store_postgres.gd")
 var db: Object
 var committed:=false
 var receipt_replay:=false
@@ -22,6 +23,12 @@ static func upgrade_content(recipe: UpgradeDefinition) -> Dictionary:
 	return {"id":str(recipe.upgrade_id),"item":str(recipe.item_definition_id),"from":recipe.from_level,"to":recipe.to_level,"cost":recipe.yang_cost,"material":str(recipe.material_definition_id),"amount":recipe.material_amount,"success":recipe.success_rate}
 
 func execute(context: Dictionary, kind: String, id: String, body: Dictionary, income: int, token: String) -> Dictionary:
+	if kind=="craft":
+		var store:=Craft.new(db)
+		store.authorize_session(context,token)
+		var result: Dictionary=store.execute(context.character,income,body.uid,body.revision,body.currency_uid,body.currency_revision,id)
+		committed=store.committed;receipt_replay=store.receipt_replay
+		return result
 	if kind=="sell":
 		var store:=Vendor.new(db)
 		store.authorize_session(context,token)
@@ -70,10 +77,10 @@ func execute(context: Dictionary, kind: String, id: String, body: Dictionary, in
 ## Read-only original-character lookup; current same-account authority is still
 ## required. Account lock orders this after any older in-flight mutation.
 func receipt(context: Dictionary, issuer: int, kind: String, id: String) -> Dictionary:
-	if kind not in ["buy","upgrade","sell"] or not Commands.valid_id(id) or issuer<=0: return {"ok":false,"error":"request"}
+	if kind not in ["buy","upgrade","sell","craft"] or not Commands.valid_id(id) or issuer<=0: return {"ok":false,"error":"request"}
 	var begun:=Sessions.new(db).begin_context(context)
 	if not begun.ok: return begun
-	var found: Dictionary=db.query("SELECT result_json FROM economy.market_commands WHERE account_id=:account AND character_id=:issuer AND command_id=:id AND kind=:kind;",{"account":context.account_id,"issuer":issuer,"id":id,"kind":"vendor.sell" if kind=="sell" else ("npc_shop.buy" if kind=="buy" else "upgrade")})
+	var found: Dictionary=db.query("SELECT result_json FROM economy.market_commands WHERE account_id=:account AND character_id=:issuer AND command_id=:id AND kind=:kind;",{"account":context.account_id,"issuer":issuer,"id":id,"kind":"vendor.sell" if kind=="sell" else ("npc_shop.buy" if kind=="buy" else kind)})
 	if not found.ok:
 		if not db.rollback(): db.close()
 		return {"ok":false,"error":"storage"}

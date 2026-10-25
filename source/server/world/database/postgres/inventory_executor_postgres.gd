@@ -312,11 +312,11 @@ func submit_trade_receipt(context: Dictionary, id: String) -> Dictionary:
 	return _session_job(context,"trade_receipt",id,{})
 
 func submit_npc(context: Dictionary, kind: String, operation_id: String, body: Dictionary, income: int, token: String) -> Dictionary:
-	if kind not in ["buy","upgrade","sell"] or income<0 or income>9000000000000000 or token.length()!=32: return {"queued":false,"error":"request"}
+	if kind not in ["buy","upgrade","sell","craft"] or income<0 or income>9000000000000000 or token.length()!=32: return {"queued":false,"error":"request"}
 	return _session_job(context,"npc_execute",operation_id,{"npc_kind":kind,"body":body.duplicate(true),"income":income,"income_token":token})
 
 func submit_npc_receipt(context: Dictionary, issuer: int, kind: String, operation_id: String) -> Dictionary:
-	if issuer<=0 or kind not in ["buy","upgrade","sell"]: return {"queued":false,"error":"request"}
+	if issuer<=0 or kind not in ["buy","upgrade","sell","craft"]: return {"queued":false,"error":"request"}
 	return _session_job(context,"npc_receipt",operation_id,{"issuer":issuer,"npc_kind":kind})
 
 func _session_job(context: Dictionary, mode: String, operation_id: String, fields: Dictionary) -> Dictionary:

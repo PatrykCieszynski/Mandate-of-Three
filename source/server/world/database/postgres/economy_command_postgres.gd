@@ -94,7 +94,7 @@ func admit_in_transaction(owner: int, command: String, kind: String, args: Array
 	_command=command
 	_kind=kind
 	_request=JSON.stringify(args)
-	if kind in ["player.trade","vendor.sell","npc_shop.buy","upgrade","storage","list","edit","cancel","configure","claim","buy","claim_revenue","exchange.deposit","exchange.withdraw","exchange.order","exchange.cancel"] or (kind=="inventory" and not _resuming_inventory):
+	if kind in ["craft","player.trade","vendor.sell","npc_shop.buy","upgrade","storage","list","edit","cancel","configure","claim","buy","claim_revenue","exchange.deposit","exchange.withdraw","exchange.order","exchange.cancel"] or (kind=="inventory" and not _resuming_inventory):
 		var session_error:=Sessions.check_in_transaction(db,account_id,owner,_inventory_context if kind=="inventory" else economic_context)
 		if not session_error.is_empty():
 			cached=rollback(session_error)
@@ -230,6 +230,10 @@ static func read_state(database: Object, owner: int) -> Dictionary:
 
 static func decode(json: String) -> Dictionary:
 	var result: Dictionary=Codec.decode_result(json)
+	if result.has("affixes"):
+		var roll=preload("res://source/common/gameplay/items/affixes/affix_roll.gd")
+		if not result.affixes is Array or not roll.valid_stored(result.affixes): return {"ok":false,"error":"storage"}
+		result.affixes=roll.canonical(result.affixes)
 	for field: String in ["revision","position","shop_id","price","balance","buyer_account","seller_account","buyer_balance","amount","remaining","refunded"]:
 		if result.has(field): result[field]=int(result[field])
 	if result.has("affected_accounts"):

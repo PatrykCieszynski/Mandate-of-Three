@@ -5,6 +5,7 @@ export type PreviewAction =
   | {
       action:
         | 'trade'
+        | 'craft'
         | 'vendor'
         | 'stats'
         | 'inventory'

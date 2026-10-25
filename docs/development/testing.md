@@ -71,6 +71,11 @@ git diff --check
 
 Godot 4.7.2 and Node 20.19+ are required. Run `npm ci --ignore-scripts` in
 `source/client/ui_web` once for the pinned compiler and test dependencies.
+Crafting: `--suite crafting` covers PostgreSQL rollback, uncertain COMMIT, replay,
+revision conflict and rarity migration. `--suite npc-runtime` covers worker
+reconciliation; `--suite inventory-endpoint` covers native RPC/client-journal
+restart. Run the network suite sequentially with other port-18098 fixtures.
+
 Smoke compiles TypeScript and tests the emitted static browser JS. `-NodeExecutable` can select a bundled Node.
 No running server, browser, GUI, network port or production accounts are required.
 The smoke suite does not install/download CEF. Installing CEF is optional; installed CEF loads in headless without

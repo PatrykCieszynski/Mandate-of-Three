@@ -117,6 +117,37 @@ function storageFixture(): StorageSnapshot {
 
 function fixture(): DomainSnapshot {
   return {
+    craft: {
+      active: false,
+      pending: false,
+      busy: false,
+      currency: {
+        id: 'b'.repeat(32),
+        revision: 0,
+        name: 'Iskra Przemiany',
+        icon_id: 'change_spark',
+        quantity: 12,
+        height: 1,
+      },
+      effect:
+        'Podgląd: Iskra Przemiany zmienia Normal w Magic. Zużywa jedną sztukę.',
+      targets: [
+        {
+          id: 'a'.repeat(32),
+          revision: 0,
+          name: 'Iron Sword +3',
+          icon_id: 'iron_sword',
+          height: 3,
+          quantity: 1,
+          upgrade_level: 3,
+          tooltip: {
+            rarity: 'normal',
+            properties: ['Attack: 13'],
+            affixes: [],
+          },
+        },
+      ],
+    },
     vendor: {
       active: false,
       ready: true,
@@ -308,6 +339,18 @@ window.sendIpcMessage = (raw) => {
   }
   if (!message.id) return;
   queueMicrotask(() => {
+    if (message.type.startsWith('craft.') && state.craft) {
+      if (message.type === 'craft.close') state.craft.active = false;
+      emit('craft.updated', state.craft);
+      emit(
+        'command.result',
+        message.type === 'craft.close'
+          ? { ok: true }
+          : { ok: false, error: 'preview_only' },
+        message.id,
+      );
+      return;
+    }
     if (message.type.startsWith('vendor.') && state.vendor) {
       const v = state.vendor,
         p = message.payload;
@@ -675,6 +718,7 @@ export function decodePreviewAction(value: unknown): PreviewAction | null {
       name === 'stats' ||
       name === 'inventory' ||
       name === 'equipment' ||
+      name === 'craft' ||
       name === 'vendor' ||
       name === 'hotbar' ||
       name === 'storage' ||
@@ -754,6 +798,10 @@ window.addEventListener('message', (event) => {
       emit('hud.updated', state.hud);
       break;
 
+    case 'craft':
+      state.craft!.active = request.value;
+      emit('craft.updated', state.craft!);
+      break;
     case 'vendor':
       state.vendor!.active = request.value;
       state.hud = { ...state.hud, inventory_open: true };

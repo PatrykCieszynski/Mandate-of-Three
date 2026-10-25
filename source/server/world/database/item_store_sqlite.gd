@@ -28,6 +28,8 @@ static func ensure_schema(database: SqliteSoci) -> bool:
 		if not database.query(statement):
 			database.query("ROLLBACK;")
 			return false
+	if not _ensure_rarity(database):
+		database.query("ROLLBACK;");return false
 	if not database.query("COMMIT;"):
 		database.query("ROLLBACK;")
 		return false
@@ -90,8 +92,8 @@ func claim_ground_item(owner_id: int, drop_uid: String, item: ItemInstance) -> D
 func _insert_item(item: ItemInstance, bag_position: int) -> bool:
 	var definition: ItemDefinition = ItemDefinitions.get_definition(item.definition_id)
 	if definition == null or item.amount < 1 or item.amount > definition.stack_limit or not _fits_position(item.owner_character_id, bag_position, definition.inventory_height): return false
-	return db.query_with_bindings("INSERT INTO item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision) VALUES(?,?,?,?,?,?,?,?);",
-		[item.uid, item.owner_character_id, str(item.definition_id), item.amount, item.upgrade_level, JSON.stringify(item.affixes), JSON.stringify(item.sockets), item.revision]) \
+	return db.query_with_bindings("INSERT INTO item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision,rarity) VALUES(?,?,?,?,?,?,?,?,?);",
+		[item.uid, item.owner_character_id, str(item.definition_id), item.amount, item.upgrade_level, JSON.stringify(item.affixes), JSON.stringify(item.sockets), item.revision, item.rarity]) \
 		and _place(item.uid, item.owner_character_id, "bag", bag_position, "")
 
 func inventory(owner_id: int) -> Dictionary:
@@ -393,3 +395,26 @@ func grant_dev_trace_sword(owner_id: int) -> Dictionary:
 	var result := _commit()
 	if result.ok: result["uid"] = item.uid
 	return result
+
+static func _ensure_rarity(database: SqliteSoci) -> bool:
+	if not database.query("PRAGMA table_info(item_instances);"):
+		return false
+	var has_rarity:=false
+	for column: Dictionary in database.query_result:
+		if column.name=="rarity": has_rarity=true
+	if not has_rarity:
+		if not database.query("ALTER TABLE item_instances ADD COLUMN rarity TEXT NOT NULL DEFAULT 'normal' CHECK(rarity IN ('normal','magic','rare'));"):
+			return false
+		if not database.query("SELECT uid,affixes_json FROM item_instances;"):
+			return false
+		var old_rows: Array=database.query_result.duplicate(true)
+		for row: Dictionary in old_rows:
+			var rolls: Variant=JSON.parse_string(str(row.affixes_json))
+			if not rolls is Array or not database.query_with_bindings("UPDATE item_instances SET rarity=? WHERE uid=?;",[ItemInstance.legacy_rarity(rolls),row.uid]):
+				return false
+	return true
+
+static func migrate_rarity(database: SqliteSoci) -> bool:
+	if not database.query("BEGIN IMMEDIATE;"): return false
+	if _ensure_rarity(database) and database.query("COMMIT;"): return true
+	database.query("ROLLBACK;");return false

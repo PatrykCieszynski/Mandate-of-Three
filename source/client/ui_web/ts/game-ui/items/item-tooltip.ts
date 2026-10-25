@@ -108,7 +108,7 @@ export function ItemTooltip(
         setItemTooltipDetails(doc, event.altKey);
       const model = item.tooltip;
       title.textContent = item.name;
-      tooltip.element.dataset.rarity = itemRarity(model?.affixes?.length ?? 0);
+      tooltip.element.dataset.rarity = model?.rarity ?? itemRarity(model?.affixes?.length ?? 0);
       category.textContent = model?.category ?? '';
       category.hidden = !model?.category;
       renderLines(properties, model?.properties);

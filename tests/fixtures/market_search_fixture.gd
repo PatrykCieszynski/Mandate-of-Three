@@ -26,7 +26,7 @@ static func seed(db: SqliteSoci, owner: int, distributed_owners: bool = false) -
 			var rolls:=JSON.stringify([{"stat":"monster_damage","value":15 if n%3==0 else 5},{"stat":"critical_chance","value":7 if n%5==0 else 2}])
 			var definition:="iron_sword"
 			var position:=slot
-			instances.append("('%s',%d,'%s',1,%d,'%s','[]',0)" % [uid,int(owners.get(account,owner)),definition,level,rolls])
+			instances.append("('%s',%d,'%s',1,%d,'%s','[]',0,'rare')" % [uid,int(owners.get(account,owner)),definition,level,rolls])
 			custody.append("('%s','shop_escrow',%d,%d,'',%d,'%s')" % [uid,account,position,shop+1,offer])
 			offers.append("('%s',%d,%d,'%s',%d,%d,0)" % [offer,shop+1,account,uid,position,n+1])
 			cells.append("(%d,%d,'%s'),(%d,%d,'%s')" % [shop+1,position,uid,shop+1,position+20,uid])

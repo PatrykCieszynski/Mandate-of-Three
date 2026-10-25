@@ -182,6 +182,39 @@ func _ready() -> void:
 	assert(balance(9800)==232 and world.wallet_runtime.snapshot(101).balance==232 and items(98001).is_empty())
 	world.wallet_runtime.detach(100) # Late old disconnect cannot retire alt.
 	assert(ready(101))
+	# Crafting uses the same native owner and barriers, with currency instead of
+	# a Yang price. Lost successful completion must resolve the frozen roll.
+	var craft_target:=seed_item(98001,ItemDefinitions.IRON_SWORD,0)
+	var craft_currency:=seed_item(98001,ItemDefinitions.CHANGE_SPARK,2)
+	assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(98001).item_state))
+	await wait_for(func()->bool:return ready(101))
+	var craft_body: Dictionary={"uid":craft_target,"revision":0,"currency_uid":craft_currency,"currency_revision":0}
+	var craft_yang: int=balance(9800)
+	boundary.lose_next=true
+	assert(world.npc_runtime.craft(101,"craft-lost",craft_body).queued)
+	await wait_for(func()->bool:return result("craft-lost").get("error","")=="outcome_unknown")
+	var rolled_item: Dictionary=items(98001).filter(func(i: Dictionary)->bool:return i.uid==craft_target)[0]
+	assert(rolled_item.rarity=="magic" and rolled_item.revision==1 and not rolled_item.affixes.is_empty())
+	assert(items(98001).all(func(i: Dictionary)->bool:return i.uid!=craft_currency) and balance(9800)==craft_yang)
+	assert(world.npc_runtime.receipt(101,"craft","craft-lost").queued)
+	await wait_for(func()->bool:return result("craft-lost").get("ok",false) and ready(101))
+	assert(items(98001).filter(func(i: Dictionary)->bool:return i.uid==craft_target)[0]==rolled_item)
+	# Receipt conflict and current revision cannot consume a second currency.
+	var next_currency:=seed_item(98001,ItemDefinitions.RENEWAL_DUST,2)
+	assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(98001).item_state))
+	await wait_for(func()->bool:return ready(101))
+	craft_body.currency_uid=next_currency
+	assert(world.npc_runtime.craft(101,"craft-stale",craft_body).queued)
+	await wait_for(func()->bool:return result("craft-stale").get("error","")=="stale" and ready(101))
+	assert(items(98001).any(func(i: Dictionary)->bool:return i.uid==next_currency))
+	# Remove only fixture items, so the existing vendor assertions stay scoped.
+	assert(pg.begin())
+	for craft_uid: String in [craft_target,next_currency]:
+		assert(pg.execute("DELETE FROM economy.item_custody WHERE uid=:uid;",{"uid":craft_uid}).ok)
+		assert(pg.execute("DELETE FROM economy.item_instances WHERE uid=:uid;",{"uid":craft_uid}).ok)
+	assert(pg.commit())
+	assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(98001).item_state))
+	await wait_for(func()->bool:return ready(101))
 	# Vendor shares the SAME worker owner and Inventory/Wallet barriers. Preview
 	# is read-only; a lost completion resolves the original random reward receipt.
 	var vendor_books: Array=[]

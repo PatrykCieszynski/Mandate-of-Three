@@ -1,3 +1,4 @@
+import { mountCraft } from '../screens/craft/craft-view.js';
 import { mountTrade } from '../screens/trade/trade-view.js';
 import { QuickItemTargets } from './quick-item-targets.js';
 import { mountVendor } from '../screens/vendor/vendor-view.js';
@@ -33,11 +34,19 @@ await applySkin(document.documentElement, legacy.skin);
 uiIcons.replace(legacy.uiIcons, new URL('./', import.meta.url));
 const itemIcons = new ItemIconResolver({
     ...legacy.itemIcons,
+    change_spark: new URL('../content/change_spark.svg', import.meta.url).href,
+    renewal_dust: new URL('../content/renewal_dust.svg', import.meta.url).href,
+    completion_shard: new URL('../content/completion_shard.svg', import.meta.url)
+        .href,
     upgrade_ore: new URL('../content/upgrade_ore.svg', import.meta.url).href,
 });
 export const resolveItemIcon = (id) => itemIcons.resolve(id);
 export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
+const craftRoot = document.createElement('main');
+craftRoot.id = 'craft';
+craftRoot.hidden = true;
+document.body.append(craftRoot);
 const root = findElement(document, '#inventory', 'main'), storageRoot = findElement(document, '#storage', 'main'), equipmentRoot = findElement(document, '#equipment', 'main'), shopRoot = findElement(document, '#shop', 'main'), vendorRoot = findElement(document, '#vendor', 'main'), exchangeRoot = findElement(document, '#exchange', 'main'), marketBrowserRoot = findElement(document, '#market-browser', 'main'), marketVisitorRoot = findElement(document, '#market-visitor', 'main'), marketRoot = findElement(document, '#market', 'main'), upgradeRoot = findElement(document, '#upgrade', 'main'), npcRoot = findElement(document, '#npc-menu', 'main'), npcServiceRoot = findElement(document, '#npc-service', 'main'), store = new DomainStore();
 let regions;
 const bridge = new WebBridge({
@@ -55,6 +64,7 @@ const bridge = new WebBridge({
             exchange.closeIfActive() ||
             marketBrowser.closeIfActive() ||
             market.closeIfActive() ||
+            craft.closeIfActive() ||
             upgrade.closeIfActive() ||
             npc.closeIfActive())
             return;
@@ -110,6 +120,9 @@ const bridge = new WebBridge({
             market.setInventory(state.inventory);
         if (message.type === 'ui.snapshot' || message.type === 'wallet.updated')
             market.setWallet(state.wallet ?? {});
+        if ((message.type === 'ui.snapshot' || message.type === 'craft.updated') &&
+            state.craft)
+            craft.setState(state.craft);
         updateGameViews(message.type, state, {
             inventory: view,
             equipment,
@@ -182,6 +195,16 @@ const worldDrop = mountNpcWorldDrop(drag, (npc, service, item) => bridge.request
     service_id: service,
     ...item,
 }), () => regions?.refresh());
+const craft = mountCraft(craftRoot, {
+    manager,
+    resolveItemIcon,
+    execute: (p) => bridge.request('craft.execute', p),
+    retry: () => bridge.request('craft.retry', {}),
+    close: () => {
+        void bridge.request('craft.close', {});
+    },
+    regions: () => regions?.refresh(),
+});
 const view = mountInventory(root, {
     retry: () => bridge.request('inventory.retry', {}),
     drag,
@@ -389,6 +412,7 @@ regions = reportInteractiveRegions(bridge, [
     ...exchange.regions,
     ...marketBrowser.regions,
     ...market.regions,
+    ...craft.regions,
     ...upgrade.regions,
     ...npc.regions,
     ...view.regions,
@@ -402,6 +426,7 @@ window.addEventListener('pagehide', () => {
     party.dispose();
     trade.dispose();
     worldDrop.dispose();
+    craft.dispose();
     upgrade.dispose();
     shop.dispose();
     vendor.dispose();

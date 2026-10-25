@@ -64,7 +64,7 @@ KU, event-specific grants, starters, NPC purchases and the legacy arena/Metin
 guaranteed reward keep their previous behavior.
 
 `loot/tables/natural_affix_profile.tres` defines provisional alpha weights:
-normal 60 (0+0 affixes), magic 30 (1+1), rare 9 (2+2), legendary 1 (3+3).
+normal 60 (0+0 affixes), magic 30 (1+1), rare 9 (2+2), rare_full 1 (3+3).
 These are tuning values, not finalized economy odds. Quality changes counts,
 never eligibility or tier weights: a two-affix item can roll any tier its base
 allows. Iron Sword remains eligibility level 1, so its currently legal tiers
@@ -79,10 +79,66 @@ structure, never rerolls or resolves current profile values. Existing protection
 expiry, capacity, atomic PostgreSQL claims and receipts remain authoritative.
 No SQL schema, new currency, mob rarity or crafting action is introduced.
 
-Smoke adds `natural_affix_loot` for normal/magic/rare/legendary counts, eligible
+Smoke adds `natural_affix_loot` for zero/two/four/six affix counts, eligible
 top-tier access, frozen UID, material/KU exclusions and production Loot V2 RNG
 parity. PostgreSQL `--suite ground-runtime` additionally covers a six-affix
 pickup with lost completion, read-only recovery, replay and exactly one UID.
+
+## Crafting currencies C3
+
+Equipment has a durable `rarity` (`normal`, `magic`, `rare`), separate from
+its affix count and +0…+9 upgrade. Magic permits at most one prefix and one
+suffix; Rare at most three of each. There is no automatic Legendary label for
+five/six bonuses. A Rare item stays Rare even with fewer bonuses.
+
+Offline PostgreSQL provisioning migrates `npc_shop` from 1 to 2. Zero-affix old
+items become Normal; versioned sets with at most one prefix and one suffix become
+Magic; larger sets and opaque legacy bonuses become Rare. UID, resolved values,
+revision, sockets and upgrade level are preserved. Legacy bonuses are not guessed
+into prefix/suffix identities and cannot be crafted by these currencies. The
+embedded SOCI fixture schema applies the same classification. Normal deployment
+requires provisioning before build 0.38.0; runtime never migrates or falls back.
+
+The first three original currencies are stackable USE items:
+
+| Currency | Preconditions | Committed effect |
+| --- | --- | --- |
+| Iskra Przemiany (`change_spark`) | Normal eligible equipment in bag | Becomes Magic with one/two new affixes |
+| Pył Odnowy (`renewal_dust`) | Magic eligible equipment in bag | Replaces all affixes; remains Magic |
+| Odłamek Dopełnienia (`completion_shard`) | Magic equipment with exactly one affix | Preserves that roll and adds the opposite kind |
+
+Each action consumes exactly one selected currency, with no Yang surcharge.
+Transform/renew currently choose prefix-only, suffix-only or both with equal
+probability; these are explicit provisional content odds. Affix/tier weights and
+base eligibility use the same natural-drop pool. Exhaustion/invalid existing
+rolls reject the whole operation without consuming currency. Currency sourcing,
+market value and drop rates are not added in C3.
+
+The client opens Przemiana by using a currency from Inventory or a USE hotbar
+binding, chooses a bag target and confirms. Original symbols and shared CEF
+window chrome are used. A preview explains possible effects, never predicts RNG.
+The standalone preview has a non-economic Sample crafting fixture.
+
+The existing native NPC-operation coordinator is reused for worker scheduling,
+Inventory/Wallet barriers, reconciliation and receipts; crafting itself needs
+no NPC authorization or SQL on the simulation thread. Both item UIDs/revisions,
+current session and bag custody are validated on the server. One transaction
+settles the pending Yang prefix, consumes currency, updates target rarity/affixes
+and revision, and writes a frozen receipt. UID, +level, sockets and placement are
+unchanged. Server entropy is stable across proven-aborted SQL retries; uncertain
+COMMIT goes to read-only receipt lookup, never an automatic second roll.
+
+The client journals the original identity before sending. Reload/relogin looks
+up the receipt; only explicit Retry can submit a previously unsent operation
+when the receipt is absent. Character-scoped journals are not transferable to
+another character. Pending results block another crafting intent. Existing
+Inventory snapshots publish the committed outcome and refresh derived stats.
+
+Verification: smoke `crafting_currencies`, PostgreSQL `--suite crafting` and
+`--suite npc-runtime`; `--suite inventory-endpoint` includes real client-process
+restart, lost crafting response and a saved-but-unsent journal. UI contracts
+check identity-only commands, pending retry and explicit-rarity tooltips. Headless
+and browser fixtures do not establish physical native CEF input behavior.
 
 ## Historical first progression slice
 
