@@ -1,12 +1,9 @@
 import { isItem } from '../../protocol.js';
-import { UiWindow } from '../../core/window/ui-window.js';
-import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { paintItemIcon } from '../../game-ui/items/item-icon.js';
 import type {
   ItemPresentation,
   ResolveItemIcon,
 } from '../../game-ui/item-types.js';
-import type { WindowManager } from '../../core/window/window-manager.js';
 import type { CommandResult, ItemCommand } from '../../protocol/contracts.js';
 export interface CraftSnapshot {
   active: boolean;
@@ -34,64 +31,45 @@ export function isCraft(v: unknown): v is CraftSnapshot {
     (Object.keys(s.currency).length === 0 || item(s.currency))
   );
 }
+export const CRAFT_CURRENCIES = [
+  'change_spark',
+  'renewal_dust',
+  'completion_shard',
+];
+// Explicit currency-use mode, separate from ordinary item carrying/placement.
 export function mountCraft(
   root: HTMLElement,
   options: {
-    manager: WindowManager;
     resolveItemIcon: ResolveItemIcon;
     execute: (p: ItemCommand) => Promise<CommandResult>;
     retry: () => Promise<CommandResult>;
     close: () => void;
+    cancelCarry: () => void;
     regions: () => void;
   },
 ) {
-  const shell = new UiWindow(root, {
-    id: 'craft',
-    title: 'Przemiana',
-    className: 'craft-window',
-    manager: options.manager,
-    placement: {
-      kind: 'relative',
-      target: 'inventory',
-      side: 'left',
-      align: 'start',
-      gap: 8,
-      fallback: {
-        kind: 'viewport',
-        anchor: 'top-left',
-        offset: { x: 24, y: 180 },
-      },
-    },
-    onClose: options.close,
-    onRegionsChanged: options.regions,
-  });
-  const body = document.createElement('div');
-  body.className = 'craft-body';
-  shell.contentRoot.append(body);
-  const currency = document.createElement('div');
-  currency.className = 'craft-currency';
-  const symbol = document.createElement('span');
-  symbol.className = 'craft-symbol';
-  const name = document.createElement('strong');
-  currency.append(symbol, name);
-  const effect = document.createElement('p'),
-    select = document.createElement('select'),
-    target = document.createElement('div'),
-    details = document.createElement('p'),
-    notice = document.createElement('p'),
-    actions = document.createElement('div'),
-    apply = document.createElement('button'),
-    retry = document.createElement('button');
-  select.setAttribute('aria-label', 'Przedmiot do przemiany');
-  target.className = 'craft-target';
-  details.className = 'craft-details';
-  notice.className = 'craft-notice';
-  actions.className = 'craft-actions';
-  apply.textContent = 'Użyj · 1 szt.';
+  const doc = root.ownerDocument;
+  const surface = doc.createElement('div');
+  surface.className = 'craft-input-surface';
+  surface.id = 'craft-targeting';
+  surface.hidden = true;
+  surface.setAttribute('aria-hidden', 'true');
+  doc.body.append(surface);
+  const cursor = doc.createElement('div');
+  cursor.className = 'craft-use-cursor';
+  surface.append(cursor);
+  const icon = doc.createElement('span'),
+    hint = doc.createElement('span');
+  icon.className = 'craft-cursor-icon';
+  cursor.append(icon, hint);
+  const recovery = doc.createElement('div');
+  recovery.className = 'craft-recovery';
+  recovery.hidden = true;
+  const message = doc.createElement('span'),
+    retry = doc.createElement('button');
   retry.textContent = 'Odzyskaj wynik';
-  actions.append(apply, retry);
-  body.append(currency, effect, select, target, details, notice, actions);
-  const tooltip = ItemTooltip(root, { geometry: () => options.manager });
+  recovery.append(message, retry);
+  (root.querySelector('.window-content') ?? root).append(recovery);
   let state: CraftSnapshot = {
       active: false,
       pending: false,
@@ -100,94 +78,196 @@ export function mountCraft(
       effect: '',
       targets: [],
     },
-    selected = '',
-    pending = false;
+    armed = false,
+    inFlight = false,
+    disposed = false,
+    notice = '';
+  function reason(item: ItemPresentation | undefined): string {
+    if (!item) return 'Wybierz przedmiot w torbie';
+    const target = state.targets.find((i) => i.id === item.id);
+    if (!target) return 'Nie można użyć tej waluty na tym przedmiocie';
+    const rarity = target.tooltip?.rarity;
+    const currency = (state.currency as Partial<ItemPresentation>)
+      .definition_id;
+    if (currency === 'change_spark')
+      return rarity === 'normal' ? '' : 'Wymaga przedmiotu Normal';
+    if (rarity !== 'magic') return 'Wymaga przedmiotu Magic';
+    if (
+      currency === 'completion_shard' &&
+      target.tooltip?.affixes?.length !== 1
+    )
+      return 'Wymaga dokładnie jednego affixu';
+    return '';
+  }
+  function refreshTargets() {
+    for (const node of root.querySelectorAll<HTMLElement>('.inventory-item')) {
+      const target = state.targets.find((i) => i.id === node.dataset.id);
+      if (armed) {
+        node.dataset.craftTarget = reason(target) ? 'invalid' : 'valid';
+        node.title = reason(target);
+      } else {
+        delete node.dataset.craftTarget;
+        node.removeAttribute('title');
+      }
+    }
+  }
   function render() {
-    root.hidden = !state.active;
-    const c = state.currency as Partial<ItemPresentation>;
-    name.textContent = c.name ?? 'Odzyskiwanie przemiany';
-    symbol.replaceChildren();
-    if (c.icon_id)
-      paintItemIcon(symbol, c as ItemPresentation, {
+    surface.hidden = !armed;
+    icon.replaceChildren();
+    const currency = state.currency as Partial<ItemPresentation>;
+    if (currency.id)
+      paintItemIcon(icon, currency as ItemPresentation, {
         resolveItemIcon: options.resolveItemIcon,
       });
-    effect.textContent = state.effect;
-    select.replaceChildren();
-    const prompt = document.createElement('option');
-    prompt.value = '';
-    prompt.textContent = 'Wybierz przedmiot z torby';
-    select.append(prompt);
-    for (const i of state.targets) {
-      const o = document.createElement('option');
-      o.value = i.id;
-      o.textContent = i.name;
-      select.append(o);
-    }
-    if (!state.targets.some((i) => i.id === selected)) selected = '';
-    select.value = selected;
-    const item = state.targets.find((i) => i.id === selected);
-    target.replaceChildren();
-    if (item)
-      paintItemIcon(target, item, { resolveItemIcon: options.resolveItemIcon });
-    details.textContent = item
-      ? `${item.tooltip?.rarity ?? 'normal'} · +${item.upgrade_level ?? 0} · ${item.tooltip?.affixes?.length ?? 0} affixów`
-      : '';
-    apply.disabled = pending || state.busy || state.pending || !item || !c.id;
-    select.disabled = pending || state.busy || state.pending;
-    retry.hidden = !state.pending;
-    retry.disabled = pending || state.busy;
-    shell.refresh();
+    hint.textContent =
+      inFlight || state.busy
+        ? 'Oczekiwanie…'
+        : state.pending
+          ? 'Najpierw odzyskaj wynik'
+          : notice || `${currency.name ?? ''} · kliknij cel · Shift: powtarzaj`;
+    recovery.hidden = !state.pending || state.busy || inFlight;
+    message.textContent = 'Wynik przemiany niepotwierdzony. ';
+    retry.disabled = inFlight || state.busy;
+    refreshTargets();
     options.regions();
   }
-  select.addEventListener('change', () => {
-    selected = select.value;
-    notice.textContent = '';
+  function cancel() {
+    if (!armed) return false;
+    armed = false;
+    notice = '';
+    options.close();
     render();
-  });
-  target.addEventListener('mousemove', (e) => {
-    const i = state.targets.find((i) => i.id === selected);
-    if (i) tooltip.show(e, i);
-  });
-  target.addEventListener('mouseleave', () => tooltip.hide());
-  async function run(recover: boolean) {
-    if (pending) return;
-    const item = state.targets.find((i) => i.id === selected);
-    if (!recover && !item) return;
-    pending = true;
+    return true;
+  }
+  async function use(item: ItemPresentation, shift: boolean) {
+    if (!armed || inFlight || state.busy || state.pending) return;
+    const why = reason(item);
+    if (why) {
+      notice = why;
+      render();
+      return;
+    }
+    const target = state.targets.find((i) => i.id === item.id)!;
+    inFlight = true;
+    notice = '';
     render();
     try {
-      const r = await (recover
-        ? options.retry()
-        : options.execute({ id: item!.id, revision: item!.revision }));
-      notice.textContent = r.ok
-        ? 'Przemiana zakończona.'
-        : `Nie ukończono: ${r.error ?? 'unknown'}`;
+      const result = await options.execute({
+        id: target.id,
+        revision: target.revision,
+      });
+      if (disposed) return;
+      if (result.ok) {
+        if (!shift || !(state.currency as Partial<ItemPresentation>).id)
+          cancel();
+      } else notice = `Nie ukończono: ${result.error ?? 'unknown'}`;
     } catch {
-      notice.textContent = 'Brak potwierdzenia. Odzyskaj wynik.';
+      notice = 'Brak potwierdzenia — odzyskaj wynik';
     } finally {
-      pending = false;
-      render();
+      inFlight = false;
+      if (!disposed) render();
     }
   }
-  apply.addEventListener('click', () => void run(false));
-  retry.addEventListener('click', () => void run(true));
+  function pointer(event: PointerEvent) {
+    if (!armed) return;
+    if (event.button === 2) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      cancel();
+      return;
+    }
+    if (event.button !== 0) return;
+    if (
+      event.target instanceof doc.defaultView!.Element &&
+      root.contains(event.target) &&
+      event.target.closest('button,[role=tab]')
+    )
+      return;
+    if (
+      event.target instanceof doc.defaultView!.Node &&
+      recovery.contains(event.target)
+    )
+      return;
+    // A normal drag never reaches crafting. Use mode consumes a deliberate click
+    // before any Inventory activation or placement can run.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    options.cancelCarry();
+    const node =
+      event.target instanceof doc.defaultView!.Element
+        ? event.target.closest<HTMLElement>('.inventory-item')
+        : null;
+    if (node && root.contains(node)) {
+      const item = state.targets.find((i) => i.id === node.dataset.id);
+      if (item) void use(item, event.shiftKey);
+      else {
+        notice = 'Nieprawidłowy cel';
+        render();
+      }
+    }
+  }
+  function move(event: PointerEvent) {
+    cursor.style.left = `${Math.max(0, Math.min(event.clientX + 14, (doc.defaultView?.innerWidth ?? 0) - 260))}px`;
+    cursor.style.top = `${Math.max(0, Math.min(event.clientY + 14, (doc.defaultView?.innerHeight ?? 0) - 72))}px`;
+  }
+  function key(event: KeyboardEvent) {
+    if (event.key === 'Escape' && cancel()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }
+  function blur() {
+    cancel();
+  }
+  async function recover() {
+    if (inFlight || state.busy) return;
+    inFlight = true;
+    render();
+    try {
+      const result = await options.retry();
+      if (result.ok || !state.pending) {
+        if (!cancel()) options.close();
+      }
+    } catch {
+      notice = 'Nie udało się odzyskać wyniku';
+    } finally {
+      inFlight = false;
+      if (!disposed) render();
+    }
+  }
+  retry.addEventListener('click', () => void recover());
+  doc.addEventListener('pointerdown', pointer, true);
+  doc.addEventListener('pointermove', move, true);
+  doc.addEventListener('keydown', key, true);
+  doc.defaultView?.addEventListener('blur', blur);
   return {
-    regions: [shell.panel],
+    regions: [surface],
+    engaged: () => armed,
+    cancel,
+    refreshTargets,
+    reason,
+    use,
     setState(next: CraftSnapshot) {
-      const opening = !state.active && next.active;
+      const opening = next.active && !state.active;
       state = next;
+      if (opening && !next.pending) {
+        options.cancelCarry();
+        armed = true;
+      }
+      if (!next.active) armed = false;
+      if (armed && !(next.currency as Partial<ItemPresentation>).id) cancel();
       render();
-      if (opening) shell.handle.activate();
-    },
-    closeIfActive() {
-      if (root.hidden || options.manager.activeWindowId !== 'craft')
-        return false;
-      options.close();
-      return true;
     },
     dispose() {
-      tooltip.dispose();
-      shell.dispose();
+      disposed = true;
+      armed = false;
+      doc.removeEventListener('pointerdown', pointer, true);
+      doc.removeEventListener('pointermove', move, true);
+      doc.removeEventListener('keydown', key, true);
+      doc.defaultView?.removeEventListener('blur', blur);
+      surface.remove();
+      recovery.remove();
+      refreshTargets();
     },
   };
 }

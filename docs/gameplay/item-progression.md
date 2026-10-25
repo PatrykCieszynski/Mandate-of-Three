@@ -5,8 +5,7 @@
 The shared, pure `items/affixes/affix_generator.gd` accepts an ItemDefinition,
 requested prefix/suffix counts, an authored pool and an explicit RNG. It returns
 a complete decision or an error, never mutates an item, writes SQL or awards loot.
-It is used by C2 ordinary equipment drops below; crafting actions are not yet
-implemented. The independent +0…+9 upgrade state remains unchanged.
+It is used by C2 ordinary equipment drops and C3 consumable crafting below. The independent +0…+9 upgrade state remains unchanged.
 
 - Resource definitions specify identity, prefix/suffix kind, group,
   symmetric exclusion groups within the same kind, allowed base families/slots and integer-valued tiers.
@@ -43,7 +42,7 @@ and resolved value before a future mutation is allowed.
 Legacy `{stat,value}` rolls remain unclassified and retain their old calculation
 and tooltip behavior; no invented prefix, tier, item level or refund is applied.
 Mixed legacy/versioned arrays are rejected: converting a legacy item for future
-crafting needs an explicit policy in C3. UID, sockets, placement, revision and
+C3 crafting rejects these legacy items without altering their saved bonuses. UID, sockets, placement, revision and
 upgrade level are independent of the new metadata. Existing CEF tooltips show
 the real prefix/suffix kind for versioned rolls through the existing Alt labels.
 
@@ -114,10 +113,16 @@ base eligibility use the same natural-drop pool. Exhaustion/invalid existing
 rolls reject the whole operation without consuming currency. Currency sourcing,
 market value and drop rates are not added in C3.
 
-The client opens Przemiana by using a currency from Inventory or a USE hotbar
-binding, chooses a bag target and confirms. Original symbols and shared CEF
-window chrome are used. A preview explains possible effects, never predicts RNG.
-The standalone preview has a non-economic Sample crafting fixture.
+Right-click a currency in Inventory (or activate its USE hotbar binding) to arm
+its original symbol and remaining stack at the cursor. Left-click a bag target
+to use exactly one unit. Normal carrying/dragging only moves items and never
+crafts. Without Shift, a successful use exits targeting; Shift retains the stack
+for another deliberate click after authoritative reconciliation. Pending requests
+block new uses; each repeat reads current item/currency revisions. Invalid targets
+are dimmed and explain the restriction. RMB/Escape/blur cancel targeting; closing
+Inventory also cancels. There is no crafting panel or dropdown. Recovery is a
+small Inventory notice/button, and never automatically executes an unsent intent.
+The standalone preview has a non-economic Use crafting currency fixture.
 
 The existing native NPC-operation coordinator is reused for worker scheduling,
 Inventory/Wallet barriers, reconciliation and receipts; crafting itself needs
@@ -137,7 +142,8 @@ Inventory snapshots publish the committed outcome and refresh derived stats.
 Verification: smoke `crafting_currencies`, PostgreSQL `--suite crafting` and
 `--suite npc-runtime`; `--suite inventory-endpoint` includes real client-process
 restart, lost crafting response and a saved-but-unsent journal. UI contracts
-check identity-only commands, pending retry and explicit-rarity tooltips. Headless
+check explicit target clicks, normal-drag isolation, serialized Shift reuse with
+current revisions, cancellation, pending retry and explicit-rarity tooltips. Headless
 and browser fixtures do not establish physical native CEF input behavior.
 
 ## Historical first progression slice

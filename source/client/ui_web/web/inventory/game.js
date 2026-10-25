@@ -1,4 +1,4 @@
-import { mountCraft } from '../screens/craft/craft-view.js';
+import { CRAFT_CURRENCIES, mountCraft } from '../screens/craft/craft-view.js';
 import { mountTrade } from '../screens/trade/trade-view.js';
 import { QuickItemTargets } from './quick-item-targets.js';
 import { mountVendor } from '../screens/vendor/vendor-view.js';
@@ -43,10 +43,6 @@ const itemIcons = new ItemIconResolver({
 export const resolveItemIcon = (id) => itemIcons.resolve(id);
 export const manager = new WindowManager();
 manager.setViewport({ width: innerWidth, height: innerHeight }, 1);
-const craftRoot = document.createElement('main');
-craftRoot.id = 'craft';
-craftRoot.hidden = true;
-document.body.append(craftRoot);
 const root = findElement(document, '#inventory', 'main'), storageRoot = findElement(document, '#storage', 'main'), equipmentRoot = findElement(document, '#equipment', 'main'), shopRoot = findElement(document, '#shop', 'main'), vendorRoot = findElement(document, '#vendor', 'main'), exchangeRoot = findElement(document, '#exchange', 'main'), marketBrowserRoot = findElement(document, '#market-browser', 'main'), marketVisitorRoot = findElement(document, '#market-visitor', 'main'), marketRoot = findElement(document, '#market', 'main'), upgradeRoot = findElement(document, '#upgrade', 'main'), npcRoot = findElement(document, '#npc-menu', 'main'), npcServiceRoot = findElement(document, '#npc-service', 'main'), store = new DomainStore();
 let regions;
 const bridge = new WebBridge({
@@ -56,6 +52,8 @@ const bridge = new WebBridge({
             chat.focus();
             return;
         }
+        if (craft.cancel())
+            return;
         if (chat.escape())
             return;
         if (drag.cancel())
@@ -64,7 +62,7 @@ const bridge = new WebBridge({
             exchange.closeIfActive() ||
             marketBrowser.closeIfActive() ||
             market.closeIfActive() ||
-            craft.closeIfActive() ||
+            craft.cancel() ||
             upgrade.closeIfActive() ||
             npc.closeIfActive())
             return;
@@ -132,6 +130,9 @@ const bridge = new WebBridge({
             viewport: () => ({ width: innerWidth, height: innerHeight }),
             onRegionsChanged: () => regions?.refresh(),
         });
+        if (root.hidden)
+            craft.cancel();
+        craft.refreshTargets();
         if ((message.type === 'ui.snapshot' || message.type === 'hotbar.updated') &&
             state.hotbar)
             bottomHud.render(state.hotbar);
@@ -195,17 +196,8 @@ const worldDrop = mountNpcWorldDrop(drag, (npc, service, item) => bridge.request
     service_id: service,
     ...item,
 }), () => regions?.refresh());
-const craft = mountCraft(craftRoot, {
-    manager,
-    resolveItemIcon,
-    execute: (p) => bridge.request('craft.execute', p),
-    retry: () => bridge.request('craft.retry', {}),
-    close: () => {
-        void bridge.request('craft.close', {});
-    },
-    regions: () => regions?.refresh(),
-});
 const view = mountInventory(root, {
+    blockCarry: () => craft.engaged(),
     retry: () => bridge.request('inventory.retry', {}),
     drag,
     quickTransfer: (item) => quickTargets.receive(item),
@@ -215,6 +207,11 @@ const view = mountInventory(root, {
     manager,
     resolveItemIcon,
     activateItem: (payload) => {
+        const selected = readDomainSnapshot(store.state)?.inventory?.items.find((i) => i.id === payload.id);
+        if (CRAFT_CURRENCIES.includes(selected?.definition_id ?? '')) {
+            drag.cancel();
+            return bridge.request('item.activate', payload);
+        }
         if (!marketRoot.hidden)
             return market.selectInventory(payload);
         if (!upgradeRoot.hidden)
@@ -224,6 +221,16 @@ const view = mountInventory(root, {
     moveItem: (payload) => bridge.request('inventory.move_item', payload),
     onClose: () => bridge.request('inventory.close', {}).catch(() => { }),
     onRegionsChanged: () => regions?.refresh(),
+});
+const craft = mountCraft(root, {
+    resolveItemIcon,
+    execute: (p) => bridge.request('craft.execute', p),
+    retry: () => bridge.request('craft.retry', {}),
+    close: () => {
+        void bridge.request('craft.close', {}).catch(() => { });
+    },
+    cancelCarry: () => drag.cancel(),
+    regions: () => regions?.refresh(),
 });
 const equipment = mountEquipment(equipmentRoot, {
     drag,
@@ -446,7 +453,8 @@ window.addEventListener('pagehide', () => {
 document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || event.repeat)
         return;
-    if (drag.cancel() ||
+    if (craft.cancel() ||
+        drag.cancel() ||
         exchange.closeIfActive() ||
         marketBrowser.closeIfActive() ||
         market.closeIfActive() ||

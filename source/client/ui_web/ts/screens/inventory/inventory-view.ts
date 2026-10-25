@@ -27,6 +27,7 @@ import type { Placement } from './placement.js';
 import { element as findElement } from '../../core/dom.js';
 import { errorMessage } from '../../protocol.js';
 interface InventoryOptions {
+  blockCarry?: () => boolean;
   manager: WindowManager;
   drag?: ItemDragRuntime;
   quickTransfer?: (item: ItemPresentation) => Promise<void> | null;
@@ -60,6 +61,7 @@ export function mountInventory(
   root: HTMLElement,
   {
     manager,
+    blockCarry,
     drag,
     quickTransfer,
     withdrawItem,
@@ -176,7 +178,8 @@ export function mountInventory(
             drag.registerSource({
               element: node,
               payload: (event) => {
-                if (pending || inventory.recoveryPending) return null;
+                if (pending || inventory.recoveryPending || blockCarry?.())
+                  return null;
                 shell.handle.activate();
                 tip.hide();
                 if (event.ctrlKey && quickTransfer) {

@@ -125,12 +125,13 @@ function fixture(): DomainSnapshot {
         id: 'b'.repeat(32),
         revision: 0,
         name: 'Iskra Przemiany',
+        definition_id: 'change_spark',
         icon_id: 'change_spark',
         quantity: 12,
         height: 1,
       },
       effect:
-        'Podgląd: Iskra Przemiany zmienia Normal w Magic. Zużywa jedną sztukę.',
+        'Podgląd trybu użycia: kliknij przedmiot. Shift pozwala zachować walutę przy kursorze.',
       targets: [
         {
           id: 'a'.repeat(32),
@@ -339,6 +340,18 @@ window.sendIpcMessage = (raw) => {
   }
   if (!message.id) return;
   queueMicrotask(() => {
+    if (message.type === 'item.activate' && state.craft) {
+      const item = state.inventory?.items.find(
+        (i) => i.id === message.payload.id,
+      );
+      if (item?.definition_id === 'change_spark') {
+        state.craft.currency = item;
+        state.craft.active = true;
+        emit('craft.updated', state.craft);
+        emit('command.result', { ok: true }, message.id);
+        return;
+      }
+    }
     if (message.type.startsWith('craft.') && state.craft) {
       if (message.type === 'craft.close') state.craft.active = false;
       emit('craft.updated', state.craft);
@@ -799,6 +812,30 @@ window.addEventListener('message', (event) => {
       break;
 
     case 'craft':
+      state.hud = { ...state.hud, inventory_open: true };
+      emit('hud.updated', state.hud);
+      if (state.inventory && state.craft) {
+        const target = state.craft.targets[0]!;
+        const currency = state.craft
+          .currency as import('../web/game-ui/item-types.js').ItemPresentation;
+        if (!state.inventory.items.some((i) => i.id === target.id))
+          state.inventory.items.push({
+            ...target,
+            primary_action: 'EQUIP',
+            x: 4,
+            y: 6,
+            page: 0,
+          });
+        if (!state.inventory.items.some((i) => i.id === currency.id))
+          state.inventory.items.push({
+            ...currency,
+            primary_action: 'USE',
+            x: 3,
+            y: 6,
+            page: 0,
+          });
+        emit('inventory.updated', state.inventory);
+      }
       state.craft!.active = request.value;
       emit('craft.updated', state.craft!);
       break;

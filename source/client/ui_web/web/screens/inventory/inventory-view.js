@@ -10,7 +10,7 @@ import { UiItemSlot } from '../../game-ui/items/ui-item-slot.js';
 import { ItemTooltip } from '../../game-ui/items/item-tooltip.js';
 import { UiCurrency } from '../../core/primitives/ui-currency.js';
 import { UiWindow } from '../../core/window/ui-window.js';
-export function mountInventory(root, { manager, drag, quickTransfer, withdrawItem, receiveEquipped, buyShopOffer, resolveItemIcon = () => null, moveItem, retry, activateItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
+export function mountInventory(root, { manager, blockCarry, drag, quickTransfer, withdrawItem, receiveEquipped, buyShopOffer, resolveItemIcon = () => null, moveItem, retry, activateItem, onClose = () => { }, onRegionsChanged = () => { }, }) {
     const shell = new UiWindow(root, {
         id: 'inventory',
         title: 'Inventory',
@@ -109,7 +109,7 @@ export function mountInventory(root, { manager, drag, quickTransfer, withdrawIte
                 sourceBindings.push(drag.registerSource({
                     element: node,
                     payload: (event) => {
-                        if (pending || inventory.recoveryPending)
+                        if (pending || inventory.recoveryPending || blockCarry?.())
                             return null;
                         shell.handle.activate();
                         tip.hide();

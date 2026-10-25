@@ -2,6 +2,7 @@ extends RefCounted
 ## Consumable selection is presentation. The server rereads both UID revisions.
 const Rules=preload("res://source/common/gameplay/items/crafting/crafting_rules.gd")
 const Journal=preload("res://source/client/ui_web/local_economy_journal.gd")
+signal shown
 var journal=Journal.new("craft-","user://pending_crafting")
 var _endpoint: InventoryEndpoint3D
 var _dispatcher: UiCommandDispatcher
@@ -26,9 +27,10 @@ func dispose() -> void:
 	_disposed=true
 	if is_instance_valid(_endpoint) and _endpoint.state_changed.is_connected(accept_inventory): _endpoint.state_changed.disconnect(accept_inventory)
 func open(payload: Dictionary) -> void:
+	if not _intent.is_empty(): _opened=true;shown.emit();publish();return
 	for item: Dictionary in _inventory.get("items",[]):
 		if item.uid==payload.id and item.revision==payload.revision and Rules.CURRENCIES.has(str(item.definition_id)):
-			_currency=item.duplicate(true);_opened=true;publish();return
+			_currency=item.duplicate(true);_opened=true;shown.emit();publish();return
 func accept_inventory(snapshot: Dictionary) -> void:
 	if _disposed or not snapshot.get("ok",false): return
 	_inventory=snapshot.duplicate(true)
@@ -43,7 +45,7 @@ func accept_inventory(snapshot: Dictionary) -> void:
 				_ready=false;return
 			saved.revision=int(saved.revision);saved.currency_revision=int(saved.currency_revision)
 		if _ready and not restored.entry.is_empty():
-			_intent=restored.entry.duplicate(true);_opened=true
+			_intent=restored.entry.duplicate(true);_opened=true;shown.emit()
 			_retry.call_deferred(false)
 	elif not context.is_empty() and context!=_context: _ready=false
 	if not _currency.is_empty():

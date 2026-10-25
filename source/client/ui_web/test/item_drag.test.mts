@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { mountCraft } from '../web/screens/craft/craft-view.js';
 import { ItemDragRuntime } from '../web/game-ui/drag/item-drag-runtime.js';
 import { UiWindow } from '../web/core/window/ui-window.js';
 import { mountInventory } from '../web/screens/inventory/inventory-view.js';
@@ -673,4 +674,16 @@ test('background refresh of a hidden window preserves carry; hiding the source w
   f.runtime.dispose();
   f.manager.dispose();
   f.host.close();
+});
+
+test('armed currency clicks cannot start Inventory carrying and normal carrying never crafts',()=>{
+ const f=fixture(),root=target();f.doc.body.append(root);let attempts=0;
+ let craft:ReturnType<typeof mountCraft>;
+ const item={...bagItem,id:'a'.repeat(32),definition_id:'iron_sword',quantity:1,tooltip:{rarity:'normal' as const,affixes:[]}};
+ const view=mountInventory(root,{manager:f.manager,drag:f.runtime,blockCarry:()=>craft?.engaged()??false,moveItem:async()=>({ok:true}),resolveItemIcon:()=>null});
+ view.setState({inventory:{columns:5,rows:9,pages:4,items:[item]},hud:{inventory_open:true}});
+ craft=mountCraft(root,{resolveItemIcon:()=>null,execute:async()=>{attempts++;return {ok:true};},retry:async()=>({ok:true}),close:()=>{},cancelCarry:()=>f.runtime.cancel(),regions:()=>{}});
+ const node=root.querySelector<HTMLElement>('.inventory-item')!;capture(node);f.pointer(node,'pointerdown');assert.equal(attempts,0);assert.ok(f.runtime.active);f.runtime.cancel();
+ craft.setState({active:true,pending:false,busy:false,currency:{...item,id:'b'.repeat(32),definition_id:'change_spark'},effect:'transform',targets:[item]});f.pointer(node,'pointerdown');assert.equal(attempts,1);assert.equal(f.runtime.active,false);
+ craft.dispose();view.dispose();f.runtime.dispose();f.manager.dispose();f.dom.window.close();
 });

@@ -100,6 +100,7 @@ func setup(game_world: GameWorld3D) -> void:
 	items.recovery_needed.connect(func() -> void:
 		opened = true
 		_layout())
+	crafting.shown.connect(func()->void:opened=true;_layout())
 	crafting.attach(world.inventory_endpoint,dispatcher,session,get_tree())
 	items.craft_requested.connect(crafting.open)
 	items.attach(world.inventory_endpoint, dispatcher, session, get_tree())
