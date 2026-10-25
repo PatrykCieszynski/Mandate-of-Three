@@ -1,3 +1,4 @@
+import { isTrade } from './screens/trade/trade-view.js';
 import { isVendor } from './screens/vendor/vendor-model.js';
 import { isHotbar } from './inventory/hotbar-model.js';
 import { isStats } from './screens/stats/stats-model.js';
@@ -49,10 +50,10 @@ export function isCommandResult(result) {
         (!('error' in result) || typeof result.error === 'string');
 }
 export function isStateMessage(message) {
-    return !message.id && ['ui.snapshot', 'vendor.updated', 'hotbar.updated', 'stats.updated', 'chat.updated', 'party.updated', 'exchange.updated', 'market_browser.updated', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
+    return !message.id && ['ui.snapshot', 'trade.updated', 'vendor.updated', 'hotbar.updated', 'stats.updated', 'chat.updated', 'party.updated', 'exchange.updated', 'market_browser.updated', 'market.updated', 'upgrade.updated', 'npc_targets.updated', 'shop.updated', 'npc.updated', 'storage.updated', 'inventory.updated', 'equipment.updated', 'wallet.updated', 'player.updated', 'hud.updated'].includes(message.type);
 }
 export function isDomainName(value) {
-    return ['vendor', 'hotbar', 'stats', 'chat', 'party', 'exchange', 'market_browser', 'market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
+    return ['trade', 'vendor', 'hotbar', 'stats', 'chat', 'party', 'exchange', 'market_browser', 'market', 'upgrade', 'npc_targets', 'shop', 'npc', 'storage', 'inventory', 'equipment', 'wallet', 'player', 'hud'].includes(value);
 }
 export function isRawDomainState(value) {
     return isObject(value) && Object.entries(value).every(([key, domain]) => isDomainName(key) && isObject(domain));
@@ -187,6 +188,7 @@ export function isValidDomainValue(domain, value) {
         case 'hotbar': return isHotbar(value);
         case 'stats': return isStats(value);
         case 'chat': return isChatSnapshot(value);
+        case 'trade': return isTrade(value);
         case 'party': return isParty(value);
         case 'exchange': return isExchangeSnapshot(value);
         case 'market_browser': return isBrowserSnapshot(value);

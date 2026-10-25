@@ -49,7 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "wallet", "commit-failure", "npc-shop", "vendor-sell", "vendor-ui", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "player-trade", "player-trade-network", "wallet", "commit-failure", "npc-shop", "vendor-sell", "vendor-ui", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
     parser.add_argument("--load-seconds", type=int, default=8, choices=range(2,1801))
     parser.add_argument("--load-repeats", type=int, default=3, choices=(1,2,3))
     parser.add_argument("--load-faults", action="store_true", help="Inject fixture-only COMMIT failure and lost application reply under mixed load")
@@ -183,6 +183,8 @@ def main():
             "inventory-sessions": ("postgres_inventory_sessions", "POSTGRES_INVENTORY_SESSIONS_OK"),
             "inventory-runtime": ("postgres_inventory_runtime", "POSTGRES_INVENTORY_RUNTIME_OK"),
             "wallet-runtime": ("postgres_wallet_runtime", "POSTGRES_WALLET_RUNTIME_OK"),
+            "player-trade-network": ("player_trade_network", "PLAYER_TRADE_NETWORK_OK"),
+            "player-trade": ("postgres_player_trade", "POSTGRES_PLAYER_TRADE_OK"),
             "npc-runtime": ("postgres_npc_runtime", "POSTGRES_NPC_RUNTIME_OK"),
             "storage-runtime": ("postgres_storage_runtime", "POSTGRES_STORAGE_RUNTIME_OK"),
             "ground-runtime": ("postgres_ground_runtime", "POSTGRES_GROUND_RUNTIME_OK"),
@@ -203,7 +205,7 @@ def main():
             "inventory-endpoint": ("postgres_inventory_endpoint", "POSTGRES_INVENTORY_ENDPOINT_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
-             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload") else ["--quit-after", "1200"]),
+             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("player-trade-network", "inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload") else ["--quit-after", "1200"]),
             env=env, log=directory / "godot.log", timeout=(args.realm_seconds+args.realm_players*3+300) if args.suite=="realm-workload" else (args.load_seconds*args.load_repeats*4+240) if args.suite=="mixed-load" else 225 if args.suite in ("inventory-endpoint", "process-startup", "full-state", "maintenance", "backup", "world-replacement") else 60)
         output = (directory / "godot.log").read_text(encoding="utf-8", errors="replace")
         if marker not in output or any(word in output for word in ("SCRIPT ERROR", "Parse Error", "POSTGRES_READINESS_FAILED")):

@@ -116,6 +116,21 @@ for complete login/restart acceptance on the normal backend.
 
 ## PostgreSQL runner
 
+Player Trade V1: `--suite player-trade` covers atomic two-account settlement,
+UID/roll preservation, capacity/full-bag swaps, concurrent UID attempts, rollback,
+COMMIT uncertainty, replay and stale sessions. `--suite player-trade-network`
+uses two real headless WebSocket clients and production negotiation RPCs with
+native PostgreSQL owners, including a lost completion and private Inventory
+reconciliation. Master grant transport is fixture-controlled; this is not a full
+Gateway login or a physical CEF input test. Run port-18098 suites sequentially.
+The Trade network case also journals the first acceptance without submitting SQL,
+drops the old adapter before cancellation publication, exits that client process,
+and reconnects the same character with a new peer/session. A fresh adapter reads
+the same on-disk pending ID, resolves PostgreSQL `not_committed`, and clears both
+the journal and UI pending state. Original UIDs/balances are checked unchanged,
+then another trade completes. It uses wall-clock timeouts rather than a startup
+frame budget, since the scenario starts a replacement process.
+
 ```powershell
 python tools/postgres/run_readiness.py --pg-bin Y:/Software/PostgreSQL/bin --suite full-state
 python tools/postgres/run_readiness.py --help

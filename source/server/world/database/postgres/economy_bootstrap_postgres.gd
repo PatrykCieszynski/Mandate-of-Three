@@ -10,7 +10,7 @@ var _world: WorldServer
 var _master: WorldManagerServer
 var _pools: Dictionary={}
 var _settings: Dictionary={}
-const WORLD_POOLS: Dictionary={"inventory":2,"wallet":1,"npc":1,"storage":1,"ground":1,"market":2}
+const WORLD_POOLS: Dictionary={"inventory":2,"wallet":1,"npc":1,"storage":1,"ground":1,"market":2,"trade":1}
 
 func stopped() -> bool: return state==State.STOPPED
 func authority_id() -> String: return str(_settings.get("authority_id",""))
@@ -25,13 +25,13 @@ func status() -> Dictionary:
 		if pool.is_ready(): ready_workers+=WORLD_POOLS.get(key,1)
 	var unsettled: Array[String]=[]
 	if _world!=null:
-		var domains: Dictionary={"wallet":_world.wallet_runtime,"npc":_world.npc_runtime,"storage":_world.storage_runtime,"ground":_world.ground_item_runtime,"market":_world.seller_runtime}
+		var domains: Dictionary={"wallet":_world.wallet_runtime,"npc":_world.npc_runtime,"storage":_world.storage_runtime,"ground":_world.ground_item_runtime,"market":_world.seller_runtime,"trade":_world.trade_runtime}
 		for key: String in domains:
 			if domains[key]!=null and not domains[key].drained(): unsettled.append(key)
-	return {"unsettled_domains":unsettled,"database_probe":false,"state":State.keys()[state],"error":error,"pools":_pools.size(),"workers":(8 if _world!=null else 1) if ready() else 0,"workers_ready":ready_workers,"pending":pending,"ready":ready(),"stopped":_pools.values().all(func(pool: RefCounted)->bool:return pool.is_stopped())}
+	return {"unsettled_domains":unsettled,"database_probe":false,"state":State.keys()[state],"error":error,"pools":_pools.size(),"workers":(9 if _world!=null else 1) if ready() else 0,"workers_ready":ready_workers,"pending":pending,"ready":ready(),"stopped":_pools.values().all(func(pool: RefCounted)->bool:return pool.is_stopped())}
 
 func start_world(world: WorldServer, settings: Dictionary) -> bool:
-	if state!=State.NEW or world==null or not world.is_inside_tree() or world.database==null or world.economy_bootstrap!=null or world.inventory_runtime!=null or world.wallet_runtime!=null or world.npc_runtime!=null or world.storage_runtime!=null or world.ground_item_runtime!=null or world.seller_runtime!=null or not world.connected_players.is_empty(): return false
+	if state!=State.NEW or world==null or not world.is_inside_tree() or world.database==null or world.economy_bootstrap!=null or world.inventory_runtime!=null or world.wallet_runtime!=null or world.npc_runtime!=null or world.storage_runtime!=null or world.ground_item_runtime!=null or world.seller_runtime!=null or world.trade_runtime!=null or not world.connected_players.is_empty(): return false
 	if world.database!=null and not world.database.dirty_wallet.is_empty(): return false # No hot switch with unsaved SQLite money.
 	_world=world
 	world.economy_bootstrap=self # Selection is sticky, including a failed startup.
@@ -64,6 +64,7 @@ func start_world(world: WorldServer, settings: Dictionary) -> bool:
 	world.storage_runtime=preload("res://source/server/world/database/postgres/storage_runtime_postgres.gd").new(world.inventory_runtime,_pools.storage)
 	world.ground_item_runtime=preload("res://source/server/world/database/postgres/ground_item_runtime_postgres.gd").new(world.inventory_runtime,_pools.ground)
 	world.seller_runtime=preload("res://source/server/world/database/postgres/seller_runtime_postgres.gd").new(world.inventory_runtime,_pools.market,world.wallet_runtime,true,true,true)
+	world.trade_runtime=preload("res://source/server/world/database/postgres/player_trade_runtime_postgres.gd").new(world,_pools.trade)
 	state=State.READY
 	if world.database!=null: world.database.wallet_ready=true
 	return true

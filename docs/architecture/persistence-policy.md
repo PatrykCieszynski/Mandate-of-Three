@@ -21,6 +21,7 @@ the cache. Combat never performs SQL or network round trips per hit.
 | Item creation/destruction, pickup, ownership, placement, equipment | Validate authoritative item/session context; refresh projections after commit | Immediate atomic transaction with custody/revisions and applicable receipt |
 | Storage transfer | Account-shared custody; withdrawal names its receiving character | Immediate item/placement/ownership/revision transaction |
 | Critical Yang spend, NPC purchase, upgrade, trading | Include captured pending income with the durable mutation | Immediate atomic transaction; no independent payment/item commits |
+| Direct player trade | Both accounts held through settlement; both projections reconcile before completion | One transaction for both pending prefixes, Yang, UID/custody/revisions and dual receipts; unknown outcome uses lookup, never blind retry |
 | Marketplace sale | Transfer UID, debit buyer and credit seller's claimable revenue | One immediate transaction, including its durable result |
 | Revenue collection / Exchange | Reconcile committed balances and reservations | Immediate transaction with replay/recovery guarantees |
 | Party membership/invitations | World-process RAM, 120-second reconnect grace; independent of local MapInstance | No persistence; World restart clears party |
@@ -28,7 +29,7 @@ the cache. Combat never performs SQL or network round trips per hit.
 
 Materials/currencies represented as Inventory items or stacks follow item
 transactions, including split/merge, rather than the wallet checkpoint policy.
-Accepted future Trade/socket/reroll/crafting operations must preserve these
+Accepted future socket/reroll/crafting operations must preserve these
 atomicity rules; this table does not assert that all those features exist.
 
 ## Soft progression and wallet checkpoints

@@ -161,25 +161,25 @@ html,body {
 .ui-tooltip[popover]::backdrop {display:none}
 
 /* Compact content windows; slot and equipment artwork retain their logical size. */
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) {
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) {
   --window-inset:8px;
   padding-bottom:8px;
 }
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) > .window-header {
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) > .window-header {
   margin-bottom:4px;
 }
 
 /* Legacy edge PNGs include 32 px of paint; expose only the outer 8 px so the
    decorative layer cannot cover compact content. Source PNGs stay unscaled. */
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .corner.tl {clip-path:inset(0 24px 24px 0)}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .corner.tr {clip-path:inset(0 0 24px 24px)}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .corner.bl {clip-path:inset(24px 24px 0 0)}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .corner.br {clip-path:inset(24px 0 0 24px)}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .edge.top,
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .edge.bottom {left:7px;right:7px}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .edge.top {clip-path:inset(0 0 24px 0)}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .edge.bottom {clip-path:inset(24px 0 0 0)}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .edge.left,
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .edge.right {top:7px;bottom:7px}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .edge.left {clip-path:inset(0 24px 0 0)}
-.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window) .edge.right {clip-path:inset(0 0 0 24px)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .corner.tl {clip-path:inset(0 24px 24px 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .corner.tr {clip-path:inset(0 0 24px 24px)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .corner.bl {clip-path:inset(24px 24px 0 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .corner.br {clip-path:inset(24px 0 0 24px)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .edge.top,
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .edge.bottom {left:7px;right:7px}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .edge.top {clip-path:inset(0 0 24px 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .edge.bottom {clip-path:inset(24px 0 0 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .edge.left,
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .edge.right {top:7px;bottom:7px}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .edge.left {clip-path:inset(0 24px 0 0)}
+.window-chrome:is(#inventory-window,.equipment-window,.storage-window,.stats-window,.vendor-window,.trade-window) .edge.right {clip-path:inset(0 0 0 24px)}

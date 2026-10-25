@@ -104,7 +104,7 @@ func _ready() -> void:
 	var owner:=Bootstrap.new()
 	var before: int=ticks
 	assert(await owner.start_world(world,config) and ticks>=before)
-	assert(owner.ready() and owner.status().workers==8 and world.database.wallet_ready)
+	assert(owner.ready() and owner.status().workers==9 and world.database.wallet_ready)
 	assert(world.inventory_runtime!=null and world.wallet_runtime!=null and world.npc_runtime!=null and world.storage_runtime!=null and world.ground_item_runtime!=null and world.seller_runtime.auction!=null)
 	assert(not await Bootstrap.new().start_world(world,config) and owner.ready())
 	assert(not JSON.stringify(owner.status()).contains(connection))
