@@ -51,6 +51,10 @@ func wait_until(predicate: Callable) -> void:
 ## Extension points for focused real-network contracts sharing this host fixture.
 func make_world_server() -> WorldServer: return WorldServer.new()
 func entry_channel(index: int) -> int: return index
+func make_fixture_player(peer: int) -> PlayerResource:
+	var owner:=EconomyFixture.create_character(server.database.store,"map%d" % peer,{"name":"Map%d" % peer,"skin":1})
+	EconomyFixture.prepare(server.database)
+	return server.database.store.get_player(owner)
 
 func _ready() -> void:
 	BaseMultiplayerEndpoint.configure_peer(socket)
@@ -69,9 +73,8 @@ func _ready() -> void:
 		# This fixture supplies authenticated sessions, not Gateway credentials.
 		# Production manager routing/loading/join code runs unchanged.
 		api.peer_connected.connect(func(peer: int)->void:
-			var owner:=EconomyFixture.create_character(server.database.store,"map%d" % peer,{"name":"Map%d" % peer,"skin":1})
-			EconomyFixture.prepare(server.database)
-			var player: PlayerResource=server.database.store.get_player(owner)
+			var player:=make_fixture_player(peer)
+			var owner:=player.player_id
 			player.current_peer_id=peer
 			server.connected_players[peer]=player
 			server.player_id_to_peer_id[owner]=peer

@@ -205,7 +205,7 @@ def main():
             "inventory-endpoint": ("postgres_inventory_endpoint", "POSTGRES_INVENTORY_ENDPOINT_OK"),
         }[args.suite]
         run([args.godot, "--headless", "--path", ROOT, "--mode=world-server",
-             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload") else ["--quit-after", "1200"]),
+             f"res://tests/{scene}.tscn"] + ([] if args.suite in ("player-trade-network", "inventory-endpoint", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload") else ["--quit-after", "1200"]),
             env=env, log=directory / "godot.log", timeout=(args.realm_seconds+args.realm_players*3+300) if args.suite=="realm-workload" else (args.load_seconds*args.load_repeats*4+240) if args.suite=="mixed-load" else 225 if args.suite in ("inventory-endpoint", "process-startup", "full-state", "maintenance", "backup", "world-replacement") else 60)
         output = (directory / "godot.log").read_text(encoding="utf-8", errors="replace")
         if marker not in output or any(word in output for word in ("SCRIPT ERROR", "Parse Error", "POSTGRES_READINESS_FAILED")):
