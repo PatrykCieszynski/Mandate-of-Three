@@ -6,6 +6,7 @@ var _ground: GroundLootSystem
 var _currency: CurrencyEndpoint3D
 var _region_key: StringName = &""
 var _rng := RandomNumberGenerator.new()
+var _affix_rng := RandomNumberGenerator.new()
 var event_drops := WorldEventDropService.new()
 var party_rewards = preload("res://source/common/gameplay/party/party_rewards.gd").new(self)
 
@@ -15,6 +16,15 @@ func setup(services: MandateWorldServices, ground: GroundLootSystem, currency: C
 	_currency = currency
 	_region_key = region_key
 	_rng.randomize()
+	_affix_rng.randomize()
+
+func resolve_ordinary(result: MobDeathResult, luck_bp: int) -> Dictionary:
+	var outcome: Dictionary=LootResolver.resolve(LootContent.tables_for(_region_key,result.category,result.mob_key),result.spawn_base_loot_rolls,luck_bp,_rng)
+	if not outcome.ok: return outcome
+	var decorated: Dictionary=preload("res://source/common/gameplay/loot/natural_affix_loot.gd").resolve(outcome.items,_affix_rng)
+	if not decorated.ok: return decorated
+	outcome.items=decorated.items
+	return outcome
 
 func handle_mob_death(result: MobDeathResult) -> void:
 	if party_rewards.handle_mob(result): return
@@ -36,8 +46,7 @@ func spawn_ordinary_rewards(result: MobDeathResult) -> void:
 		# Authoritative runtime gear stats only. Until Luck gear exists this is zero;
 		# never accept a roll chance supplied by clients.
 		luck_bp = clampi(int(_services.runtime_stats(result.reward_owner).get(&"loot_luck_bp", 0)), 0, LootResolver.BASIS_POINTS)
-	var tables := LootContent.tables_for(_region_key, result.category, result.mob_key)
-	var outcome: Dictionary = LootResolver.resolve(tables, result.spawn_base_loot_rolls, luck_bp, _rng)
+	var outcome: Dictionary = resolve_ordinary(result,luck_bp)
 	if not outcome.ok:
 		# Invalid authored content must fail closed, without a partial item grant.
 		push_error("Invalid authored ordinary loot for mob %s: %s" % [result.mob_key, outcome.error])

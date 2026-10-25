@@ -24,7 +24,7 @@ func handle_mob(result: MobDeathResult) -> bool:
 	else:
 		var owner: int=Drop.choose(competitors[0].eligible,"by_damage",competitors[0].by_id,0).owner
 		var luck: int=clampi(int(resolver._services.runtime_stats(owner).get(&"loot_luck_bp",0)),0,LootResolver.BASIS_POINTS)
-		var outcome: Dictionary=LootResolver.resolve(LootContent.tables_for(resolver._region_key,result.category,result.mob_key),result.spawn_base_loot_rolls,luck,resolver._rng)
+		var outcome: Dictionary=resolver.resolve_ordinary(result,luck)
 		if outcome.ok: items=outcome.items
 		else: push_error("Invalid party loot content: "+str(outcome.error))
 	items.append_array(resolver.event_drops.resolve_drops())
