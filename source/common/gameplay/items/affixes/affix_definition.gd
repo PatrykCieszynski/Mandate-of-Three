@@ -3,6 +3,7 @@ extends Resource
 @export var affix_id: StringName
 @export_enum("prefix", "suffix") var kind: String = "prefix"
 @export var group: StringName
+## References groups within this definition's kind only.
 @export var excludes: Array[StringName] = []
 @export var families: Array[StringName] = []
 @export var slots: Array[StringName] = []

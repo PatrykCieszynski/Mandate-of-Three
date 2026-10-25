@@ -10,7 +10,9 @@ func _ready() -> void:
 	assert(db.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) and Schema.ensure_schema(db))
 	assert(Wallet.new(db).initialize_account(16000).ok and Items.new(db).bind_character(160000,16000))
 	var rng:=RandomNumberGenerator.new();rng.seed=903
-	var rolls: Array=Generator.generate(ItemDefinitions.IRON_SWORD,2,2,Catalog.definitions(),rng).affixes
+	var pool:=Catalog.definitions()
+	pool[2].group=pool[0].group # Same name on opposite sides must survive persistence.
+	var rolls: Array=Generator.generate(ItemDefinitions.IRON_SWORD,2,2,pool,rng).affixes
 	var generated:=ItemInstance.create(ItemDefinitions.IRON_SWORD,160000,rolls)
 	generated.upgrade_level=4;generated.sockets=[{"definition_id":"preserved"}]
 	var legacy:=ItemInstance.create(ItemDefinitions.IRON_SWORD,160000,[{"stat":"attack","value":7}])
@@ -23,7 +25,7 @@ func _ready() -> void:
 	for item: ItemInstance in [generated,legacy]:
 		var loaded: Dictionary=snapshot.items.filter(func(i: Dictionary)->bool:return i.uid==item.uid)[0]
 		assert(loaded.stats==item.effective_stats(ItemDefinitions.IRON_SWORD) and loaded.sockets==item.sockets and loaded.upgrade_level==item.upgrade_level and loaded.revision==0)
-		if item==generated: assert(loaded.affixes==rolls and Generator.validate(loaded.affixes,ItemDefinitions.IRON_SWORD,Catalog.definitions()))
+		if item==generated: assert(loaded.affixes==rolls and Generator.validate(loaded.affixes,ItemDefinitions.IRON_SWORD,pool))
 		else: assert(loaded.affixes.size()==1 and loaded.affixes[0].value==7 and not loaded.affixes[0].has("affix_version"))
 		var indexed: Dictionary=db.query("SELECT ordinal,stat_id,value FROM economy.item_affix_index WHERE uid=:uid ORDER BY ordinal;",{"uid":item.uid})
 		assert(indexed.ok and indexed.rows.size()==item.affixes.size())

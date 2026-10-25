@@ -8,11 +8,13 @@ a complete decision or an error, never mutates an item, writes SQL or awards loo
 It is **not yet wired into production drops or crafting**; existing drop bonuses
 and the independent +0…+9 upgrade state remain unchanged.
 
-- Resource definitions specify identity, prefix/suffix kind, unique group,
-  symmetric exclusion groups, allowed base families/slots and integer-valued tiers.
+- Resource definitions specify identity, prefix/suffix kind, group,
+  symmetric exclusion groups within the same kind, allowed base families/slots and integer-valued tiers.
   Each eligible definition/tier pair competes by its explicit positive weight.
   One chosen group excludes all its other definitions/tiers on that item.
-  The cap is three prefixes and three suffixes, with no duplicate groups.
+  The cap is three prefixes and three suffixes, with no duplicate groups within
+  each kind. Prefixes and suffixes have independent group namespaces: the same
+  group name may appear once in each, and exclusions never cross the two kinds.
 - C1 eligibility uses authored `ItemDefinition.affix_family` and `affix_level`,
   not character level or upgrade level. Empty family opts out. Iron Sword opts
   into the illustrative sword pool at base eligibility level 1. A future rolled,
@@ -32,7 +34,7 @@ and the independent +0…+9 upgrade state remain unchanged.
 New stored rolls retain `stat` and the resolved `value` plus `affix_version=1`,
 `affix_id`, `kind`, `group`, `tier` and the eligibility `level` used at creation.
 They use the existing affixes JSON field and auction stat/value projection.
-Loading validates structure, caps and duplicate groups, normalizes JSON integer
+Loading validates structure, caps and duplicate groups per kind, normalizes JSON integer
 metadata, and reads the **saved effect**, without looking up current tier values.
 Changing/removing a catalogue entry therefore cannot reroll an existing item.
 Live `validate()` additionally checks the current definition, tier, restrictions

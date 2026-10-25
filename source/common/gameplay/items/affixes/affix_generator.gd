@@ -11,18 +11,19 @@ static func valid_pool(pool: Array) -> bool:
 		ids[d.affix_id]=true
 		for tier: Dictionary in d.tiers: weight+=tier.weight
 		if weight>1000000000: return false # Bound integer RNG range even for malformed content.
-	var groups: Dictionary={}
-	for d: Resource in pool: groups[d.group]=true
+	var groups: Dictionary={"prefix":{},"suffix":{}}
+	for d: Resource in pool: groups[d.kind][d.group]=true
 	for d: Resource in pool:
 		for excluded: StringName in d.excludes:
-			if not groups.has(excluded): return false
+			if not groups[d.kind].has(excluded): return false
 	return true
 
 static func compatible(d: Resource, selected: Array, pool: Array) -> bool:
 	for roll: Dictionary in selected:
+		if d.kind!=roll.kind: continue
 		if d.group==StringName(roll.group) or StringName(roll.group) in d.excludes: return false
 		for existing: Resource in pool:
-			if str(existing.affix_id)==roll.affix_id and d.group in existing.excludes: return false
+			if existing.kind==d.kind and str(existing.affix_id)==roll.affix_id and d.group in existing.excludes: return false
 	return true
 
 static func generate(base: ItemDefinition, prefixes: int, suffixes: int, pool: Array, rng: RandomNumberGenerator) -> Dictionary:

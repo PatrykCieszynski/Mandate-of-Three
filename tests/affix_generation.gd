@@ -33,17 +33,34 @@ func _ready() -> void:
 				if level==1: assert(r.tier==1,"ineligible tier never rolls")
 				else: seen_tiers[r.tier]=true
 	assert(seen_tiers.has(1) and seen_tiers.has(2),"positive tier weights are reachable")
-	# Three slots per kind, and symmetric cross-kind exclusion with no partial result.
+	# Group names are scoped by kind: identical prefix/suffix groups coexist.
 	var third_prefix: Resource=pool[0].duplicate(true);third_prefix.affix_id=&"test_prefix";third_prefix.kind="prefix";third_prefix.group=&"test_prefix"
 	var third_suffix: Resource=pool[0].duplicate(true);third_suffix.affix_id=&"test_suffix";third_suffix.kind="suffix";third_suffix.group=&"test_suffix"
 	var expanded: Array=pool+[third_prefix,third_suffix]
 	var full: Dictionary=Generator.generate(base,3,3,expanded,rng)
 	assert(full.ok and full.affixes.size()==6 and Generator.validate(full.affixes,base,expanded))
-	third_prefix.excludes.append(third_suffix.group)
-	assert(not Generator.generate(base,3,3,expanded,rng).ok)
+	third_suffix.group=third_prefix.group
+	full=Generator.generate(base,3,3,expanded,rng)
+	assert(full.ok and Generator.validate(full.affixes,base,expanded) and Roll.valid_stored(full.affixes),"same group in prefix and suffix is legal in generation, validation and storage")
+	var duplicate_group: Array=full.affixes.duplicate(true);duplicate_group[1].group=duplicate_group[0].group
+	assert(not Roll.valid_stored(duplicate_group),"storage still rejects duplicate groups inside one kind")
+	# Symmetric exclusions apply within a kind, in either input ordering.
+	var other_prefix: Resource=expanded.filter(func(d: Resource)->bool:return d.kind=="prefix" and d!=third_prefix)[0]
+	var other_suffix: Resource=expanded.filter(func(d: Resource)->bool:return d.kind=="suffix" and d!=third_suffix)[0]
+	third_prefix.excludes.append(other_prefix.group)
+	assert(not Generator.validate(full.affixes,base,expanded),"same-kind exclusion rejects a previously legal set")
+	var reversed: Array=full.affixes.duplicate(true);reversed.reverse()
+	assert(not Generator.validate(reversed,base,expanded),"reverse exclusion is enforced within a kind")
+	assert(Generator.generate(base,3,0,expanded,rng).get("error")=="insufficient_pool","insufficient prefix pool returns error without a partial result")
+	assert(Generator.generate(base,0,3,expanded,rng).ok,"prefix exclusion does not deplete suffix pool despite the shared group name")
 	third_prefix.excludes.clear()
-	third_suffix.excludes.append(third_prefix.group)
-	assert(not Generator.generate(base,3,3,expanded,rng).ok,"exclusion also applies in reverse selection order")
+	third_suffix.excludes.append(other_suffix.group)
+	assert(not Generator.validate(full.affixes,base,expanded))
+	assert(Generator.generate(base,0,3,expanded,rng).get("error")=="insufficient_pool","insufficient suffix pool returns error")
+	assert(Generator.generate(base,3,0,expanded,rng).ok,"suffix exclusion cannot deplete prefix pool")
+	third_suffix.excludes.clear()
+	third_prefix.group=other_prefix.group
+	assert(Generator.generate(base,3,0,expanded,rng).get("error")=="insufficient_pool","same-kind duplicate groups remain forbidden")
 	var tampered: Array=first.affixes.duplicate(true);tampered[0].value=999999
 	base.affix_level=1
 	assert(not Generator.validate(tampered,base,pool))
