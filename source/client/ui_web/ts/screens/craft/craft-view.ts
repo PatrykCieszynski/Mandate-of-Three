@@ -35,6 +35,8 @@ export const CRAFT_CURRENCIES = [
   'change_spark',
   'renewal_dust',
   'completion_shard',
+  'ascension_ember',
+  'renewal_prism',
 ];
 // Explicit currency-use mode, separate from ordinary item carrying/placement.
 export function mountCraft(
@@ -90,8 +92,10 @@ export function mountCraft(
     const rarity = target.tooltip?.rarity;
     const currency = (state.currency as Partial<ItemPresentation>)
       .definition_id;
-    if (currency === 'change_spark')
+    if (currency === 'change_spark' || currency === 'ascension_ember')
       return rarity === 'normal' ? '' : 'Wymaga przedmiotu Normal';
+    if (currency === 'renewal_prism')
+      return rarity === 'rare' ? '' : 'Wymaga przedmiotu Rare';
     if (rarity !== 'magic') return 'Wymaga przedmiotu Magic';
     if (
       currency === 'completion_shard' &&

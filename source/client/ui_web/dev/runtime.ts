@@ -16,6 +16,7 @@ import type {
   StorageTransferCommand,
 } from '../web/protocol/contracts.js';
 import { isObject } from '../web/protocol.js';
+import { CRAFT_CURRENCIES } from '../web/screens/craft/craft-view.js';
 // Development-only native stand-in. Production bridge/store/views are unchanged.
 import { decode, encode } from '../web/protocol.js';
 import type { DomainSnapshot, StateType } from '../web/protocol/contracts.js';
@@ -344,7 +345,10 @@ window.sendIpcMessage = (raw) => {
       const item = state.inventory?.items.find(
         (i) => i.id === message.payload.id,
       );
-      if (item?.definition_id === 'change_spark') {
+      if (
+        item?.definition_id &&
+        CRAFT_CURRENCIES.includes(item.definition_id)
+      ) {
         state.craft.currency = item;
         state.craft.active = true;
         emit('craft.updated', state.craft);
@@ -834,6 +838,51 @@ window.addEventListener('message', (event) => {
             y: 6,
             page: 0,
           });
+        const rare = {
+          ...target,
+          id: 'e'.repeat(32),
+          name: 'Rare Iron Sword +3',
+          tooltip: {
+            ...target.tooltip,
+            rarity: 'rare' as const,
+            affixes: [
+              { kind: 'prefix' as const, lines: ['+3 Attack'] },
+              { kind: 'prefix' as const, lines: ['+2 Attack'] },
+              { kind: 'suffix' as const, lines: ['+2% Attack speed'] },
+              { kind: 'suffix' as const, lines: ['+1% Attack speed'] },
+            ],
+          },
+        };
+        if (!state.craft.targets.some((i) => i.id === rare.id))
+          state.craft.targets.push(rare);
+        if (!state.inventory.items.some((i) => i.id === rare.id))
+          state.inventory.items.push({
+            ...rare,
+            primary_action: 'EQUIP',
+            x: 0,
+            y: 6,
+            page: 0,
+          });
+        for (const [index, definition_id, name] of [
+          [1, 'ascension_ember', 'Żar Wyniesienia'],
+          [2, 'renewal_prism', 'Pryzmat Odnowy'],
+        ] as const) {
+          const id = (index === 1 ? 'c' : 'd').repeat(32);
+          if (!state.inventory.items.some((i) => i.id === id))
+            state.inventory.items.push({
+              id,
+              revision: 0,
+              definition_id,
+              name,
+              icon_id: definition_id,
+              quantity: 12,
+              height: 1,
+              primary_action: 'USE',
+              x: index,
+              y: 6,
+              page: 0,
+            });
+        }
         emit('inventory.updated', state.inventory);
       }
       state.craft!.active = request.value;
