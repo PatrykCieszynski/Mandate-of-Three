@@ -397,25 +397,27 @@ func run() -> void:
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	# Craft uses the actual endpoint, UI journal and separate native client
 	# process. It must recover a committed random outcome without redrawing.
-	var craft_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,character,[])
-	craft_target.upgrade_level=3;craft_target.sockets=[{"definition_id":"preserve"}]
-	var craft_material:=ItemInstance.create(ItemDefinitions.CHANGE_SPARK,character,[])
-	craft_material.amount=2
-	assert(pg.begin() and Items.new(pg).receive_item_in_transaction(craft_target).ok and Items.new(pg).receive_item_in_transaction(craft_material).ok and pg.commit())
-	assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(character).item_state))
-	await wait_for(func()->bool:return world.inventory_runtime.mutations_allowed(actor))
-	var craft_payload: Dictionary={"target":craft_target.uid,"currency":craft_material.uid}
-	assert((await phase(actor,"craft-lost",craft_payload)).error=="timeout")
-	var frozen: Dictionary=Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_target.uid)[0]
-	assert(frozen.rarity=="magic" and frozen.revision==1 and frozen.upgrade_level==3 and frozen.sockets==craft_target.sockets)
-	await phase(actor,"exit")
-	await wait_for(func()->bool:return not world.connected_players.has(actor))
-	await start_client(211,"alpha","craft-restored")
-	await wait_for(func()->bool:return map.reports.has("craft-restored-ready"))
-	actor=map.reports["craft-restored-ready"].peer
-	assert((await phase(actor,"craft-restored",craft_payload)).ok)
-	assert(Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_target.uid)[0]==frozen)
-	assert(Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_material.uid)[0].amount==1)
+	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.ASCENSION_EMBER]:
+		var craft_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,character,[])
+		craft_target.upgrade_level=3;craft_target.sockets=[{"definition_id":"preserve"}]
+		var craft_material:=ItemInstance.create(definition,character,[])
+		craft_material.amount=2
+		assert(pg.begin() and Items.new(pg).receive_item_in_transaction(craft_target).ok and Items.new(pg).receive_item_in_transaction(craft_material).ok and pg.commit())
+		assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(character).item_state))
+		await wait_for(func()->bool:return world.inventory_runtime.mutations_allowed(actor))
+		var craft_payload: Dictionary={"target":craft_target.uid,"currency":craft_material.uid,"rarity":"magic" if definition==ItemDefinitions.CHANGE_SPARK else "rare"}
+		assert((await phase(actor,"craft-lost",craft_payload)).error=="timeout")
+		var frozen: Dictionary=Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_target.uid)[0]
+		assert(frozen.rarity==craft_payload.rarity and frozen.revision==1 and frozen.upgrade_level==3 and frozen.sockets==craft_target.sockets)
+		await phase(actor,"exit")
+		await wait_for(func()->bool:return not world.connected_players.has(actor))
+		map.reports.erase("craft-restored-ready")
+		await start_client(211 if definition==ItemDefinitions.CHANGE_SPARK else 212,"alpha","craft-restored")
+		await wait_for(func()->bool:return map.reports.has("craft-restored-ready"))
+		actor=map.reports["craft-restored-ready"].peer
+		assert((await phase(actor,"craft-restored",craft_payload)).ok)
+		assert(Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_target.uid)[0]==frozen)
+		assert(Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_material.uid)[0].amount==1)
 	await phase(actor,"exit")
 	await phase(observer,"exit")
 	await wait_for(func() -> bool: return client_processes.all(func(pid: int) -> bool: return not OS.is_process_running(pid)))
@@ -863,7 +865,7 @@ func client_phase(label: String, payload: Dictionary) -> void:
 		"craft-restored":
 			await wait_for(func()->bool:return craft_adapter.journal.load_pending().entry.is_empty())
 			var target: Dictionary=map.endpoint.state.items.filter(func(i: Dictionary)->bool:return i.uid==payload.target)[0]
-			assert(target.rarity=="magic" and target.revision==1)
+			assert(target.rarity==payload.rarity and target.revision==1)
 			# A journal entry saved before sending is discovered read-only.
 			var id: String="craft-"+Crypto.new().generate_random_bytes(16).hex_encode()
 			var currency: Dictionary=map.endpoint.state.items.filter(func(i: Dictionary)->bool:return i.uid==payload.currency)[0]

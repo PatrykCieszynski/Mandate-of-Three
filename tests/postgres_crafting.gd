@@ -15,7 +15,7 @@ func _ready() -> void:
 	var target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[])
 	target.upgrade_level=4;target.sockets=[{"definition_id":"preserved"}]
 	var currencies: Array=[]
-	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD]:
+	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM]:
 		var item:=ItemInstance.create(definition,OWNER,[]);item.amount=20;currencies.append(item)
 	assert(db.begin())
 	for item: ItemInstance in [target]+currencies: assert(Items.new(db).receive_item_in_transaction(item).ok)
@@ -72,6 +72,38 @@ func _ready() -> void:
 	assert(state().filter(func(i: Dictionary)->bool:return i.uid==rare_empty.uid)[0].rarity=="rare","explicit rarity is not recomputed from zero affixes")
 	var indexed: Dictionary=db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":target.uid})
 	assert(indexed.ok and indexed.rows.size()==renewed.affixes.size())
+	var rare_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[])
+	rare_target.upgrade_level=5;rare_target.sockets=[{"definition_id":"preserved-rare"}]
+	assert(db.begin() and Items.new(db).receive_item_in_transaction(rare_target).ok and db.commit())
+	var rare_before:=state()
+	assert(store.execute(OWNER,0,rare_target.uid,0,currencies[4].uid,0,"rare-wrong-rarity").error=="rarity" and state()==rare_before)
+	# The same rollback/unknown outcome guarantee applies to creating Rare.
+	assert(db.execute("CREATE CONSTRAINT TRIGGER craft_fault AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+	assert(store.execute(OWNER,0,rare_target.uid,0,currencies[3].uid,0,"rare-unknown").get("outcome_unknown",false))
+	assert(db.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")))
+	assert(state()==rare_before)
+	assert(db.execute("DROP TRIGGER craft_fault ON economy.market_commands;").ok)
+	store=Craft.new(db)
+	var created:=store.execute(OWNER,0,rare_target.uid,0,currencies[3].uid,0,"rare-create")
+	assert(created.ok and store.committed and created.rarity=="rare" and created.affixes.size()>=4 and created.affixes.size()<=6)
+	var created_state:=state()
+	var rare_saved: Dictionary=created_state.filter(func(i: Dictionary)->bool:return i.uid==rare_target.uid)[0]
+	assert(rare_saved.upgrade_level==5 and rare_saved.sockets==rare_target.sockets and rare_saved.bag_position==rare_before.filter(func(i: Dictionary)->bool:return i.uid==rare_target.uid)[0].bag_position)
+	assert(created_state.filter(func(i: Dictionary)->bool:return i.uid==currencies[3].uid)[0].amount==19)
+	assert(db.execute("CREATE TRIGGER craft_fault BEFORE UPDATE OF affixes_json ON economy.item_instances FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+	assert(store.execute(OWNER,0,rare_target.uid,1,currencies[4].uid,0,"rare-reroll-fault").error=="storage" and state()==created_state)
+	assert(db.execute("DROP TRIGGER craft_fault ON economy.item_instances;").ok)
+	var reforged:=store.execute(OWNER,0,rare_target.uid,1,currencies[4].uid,0,"rare-reforge")
+	assert(reforged.ok and reforged.rarity=="rare" and reforged.affixes.size()>=4 and reforged.affixes.size()<=6)
+	var final_state:=state()
+	assert(final_state.filter(func(i: Dictionary)->bool:return i.uid==currencies[4].uid)[0].amount==19)
+	assert(store.execute(OWNER,0,rare_target.uid,1,currencies[4].uid,0,"rare-reforge")==reforged and store.receipt_replay)
+	assert(store.execute(OWNER,0,rare_target.uid,0,currencies[3].uid,0,"rare-create")==created and store.receipt_replay and state()==final_state,"old creation receipt never rolls back a later reforge")
+	assert(store.execute(OWNER,0,rare_target.uid,1,currencies[4].uid,0,"rare-stale").error=="stale" and state()==final_state)
+	assert(store.execute(OWNER,0,legacy.uid,0,currencies[4].uid,1,"rare-legacy").error=="invalid_affixes" and state()==final_state)
+	var final_target: Dictionary=final_state.filter(func(i: Dictionary)->bool:return i.uid==rare_target.uid)[0]
+	assert(final_target.revision==2 and final_target.upgrade_level==5 and final_target.sockets==rare_target.sockets and final_target.affixes==reforged.affixes)
+	assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":rare_target.uid}).rows.size()==reforged.affixes.size())
 	db.close()
 	print("POSTGRES_CRAFTING_OK rollback, uncertain COMMIT, replay/conflict, stale race, UID/+level/sockets, migration and auction index")
 	get_tree().quit()

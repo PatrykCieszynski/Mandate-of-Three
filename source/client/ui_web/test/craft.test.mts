@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { environment, target } from './fixtures.mjs';
-import { mountCraft, isCraft, type CraftSnapshot } from '../web/screens/craft/craft-view.js';
+import { mountCraft, isCraft, CRAFT_CURRENCIES, type CraftSnapshot } from '../web/screens/craft/craft-view.js';
 import type { ItemPresentation } from '../web/game-ui/item-types.js';
 import { DomainStore } from '../web/store.js';
 const sword={id:'a'.repeat(32),revision:7,name:'Sword',icon_id:'iron_sword',height:3,quantity:1,tooltip:{rarity:'magic' as const,affixes:[{kind:'prefix' as const,lines:['+1 Attack']}]} };
@@ -43,5 +43,29 @@ test('outside clicks cancel targeting and reach other windows without losing pen
  assert.equal(view.engaged(),false);assert.equal(actions,1);assert.equal(click.defaultPrevented,false);assert.equal(attempts,0);assert.equal(closes,1);
  view.setState({...state(),active:false});view.setState(state());view.setState({...state(),pending:true});other.dispatchEvent(new host.MouseEvent('pointerdown',{button:0,bubbles:true,cancelable:true}));
  assert.equal(view.engaged(),false);assert.equal(actions,2);assert.equal(root.querySelector('button')!.hidden,false,'cancellation leaves unresolved receipt recovery visible');
+ view.dispose();manager.dispose();host.close();
+});
+
+test('Rare currencies use the same explicit cursor with correct rarity targets and Shift revisions',async()=>{
+ const {manager,doc,host}=environment(),root=target();doc.body.append(root);
+ const sent:unknown[]=[];
+ const view=mountCraft(root,{resolveItemIcon:()=>null,execute:async p=>{sent.push(p);return {ok:true};},retry:async()=>({ok:true}),close:()=>{},cancelCarry:()=>{},regions:()=>{}});
+ for(const currency of ['ascension_ember','renewal_prism']) {
+   assert.ok(CRAFT_CURRENCIES.includes(currency));
+   const required=currency==='ascension_ember'?'normal':'rare';
+   const target={...sword,tooltip:{rarity:required as 'normal'|'rare',affixes:[]}};
+   const snapshot={...state(),currency:{...(state().currency as ItemPresentation),definition_id:currency},targets:[target]};
+   view.setState({...snapshot,active:false});view.setState(snapshot);
+   assert.equal(view.reason(target),'');await view.use(target,true);assert.ok(view.engaged());
+   const next={...target,revision:8,tooltip:{rarity:'rare' as const,affixes:[]}};
+   view.setState({...snapshot,targets:[next]});
+   if(currency==='ascension_ember') {assert.ok(view.reason(next));await view.use(next,true);}
+   else {assert.equal(view.reason(next),'');await view.use(next,false);assert.equal(view.engaged(),false);assert.deepEqual(sent.at(-1),{id:sword.id,revision:8});}
+   for(const rarity of ['normal','magic','rare'] as const) {
+     view.setState({...snapshot,targets:[{...target,tooltip:{rarity,affixes:[]}}]});
+     assert.equal(view.reason(target)==='',rarity===required);
+   }
+ }
+ assert.equal(sent.length,3,'creation cannot repeat on a newly Rare target; reforge can repeat with the latest revision');
  view.dispose();manager.dispose();host.close();
 });

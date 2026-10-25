@@ -98,13 +98,15 @@ into prefix/suffix identities and cannot be crafted by these currencies. The
 embedded SOCI fixture schema applies the same classification. Normal deployment
 requires provisioning before build 0.38.0; runtime never migrates or falls back.
 
-The first three original currencies are stackable USE items:
+The original currencies are stackable USE items:
 
 | Currency | Preconditions | Committed effect |
 | --- | --- | --- |
 | Iskra Przemiany (`change_spark`) | Normal eligible equipment in bag | Becomes Magic with one/two new affixes |
 | Pył Odnowy (`renewal_dust`) | Magic eligible equipment in bag | Replaces all affixes; remains Magic |
 | Odłamek Dopełnienia (`completion_shard`) | Magic equipment with exactly one affix | Preserves that roll and adds the opposite kind |
+| Żar Wyniesienia (`ascension_ember`) | Normal eligible equipment in bag | Becomes Rare with four to six new affixes |
+| Pryzmat Odnowy (`renewal_prism`) | Rare eligible equipment in bag | Replaces all affixes with four to six new rolls; remains Rare |
 
 Each action consumes exactly one selected currency, with no Yang surcharge.
 Transform/renew currently choose prefix-only, suffix-only or both with equal
@@ -112,6 +114,17 @@ probability; these are explicit provisional content odds. Affix/tier weights and
 base eligibility use the same natural-drop pool. Exhaustion/invalid existing
 rolls reject the whole operation without consuming currency. Currency sourcing,
 market value and drop rates are not added in C3.
+
+Rare creation/reforge use provisional equal chances of four, five or six total
+affixes; each legal prefix/suffix split for that count is equally likely (4:
+1+3/2+2/3+1; 5: 2+3/3+2; 6: 3+3). There is no downgrade, fallback or reroll
+on an insufficient pool, and a legal random result may repeat existing rolls.
+The same kind-local group/exclusion and tier eligibility rules apply. Normal
+to Rare is deliberate; converting Magic to Rare or removing affixes is outside
+this slice. Opaque legacy Rare bonuses remain protected from crafting.
+The Rare extension changes content only, not RPC signatures or the SQL schema;
+client/server build 0.39.0 includes both currencies. No deployment migration
+beyond the C3 rarity schema is needed. Currency sources/drop rates remain deferred.
 
 Right-click a currency in Inventory (or activate its USE hotbar binding) to arm
 its original symbol and remaining stack at the cursor. Left-click a bag target
@@ -145,7 +158,7 @@ Inventory snapshots publish the committed outcome and refresh derived stats.
 
 Verification: smoke `crafting_currencies`, PostgreSQL `--suite crafting` and
 `--suite npc-runtime`; `--suite inventory-endpoint` includes real client-process
-restart, lost crafting response and a saved-but-unsent journal. UI contracts
+restart, lost Magic/Rare crafting responses and a saved-but-unsent journal. UI contracts
 check explicit target clicks, normal-drag isolation, serialized Shift reuse with
 current revisions, cancellation, pending retry and explicit-rarity tooltips. Headless
 and browser fixtures do not establish physical native CEF input behavior.

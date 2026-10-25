@@ -32,5 +32,35 @@ func _ready() -> void:
 	assert(not Generator.generate(ItemDefinitions.IRON_SWORD,1,0,Rules.PROFILE.pool,rng,full).ok)
 	var currency:=ItemInstance.create(ItemDefinitions.CHANGE_SPARK,1,[])
 	assert(Rules.resolve(currency,"change_spark",rng).error=="unsupported_item")
+	var counts: Dictionary={}
+	var splits: Dictionary={}
+	for seed_value: int in 120:
+		var normal:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[])
+		normal.upgrade_level=4;normal.sockets=[{"definition_id":"kept"}]
+		var original:=normal.to_snapshot()
+		rng.seed=seed_value
+		var made:=Rules.resolve(normal,"ascension_ember",rng)
+		assert(made.ok and made.rarity=="rare" and made.affixes.size()>=4 and made.affixes.size()<=6)
+		assert(Generator.validate(made.affixes,ItemDefinitions.IRON_SWORD,Rules.PROFILE.pool))
+		assert(ItemInstance.valid_rarity(made.rarity,made.affixes) and normal.to_snapshot()==original)
+		counts[made.affixes.size()]=true
+		var prefixes: int=made.affixes.filter(func(a: Dictionary)->bool:return a.kind=="prefix").size()
+		splits["%d:%d" % [prefixes,made.affixes.size()-prefixes]]=true
+		rng.seed=seed_value
+		assert(Rules.resolve(normal,"ascension_ember",rng)==made,"same server seed has the same complete outcome")
+		normal.affixes=made.affixes;normal.rarity="rare"
+		var before_reroll:=normal.to_snapshot()
+		var rerolled:=Rules.resolve(normal,"renewal_prism",rng)
+		assert(rerolled.ok and rerolled.rarity=="rare" and ItemInstance.valid_rarity("rare",rerolled.affixes))
+		assert(Generator.validate(rerolled.affixes,ItemDefinitions.IRON_SWORD,Rules.PROFILE.pool) and normal.to_snapshot()==before_reroll)
+		assert(Rules.resolve(normal,"ascension_ember",rng).error=="rarity")
+	assert(counts.size()==3 and splits.size()==6,"exercise every 4/5/6-affix legal split, with at most 3 of each kind")
+	var magic:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[full[0]])
+	assert(Rules.resolve(magic,"ascension_ember",rng).error=="rarity" and Rules.resolve(magic,"renewal_prism",rng).error=="rarity")
+	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"renewal_prism",rng).error=="rarity")
+	assert(Rules.resolve(legacy,"renewal_prism",rng).error=="invalid_affixes")
+	var tiny_pool: Array=Rules.PROFILE.pool.slice(0,1)
+	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"ascension_ember",rng,tiny_pool).error=="insufficient_pool","no downgrade or retry if the authored pool cannot supply Rare")
+	assert(Rules.resolve(currency,"ascension_ember",rng).error=="unsupported_item")
 	print("CRAFTING_CURRENCIES_OK explicit rarity, one/two rolls, preserved augmentation, legacy refusal, caps")
 	get_tree().quit()
