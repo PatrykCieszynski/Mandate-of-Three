@@ -375,7 +375,8 @@ export function mountUpgrade(root, options) {
             slot.append(empty);
         }
         name.textContent = preview?.current.name ?? 'Select an item';
-        name.dataset.rarity = itemRarity(item?.tooltip?.affixes?.length ?? 0);
+        name.dataset.rarity =
+            item?.tooltip?.rarity ?? itemRarity(item?.tooltip?.affixes?.length ?? 0);
         find('.upgrade-category').textContent = item?.tooltip?.category ?? '';
         find('.upgrade-category').hidden = !item?.tooltip?.category;
         find('.upgrade-prompt').hidden = !!item;

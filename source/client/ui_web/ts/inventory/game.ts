@@ -1,3 +1,4 @@
+import { CRAFT_CURRENCIES, mountCraft } from '../screens/craft/craft-view.js';
 import { mountTrade } from '../screens/trade/trade-view.js';
 import { QuickItemTargets } from './quick-item-targets.js';
 import { mountVendor } from '../screens/vendor/vendor-view.js';
@@ -38,6 +39,10 @@ await applySkin(document.documentElement, legacy.skin);
 uiIcons.replace(legacy.uiIcons, new URL('./', import.meta.url));
 const itemIcons = new ItemIconResolver({
   ...legacy.itemIcons,
+  change_spark: new URL('../content/change_spark.svg', import.meta.url).href,
+  renewal_dust: new URL('../content/renewal_dust.svg', import.meta.url).href,
+  completion_shard: new URL('../content/completion_shard.svg', import.meta.url)
+    .href,
   upgrade_ore: new URL('../content/upgrade_ore.svg', import.meta.url).href,
 });
 export const resolveItemIcon = (id: ItemIconId) => itemIcons.resolve(id);
@@ -64,6 +69,7 @@ const bridge = new WebBridge({
       chat.focus();
       return;
     }
+    if (craft.cancel()) return;
     if (chat.escape()) return;
     if (drag.cancel()) return;
     if (
@@ -71,6 +77,7 @@ const bridge = new WebBridge({
       exchange.closeIfActive() ||
       marketBrowser.closeIfActive() ||
       market.closeIfActive() ||
+      craft.cancel() ||
       upgrade.closeIfActive() ||
       npc.closeIfActive()
     )
@@ -132,6 +139,11 @@ const bridge = new WebBridge({
       market.setInventory(state.inventory);
     if (message.type === 'ui.snapshot' || message.type === 'wallet.updated')
       market.setWallet(state.wallet ?? {});
+    if (
+      (message.type === 'ui.snapshot' || message.type === 'craft.updated') &&
+      state.craft
+    )
+      craft.setState(state.craft);
     updateGameViews(message.type, state, {
       inventory: view,
       equipment,
@@ -141,6 +153,8 @@ const bridge = new WebBridge({
       viewport: () => ({ width: innerWidth, height: innerHeight }),
       onRegionsChanged: () => regions?.refresh(),
     });
+    if (root.hidden) craft.cancel();
+    craft.refreshTargets();
     if (
       (message.type === 'ui.snapshot' || message.type === 'hotbar.updated') &&
       state.hotbar
@@ -231,6 +245,7 @@ const worldDrop = mountNpcWorldDrop(
   () => regions?.refresh(),
 );
 const view = mountInventory(root, {
+  blockCarry: () => craft.engaged(),
   retry: () => bridge.request('inventory.retry', {}),
   drag,
   quickTransfer: (item) => quickTargets.receive(item),
@@ -240,6 +255,13 @@ const view = mountInventory(root, {
   manager,
   resolveItemIcon,
   activateItem: (payload) => {
+    const selected = readDomainSnapshot(store.state)?.inventory?.items.find(
+      (i) => i.id === payload.id,
+    );
+    if (CRAFT_CURRENCIES.includes(selected?.definition_id ?? '')) {
+      drag.cancel();
+      return bridge.request('item.activate', payload);
+    }
     if (!marketRoot.hidden) return market.selectInventory(payload);
     if (!upgradeRoot.hidden) return upgrade.selectItem(payload);
     return bridge.request('item.activate', payload);
@@ -247,6 +269,17 @@ const view = mountInventory(root, {
   moveItem: (payload) => bridge.request('inventory.move_item', payload),
   onClose: () => bridge.request('inventory.close', {}).catch(() => {}),
   onRegionsChanged: () => regions?.refresh(),
+});
+const craft = mountCraft(root, {
+  storageRoot,
+  resolveItemIcon,
+  execute: (p) => bridge.request('craft.execute', p),
+  retry: () => bridge.request('craft.retry', {}),
+  close: () => {
+    void bridge.request('craft.close', {}).catch(() => {});
+  },
+  cancelCarry: () => drag.cancel(),
+  regions: () => regions?.refresh(),
 });
 const equipment = mountEquipment(equipmentRoot, {
   drag,
@@ -445,6 +478,7 @@ regions = reportInteractiveRegions(
     ...exchange.regions,
     ...marketBrowser.regions,
     ...market.regions,
+    ...craft.regions,
     ...upgrade.regions,
     ...npc.regions,
     ...view.regions,
@@ -460,6 +494,7 @@ window.addEventListener('pagehide', () => {
   party.dispose();
   trade.dispose();
   worldDrop.dispose();
+  craft.dispose();
   upgrade.dispose();
   shop.dispose();
   vendor.dispose();
@@ -481,6 +516,7 @@ document.addEventListener(
   (event) => {
     if (event.key !== 'Escape' || event.repeat) return;
     if (
+      craft.cancel() ||
       drag.cancel() ||
       exchange.closeIfActive() ||
       marketBrowser.closeIfActive() ||

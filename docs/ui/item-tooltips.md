@@ -12,14 +12,11 @@ requirement lines and affixes. An affix has one to three display lines and an
 optional `kind: prefix | suffix`. IPC validates the shape, bounded text/arrays,
 maximum six affixes, maximum three classified prefixes and three suffixes.
 
-Rarity is derived outside the renderer by `itemRarity`, from affix count:
-
-| Affixes | Rarity | Name colour |
-| --- | --- | --- |
-| 0 | Normal | White |
-| 1–2 | Magic | Blue |
-| 3–4 | Rare | Yellow |
-| 5–6 | Legendary | Dark orange |
+Production metadata carries the saved `tooltip.rarity`: Normal (white), Magic
+(blue), or Rare (yellow). The renderer uses it independently of affix count;
+five/six bonuses no longer imply Legendary. See [crafting and migration](../gameplay/item-progression.md#crafting-currencies-c3).
+`itemRarity` remains a presentation-only fallback for old preview metadata:
+zero bonuses Normal, one/two Magic, three/six Rare. It never authorizes crafting.
 
 One affix may display several effects; lines are not counted as separate affixes.
 Properties, requirements, upgrade and sockets do not contribute. The name and
@@ -37,7 +34,7 @@ Bonus order stays fixed. Blur/hiding/disposal do not resurrect the tooltip.
 
 Existing native attack rolls have no prefix/suffix metadata. They are displayed
 and counted faithfully, without inventing a classification. Their gameplay
-behaviour is unchanged. New 3+3 examples are development fixtures only.
+behaviour is unchanged. Versioned production rolls carry their actual kind; legacy bonuses remain unclassified.
 
 ## Input and preview
 
@@ -50,7 +47,7 @@ is involved. Native input takes precedence over pointer modifier flags.
 
 Browser-only preview supports DOM Alt and mirrors parent-page Alt to its iframe,
 so hovering works without clicking to acquire keyboard focus. Reset fixtures show
-Legendary sword, Rare armour, Magic equipped sword and Normal material. Fixture
+six-affix Rare sword, Rare armour, Magic equipped sword and Normal material. Fixture
 bonuses do not affect simulated transfers or production stats.
 
 Default smoke exercises generated JS rarity boundaries, multiline affixes,

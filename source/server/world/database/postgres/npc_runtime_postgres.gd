@@ -1,5 +1,5 @@
 extends RefCounted
-## Single-World coordinator for NPC purchases, vendor sales and upgrades. No SQL
+## Single-World coordinator for NPC purchases, vendor sales, upgrades and crafting. No SQL
 ## on the simulation thread, no server durable-admission ACK. Client journals
 ## retain intent; receipts resolve uncertainty before any explicit resubmission.
 const Commands = preload("res://source/server/world/database/postgres/economy_command_postgres.gd")
@@ -51,6 +51,10 @@ func upgrade(peer: int, id: String, recipe: UpgradeDefinition, uid: String, revi
 	if recipe==null or not recipe.validation_errors().is_empty() or not ItemInstance.valid_uid(uid) or revision<0: return {"queued":false,"error":"request"}
 	return _begin(peer,"upgrade",id,{"content":Content.upgrade_content(recipe),"uid":uid,"revision":revision},false)
 
+func craft(peer: int, id: String, body: Dictionary) -> Dictionary:
+	if body.size()!=4 or not ItemInstance.valid_uid(str(body.get("uid",""))) or not ItemInstance.valid_uid(str(body.get("currency_uid",""))) or not body.get("revision") is int or not body.get("currency_revision") is int: return {"queued":false,"error":"request"}
+	return _begin(peer,"craft",id,body,false)
+
 func receipt(peer: int, kind: String, id: String) -> Dictionary:
 	var context: Dictionary=_wallet.context_for_peer(peer)
 	if context.is_empty(): return {"queued":false,"error":"stale_session"}
@@ -70,7 +74,7 @@ func receipt(peer: int, kind: String, id: String) -> Dictionary:
 	return _begin(peer,kind,id,{},true)
 
 func _begin(peer: int, kind: String, id: String, body: Dictionary, lookup: bool) -> Dictionary:
-	if _draining or kind not in ["buy","upgrade","sell"] or not Commands.valid_id(id): return {"queued":false,"error":"request"}
+	if _draining or kind not in ["buy","upgrade","sell","craft"] or not Commands.valid_id(id): return {"queued":false,"error":"request"}
 	var context: Dictionary=_wallet.context_for_peer(peer)
 	if context.is_empty(): return {"queued":false,"error":"stale_session"}
 	if _active.has(context.account_id) or not _inventory.mutations_allowed(peer): return {"queued":false,"error":"recovery_required"}

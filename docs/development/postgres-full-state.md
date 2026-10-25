@@ -16,6 +16,10 @@ godot-sqlite addon is not a supported dependency.
 | Retired tables (no active services) | Existing guild, mail and persistent chat tables remain on disk; no runtime stores or RPCs |
 | Existing Economy owners | `economy.*`: UIDs, custody, equipment, wallets, Storage, shops, Exchange, grants, intents and receipts |
 
+Crafting build 0.38.0 requires offline provisioning of `npc_shop=2` for durable
+item rarity. Existing affixes, UIDs, sockets and upgrades are retained; see
+[item progression](../gameplay/item-progression.md#crafting-currencies-c3).
+
 Profile upserts cannot change the account owning an existing character. The pure
 profile decoder is shared with the SQLite reference store; SQL/access remain
 separate. This introduces no generic database interface or ORM. Combat still

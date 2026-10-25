@@ -5,6 +5,7 @@ var _endpoint: InventoryEndpoint3D
 var _dispatcher: UiCommandDispatcher
 var _session: UiCommandSession
 var _tree: SceneTree
+signal craft_requested(payload: Dictionary)
 signal recovery_needed
 const LocalJournal = preload("res://source/client/ui_web/local_economy_journal.gd")
 var journal = LocalJournal.new("inventory-","user://pending_inventory_commands")
@@ -55,7 +56,7 @@ static func tooltip_details(item: Dictionary) -> Dictionary:
 		var socket: Variant=item.sockets[index]
 		var label: String=str(socket.get("definition_id",JSON.stringify(socket))) if socket is Dictionary else str(socket)
 		properties.append("Socket %d: %s" % [index+1,label.left(240)])
-	return {"properties":properties,"affixes":affixes}
+	return {"rarity":str(item.get("rarity",ItemInstance.legacy_rarity(item.get("affixes",[])))),"properties":properties,"affixes":affixes}
 
 static func item_model(item: Dictionary) -> Dictionary:
 	var definition: ItemDefinition = ItemDefinitions.get_definition(StringName(item.definition_id))
@@ -99,6 +100,9 @@ static func valid_storage(p: Dictionary) -> bool:
 	var pages: int = 2 if p.to == "storage" else 4
 	return WebUiBridge.is_integer(p.x) and WebUiBridge.is_integer(p.y) and WebUiBridge.is_integer(p.page) and p.x >= 0 and p.x < columns and p.y >= 0 and p.y < 9 and p.page >= 0 and p.page < pages
 func _activate(payload: Dictionary) -> Dictionary:
+	for item: Dictionary in _endpoint.state.get("items",[]):
+		if item.uid==payload.id and item.revision==payload.revision and item.location=="bag" and preload("res://source/common/gameplay/items/crafting/crafting_rules.gd").CURRENCIES.has(str(item.definition_id)):
+			craft_requested.emit(payload);return {"ok":true}
 	return await _submit(payload, "activate")
 
 func _equip(payload: Dictionary) -> Dictionary:

@@ -63,7 +63,6 @@
   overflow-wrap:anywhere}
 .item-tooltip[data-rarity=magic] {--item-rarity-color:#7aa7f5}
 .item-tooltip[data-rarity=rare] {--item-rarity-color:#e8ce63}
-.item-tooltip[data-rarity=legendary] {--item-rarity-color:#df862f}
 .item-tooltip .item-tooltip-title {
   margin:0;
   font:15px/20px Georgia,serif;

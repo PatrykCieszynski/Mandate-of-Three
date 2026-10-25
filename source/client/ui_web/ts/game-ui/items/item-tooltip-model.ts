@@ -5,17 +5,17 @@ export interface TooltipAffix {
   lines: readonly string[];
 }
 export interface ItemTooltipDetails {
+  rarity?: ItemRarity;
   category?: string;
   properties?: readonly string[];
   requirements?: readonly string[];
   affixes?: readonly TooltipAffix[];
 }
-export type ItemRarity = 'normal' | 'magic' | 'rare' | 'legendary';
+export type ItemRarity = 'normal' | 'magic' | 'rare';
 export function itemRarity(affixCount: number): ItemRarity {
   if (affixCount === 0) return 'normal';
   if (affixCount <= 2) return 'magic';
-  if (affixCount <= 4) return 'rare';
-  return 'legendary';
+  return 'rare';
 }
 const object = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -31,10 +31,11 @@ export function isItemTooltipDetails(
     !object(value) ||
     Object.keys(value).some(
       (key) =>
-        !['category', 'properties', 'requirements', 'affixes'].includes(key),
+        !['rarity', 'category', 'properties', 'requirements', 'affixes'].includes(key),
     )
   )
     return false;
+  if ('rarity' in value && !['normal','magic','rare'].includes(String(value.rarity))) return false;
   if ('category' in value && !text(value.category)) return false;
   if ('properties' in value && !lines(value.properties, 8)) return false;
   if ('requirements' in value && !lines(value.requirements, 4)) return false;

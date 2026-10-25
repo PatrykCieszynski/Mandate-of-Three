@@ -125,7 +125,7 @@ try {
   await ui.locator('#inventory .item-tooltip').waitFor({ state: 'visible' });
   assert.equal(
     await ui.locator('#inventory .item-tooltip').getAttribute('data-rarity'),
-    'legendary',
+    'rare',
   );
   assert.equal(
     await ui

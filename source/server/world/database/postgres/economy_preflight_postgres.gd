@@ -1,6 +1,6 @@
 extends RefCounted
 ## Read-only startup gate. Provisioning/migration is deliberately separate.
-const VERSIONS: Dictionary={"wallet":1,"inventory":1,"inventory_intents":2,"inventory_sessions":1,"npc_shop":1,"storage":1,"shop_seller":1,"shop_settlement":1,"account_claims":1,"auction_search":1,"exchange_ledger":1,"exchange_orders":1}
+const VERSIONS: Dictionary={"wallet":1,"inventory":1,"inventory_intents":2,"inventory_sessions":1,"npc_shop":2,"storage":1,"shop_seller":1,"shop_settlement":1,"account_claims":1,"auction_search":1,"exchange_ledger":1,"exchange_orders":1}
 var db: Object
 var committed:=false
 var receipt_replay:=false

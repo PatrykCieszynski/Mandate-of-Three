@@ -22,9 +22,10 @@ export interface EquipmentSnapshot { items?: EquipmentItem[]; stats?: { attack?:
 export interface WalletSnapshot { balance?: number; ready?: boolean }
 export interface HudSnapshot { inventory_open?: boolean; equipment_open?: boolean; storage_open?: boolean; ui_scale?: number; viewport?: Viewport }
 export type RawObject = Record<string, unknown>;
-export type DomainName = 'trade'|'vendor'|'hotbar'|'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
+export type DomainName = 'craft'|'trade'|'vendor'|'hotbar'|'stats'|'chat'|'party'|'exchange'|'market_browser'|'market' | 'upgrade' | 'npc_targets' | 'shop' | 'npc' | 'storage' | 'inventory' | 'equipment' | 'wallet' | 'player' | 'hud';
 export type RawDomainState = Partial<Record<DomainName, RawObject>>;
 export interface DomainSnapshot {
+  craft?: import('../screens/craft/craft-view.js').CraftSnapshot;
   trade?: TradeSnapshot;
   hotbar?: HotbarSnapshot;
   stats?: StatsSnapshot;
@@ -48,6 +49,9 @@ export interface MoveItemCommand extends ItemCommand { x: number; y: number; pag
 export type UnequipItemCommand = ItemCommand & ({ x?: never; y?: never; page?: never } | { x: number; y: number; page: number });
 export interface StorageTransferCommand extends ItemCommand { from: 'inventory' | 'storage'; to: 'inventory' | 'storage'; x:number; y:number; page:number; quick:boolean }
 export interface CommandPayloads {
+  'craft.execute': ItemCommand;
+  'craft.retry': Record<string,never>;
+  'craft.close': Record<string,never>;
   'hotbar.assign': {slot:number;id:string};
   'hotbar.clear': {slot:number};
   'hotbar.activate': {slot:number};

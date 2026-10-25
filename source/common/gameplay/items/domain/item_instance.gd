@@ -7,6 +7,7 @@ var owner_character_id: int
 var amount: int = 1
 var upgrade_level: int = 0
 var affixes: Array = []
+var rarity: String = "normal"
 var sockets: Array = []
 var revision: int = 0
 var location: String = "bag"
@@ -28,6 +29,7 @@ static func create(definition: ItemDefinition, owner_id: int, rolls: Array) -> I
 	item.definition_id = definition.definition_id
 	item.owner_character_id = owner_id
 	item.affixes = rolls.duplicate(true)
+	item.rarity = legacy_rarity(rolls)
 	return item
 
 func effective_stats(definition: ItemDefinition) -> Dictionary:
@@ -42,7 +44,7 @@ func effective_stats(definition: ItemDefinition) -> Dictionary:
 
 func to_snapshot() -> Dictionary:
 	return {"uid": uid, "definition_id": str(definition_id), "owner_character_id": owner_character_id,
-		"amount": amount, "upgrade_level": upgrade_level, "affixes": affixes.duplicate(true),
+		"amount": amount, "upgrade_level": upgrade_level, "rarity":rarity, "affixes": affixes.duplicate(true),
 		"sockets": sockets.duplicate(true), "revision": revision, "location": location,
 		"bag_position": bag_position, "equipment_slot": str(equipment_slot)}
 
@@ -63,5 +65,27 @@ static func from_row(row: Dictionary) -> ItemInstance:
 		return null
 	if not preload("res://source/common/gameplay/items/affixes/affix_roll.gd").valid_stored(rolls): return null
 	item.affixes = preload("res://source/common/gameplay/items/affixes/affix_roll.gd").canonical(rolls)
+	item.rarity = str(row.get("rarity", legacy_rarity(item.affixes)))
+	if not valid_rarity(item.rarity,item.affixes): return null
 	item.sockets = stones
 	return item
+
+## One-time compatibility classification; never used to change an explicit rarity.
+static func legacy_rarity(rolls: Array) -> String:
+	if rolls.is_empty(): return "normal"
+	var counts: Dictionary={"prefix":0,"suffix":0}
+	for r: Variant in rolls:
+		if not r is Dictionary or r.get("affix_version",0)!=1: return "rare"
+		counts[str(r.get("kind",""))]=int(counts.get(str(r.get("kind","")),0))+1
+	return "magic" if rolls.size()<=2 and counts.prefix<=1 and counts.suffix<=1 else "rare"
+
+static func valid_rarity(value: String, rolls: Array) -> bool:
+	if value=="normal": return rolls.is_empty()
+	if value=="rare": return rolls.size()<=6
+	if value!="magic" or rolls.size()>2: return false
+	var prefix:=0;var suffix:=0
+	for r: Dictionary in rolls:
+		if r.get("kind","")=="prefix": prefix+=1
+		elif r.get("kind","")=="suffix": suffix+=1
+		else: return false
+	return prefix<=1 and suffix<=1

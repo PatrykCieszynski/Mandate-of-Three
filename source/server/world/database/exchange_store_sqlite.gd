@@ -77,7 +77,7 @@ func withdraw(character_id: int,command_id: String,asset: String,amount: int,des
 		var inserted:=ItemStoreSqlite.new(db).receive_item_in_transaction(item)
 		if not inserted.ok: return _transaction.rollback(str(inserted.error))
 	else:
-		if not db.query_with_bindings("INSERT INTO item_instances VALUES(?,?,?,?,?,?,?,?);",[item.uid,character_id,asset,amount,0,"[]","[]",0]): return _transaction.rollback("storage")
+		if not db.query_with_bindings("INSERT INTO item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision) VALUES(?,?,?,?,?,?,?,?);",[item.uid,character_id,asset,amount,0,"[]","[]",0]): return _transaction.rollback("storage")
 		if not db.query_with_bindings("INSERT INTO item_custody(uid,location,owner_id,position) VALUES(?,'account_claim',?,-1);",[item.uid,_transaction.account_id]): return _transaction.rollback("storage")
 	return _transaction.commit({"ok":true,"uid":item.uid,"amount":amount})
 ## Only order transactions may reserve/release. These are not exposed UI commands.

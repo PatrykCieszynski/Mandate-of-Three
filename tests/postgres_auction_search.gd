@@ -20,14 +20,14 @@ func execute(native: bool, sql: String, bindings: Dictionary = {}) -> void:
 	if native:
 		var result: Dictionary=pg.execute(sql,bindings)
 		assert(result.ok,str(result))
-	else: assert(sqlite.query_with_bindings(sql,bindings.values()))
+	else: assert(sqlite.query_with_named_bindings(sql,bindings))
 
 func query(native: bool, sql: String, bindings: Dictionary = {}) -> Array:
 	if native:
 		var result: Dictionary=pg.query(sql,bindings)
 		assert(result.ok and not result.truncated)
 		return result.rows
-	assert(sqlite.query_with_bindings(sql,bindings.values()))
+	assert(sqlite.query_with_named_bindings(sql,bindings))
 	return sqlite.query_result.duplicate(true)
 
 func seed_offers(native: bool) -> void:
@@ -40,7 +40,7 @@ func seed_offers(native: bool) -> void:
 			var rolls: Array=[{"stat":"monster_damage","value":15 if n%3==0 else 5},{"stat":"critical_chance","value":7 if n%5==0 else 2}]
 			if n==0: rolls.append({"stat":"monster_damage","value":16})
 			var definition: String="upgrade_ore" if n%7==0 else "iron_sword"
-			execute(native,"INSERT INTO "+prefix+"item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision) VALUES(:uid,:owner,:definition,1,:upgrade,:affixes,'[]',0);",{"uid":uid(n+1),"owner":characters[shop],"definition":definition,"upgrade":n%10,"affixes":JSON.stringify(rolls)})
+			execute(native,"INSERT INTO "+prefix+"item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision,rarity) VALUES(:uid,:owner,:definition,1,:upgrade,:affixes,'[]',0,'rare');",{"uid":uid(n+1),"owner":characters[shop],"definition":definition,"upgrade":n%10,"affixes":JSON.stringify(rolls)})
 			var position: int=slot%5+(slot/5)*10
 			if native:
 				execute(true,"INSERT INTO economy.item_custody(uid,location,owner_id,position,escrow_account_id,shop_id,offer_id) VALUES(:uid,'shop_escrow',:owner,:position,:account,:shop,:offer);",{"uid":uid(n+1),"owner":characters[shop],"position":position,"account":accounts[shop],"shop":100+shop,"offer":uid(n+20000)})
@@ -181,7 +181,7 @@ func benchmark() -> void:
 	for index: int in 20:
 		var batch: Dictionary={"first":index*500,"last":index*500+499}
 		assert(pg.begin())
-		execute(true,"INSERT INTO economy.item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision) SELECT lpad(to_hex(100000+n),32,'0'),20000+n/20,'iron_sword',1,n%10,jsonb_build_array(jsonb_build_object('stat','monster_damage','value',CASE WHEN n%3=0 THEN 15 ELSE 5 END),jsonb_build_object('stat','critical_chance','value',CASE WHEN n%5=0 THEN 7 ELSE 2 END))::text,'[]',0 FROM generate_series(CAST(:first AS INTEGER),CAST(:last AS INTEGER)) n;",batch)
+		execute(true,"INSERT INTO economy.item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision,rarity) SELECT lpad(to_hex(100000+n),32,'0'),20000+n/20,'iron_sword',1,n%10,jsonb_build_array(jsonb_build_object('stat','monster_damage','value',CASE WHEN n%3=0 THEN 15 ELSE 5 END),jsonb_build_object('stat','critical_chance','value',CASE WHEN n%5=0 THEN 7 ELSE 2 END))::text,'[]',0,'rare' FROM generate_series(CAST(:first AS INTEGER),CAST(:last AS INTEGER)) n;",batch)
 		execute(true,"INSERT INTO economy.item_custody(uid,location,owner_id,position,escrow_account_id,shop_id,offer_id) SELECT lpad(to_hex(100000+n),32,'0'),'shop_escrow',20000+n/20,n%5+(n%20/5)*10,10000+n/20,10000+n/20,lpad(to_hex(200000+n),32,'0') FROM generate_series(CAST(:first AS INTEGER),CAST(:last AS INTEGER)) n;",batch)
 		execute(true,"INSERT INTO economy.shop_offers(offer_id,shop_id,account_id,item_uid,position,price_yang) SELECT lpad(to_hex(200000+n),32,'0'),10000+n/20,10000+n/20,lpad(to_hex(100000+n),32,'0'),n%5+(n%20/5)*10,n+1 FROM generate_series(CAST(:first AS INTEGER),CAST(:last AS INTEGER)) n;",batch)
 		execute(true,"INSERT INTO economy.shop_cells SELECT c.shop_id,c.position+5*v,c.uid FROM economy.item_custody c CROSS JOIN generate_series(0,1) v WHERE c.shop_id>=10000 AND c.offer_id BETWEEN :first AND :last;",{"first":uid(200000+int(batch.first)),"last":uid(200000+int(batch.last))})

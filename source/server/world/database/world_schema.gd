@@ -85,6 +85,8 @@ static func ensure_schema(db: SqliteSoci) -> void:
 
 	# Independent additive feature migration: core schema stops at v17 until the
 	# verified Master identity manifest enables existing v18-v23 migrations.
+	if not ItemStoreSqlite.migrate_rarity(db):
+		push_error("Could not migrate item rarity.");return
 	if not preload("res://source/server/world/database/item_state_revision_sqlite.gd").ensure_schema(db):
 		push_error("Could not initialize durable account item revisions.")
 

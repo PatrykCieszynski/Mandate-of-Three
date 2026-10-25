@@ -81,7 +81,7 @@ func receive_item_in_transaction(item: ItemInstance, requested_position: int = -
 	if item.amount<1 or item.amount>definition.stack_limit: return {"ok":false,"error":"storage"}
 	var receiving:=resolve_inventory_position(item.owner_character_id,definition.inventory_height,requested_position)
 	if not receiving.ok: return receiving
-	var result: Dictionary=db.execute("INSERT INTO economy.item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision) VALUES(:uid,:owner,:definition,:amount,:upgrade,:affixes,:sockets,:revision);",{"uid":item.uid,"owner":item.owner_character_id,"definition":str(item.definition_id),"amount":item.amount,"upgrade":item.upgrade_level,"affixes":JSON.stringify(item.affixes),"sockets":JSON.stringify(item.sockets),"revision":item.revision})
+	var result: Dictionary=db.execute("INSERT INTO economy.item_instances(uid,owner_character_id,definition_id,amount,upgrade_level,affixes_json,sockets_json,revision,rarity) VALUES(:uid,:owner,:definition,:amount,:upgrade,:affixes,:sockets,:revision,:rarity);",{"uid":item.uid,"owner":item.owner_character_id,"definition":str(item.definition_id),"amount":item.amount,"upgrade":item.upgrade_level,"affixes":JSON.stringify(item.affixes),"sockets":JSON.stringify(item.sockets),"revision":item.revision,"rarity":item.rarity})
 	if not result.ok: return {"ok":false,"error":"storage"}
 	result=db.execute("INSERT INTO economy.item_custody(uid,location,owner_id,position) VALUES(:uid,'bag',:owner,:position);",{"uid":item.uid,"owner":item.owner_character_id,"position":receiving.position})
 	if not result.ok: return {"ok":false,"error":"storage"}

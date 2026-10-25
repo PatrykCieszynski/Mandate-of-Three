@@ -37,7 +37,7 @@ const bonuses: TooltipAffix[] = [
   { kind: 'suffix', lines: ['+12% fire resistance'] },
   { kind: 'suffix', lines: ['+6% movement speed'] },
 ];
-test('rarity counts affixes rather than lines and clears sections/offer data on item replacement', () => {
+test('preview fallback counts affixes rather than lines and clears sections/offer data on item replacement', () => {
   const f = fixture();
   try {
     for (let count = 0; count <= 6; count++) {
@@ -47,7 +47,7 @@ test('rarity counts affixes rather than lines and clears sections/offer data on 
       );
       assert.equal(
         f.tip.element.dataset.rarity,
-        ['normal', 'magic', 'magic', 'rare', 'rare', 'legendary', 'legendary'][
+        ['normal', 'magic', 'magic', 'rare', 'rare', 'rare', 'rare'][
           count
         ],
       );
@@ -299,4 +299,8 @@ test('Shop validates the same tooltip contract independently of owned item ident
     false,
   );
   assert.equal(store.state, before);
+});
+
+test('explicit rarity remains authoritative regardless of affix count',()=>{
+ const f=fixture();try{f.tip.show({clientX:20,clientY:20},{name:'Rare',tooltip:{rarity:'rare',affixes:[]}});assert.equal(f.tip.element.dataset.rarity,'rare');}finally{f.dispose();}
 });

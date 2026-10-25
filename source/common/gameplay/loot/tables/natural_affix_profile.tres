@@ -10,4 +10,4 @@
 script = ExtResource("1")
 pool = Array[Resource]([ExtResource("2"),ExtResource("3"),ExtResource("4"),ExtResource("5"),ExtResource("6"),ExtResource("7")])
 ; Provisional alpha profile. Item tables/attempt chances are unchanged.
-bands = Array[Dictionary]([{"quality":"normal","weight":60,"prefixes":0,"suffixes":0},{"quality":"magic","weight":30,"prefixes":1,"suffixes":1},{"quality":"rare","weight":9,"prefixes":2,"suffixes":2},{"quality":"legendary","weight":1,"prefixes":3,"suffixes":3}])
+bands = Array[Dictionary]([{"quality":"normal","weight":60,"prefixes":0,"suffixes":0},{"quality":"magic","weight":30,"prefixes":1,"suffixes":1},{"quality":"rare","weight":9,"prefixes":2,"suffixes":2},{"quality":"rare_full","weight":1,"prefixes":3,"suffixes":3}])

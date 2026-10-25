@@ -57,6 +57,9 @@ class CurrencyMap extends GameWorld3D:
 	func has_line_of_sight(_from: Vector3, _to: Vector3) -> bool: return true
 
 class FixtureMap extends Node3D:
+	var combat_endpoint: Node
+	var inventory_endpoint: Node
+	var currency_endpoint: Node
 	var characters: Dictionary[int,PlayerActor3D]={}
 	var upgrade_endpoint: Node
 	var endpoint: InventoryEndpoint3D
@@ -72,6 +75,9 @@ class FixtureMap extends Node3D:
 		currency_map=CurrencyMap.new()
 		currency_map.name="CurrencyMap"
 		add_child(currency_map)
+		combat_endpoint=currency_map.combat_endpoint
+		inventory_endpoint=endpoint
+		currency_endpoint=currency_map.currency_endpoint
 	@rpc("any_peer","call_remote","reliable",1)
 	func join() -> void:
 		if GameMode.is_world_server(): joined.emit(multiplayer.get_remote_sender_id())
@@ -96,6 +102,7 @@ var facts: int=0
 var npc_adapter: NpcUiAdapter
 var shop_adapter: ShopUiAdapter
 var upgrade_adapter: UpgradeUiAdapter
+var craft_adapter: RefCounted
 var storage_adapter: RefCounted
 var world_bootstrap: RefCounted
 var master_bootstrap: RefCounted
@@ -124,7 +131,7 @@ func add_map(parent: Node) -> FixtureMap:
 func start_client(request: int, username: String, role: String) -> void:
 	issue(request,username,character if username=="alpha" else extra_characters[username])
 	await wait_for(func() -> bool: return master.responses.has(request))
-	assert(master.responses[request].has("auth-token"))
+	assert(master.responses[request].has("auth-token"),str(master.responses[request]))
 	var arguments: Array[String]=["--headless","--path",ProjectSettings.globalize_path("res://"),"--mode=client","res://tests/postgres_inventory_endpoint.tscn","--fixture-token="+master.responses[request]["auth-token"],"--fixture-role="+role,"--fixture-dir="+ProjectSettings.globalize_path(fixture_dir),"--log-file",ProjectSettings.globalize_path(fixture_dir+"/client-"+role+".log")]
 	var pid:=OS.create_process(OS.get_executable_path(),arguments,false)
 	assert(pid>0)
@@ -183,7 +190,7 @@ func run() -> void:
 	add_child(world)
 	world_bootstrap=load("res://source/server/world/database/postgres/economy_bootstrap_postgres.gd").new()
 	assert(await world_bootstrap.start_world(world,bootstrap_settings))
-	assert(database.economy_backend=="postgresql" and world_bootstrap.status().workers==8)
+	assert(database.economy_backend=="postgresql" and world_bootstrap.status().workers_ready==world_bootstrap.status().workers)
 	assert(not database.load_wallet(character) and not database.credit_account(21,100).ok)
 
 	assert(world.create(BaseMultiplayerEndpoint.Role.SERVER,"127.0.0.1",18098)==OK)
@@ -195,6 +202,8 @@ func run() -> void:
 	assert(link.create(BaseMultiplayerEndpoint.Role.CLIENT,"127.0.0.1",18099)==OK)
 	await wait_for(func() -> bool: return master.connected_worlds.size()==1)
 	world_id=link.multiplayer_api.get_unique_id()
+	# Controlled roster handshake: production bootstraps above are actually ready.
+	master.connected_worlds[world_id].economy_ready=world_bootstrap.ready()
 	map=add_map(world)
 	map.joined.connect(func(peer: int) -> void:
 		assert(world.connected_players.has(peer))
@@ -386,6 +395,27 @@ func run() -> void:
 	assert((await phase(observer,"matching-reserve-cancel")).ok)
 	assert(int(Wallet.new(pg).load_wallet(21).balance)==4297 and int(Wallet.new(pg).load_wallet(22).balance)==700)
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
+	# Craft uses the actual endpoint, UI journal and separate native client
+	# process. It must recover a committed random outcome without redrawing.
+	var craft_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,character,[])
+	craft_target.upgrade_level=3;craft_target.sockets=[{"definition_id":"preserve"}]
+	var craft_material:=ItemInstance.create(ItemDefinitions.CHANGE_SPARK,character,[])
+	craft_material.amount=2
+	assert(pg.begin() and Items.new(pg).receive_item_in_transaction(craft_target).ok and Items.new(pg).receive_item_in_transaction(craft_material).ok and pg.commit())
+	assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(character).item_state))
+	await wait_for(func()->bool:return world.inventory_runtime.mutations_allowed(actor))
+	var craft_payload: Dictionary={"target":craft_target.uid,"currency":craft_material.uid}
+	assert((await phase(actor,"craft-lost",craft_payload)).error=="timeout")
+	var frozen: Dictionary=Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_target.uid)[0]
+	assert(frozen.rarity=="magic" and frozen.revision==1 and frozen.upgrade_level==3 and frozen.sockets==craft_target.sockets)
+	await phase(actor,"exit")
+	await wait_for(func()->bool:return not world.connected_players.has(actor))
+	await start_client(211,"alpha","craft-restored")
+	await wait_for(func()->bool:return map.reports.has("craft-restored-ready"))
+	actor=map.reports["craft-restored-ready"].peer
+	assert((await phase(actor,"craft-restored",craft_payload)).ok)
+	assert(Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_target.uid)[0]==frozen)
+	assert(Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_material.uid)[0].amount==1)
 	await phase(actor,"exit")
 	await phase(observer,"exit")
 	await wait_for(func() -> bool: return client_processes.all(func(pid: int) -> bool: return not OS.is_process_running(pid)))
@@ -417,6 +447,10 @@ func compose_ui() -> void:
 	adapter=ItemUiAdapter.new()
 	adapter.journal.directory=fixture_dir+"/journal"
 	adapter.attach(map.endpoint,dispatcher,session,get_tree())
+	craft_adapter=preload("res://source/client/ui_web/crafting_ui_adapter.gd").new()
+	craft_adapter.journal.directory=fixture_dir+"/craft-journal"
+	craft_adapter.attach(map.endpoint,dispatcher,session,get_tree())
+	adapter.craft_requested.connect(craft_adapter.open)
 	market_adapter=MarketUiAdapter.new()
 	market_adapter.state_updated.connect(func(view: Dictionary)->void:market_views.append(view))
 	market_adapter.journal.directory=fixture_dir+"/revenue-journal"
@@ -470,6 +504,7 @@ func close_ui() -> void:
 	shop_adapter.dispose()
 	upgrade_adapter.dispose()
 	storage_adapter.dispose()
+	craft_adapter.dispose()
 	adapter.dispose()
 	session.close("teardown")
 	dispatcher.dispose()
@@ -818,6 +853,27 @@ func client_phase(label: String, payload: Dictionary) -> void:
 			assert(adapter.journal.load_pending().entry.id==id and item().bag_position!=108)
 			result=await command("inventory.retry",{})
 			assert(result.ok and adapter.journal.load_pending().entry.is_empty())
+		"craft-lost":
+			var currency: Dictionary=map.endpoint.state.items.filter(func(i: Dictionary)->bool:return i.uid==payload.currency)[0]
+			assert((await command("item.activate",{"id":currency.uid,"revision":currency.revision})).ok)
+			map.endpoint.operation_finished.disconnect(session.finish)
+			result=await command("craft.execute",{"id":payload.target,"revision":0})
+			map.endpoint.operation_finished.connect(session.finish)
+			assert(not craft_adapter.journal.load_pending().entry.is_empty())
+		"craft-restored":
+			await wait_for(func()->bool:return craft_adapter.journal.load_pending().entry.is_empty())
+			var target: Dictionary=map.endpoint.state.items.filter(func(i: Dictionary)->bool:return i.uid==payload.target)[0]
+			assert(target.rarity=="magic" and target.revision==1)
+			# A journal entry saved before sending is discovered read-only.
+			var id: String="craft-"+Crypto.new().generate_random_bytes(16).hex_encode()
+			var currency: Dictionary=map.endpoint.state.items.filter(func(i: Dictionary)->bool:return i.uid==payload.currency)[0]
+			assert(craft_adapter.journal.save_pending(id,{"uid":target.uid,"revision":target.revision,"currency_uid":currency.uid,"currency_revision":currency.revision}))
+			close_ui();compose_ui()
+			await get_tree().create_timer(0.4).timeout
+			assert(craft_adapter.journal.load_pending().entry.id==id)
+			# Explicit retry receives a definitive rarity rejection, consuming nothing.
+			assert((await command("craft.retry",{})).error=="rarity")
+			assert(craft_adapter.journal.load_pending().entry.is_empty())
 		"exit":
 			map.report.rpc_id(1,label,result)
 			await get_tree().create_timer(0.1).timeout
