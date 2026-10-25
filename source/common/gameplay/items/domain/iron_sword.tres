@@ -6,6 +6,7 @@ definition_id = &"iron_sword"
 icon_id = &"iron_sword"
 item_name = "Żelazny miecz"
 equipment_slot = &"weapon"
+affix_family = &"sword"
 primary_action = 1
 stack_limit = 1
 base_stats = Dictionary[StringName, float]({&"attack": 10.0, &"attack_speed": 22.0})

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/items/affixes/affix_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+affix_id = &"keen"
+kind = "prefix"
+group = &"edge"
+stat = &"attack"
+families = Array[StringName]([&"sword"])
+slots = Array[StringName]([&"weapon"])
+tiers = Array[Dictionary]([{"tier":1,"min_level":1,"weight":80,"min_value":1,"max_value":3},{"tier":2,"min_level":5,"weight":20,"min_value":4,"max_value":6}])

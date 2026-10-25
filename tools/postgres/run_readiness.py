@@ -49,7 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pg-bin", type=Path, default=ROOT / ".godot/plugin-cache/postgresql-18.6/pgsql/bin")
     parser.add_argument("--godot", type=Path, default=ROOT / ".godot/Godot_v4.7.2-stable_win64_console.exe")
-    parser.add_argument("--suite", choices=("readiness", "player-trade", "player-trade-network", "wallet", "commit-failure", "npc-shop", "vendor-sell", "vendor-ui", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
+    parser.add_argument("--suite", choices=("readiness", "affix-generation", "player-trade", "player-trade-network", "wallet", "commit-failure", "npc-shop", "vendor-sell", "vendor-ui", "inventory", "storage", "upgrade", "shop-seller", "shop-settlement", "account-claims", "auction-search", "exchange-ledger", "exchange-orders", "wallet-concurrency", "inventory-concurrency", "inventory-executor", "inventory-intents", "inventory-sessions", "inventory-runtime", "wallet-runtime", "npc-runtime", "storage-runtime", "ground-runtime", "seller-runtime", "settlement-runtime", "exchange-runtime", "matching-runtime", "auction-runtime", "bootstrap", "process-startup", "full-state", "maintenance", "backup", "world-replacement", "mixed-load", "realm-workload", "inventory-session-bridge", "inventory-endpoint"), default="readiness")
     parser.add_argument("--load-seconds", type=int, default=8, choices=range(2,1801))
     parser.add_argument("--load-repeats", type=int, default=3, choices=(1,2,3))
     parser.add_argument("--load-faults", action="store_true", help="Inject fixture-only COMMIT failure and lost application reply under mixed load")
@@ -185,6 +185,7 @@ def main():
             "wallet-runtime": ("postgres_wallet_runtime", "POSTGRES_WALLET_RUNTIME_OK"),
             "player-trade-network": ("player_trade_network", "PLAYER_TRADE_NETWORK_OK"),
             "player-trade": ("postgres_player_trade", "POSTGRES_PLAYER_TRADE_OK"),
+            "affix-generation": ("postgres_affix_generation", "POSTGRES_AFFIX_GENERATION_OK"),
             "npc-runtime": ("postgres_npc_runtime", "POSTGRES_NPC_RUNTIME_OK"),
             "storage-runtime": ("postgres_storage_runtime", "POSTGRES_STORAGE_RUNTIME_OK"),
             "ground-runtime": ("postgres_ground_runtime", "POSTGRES_GROUND_RUNTIME_OK"),

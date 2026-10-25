@@ -35,15 +35,16 @@ func dispose() -> void:
 		if _endpoint.operation_finished.is_connected(_session.finish): _endpoint.operation_finished.disconnect(_session.finish)
 
 static func tooltip_details(item: Dictionary) -> Dictionary:
-	# Existing rolls are shown faithfully. Prefix/suffix metadata is absent until
-	# the content model defines it; no generated affixes or combat changes here.
+	# Existing rolls stay unclassified; C1 rolls carry explicit prefix/suffix kind.
 	var affixes: Array = []
 	for affix: Dictionary in item.get("affixes", []):
 		var value_text: String = str(affix.value)
 		if affix.value >= 0: value_text = "+" + value_text
 		var metadata: Dictionary=ItemAffixLabels.STATS.get(str(affix.stat),{})
 		if metadata.get("unit","")=="percent": value_text+="%"
-		affixes.append({"lines": ["%s %s" % [value_text, metadata.get("label",str(affix.stat).capitalize())]]})
+		var line: Dictionary={"lines": ["%s %s" % [value_text, metadata.get("label",str(affix.stat).capitalize())]]}
+		if affix.get("affix_version",0)==1 and affix.get("kind","") in ["prefix","suffix"]: line.kind=affix.kind
+		affixes.append(line)
 	var properties: Array = []
 	for stat: Variant in item.get("stats",{}):
 		var metadata: Dictionary=ItemAffixLabels.STATS.get(str(stat),{})
