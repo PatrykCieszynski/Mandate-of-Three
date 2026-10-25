@@ -190,6 +190,17 @@ export function mountCraft(
       if (!disposed) render();
     }
   }
+  // Window capture runs before document-level item carrying. Cancel without
+  // consuming the event, so the first click in another window still works.
+  function outsidePointer(event: PointerEvent) {
+    if (
+      armed &&
+      event.button === 0 &&
+      event.target instanceof doc.defaultView!.Node &&
+      !root.contains(event.target)
+    )
+      cancel();
+  }
   function pointer(event: PointerEvent) {
     if (!armed) return;
     if (event.button === 2) {
@@ -201,8 +212,7 @@ export function mountCraft(
     if (event.button !== 0) return;
     if (
       event.target instanceof doc.defaultView!.Element &&
-      (root.contains(event.target) ||
-        options.storageRoot?.contains(event.target)) &&
+      root.contains(event.target) &&
       event.target.closest('button,[role=tab]')
     )
       return;
@@ -220,15 +230,6 @@ export function mountCraft(
       event.target instanceof doc.defaultView!.Element
         ? event.target.closest<HTMLElement>('.inventory-item')
         : null;
-    if (
-      event.target instanceof doc.defaultView!.Element &&
-      options.storageRoot?.contains(event.target) &&
-      event.target.closest('.ui-item-slot')
-    ) {
-      notice = 'Przenieś przedmiot ze Storage do torby';
-      render();
-      return;
-    }
     if (node && root.contains(node)) {
       const item = state.targets.find((i) => i.id === node.dataset.id);
       if (item) void use(item, event.shiftKey);
@@ -268,6 +269,7 @@ export function mountCraft(
     }
   }
   retry.addEventListener('click', () => void recover());
+  doc.defaultView?.addEventListener('pointerdown', outsidePointer, true);
   doc.addEventListener('pointerdown', pointer, true);
   doc.addEventListener('pointermove', move, true);
   doc.addEventListener('keydown', key, true);
@@ -294,6 +296,7 @@ export function mountCraft(
       disposed = true;
       slotsChanged.disconnect();
       armed = false;
+      doc.defaultView?.removeEventListener('pointerdown', outsidePointer, true);
       doc.removeEventListener('pointerdown', pointer, true);
       doc.removeEventListener('pointermove', move, true);
       doc.removeEventListener('keydown', key, true);

@@ -121,8 +121,10 @@ for another deliberate click after authoritative reconciliation. Pending request
 block new uses; each repeat reads current item/currency revisions. Invalid targets
 are dimmed and explain the restriction. Decorations survive Inventory/Storage
 page changes; Storage targets explain that crafting requires moving to the bag.
-Storage carry/quick-transfer is blocked while targeting. RMB/Escape/blur cancel targeting; closing
-Inventory also cancels. There is no crafting panel or dropdown. Recovery is a
+A left click outside Inventory cancels targeting before normal UI handlers run,
+so the same click can operate Shop, Trade or Storage (including Ctrl-transfer).
+RMB/Escape/blur and closing Inventory also cancel. Cancellation never discards a
+pending receipt or sends another crafting operation. There is no crafting panel or dropdown. Recovery is a
 small Inventory notice/button, and never automatically executes an unsent intent.
 The standalone preview has a non-economic Use crafting currency fixture.
 

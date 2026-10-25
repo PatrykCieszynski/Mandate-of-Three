@@ -243,7 +243,6 @@ const equipment = mountEquipment(equipmentRoot, {
     onRegionsChanged: () => regions?.refresh(),
 });
 const storage = mountStorage(storageRoot, {
-    blockCarry: () => craft.engaged(),
     drag,
     transfer: (payload) => bridge.request('storage.transfer', payload),
     retry: () => bridge.request('storage.retry', {}),

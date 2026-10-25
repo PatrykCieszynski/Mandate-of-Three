@@ -33,3 +33,15 @@ test('ineligible targets and depleted stacks never send a new crafting operation
  const snapshot=state();view.setState({...snapshot,targets:[{...sword,tooltip:{rarity:'rare',affixes:[]}}]});assert.ok(view.reason(sword));void view.use(sword,true);assert.equal(attempts,0);
  view.setState({...snapshot,currency:{}});assert.equal(view.engaged(),false);view.dispose();manager.dispose();host.close();
 });
+
+test('outside clicks cancel targeting and reach other windows without losing pending recovery',()=>{
+ const {manager,doc,host}=environment(),root=target();doc.body.append(root);
+ const other=doc.createElement('button');other.textContent='Trade accept';doc.body.append(other);
+ let actions=0,attempts=0,closes=0;other.addEventListener('pointerdown',()=>actions++);
+ const view=mountCraft(root,{resolveItemIcon:()=>null,execute:async()=>{attempts++;return {ok:true};},retry:async()=>({ok:true}),close:()=>{closes++;},cancelCarry:()=>{},regions:()=>{}});
+ view.setState(state());const click=new host.MouseEvent('pointerdown',{button:0,bubbles:true,cancelable:true});other.dispatchEvent(click);
+ assert.equal(view.engaged(),false);assert.equal(actions,1);assert.equal(click.defaultPrevented,false);assert.equal(attempts,0);assert.equal(closes,1);
+ view.setState({...state(),active:false});view.setState(state());view.setState({...state(),pending:true});other.dispatchEvent(new host.MouseEvent('pointerdown',{button:0,bubbles:true,cancelable:true}));
+ assert.equal(view.engaged(),false);assert.equal(actions,2);assert.equal(root.querySelector('button')!.hidden,false,'cancellation leaves unresolved receipt recovery visible');
+ view.dispose();manager.dispose();host.close();
+});
