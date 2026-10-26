@@ -888,9 +888,18 @@ window.addEventListener('message', (event) => {
           [2, 'renewal_prism', 'Pryzmat Odnowy'],
           [3, 'awakening_seal', 'Pieczęć Przebudzenia'],
           [4, 'cleansing_salt', 'Sól Oczyszczenia'],
+          [5, 'completion_core', 'Rdzeń Dopełnienia'],
         ] as const) {
           const id = (
-            index === 1 ? 'c' : index === 2 ? 'd' : index === 3 ? '9' : '8'
+            index === 1
+              ? 'c'
+              : index === 2
+                ? 'd'
+                : index === 3
+                  ? '9'
+                  : index === 4
+                    ? '8'
+                    : '7'
           ).repeat(32);
           if (!state.inventory.items.some((i) => i.id === id))
             state.inventory.items.push({

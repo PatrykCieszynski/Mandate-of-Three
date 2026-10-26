@@ -106,5 +106,30 @@ func _ready() -> void:
 	assert(Rules.resolve(rare,"cleansing_salt",rng).error=="affix_capacity")
 	assert(Rules.resolve(legacy,"cleansing_salt",rng).error=="invalid_affixes","opaque legacy bonuses stay protected")
 	assert(Rules.resolve(currency,"cleansing_salt",rng).error=="unsupported_item")
-	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, Magic to Rare, cleanse, legacy refusal, caps")
+	for prefixes: int in 4:
+		for suffixes: int in 4:
+			for seed_value: int in 12:
+				rng.seed=seed_value
+				var retained: Array=Generator.generate(ItemDefinitions.IRON_SWORD,prefixes,suffixes,Rules.PROFILE.pool,rng).affixes
+				var initial:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,retained);initial.rarity="rare"
+				initial.upgrade_level=4;initial.sockets=[{"definition_id":"kept-extension"}]
+				var before:=initial.to_snapshot()
+				rng.seed=seed_value
+				var extended:=Rules.resolve(initial,"completion_core",rng)
+				assert(initial.to_snapshot()==before)
+				if prefixes==3 and suffixes==3:
+					assert(extended.error=="affix_capacity")
+					continue
+				assert(extended.ok and extended.rarity=="rare" and extended.affixes.size()==retained.size()+1)
+				assert(extended.affixes.slice(0,retained.size())==retained and Generator.validate(extended.affixes,ItemDefinitions.IRON_SWORD,Rules.PROFILE.pool))
+				if prefixes==3: assert(extended.affixes[-1].kind=="suffix")
+				if suffixes==3: assert(extended.affixes[-1].kind=="prefix")
+				rng.seed=seed_value
+				assert(Rules.resolve(initial,"completion_core",rng)==extended)
+	restricted_magic.rarity="rare"
+	assert(Rules.resolve(restricted_magic,"completion_core",rng,restricted).error=="insufficient_pool")
+	assert(Rules.resolve(legacy,"completion_core",rng).error=="invalid_affixes")
+	assert(Rules.resolve(magic,"completion_core",rng).error=="rarity")
+	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"completion_core",rng).error=="rarity")
+	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, extension, cleanse, legacy refusal, caps")
 	get_tree().quit()

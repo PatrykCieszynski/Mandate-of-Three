@@ -9,7 +9,8 @@ const CURRENCIES: Dictionary={
 	"ascension_ember":{"action":"rarefy","name":"Żar Wyniesienia","effect":"Normal to Rare: rolls four to six affixes."},
 	"renewal_prism":{"action":"reforge","name":"Pryzmat Odnowy","effect":"Rare: replaces all affixes with four to six new rolls."},
 	"awakening_seal":{"action":"awaken","name":"Pieczęć Przebudzenia","effect":"Magic to Rare: preserves all existing affixes and adds exactly one new roll."},
-	"cleansing_salt":{"action":"cleanse","name":"Sól Oczyszczenia","effect":"Magic or Rare to Normal: removes all affixes, preserving upgrades and sockets."}
+	"cleansing_salt":{"action":"cleanse","name":"Sól Oczyszczenia","effect":"Magic or Rare to Normal: removes all affixes, preserving upgrades and sockets."},
+	"completion_core":{"action":"extend","name":"Rdzeń Dopełnienia","effect":"Rare: preserves all affixes and adds one new roll, up to three prefixes and three suffixes."}
 }
 static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGenerator, pool: Array=PROFILE.pool) -> Dictionary:
 	if item==null or rng==null or not CURRENCIES.has(currency): return {"ok":false,"error":"request"}
@@ -21,7 +22,7 @@ static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGener
 		if item.rarity not in ["magic","rare"]: return {"ok":false,"error":"rarity"}
 		if item.affixes.is_empty(): return {"ok":false,"error":"affix_capacity"}
 		return {"ok":true,"rarity":"normal","affixes":[]}
-	var required: String="normal" if action in ["transform","rarefy"] else ("rare" if action=="reforge" else "magic")
+	var required: String="normal" if action in ["transform","rarefy"] else ("rare" if action in ["reforge","extend"] else "magic")
 	if item.rarity!=required: return {"ok":false,"error":"rarity"}
 	var rolled: Dictionary
 	if action in ["rarefy","reforge"]:
@@ -30,6 +31,14 @@ static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGener
 		var count: int=rng.randi_range(4,6)
 		var prefixes: int=rng.randi_range(maxi(1,count-3),mini(3,count-1))
 		rolled=Generator.generate(base,prefixes,count-prefixes,pool,rng)
+	elif action=="extend":
+		var prefixes: int=item.affixes.filter(func(r: Dictionary)->bool:return r.kind=="prefix").size()
+		var suffixes: int=item.affixes.size()-prefixes
+		if prefixes>=3 and suffixes>=3: return {"ok":false,"error":"affix_capacity"}
+		# Capacity selects a forced kind. With both kinds open, choose once;
+		# insufficient compatible content fails without fallback or a reroll.
+		var prefix: bool=prefixes<3 and (suffixes>=3 or rng.randi_range(0,1)==0)
+		rolled=Generator.generate(base,1 if prefix else 0,0 if prefix else 1,pool,rng,item.affixes)
 	elif action=="awaken":
 		# Retained rolls participate in the same kind-local conflict checks.
 		# Pick once; an exhausted chosen kind fails without fallback or consumption.
@@ -43,5 +52,5 @@ static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGener
 		# Provisional equal chance of prefix, suffix or both. No retries of RNG.
 		var layout: int=rng.randi_range(0,2)
 		rolled=Generator.generate(base,0 if layout==1 else 1,0 if layout==0 else 1,pool,rng)
-	if rolled.ok: rolled.rarity="rare" if action in ["rarefy","reforge","awaken"] else "magic"
+	if rolled.ok: rolled.rarity="rare" if action in ["rarefy","reforge","awaken","extend"] else "magic"
 	return rolled

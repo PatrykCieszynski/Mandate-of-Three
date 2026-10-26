@@ -99,3 +99,16 @@ test('cleanse accepts nonempty Magic/Rare only and stops repeat after the Normal
  }
  assert.equal(attempts,2);view.dispose();manager.dispose();host.close();
 });
+
+test('Rare extension preserves targeting until the authoritative six-affix capacity',async()=>{
+ const {manager,doc,host}=environment(),root=target();doc.body.append(root);const sent:unknown[]=[];
+ const view=mountCraft(root,{resolveItemIcon:()=>null,execute:async p=>{sent.push(p);return {ok:true};},retry:async()=>({ok:true}),close:()=>{},cancelCarry:()=>{},regions:()=>{}});
+ assert.ok(CRAFT_CURRENCIES.includes('completion_core'));
+ const candidate={...sword,tooltip:{rarity:'rare' as const,affixes:Array.from({length:5},(_,i)=>({kind:(i<3?'prefix':'suffix') as 'prefix'|'suffix',lines:['+1 test']}))}};
+ const snapshot={...state(),currency:{...(state().currency as ItemPresentation),definition_id:'completion_core'},targets:[candidate]};
+ view.setState(snapshot);assert.equal(view.reason(candidate),'');await view.use(candidate,true);assert.ok(view.engaged());assert.deepEqual(sent,[{id:sword.id,revision:7}]);
+ view.setState({...snapshot,targets:[{...candidate,revision:8,tooltip:{rarity:'rare',affixes:[...candidate.tooltip.affixes,{kind:'suffix' as const,lines:['+1 test']}]}}]});
+ assert.ok(view.reason(candidate));await view.use(candidate,true);assert.equal(sent.length,1);
+ for(const rarity of ['magic','normal'] as const){view.setState({...snapshot,targets:[{...sword,tooltip:{rarity,affixes:[]}}]});assert.ok(view.reason(candidate));}
+ view.dispose();manager.dispose();host.close();
+});
