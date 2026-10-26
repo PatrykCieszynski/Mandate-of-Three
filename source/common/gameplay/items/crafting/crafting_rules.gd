@@ -10,7 +10,8 @@ const CURRENCIES: Dictionary={
 	"renewal_prism":{"action":"reforge","name":"Pryzmat Odnowy","effect":"Rare: replaces all affixes with four to six new rolls."},
 	"awakening_seal":{"action":"awaken","name":"Pieczęć Przebudzenia","effect":"Magic to Rare: preserves all existing affixes and adds exactly one new roll."},
 	"cleansing_salt":{"action":"cleanse","name":"Sól Oczyszczenia","effect":"Magic or Rare to Normal: removes all affixes, preserving upgrades and sockets."},
-	"completion_core":{"action":"extend","name":"Rdzeń Dopełnienia","effect":"Rare: preserves all affixes and adds one new roll, up to three prefixes and three suffixes."}
+	"completion_core":{"action":"extend","name":"Rdzeń Dopełnienia","effect":"Rare: preserves all affixes and adds one new roll, up to three prefixes and three suffixes."},
+	"dispersal_chisel":{"action":"prune","name":"Dłuto Rozproszenia","effect":"Magic or Rare: removes one random affix, preserving rarity and all other rolls."}
 }
 static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGenerator, pool: Array=PROFILE.pool) -> Dictionary:
 	if item==null or rng==null or not CURRENCIES.has(currency): return {"ok":false,"error":"request"}
@@ -18,9 +19,14 @@ static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGener
 	if base==null or base.affix_family.is_empty() or base.primary_action!=ItemDefinition.PrimaryAction.EQUIP or base.stack_limit!=1 or item.amount!=1: return {"ok":false,"error":"unsupported_item"}
 	if not ItemInstance.valid_rarity(item.rarity,item.affixes) or not Generator.validate(item.affixes,base,pool): return {"ok":false,"error":"invalid_affixes"}
 	var action: String=CURRENCIES[currency].action
-	if action=="cleanse":
+	if action in ["cleanse","prune"]:
 		if item.rarity not in ["magic","rare"]: return {"ok":false,"error":"rarity"}
 		if item.affixes.is_empty(): return {"ok":false,"error":"affix_capacity"}
+		if action=="prune":
+			# Each stored roll has equal probability, independent of kind or tier.
+			var remaining: Array=item.affixes.duplicate(true)
+			remaining.remove_at(rng.randi_range(0,remaining.size()-1))
+			return {"ok":true,"rarity":item.rarity,"affixes":remaining}
 		return {"ok":true,"rarity":"normal","affixes":[]}
 	var required: String="normal" if action in ["transform","rarefy"] else ("rare" if action in ["reforge","extend"] else "magic")
 	if item.rarity!=required: return {"ok":false,"error":"rarity"}

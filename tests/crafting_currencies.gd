@@ -131,5 +131,26 @@ func _ready() -> void:
 	assert(Rules.resolve(legacy,"completion_core",rng).error=="invalid_affixes")
 	assert(Rules.resolve(magic,"completion_core",rng).error=="rarity")
 	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"completion_core",rng).error=="rarity")
-	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, extension, cleanse, legacy refusal, caps")
+	for layout: Vector2i in [Vector2i(1,0),Vector2i(1,1),Vector2i(3,1),Vector2i(3,3)]:
+		var rolls: Array=Generator.generate(ItemDefinitions.IRON_SWORD,layout.x,layout.y,Rules.PROFILE.pool,rng).affixes
+		var initial:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,rolls)
+		initial.upgrade_level=5;initial.sockets=[{"definition_id":"kept-prune"}]
+		var before:=initial.to_snapshot()
+		var possible: Array=[]
+		for index: int in rolls.size():
+			var survivors: Array=rolls.duplicate(true);survivors.remove_at(index);possible.append(survivors)
+		var seen_removed: Dictionary={}
+		for seed_value: int in 100:
+			rng.seed=seed_value
+			var pruned:=Rules.resolve(initial,"dispersal_chisel",rng)
+			assert(pruned.ok and pruned.rarity==initial.rarity and pruned.affixes.size()==rolls.size()-1 and pruned.affixes in possible)
+			assert(initial.to_snapshot()==before and Generator.validate(pruned.affixes,ItemDefinitions.IRON_SWORD,Rules.PROFILE.pool))
+			seen_removed[possible.find(pruned.affixes)]=true
+			rng.seed=seed_value
+			assert(Rules.resolve(initial,"dispersal_chisel",rng)==pruned)
+		assert(seen_removed.size()==rolls.size(),"every roll can be removed, including both kinds and the last Magic affix")
+	assert(Rules.resolve(rare,"dispersal_chisel",rng).error=="affix_capacity")
+	assert(Rules.resolve(legacy,"dispersal_chisel",rng).error=="invalid_affixes")
+	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"dispersal_chisel",rng).error=="rarity")
+	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, extension, removal, cleanse, legacy refusal, caps")
 	get_tree().quit()

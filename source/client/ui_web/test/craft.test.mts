@@ -112,3 +112,21 @@ test('Rare extension preserves targeting until the authoritative six-affix capac
  for(const rarity of ['magic','normal'] as const){view.setState({...snapshot,targets:[{...sword,tooltip:{rarity,affixes:[]}}]});assert.ok(view.reason(candidate));}
  view.dispose();manager.dispose();host.close();
 });
+
+test('random removal repeats with latest revision until empty and never changes rarity eligibility',async()=>{
+ const {manager,doc,host}=environment(),root=target();doc.body.append(root);const sent:unknown[]=[];
+ const view=mountCraft(root,{resolveItemIcon:()=>null,execute:async p=>{sent.push(p);return {ok:true};},retry:async()=>({ok:true}),close:()=>{},cancelCarry:()=>{},regions:()=>{}});
+ assert.ok(CRAFT_CURRENCIES.includes('dispersal_chisel'));
+ const snapshot={...state(),currency:{...(state().currency as ItemPresentation),definition_id:'dispersal_chisel'}};
+ for(const rarity of ['magic','rare'] as const) {
+   const candidate={...sword,tooltip:{rarity,affixes:[sword.tooltip.affixes[0]!,{kind:'suffix' as const,lines:['+1 test']}]}};
+   view.setState({...snapshot,active:false});view.setState({...snapshot,targets:[candidate]});
+   assert.equal(view.reason(candidate),'');await view.use(candidate,true);assert.ok(view.engaged());
+   view.setState({...snapshot,targets:[{...candidate,revision:8,tooltip:{rarity,affixes:[candidate.tooltip.affixes[0]!]}}]});
+   assert.equal(view.reason(candidate),'');await view.use(candidate,true);assert.deepEqual(sent.at(-1),{id:sword.id,revision:8});
+   view.setState({...snapshot,targets:[{...candidate,revision:9,tooltip:{rarity,affixes:[]}}]});
+   assert.ok(view.reason(candidate));const count=sent.length;await view.use(candidate,true);assert.equal(sent.length,count);
+ }
+ view.setState({...snapshot,targets:[{...sword,tooltip:{rarity:'normal',affixes:[]}}]});assert.ok(view.reason(sword));
+ assert.equal(sent.length,4);view.dispose();manager.dispose();host.close();
+});

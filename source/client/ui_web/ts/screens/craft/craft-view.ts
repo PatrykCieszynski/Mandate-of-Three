@@ -40,6 +40,7 @@ export const CRAFT_CURRENCIES = [
   'awakening_seal',
   'cleansing_salt',
   'completion_core',
+  'dispersal_chisel',
 ];
 // Explicit currency-use mode, separate from ordinary item carrying/placement.
 export function mountCraft(
@@ -95,7 +96,7 @@ export function mountCraft(
     const rarity = target.tooltip?.rarity;
     const currency = (state.currency as Partial<ItemPresentation>)
       .definition_id;
-    if (currency === 'cleansing_salt') {
+    if (currency === 'cleansing_salt' || currency === 'dispersal_chisel') {
       if (rarity !== 'magic' && rarity !== 'rare')
         return 'Wymaga przedmiotu Magic lub Rare';
       return target.tooltip?.affixes?.length ? '' : 'Brak affixów do usunięcia';

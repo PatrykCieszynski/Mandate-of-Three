@@ -15,7 +15,7 @@ func _ready() -> void:
 	var target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[])
 	target.upgrade_level=4;target.sockets=[{"definition_id":"preserved"}]
 	var currencies: Array=[]
-	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE]:
+	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE,ItemDefinitions.DISPERSAL_CHISEL]:
 		var item:=ItemInstance.create(definition,OWNER,[]);item.amount=2 if definition==ItemDefinitions.CLEANSING_SALT else 20;currencies.append(item)
 	assert(db.begin())
 	for item: ItemInstance in [target]+currencies: assert(Items.new(db).receive_item_in_transaction(item).ok)
@@ -187,6 +187,36 @@ func _ready() -> void:
 		assert(store.execute(OWNER,0,extension_target.uid,1,currencies[7].uid,side+1,id+"-full").error=="affix_capacity" and state()==after_extension)
 		assert(store.execute(OWNER,0,extension_target.uid,0,currencies[7].uid,side,id+"-stale").error=="stale" and state()==after_extension)
 		assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":extension_target.uid}).rows.size()==6)
+	for side: int in 2:
+		var rolls: Array=generator.generate(ItemDefinitions.IRON_SWORD,1 if side==0 else 3,0 if side==0 else 3,Rules.PROFILE.pool,rng).affixes
+		var removal_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,rolls)
+		removal_target.upgrade_level=7;removal_target.sockets=[{"definition_id":"kept-removal"}]
+		assert(db.begin() and Items.new(db).receive_item_in_transaction(removal_target).ok and db.commit())
+		var before_removal:=state()
+		var saved_before: Dictionary=before_removal.filter(func(i: Dictionary)->bool:return i.uid==removal_target.uid)[0]
+		var id: String="remove-"+str(side)
+		assert(db.execute("CREATE TRIGGER craft_fault BEFORE UPDATE OF affixes_json ON economy.item_instances FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+		assert(store.execute(OWNER,0,removal_target.uid,0,currencies[8].uid,side,id+"-write").error=="storage" and state()==before_removal)
+		assert(db.execute("DROP TRIGGER craft_fault ON economy.item_instances;").ok)
+		assert(db.execute("CREATE CONSTRAINT TRIGGER craft_fault AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+		assert(store.execute(OWNER,0,removal_target.uid,0,currencies[8].uid,side,id+"-unknown").get("outcome_unknown",false))
+		assert(db.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) and state()==before_removal)
+		assert(db.execute("DROP TRIGGER craft_fault ON economy.market_commands;").ok)
+		store=Craft.new(db)
+		var pruned:=store.execute(OWNER,0,removal_target.uid,0,currencies[8].uid,side,id)
+		assert(pruned.ok and store.committed and pruned.rarity==removal_target.rarity and pruned.affixes.size()==rolls.size()-1)
+		var legal_survivors: Array=[]
+		for index: int in rolls.size():
+			var survivors: Array=rolls.duplicate(true);survivors.remove_at(index);legal_survivors.append(survivors)
+		assert(pruned.affixes in legal_survivors,"exactly one removal; other values, tiers and order survive")
+		var after_removal:=state()
+		var saved_after: Dictionary=after_removal.filter(func(i: Dictionary)->bool:return i.uid==removal_target.uid)[0]
+		assert(saved_after.revision==1 and saved_after.uid==removal_target.uid and saved_after.upgrade_level==7 and saved_after.sockets==removal_target.sockets and saved_after.bag_position==saved_before.bag_position)
+		assert(after_removal.filter(func(i: Dictionary)->bool:return i.uid==currencies[8].uid)[0].amount==19-side)
+		assert(store.execute(OWNER,0,removal_target.uid,0,currencies[8].uid,side,id)==pruned and store.receipt_replay and state()==after_removal,"receipt never removes another roll")
+		assert(store.execute(OWNER,0,removal_target.uid,0,currencies[8].uid,side,id+"-stale").error=="stale" and state()==after_removal)
+		if side==0: assert(store.execute(OWNER,0,removal_target.uid,1,currencies[8].uid,1,"remove-empty").error=="affix_capacity" and state()==after_removal)
+		assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":removal_target.uid}).rows.size()==pruned.affixes.size())
 	db.close()
 	print("POSTGRES_CRAFTING_OK rollback, uncertain COMMIT, replay/conflict, stale race, UID/+level/sockets, migration and auction index")
 	get_tree().quit()
