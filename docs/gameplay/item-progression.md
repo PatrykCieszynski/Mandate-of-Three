@@ -117,8 +117,8 @@ Each action consumes exactly one selected currency, with no Yang surcharge.
 Transform/renew currently choose prefix-only, suffix-only or both with equal
 probability; these are explicit provisional content odds. Affix/tier weights and
 base eligibility use the same natural-drop pool. Exhaustion/invalid existing
-rolls reject the whole operation without consuming currency. Currency sourcing,
-market value and drop rates are not added in C3.
+rolls reject the whole operation without consuming currency. Current currency
+sources are listed below; market value and final drop balance remain provisional.
 
 Rare creation/reforge use provisional equal chances of four, five or six total
 affixes; each legal prefix/suffix split for that count is equally likely (4:
@@ -129,7 +129,7 @@ to Rare and complete Rare rerolls use this count distribution. Opaque legacy
 Rare bonuses remain protected from crafting.
 The Rare extension changes content only, not RPC signatures or the SQL schema;
 client/server build 0.39.0 includes both currencies. No deployment migration
-beyond the C3 rarity schema is needed. Currency sources/drop rates remain deferred.
+beyond the C3 rarity schema is needed. Current provisional sources are listed below.
 
 Magic to Rare (build 0.40.0) is a separate preserving action: Pieczęć Przebudzenia
 keeps the original ordered rolls, tiers and values, then appends exactly one new
@@ -182,7 +182,45 @@ empty Magic/Rare and opaque legacy/invalid rolls are rejected without spending.
 One Pryzmat Dostrojenia is consumed with no Yang fee. The existing frozen receipt
 and client journal recover the original values after a lost response, rather than
 rerolling again. Current item snapshots refresh derived stats and Auction values.
-No schema/RPC change is required. Currency sourcing is a separate content slice.
+No schema/RPC change is required. Currency sourcing is described below.
+
+### Crafting currency sources — alpha milestone
+
+Build 0.45.0 connects all ten currencies to ordinary Loot V2 in authored regions
+(currently First Region). The legacy empty-region arena fallback remains unchanged.
+`global_crafting_currencies.tres` is appended once after the existing ordinary
+tables. Entries use absolute basis-point chances, not normalized weights. Existing
+item chances remain intact; the currency budget uses part of the no-item remainder.
+There are no extra rolls: the same spawn-selected 1–4 attempts and optional single
+Luck attempt apply. Each selected currency outcome contains one unit, not a bundle.
+
+| Currency | Provisional chance per ordinary attempt |
+| --- | --- |
+| Iskra Przemiany | 1.00% |
+| Pył Odnowy | 0.80% |
+| Odłamek Dopełnienia | 0.50% |
+| Żar Wyniesienia | 0.40% |
+| Pryzmat Odnowy | 0.30% |
+| Pieczęć Przebudzenia | 0.25% |
+| Sól Oczyszczenia | 0.40% |
+| Rdzeń Dopełnienia | 0.10% |
+| Dłuto Rozproszenia | 0.15% |
+| Pryzmat Dostrojenia | 0.10% |
+| **Any crafting currency** | **4.00%** |
+
+These are playtest starting values, not final economy balance or per-kill chances.
+Edit the authored table to tune them; exceeding the combined probability budget
+still rejects the whole ordinary roll. Metin stone reward pools, XP, Yang and event
+drops are unchanged. Ordinary wave mobs use their existing ordinary-loot policy.
+Currencies bypass equipment affix generation and use existing physical ground
+reservation/party rights, UID ownership, PostgreSQL pickup receipts and recovery.
+No free startup grants, NPC offers, new schema or RPC contract are introduced.
+
+This closes the first crafting alpha loop: find a base and currencies, pick them
+up through durable custody, craft with explicit targeting, and recover the same
+committed outcome after reconnect. Smoke, native PostgreSQL claim/crafting tests
+and browser preview cover those contracts. Physical CEF input, manual progression
+pace, broader item bases and final affix/drop balance remain playtest work.
 
 Right-click a currency in Inventory (or activate its USE hotbar binding) to arm
 its original symbol and remaining stack at the cursor. Left-click a bag target

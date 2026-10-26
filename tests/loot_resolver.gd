@@ -32,11 +32,13 @@ func _ready() -> void:
 	var bandit_tables := LootContent.tables_for(&"first_region", &"humanoid", &"road_bandit")
 	var wild_tables := LootContent.tables_for(&"first_region", &"beast", &"wild_dog")
 	var other_tables := LootContent.tables_for(&"first_region", &"undead", &"unregistered")
-	assert(forest_tables.size() == 4 and bandit_tables.size() == 4 and wild_tables.size() == 4 and other_tables.size() == 2)
-	assert(roll(forest_tables, 1, 0).pool_weight_bp == 1350)
-	assert(roll(bandit_tables, 1, 0).pool_weight_bp == 1300)
-	assert(roll(wild_tables, 1, 0).pool_weight_bp == 1250)
-	assert(roll(other_tables, 1, 0).pool_weight_bp == 350)
+	var crafting_bp: int=0
+	for entry: LootEntry in LootContent.CRAFTING.entries: crafting_bp+=entry.chance_bp
+	for selected: Array in [forest_tables,bandit_tables,wild_tables,other_tables]: assert(selected.count(LootContent.CRAFTING)==1 and selected.back()==LootContent.CRAFTING)
+	assert(roll(forest_tables, 1, 0).pool_weight_bp == 1350+crafting_bp)
+	assert(roll(bandit_tables, 1, 0).pool_weight_bp == 1300+crafting_bp)
+	assert(roll(wild_tables, 1, 0).pool_weight_bp == 1250+crafting_bp)
+	assert(roll(other_tables, 1, 0).pool_weight_bp == 350+crafting_bp)
 	var sword := ItemDefinitions.IRON_SWORD
 	var global_entry := make_entry(ore, 50, 2, 4)
 	var region_entry := make_entry(ore, 300)
@@ -96,5 +98,26 @@ func _ready() -> void:
 	assert(roll([guaranteed], 4, 10000).items.size() == 5)
 	var twenty := roll([guaranteed], 4, 2000)
 	assert(twenty.ok and twenty.attempts >= 4 and twenty.attempts <= 5)
-	print("LOOT_RESOLVER_OK: combined sources, empty outcomes, quantity, 1..4 draws and one Luck draw")
+	var currency_ids: Dictionary={}
+	var rules=preload("res://source/common/gameplay/items/crafting/crafting_rules.gd")
+	assert(LootContent.CRAFTING.valid() and crafting_bp>0)
+	for entry: LootEntry in LootContent.CRAFTING.entries:
+		assert(not currency_ids.has(entry.item.definition_id) and entry.chance_bp>0 and entry.min_amount==1 and entry.max_amount==1)
+		assert(entry.item.primary_action==ItemDefinition.PrimaryAction.USE and entry.item.affix_family.is_empty() and rules.CURRENCIES.has(str(entry.item.definition_id)))
+		currency_ids[entry.item.definition_id]=true
+	assert(currency_ids.size()==rules.CURRENCIES.size(),"all crafting currencies have a real source")
+	var old_tables: Array=wild_tables.filter(func(t: LootTable)->bool:return t!=LootContent.CRAFTING)
+	var reached: Dictionary={}
+	for seed_value: int in 20000:
+		var added:=roll(wild_tables,1,0,seed_value)
+		assert(added.ok and added.attempts==1 and added.items.size()<=1)
+		var old_outcome:=roll(old_tables,1,0,seed_value)
+		if not old_outcome.items.is_empty(): assert(added.items==old_outcome.items,"existing probability intervals and item quantities remain intact")
+		for item: Dictionary in added.items:
+			if currency_ids.has(item.definition_id):
+				assert(item.amount==1 and item.affixes.is_empty());reached[item.definition_id]=true
+		if reached.size()==currency_ids.size(): break
+	assert(reached.size()==currency_ids.size(),"every authored currency is reachable through combined production tables")
+	assert(roll(wild_tables,4,10000).attempts==5,"the currency table adds no independent attempts")
+	print("LOOT_RESOLVER_OK: combined sources, crafting currency sources, conserved existing chances and attempt budget")
 	get_tree().quit()

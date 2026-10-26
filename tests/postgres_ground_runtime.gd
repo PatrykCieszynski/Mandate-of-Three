@@ -250,6 +250,57 @@ func _ready() -> void:
 	assert((await claim(200,uid)).ok and (await claim(101,uid)).error=="claimed")
 	assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.item_instances WHERE uid=:uid;",{"uid":uid}).rows[0].n)==1)
 	assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.ground_item_claims WHERE drop_uid=:uid;",{"uid":uid}).rows[0].n)==1)
+	# Real authored ordinary tables -> currency ground UID -> native PG pickup.
+	var currency_rules=preload("res://source/common/gameplay/items/crafting/crafting_rules.gd")
+	var currency_resolver:=KillRewardResolver.new();currency_resolver._region_key=&"first_region"
+	var currency_death:=MobDeathResult.new();currency_death.mob_key=&"wild_dog";currency_death.category=&"beast";currency_death.spawn_base_loot_rolls=4
+	var currency_rewards: Dictionary={}
+	for source_seed: int in 20000:
+		currency_resolver._rng.seed=source_seed;currency_resolver._affix_rng.seed=source_seed+20
+		var currency_outcome: Dictionary=currency_resolver.resolve_ordinary(currency_death,0)
+		assert(currency_outcome.ok and currency_outcome.attempts==4)
+		for raw: Dictionary in currency_outcome.items:
+			if currency_rules.CURRENCIES.has(str(raw.definition_id)): currency_rewards[raw.definition_id]=raw.duplicate(true)
+		if currency_rewards.size()==currency_rules.CURRENCIES.size(): break
+	assert(currency_rewards.size()==currency_rules.CURRENCIES.size())
+	var currency_uids: Dictionary={}
+	for raw: Dictionary in currency_rewards.values():
+		assert(raw.amount==1 and raw.affixes.is_empty())
+		var currency_uid: String=map.ground_loot.spawn_resolved_item(Vector3.ZERO,0,"",Time.get_ticks_msec(),StringName(raw.definition_id),raw.amount,raw.affixes)
+		assert(not currency_uid.is_empty() and not currency_uids.has(currency_uid))
+		map.ground_loot.drops[currency_uid].protected_until=Time.get_ticks_msec()
+		if currency_uids.is_empty():
+			assert(pg.begin() and pg.query("SELECT account_id FROM economy.accounts WHERE account_id=9801 FOR NO KEY UPDATE;").ok)
+			pools[1].lose_claim=true
+			assert(map.ground_loot.pickup_for_peer(200,currency_uid,Time.get_ticks_msec()).queued)
+			assert((await claim(101,currency_uid)).error=="operation_pending")
+			assert(pg.commit())
+			await wait_for(func()->bool:return result(currency_uid).get("error","")=="outcome_unknown")
+			assert(world.ground_item_runtime.receipt(200,currency_uid).queued)
+			await wait_for(func()->bool:return world.ground_item_runtime.drained() and ready(200))
+		else: assert((await claim(200,currency_uid)).ok)
+		var currency_saved: Array=items(98010).filter(func(i: Dictionary)->bool:return i.uid==currency_uid)
+		assert(currency_saved.size()==1 and currency_saved[0].definition_id==str(raw.definition_id) and currency_saved[0].amount==1 and currency_saved[0].affixes.is_empty())
+		assert(ItemDefinitions.get_definition(StringName(raw.definition_id)).primary_action==ItemDefinition.PrimaryAction.USE)
+		var prior_currency_facts: int=facts
+		assert((await claim(200,currency_uid)).ok and facts==prior_currency_facts)
+		assert((await claim(101,currency_uid)).error=="claimed")
+		assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.item_instances WHERE uid=:uid;",{"uid":currency_uid}).rows[0].n)==1)
+		assert(int(pg.query("SELECT COUNT(*) AS n FROM economy.ground_item_claims WHERE drop_uid=:uid;",{"uid":currency_uid}).rows[0].n)==1)
+		currency_uids[currency_uid]=true
+	# Close the loot -> pickup -> crafting loop with an actually looted currency.
+	# Replaying its ground receipt after consumption must not resurrect the UID.
+	var looted_prism: Dictionary=items(98010).filter(func(i: Dictionary)->bool:return i.definition_id=="attunement_prism")[0]
+	var craft_base: Dictionary=items(98010).filter(func(i: Dictionary)->bool:return i.uid==uid)[0]
+	var craft=preload("res://source/server/world/database/postgres/crafting_store_postgres.gd").new(pg)
+	craft.authorize_session(b,"")
+	var crafted: Dictionary=craft.execute(98010,0,craft_base.uid,craft_base.revision,looted_prism.uid,looted_prism.revision,"looted-currency-craft")
+	assert(crafted.ok and craft.committed and crafted.affixes.size()==craft_base.affixes.size())
+	assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(98010).item_state))
+	await wait_for(func()->bool:return ready(200))
+	assert(items(98010).filter(func(i: Dictionary)->bool:return i.uid==looted_prism.uid).is_empty())
+	assert((await claim(200,looted_prism.uid)).ok and items(98010).filter(func(i: Dictionary)->bool:return i.uid==looted_prism.uid).is_empty())
+	assert(craft.execute(98010,0,craft_base.uid,craft_base.revision,looted_prism.uid,looted_prism.revision,"looted-currency-craft")==crafted and craft.receipt_replay)
 	assert(await world.flush_postgres_wallets(true))
 	pools[0].begin_drain()
 	await wait_for(func() -> bool: return pools.all(func(pool: RefCounted) -> bool: return pool.is_stopped()))
