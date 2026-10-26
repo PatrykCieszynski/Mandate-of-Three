@@ -111,6 +111,7 @@ The original currencies are stackable USE items:
 | Sól Oczyszczenia (`cleansing_salt`) | Magic/Rare eligible equipment in bag with at least one valid affix | Removes every affix and becomes Normal; preserves +level and sockets |
 | Rdzeń Dopełnienia (`completion_core`) | Rare eligible equipment in bag with fewer than six affixes | Preserves all existing rolls and appends exactly one, respecting three of each kind |
 | Dłuto Rozproszenia (`dispersal_chisel`) | Magic/Rare eligible equipment in bag with at least one valid affix | Removes one random affix; preserves rarity and every other roll |
+| Pryzmat Dostrojenia (`attunement_prism`) | Magic/Rare eligible equipment in bag with at least one valid affix | Rerolls only numeric values within existing tiers; keeps rarity and all affix identities |
 
 Each action consumes exactly one selected currency, with no Yang surcharge.
 Transform/renew currently choose prefix-only, suffix-only or both with equal
@@ -172,6 +173,16 @@ without removing another affix; another deliberate use needs a new command and
 current revisions. Shift can continue until the authoritative target is empty.
 No SQL schema, RPC or worker change is required; other crafting odds and currency
 sources remain unchanged.
+
+Value tuning (build 0.44.0) independently rerolls each affix's integer value in
+the inclusive range of its existing tier. It never chooses a new affix or tier,
+changes count/order, or resets rarity, UID, +level, sockets or placement. A result
+may equal the old value; a fixed-value tier necessarily stays unchanged. Normal,
+empty Magic/Rare and opaque legacy/invalid rolls are rejected without spending.
+One Pryzmat Dostrojenia is consumed with no Yang fee. The existing frozen receipt
+and client journal recover the original values after a lost response, rather than
+rerolling again. Current item snapshots refresh derived stats and Auction values.
+No schema/RPC change is required. Currency sourcing is a separate content slice.
 
 Right-click a currency in Inventory (or activate its USE hotbar binding) to arm
 its original symbol and remaining stack at the cursor. Left-click a bag target

@@ -890,6 +890,7 @@ window.addEventListener('message', (event) => {
           [4, 'cleansing_salt', 'Sól Oczyszczenia'],
           [5, 'completion_core', 'Rdzeń Dopełnienia'],
           [6, 'dispersal_chisel', 'Dłuto Rozproszenia'],
+          [7, 'attunement_prism', 'Pryzmat Dostrojenia'],
         ] as const) {
           const id = (
             index === 1
@@ -902,7 +903,9 @@ window.addEventListener('message', (event) => {
                     ? '8'
                     : index === 5
                       ? '7'
-                      : '6'
+                      : index === 6
+                        ? '6'
+                        : '5'
           ).repeat(32);
           if (!state.inventory.items.some((i) => i.id === id))
             state.inventory.items.push({

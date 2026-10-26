@@ -15,7 +15,7 @@ func _ready() -> void:
 	var target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[])
 	target.upgrade_level=4;target.sockets=[{"definition_id":"preserved"}]
 	var currencies: Array=[]
-	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE,ItemDefinitions.DISPERSAL_CHISEL]:
+	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE,ItemDefinitions.DISPERSAL_CHISEL,ItemDefinitions.ATTUNEMENT_PRISM]:
 		var item:=ItemInstance.create(definition,OWNER,[]);item.amount=2 if definition==ItemDefinitions.CLEANSING_SALT else 20;currencies.append(item)
 	assert(db.begin())
 	for item: ItemInstance in [target]+currencies: assert(Items.new(db).receive_item_in_transaction(item).ok)
@@ -217,6 +217,36 @@ func _ready() -> void:
 		assert(store.execute(OWNER,0,removal_target.uid,0,currencies[8].uid,side,id+"-stale").error=="stale" and state()==after_removal)
 		if side==0: assert(store.execute(OWNER,0,removal_target.uid,1,currencies[8].uid,1,"remove-empty").error=="affix_capacity" and state()==after_removal)
 		assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":removal_target.uid}).rows.size()==pruned.affixes.size())
+	for side: int in 2:
+		var rolls: Array=generator.generate(ItemDefinitions.IRON_SWORD,1 if side==0 else 3,1 if side==0 else 3,Rules.PROFILE.pool,rng).affixes
+		var tuning_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,rolls)
+		tuning_target.upgrade_level=8;tuning_target.sockets=[{"definition_id":"kept-values"}]
+		assert(db.begin() and Items.new(db).receive_item_in_transaction(tuning_target).ok and db.commit())
+		var before_tuning:=state()
+		var id: String="attune-"+str(side)
+		assert(db.execute("CREATE TRIGGER craft_fault BEFORE UPDATE OF affixes_json ON economy.item_instances FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+		assert(store.execute(OWNER,0,tuning_target.uid,0,currencies[9].uid,side,id+"-write").error=="storage" and state()==before_tuning)
+		assert(db.execute("DROP TRIGGER craft_fault ON economy.item_instances;").ok)
+		assert(db.execute("CREATE CONSTRAINT TRIGGER craft_fault AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+		assert(store.execute(OWNER,0,tuning_target.uid,0,currencies[9].uid,side,id+"-unknown").get("outcome_unknown",false))
+		assert(db.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) and state()==before_tuning)
+		assert(db.execute("DROP TRIGGER craft_fault ON economy.market_commands;").ok)
+		store=Craft.new(db)
+		var tuned:=store.execute(OWNER,0,tuning_target.uid,0,currencies[9].uid,side,id)
+		assert(tuned.ok and store.committed and tuned.rarity==tuning_target.rarity and tuned.affixes.size()==rolls.size())
+		assert(preload("res://source/common/gameplay/items/affixes/affix_generator.gd").validate(tuned.affixes,ItemDefinitions.IRON_SWORD,Rules.PROFILE.pool))
+		for index: int in rolls.size():
+			var original: Dictionary=rolls[index].duplicate(true);var tuned_meta: Dictionary=tuned.affixes[index].duplicate(true)
+			original.erase("value");tuned_meta.erase("value");assert(original==tuned_meta)
+		var after_tuning:=state()
+		var saved_after: Dictionary=after_tuning.filter(func(i: Dictionary)->bool:return i.uid==tuning_target.uid)[0]
+		assert(saved_after.revision==1 and saved_after.uid==tuning_target.uid and saved_after.upgrade_level==8 and saved_after.sockets==tuning_target.sockets and saved_after.bag_position==before_tuning.filter(func(i: Dictionary)->bool:return i.uid==tuning_target.uid)[0].bag_position)
+		assert(after_tuning.filter(func(i: Dictionary)->bool:return i.uid==currencies[9].uid)[0].amount==19-side)
+		assert(store.execute(OWNER,0,tuning_target.uid,0,currencies[9].uid,side,id)==tuned and store.receipt_replay and state()==after_tuning)
+		assert(store.execute(OWNER,0,tuning_target.uid,0,currencies[9].uid,side,id+"-stale").error=="stale" and state()==after_tuning)
+		var indexed_values: Dictionary=db.query("SELECT ordinal,value FROM economy.item_affix_index WHERE uid=:uid ORDER BY ordinal;",{"uid":tuning_target.uid})
+		assert(indexed_values.ok and indexed_values.rows.size()==tuned.affixes.size())
+		for index: int in indexed_values.rows.size(): assert(indexed_values.rows[index].value==tuned.affixes[index].value)
 	db.close()
 	print("POSTGRES_CRAFTING_OK rollback, uncertain COMMIT, replay/conflict, stale race, UID/+level/sockets, migration and auction index")
 	get_tree().quit()
