@@ -152,5 +152,32 @@ func _ready() -> void:
 	assert(Rules.resolve(rare,"dispersal_chisel",rng).error=="affix_capacity")
 	assert(Rules.resolve(legacy,"dispersal_chisel",rng).error=="invalid_affixes")
 	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"dispersal_chisel",rng).error=="rarity")
-	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, extension, removal, cleanse, legacy refusal, caps")
+	var tier_pool: Array=[]
+	for authored: Resource in Rules.PROFILE.pool:
+		var copy: Resource=authored.duplicate(true)
+		for tier: Dictionary in copy.tiers: tier.min_level=1
+		tier_pool.append(copy)
+	var tiers_seen: Dictionary={};var changed_value:=false
+	for layout: Vector2i in [Vector2i(1,0),Vector2i(1,1),Vector2i(3,3)]:
+		for seed_value: int in 40:
+			rng.seed=seed_value
+			var rolls: Array=Generator.generate(ItemDefinitions.IRON_SWORD,layout.x,layout.y,tier_pool,rng).affixes
+			var initial:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,rolls)
+			var before:=initial.to_snapshot()
+			rng.seed=seed_value+500
+			var tuned:=Rules.resolve(initial,"attunement_prism",rng,tier_pool)
+			assert(tuned.ok and tuned.rarity==initial.rarity and tuned.affixes.size()==rolls.size() and initial.to_snapshot()==before)
+			assert(Generator.validate(tuned.affixes,ItemDefinitions.IRON_SWORD,tier_pool))
+			for index: int in rolls.size():
+				var old: Dictionary=rolls[index].duplicate(true);var current: Dictionary=tuned.affixes[index].duplicate(true)
+				changed_value=changed_value or old.value!=current.value
+				tiers_seen[old.tier]=true;old.erase("value");current.erase("value")
+				assert(old==current,"only numeric values change; definition, kind, group, level, tier and order survive")
+			rng.seed=seed_value+500
+			assert(Rules.resolve(initial,"attunement_prism",rng,tier_pool)==tuned)
+	assert(tiers_seen.has(1) and tiers_seen.has(2) and changed_value)
+	assert(Rules.resolve(rare,"attunement_prism",rng).error=="affix_capacity")
+	assert(Rules.resolve(legacy,"attunement_prism",rng).error=="invalid_affixes")
+	assert(Rules.resolve(ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]),"attunement_prism",rng).error=="rarity")
+	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, values, removal, cleanse, legacy refusal, caps")
 	get_tree().quit()

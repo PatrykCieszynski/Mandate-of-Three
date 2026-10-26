@@ -130,3 +130,19 @@ test('random removal repeats with latest revision until empty and never changes 
  view.setState({...snapshot,targets:[{...sword,tooltip:{rarity:'normal',affixes:[]}}]});assert.ok(view.reason(sword));
  assert.equal(sent.length,4);view.dispose();manager.dispose();host.close();
 });
+
+test('value rerolls allow repeated nonempty Magic/Rare and always use refreshed revisions',async()=>{
+ const {manager,doc,host}=environment(),root=target();doc.body.append(root);const sent:unknown[]=[];
+ const view=mountCraft(root,{resolveItemIcon:()=>null,execute:async p=>{sent.push(p);return {ok:true};},retry:async()=>({ok:true}),close:()=>{},cancelCarry:()=>{},regions:()=>{}});
+ assert.ok(CRAFT_CURRENCIES.includes('attunement_prism'));
+ const snapshot={...state(),currency:{...(state().currency as ItemPresentation),definition_id:'attunement_prism'}};
+ for(const rarity of ['magic','rare'] as const) {
+   const candidate={...sword,tooltip:{...sword.tooltip,rarity}};
+   view.setState({...snapshot,active:false});view.setState({...snapshot,targets:[candidate]});
+   assert.equal(view.reason(candidate),'');await view.use(candidate,true);assert.ok(view.engaged());
+   view.setState({...snapshot,targets:[{...candidate,revision:8}]});await view.use(candidate,true);assert.deepEqual(sent.at(-1),{id:sword.id,revision:8});
+   view.setState({...snapshot,targets:[{...candidate,tooltip:{rarity,affixes:[]}}]});assert.ok(view.reason(candidate));
+ }
+ view.setState({...snapshot,targets:[{...sword,tooltip:{rarity:'normal',affixes:[]}}]});assert.ok(view.reason(sword));assert.equal(sent.length,4);
+ view.dispose();manager.dispose();host.close();
+});
