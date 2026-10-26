@@ -887,8 +887,11 @@ window.addEventListener('message', (event) => {
           [1, 'ascension_ember', 'Żar Wyniesienia'],
           [2, 'renewal_prism', 'Pryzmat Odnowy'],
           [3, 'awakening_seal', 'Pieczęć Przebudzenia'],
+          [4, 'cleansing_salt', 'Sól Oczyszczenia'],
         ] as const) {
-          const id = (index === 1 ? 'c' : index === 2 ? 'd' : '9').repeat(32);
+          const id = (
+            index === 1 ? 'c' : index === 2 ? 'd' : index === 3 ? '9' : '8'
+          ).repeat(32);
           if (!state.inventory.items.some((i) => i.id === id))
             state.inventory.items.push({
               id,
@@ -899,9 +902,9 @@ window.addEventListener('message', (event) => {
               quantity: 12,
               height: 1,
               primary_action: 'USE',
-              x: index === 3 ? 0 : index,
-              y: 6,
-              page: index === 3 ? 1 : 0,
+              x: index >= 3 ? index - 3 : index,
+              y: index === 4 ? 5 : 6,
+              page: index >= 3 ? 1 : 0,
             });
         }
         emit('inventory.updated', state.inventory);

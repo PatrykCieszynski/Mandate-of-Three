@@ -90,5 +90,21 @@ func _ready() -> void:
 	var restricted_magic:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,Generator.generate(ItemDefinitions.IRON_SWORD,1,1,restricted,rng).affixes)
 	var restricted_before:=restricted_magic.to_snapshot()
 	assert(Rules.resolve(restricted_magic,"awakening_seal",rng,restricted).error=="insufficient_pool" and restricted_magic.to_snapshot()==restricted_before)
-	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, Magic to Rare, legacy refusal, caps")
+	for layout: Vector2i in [Vector2i(1,0),Vector2i(1,1),Vector2i(3,3)]:
+		var rolls: Array=Generator.generate(ItemDefinitions.IRON_SWORD,layout.x,layout.y,Rules.PROFILE.pool,rng).affixes
+		var initial:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,rolls)
+		initial.upgrade_level=5;initial.sockets=[{"definition_id":"kept-cleanse"}]
+		var original:=initial.to_snapshot()
+		var rng_before: int=rng.state
+		var clean:=Rules.resolve(initial,"cleansing_salt",rng)
+		assert(clean=={"ok":true,"rarity":"normal","affixes":[]} and initial.to_snapshot()==original)
+		assert(rng.state==rng_before,"cleanse is deterministic and consumes no random rolls")
+		initial.affixes=clean.affixes;initial.rarity=clean.rarity
+		var base_only:=ItemInstance.create(ItemDefinitions.IRON_SWORD,1,[]);base_only.upgrade_level=5
+		assert(initial.effective_stats(ItemDefinitions.IRON_SWORD)==base_only.effective_stats(ItemDefinitions.IRON_SWORD),"only affix stats are removed; +level still applies")
+		assert(Rules.resolve(initial,"cleansing_salt",rng).error=="rarity")
+	assert(Rules.resolve(rare,"cleansing_salt",rng).error=="affix_capacity")
+	assert(Rules.resolve(legacy,"cleansing_salt",rng).error=="invalid_affixes","opaque legacy bonuses stay protected")
+	assert(Rules.resolve(currency,"cleansing_salt",rng).error=="unsupported_item")
+	print("CRAFTING_CURRENCIES_OK explicit rarity, preservation, Magic to Rare, cleanse, legacy refusal, caps")
 	get_tree().quit()

@@ -15,8 +15,8 @@ func _ready() -> void:
 	var target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[])
 	target.upgrade_level=4;target.sockets=[{"definition_id":"preserved"}]
 	var currencies: Array=[]
-	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL]:
-		var item:=ItemInstance.create(definition,OWNER,[]);item.amount=20;currencies.append(item)
+	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT]:
+		var item:=ItemInstance.create(definition,OWNER,[]);item.amount=2 if definition==ItemDefinitions.CLEANSING_SALT else 20;currencies.append(item)
 	assert(db.begin())
 	for item: ItemInstance in [target]+currencies: assert(Items.new(db).receive_item_in_transaction(item).ok)
 	assert(db.commit())
@@ -128,6 +128,38 @@ func _ready() -> void:
 	assert(store.execute(OWNER,0,augment_target.uid,2,currencies[5].uid,1,"awaken-twice").error=="rarity" and state()==promoted_state)
 	assert(store.execute(OWNER,0,augment_target.uid,1,currencies[5].uid,0,"awaken-stale").error=="stale" and state()==promoted_state)
 	assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":augment_target.uid}).rows.size()==awakened.affixes.size())
+	var cleanse_receipts: Array=[]
+	var cleanse_revision: int=0
+	for item: ItemInstance in [target,rare_target]:
+		var before_cleanse:=state()
+		var saved_before: Dictionary=before_cleanse.filter(func(i: Dictionary)->bool:return i.uid==item.uid)[0]
+		var id: String="cleanse-"+str(cleanse_revision)
+		assert(db.execute("CREATE TRIGGER craft_fault BEFORE UPDATE OF affixes_json ON economy.item_instances FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+		assert(store.execute(OWNER,0,item.uid,2,currencies[6].uid,cleanse_revision,id+"-write").error=="storage" and state()==before_cleanse)
+		assert(db.execute("DROP TRIGGER craft_fault ON economy.item_instances;").ok)
+		assert(db.execute("CREATE CONSTRAINT TRIGGER craft_fault AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+		assert(store.execute(OWNER,0,item.uid,2,currencies[6].uid,cleanse_revision,id+"-unknown").get("outcome_unknown",false))
+		assert(db.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) and state()==before_cleanse)
+		assert(db.execute("DROP TRIGGER craft_fault ON economy.market_commands;").ok)
+		store=Craft.new(db)
+		var cleared:=store.execute(OWNER,0,item.uid,2,currencies[6].uid,cleanse_revision,id)
+		assert(cleared.ok and store.committed and cleared.rarity=="normal" and cleared.affixes.is_empty())
+		var after_cleanse:=state()
+		var saved_after: Dictionary=after_cleanse.filter(func(i: Dictionary)->bool:return i.uid==item.uid)[0]
+		assert(saved_after.uid==item.uid and saved_after.revision==3 and saved_after.upgrade_level==saved_before.upgrade_level and saved_after.sockets==saved_before.sockets and saved_after.bag_position==saved_before.bag_position)
+		var base_only:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[]);base_only.upgrade_level=saved_before.upgrade_level
+		assert(saved_after.stats==base_only.effective_stats(ItemDefinitions.IRON_SWORD))
+		assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":item.uid}).rows.is_empty())
+		assert(store.execute(OWNER,0,item.uid,2,currencies[6].uid,cleanse_revision,id)==cleared and store.receipt_replay and state()==after_cleanse)
+		cleanse_receipts.append(cleared)
+		if cleanse_revision==0:
+			assert(after_cleanse.filter(func(i: Dictionary)->bool:return i.uid==currencies[6].uid)[0].amount==1)
+			assert(store.execute(OWNER,0,item.uid,3,currencies[6].uid,1,"cleanse-normal").error=="rarity" and state()==after_cleanse)
+			assert(store.execute(OWNER,0,legacy.uid,0,currencies[6].uid,1,"cleanse-legacy").error=="invalid_affixes" and state()==after_cleanse)
+		cleanse_revision+=1
+	var exhausted:=state()
+	assert(exhausted.filter(func(i: Dictionary)->bool:return i.uid==currencies[6].uid).is_empty())
+	assert(store.execute(OWNER,0,target.uid,2,currencies[6].uid,0,"cleanse-0")==cleanse_receipts[0] and store.receipt_replay and state()==exhausted,"replay works after the last currency was consumed")
 	db.close()
 	print("POSTGRES_CRAFTING_OK rollback, uncertain COMMIT, replay/conflict, stale race, UID/+level/sockets, migration and auction index")
 	get_tree().quit()

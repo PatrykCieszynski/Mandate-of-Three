@@ -108,6 +108,7 @@ The original currencies are stackable USE items:
 | Żar Wyniesienia (`ascension_ember`) | Normal eligible equipment in bag | Becomes Rare with four to six new affixes |
 | Pryzmat Odnowy (`renewal_prism`) | Rare eligible equipment in bag | Replaces all affixes with four to six new rolls; remains Rare |
 | Pieczęć Przebudzenia (`awakening_seal`) | Magic eligible equipment in bag | Preserves every existing roll and appends exactly one new affix; becomes Rare |
+| Sól Oczyszczenia (`cleansing_salt`) | Magic/Rare eligible equipment in bag with at least one valid affix | Removes every affix and becomes Normal; preserves +level and sockets |
 
 Each action consumes exactly one selected currency, with no Yang surcharge.
 Transform/renew currently choose prefix-only, suffix-only or both with equal
@@ -135,8 +136,18 @@ Rarity is never inferred from the resulting count. The new kind is provisionally
 chosen prefix/suffix with equal chance, using the shared weighted affix/tier pool
 and conflict checks against retained rolls. Failure to supply the chosen kind
 rejects without fallback, promotion or currency consumption. There is no reroll
-of existing bonuses and no repeat on the same item once Rare. Removing affixes
-remains outside scope. This action also requires no RPC/schema change.
+of existing bonuses and no repeat on the same item once Rare. This action also
+requires no RPC/schema change.
+
+Cleansing (build 0.41.0) removes all recognized affixes and their stat contribution
+from Magic/Rare, returning explicit Normal with an empty affix list. It does not
+reset +level, sockets, UID or placement and consumes no random draws. Normal or
+already empty Magic/Rare is rejected without spending currency. The existing
+pool/eligibility validation still protects opaque legacy or invalid bonuses;
+this action is not a legacy-data repair tool. It uses the same transaction and
+recovery path, including replay after the last currency in a stack disappears.
+The cleaned base can then be crafted again using Normal-target currencies.
+Existing roll odds and currency sourcing remain unchanged.
 
 Right-click a currency in Inventory (or activate its USE hotbar binding) to arm
 its original symbol and remaining stack at the cursor. Left-click a bag target

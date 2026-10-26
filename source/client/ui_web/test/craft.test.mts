@@ -83,3 +83,19 @@ test('awakening uses Magic targets only and cannot repeat on the promoted Rare i
  }
  view.dispose();manager.dispose();host.close();
 });
+
+test('cleanse accepts nonempty Magic/Rare only and stops repeat after the Normal snapshot',async()=>{
+ const {manager,doc,host}=environment(),root=target();doc.body.append(root);let attempts=0;
+ const view=mountCraft(root,{resolveItemIcon:()=>null,execute:async()=>{attempts++;return {ok:true};},retry:async()=>({ok:true}),close:()=>{},cancelCarry:()=>{},regions:()=>{}});
+ assert.ok(CRAFT_CURRENCIES.includes('cleansing_salt'));
+ const snapshot={...state(),currency:{...(state().currency as ItemPresentation),definition_id:'cleansing_salt'}};
+ for(const rarity of ['magic','rare'] as const) {
+   const target={...sword,tooltip:{...sword.tooltip,rarity}};
+   view.setState({...snapshot,active:false});view.setState({...snapshot,targets:[target]});
+   assert.equal(view.reason(target),'');await view.use(target,true);assert.ok(view.engaged());
+   view.setState({...snapshot,targets:[{...target,revision:8,tooltip:{rarity:'normal',affixes:[]}}]});
+   assert.ok(view.reason(target));const count=attempts;await view.use(target,true);assert.equal(attempts,count);
+   view.setState({...snapshot,targets:[{...target,tooltip:{rarity,affixes:[]}}]});assert.ok(view.reason(target));
+ }
+ assert.equal(attempts,2);view.dispose();manager.dispose();host.close();
+});
