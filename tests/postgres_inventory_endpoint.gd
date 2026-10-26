@@ -397,27 +397,29 @@ func run() -> void:
 	assert(sqlite.query("SELECT yang FROM account_wallets WHERE account_id=21;") and int(sqlite.query_result[0].yang)==1500,"PG income/spend never writes SQLite wallet")
 	# Craft uses the actual endpoint, UI journal and separate native client
 	# process. It must recover a committed random outcome without redrawing.
-	var crafting_definitions: Array[ItemDefinition]=[ItemDefinitions.CHANGE_SPARK,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT]
+	var crafting_definitions: Array[ItemDefinition]=[ItemDefinitions.CHANGE_SPARK,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE]
 	for definition: ItemDefinition in crafting_definitions:
 		var craft_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,character,[])
-		if definition in [ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT]:
+		if definition in [ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE]:
 			var rng:=RandomNumberGenerator.new();rng.seed=17
-			var count: int=3 if definition==ItemDefinitions.CLEANSING_SALT else 1
+			var count: int=3 if definition in [ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE] else 1
 			craft_target.affixes=preload("res://source/common/gameplay/items/affixes/affix_generator.gd").generate(ItemDefinitions.IRON_SWORD,count,count,preload("res://source/common/gameplay/items/crafting/crafting_rules.gd").PROFILE.pool,rng).affixes
-			craft_target.rarity="rare" if definition==ItemDefinitions.CLEANSING_SALT else "magic"
+			craft_target.rarity="rare" if definition in [ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE] else "magic"
+			if definition==ItemDefinitions.COMPLETION_CORE: craft_target.affixes.pop_back()
 		craft_target.upgrade_level=3;craft_target.sockets=[{"definition_id":"preserve"}]
 		var craft_material:=ItemInstance.create(definition,character,[])
 		craft_material.amount=2
 		assert(pg.begin() and Items.new(pg).receive_item_in_transaction(craft_target).ok and Items.new(pg).receive_item_in_transaction(craft_material).ok and pg.commit())
 		assert(world.inventory_runtime.invalidate_item_state(Items.new(pg).inventory(character).item_state))
 		await wait_for(func()->bool:return world.inventory_runtime.mutations_allowed(actor))
-		var craft_payload: Dictionary={"target":craft_target.uid,"currency":craft_material.uid,"rarity":"magic" if definition==ItemDefinitions.CHANGE_SPARK else ("normal" if definition==ItemDefinitions.CLEANSING_SALT else "rare")}
+		var craft_payload: Dictionary={"target":craft_target.uid,"currency":craft_material.uid,"rarity":"magic" if definition==ItemDefinitions.CHANGE_SPARK else ("normal" if definition==ItemDefinitions.CLEANSING_SALT else "rare"),"retry_error":"affix_capacity" if definition==ItemDefinitions.COMPLETION_CORE else "rarity"}
 		assert((await phase(actor,"craft-lost",craft_payload)).error=="timeout")
 		var frozen: Dictionary=Items.new(pg).inventory(character).items.filter(func(i: Dictionary)->bool:return i.uid==craft_target.uid)[0]
 		assert(frozen.rarity==craft_payload.rarity and frozen.revision==1 and frozen.upgrade_level==3 and frozen.sockets==craft_target.sockets)
 		if definition==ItemDefinitions.AWAKENING_SEAL:
 			assert(frozen.affixes.size()==3 and frozen.affixes.slice(0,2)==craft_target.affixes)
 		if definition==ItemDefinitions.CLEANSING_SALT: assert(frozen.affixes.is_empty())
+		if definition==ItemDefinitions.COMPLETION_CORE: assert(frozen.affixes.size()==6 and frozen.affixes.slice(0,5)==craft_target.affixes)
 		await phase(actor,"exit")
 		await wait_for(func()->bool:return not world.connected_players.has(actor))
 		map.reports.erase("craft-restored-ready")
@@ -882,8 +884,8 @@ func client_phase(label: String, payload: Dictionary) -> void:
 			close_ui();compose_ui()
 			await get_tree().create_timer(0.4).timeout
 			assert(craft_adapter.journal.load_pending().entry.id==id)
-			# Explicit retry receives a definitive rarity rejection, consuming nothing.
-			assert((await command("craft.retry",{})).error=="rarity")
+			# Explicit retry receives a definitive rarity/capacity rejection, consuming nothing.
+			assert((await command("craft.retry",{})).error==payload.retry_error)
 			assert(craft_adapter.journal.load_pending().entry.is_empty())
 		"exit":
 			map.report.rpc_id(1,label,result)

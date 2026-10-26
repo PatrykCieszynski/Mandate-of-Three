@@ -109,6 +109,7 @@ The original currencies are stackable USE items:
 | Pryzmat Odnowy (`renewal_prism`) | Rare eligible equipment in bag | Replaces all affixes with four to six new rolls; remains Rare |
 | Pieczęć Przebudzenia (`awakening_seal`) | Magic eligible equipment in bag | Preserves every existing roll and appends exactly one new affix; becomes Rare |
 | Sól Oczyszczenia (`cleansing_salt`) | Magic/Rare eligible equipment in bag with at least one valid affix | Removes every affix and becomes Normal; preserves +level and sockets |
+| Rdzeń Dopełnienia (`completion_core`) | Rare eligible equipment in bag with fewer than six affixes | Preserves all existing rolls and appends exactly one, respecting three of each kind |
 
 Each action consumes exactly one selected currency, with no Yang surcharge.
 Transform/renew currently choose prefix-only, suffix-only or both with equal
@@ -148,6 +149,16 @@ this action is not a legacy-data repair tool. It uses the same transaction and
 recovery path, including replay after the last currency in a stack disappears.
 The cleaned base can then be crafted again using Normal-target currencies.
 Existing roll odds and currency sourcing remain unchanged.
+
+Rare extension (build 0.42.0) adds exactly one roll without changing the ordered
+existing affixes, tiers or values. Rare remains Rare, including an explicit empty
+Rare base. If prefixes or suffixes already occupy three slots, the other kind
+is selected; with both kinds open, prefix/suffix currently have equal chances.
+The shared weighted pool and conflicts apply against all retained rolls. There
+is no fallback or redraw for insufficient compatible content. Full 3+3 rejects
+without spending currency, and Shift stops sending new uses for that full target
+after its authoritative snapshot. UID, +level, sockets and placement survive.
+This uses the existing receipts/recovery, without a schema or RPC change.
 
 Right-click a currency in Inventory (or activate its USE hotbar binding) to arm
 its original symbol and remaining stack at the cursor. Left-click a bag target

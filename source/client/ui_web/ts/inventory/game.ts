@@ -39,6 +39,8 @@ await applySkin(document.documentElement, legacy.skin);
 uiIcons.replace(legacy.uiIcons, new URL('./', import.meta.url));
 const itemIcons = new ItemIconResolver({
   ...legacy.itemIcons,
+  completion_core: new URL('../content/completion_core.svg', import.meta.url)
+    .href,
   cleansing_salt: new URL('../content/cleansing_salt.svg', import.meta.url)
     .href,
   awakening_seal: new URL('../content/awakening_seal.svg', import.meta.url)

@@ -15,7 +15,7 @@ func _ready() -> void:
 	var target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,[])
 	target.upgrade_level=4;target.sockets=[{"definition_id":"preserved"}]
 	var currencies: Array=[]
-	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT]:
+	for definition: ItemDefinition in [ItemDefinitions.CHANGE_SPARK,ItemDefinitions.RENEWAL_DUST,ItemDefinitions.COMPLETION_SHARD,ItemDefinitions.ASCENSION_EMBER,ItemDefinitions.RENEWAL_PRISM,ItemDefinitions.AWAKENING_SEAL,ItemDefinitions.CLEANSING_SALT,ItemDefinitions.COMPLETION_CORE]:
 		var item:=ItemInstance.create(definition,OWNER,[]);item.amount=2 if definition==ItemDefinitions.CLEANSING_SALT else 20;currencies.append(item)
 	assert(db.begin())
 	for item: ItemInstance in [target]+currencies: assert(Items.new(db).receive_item_in_transaction(item).ok)
@@ -160,6 +160,33 @@ func _ready() -> void:
 	var exhausted:=state()
 	assert(exhausted.filter(func(i: Dictionary)->bool:return i.uid==currencies[6].uid).is_empty())
 	assert(store.execute(OWNER,0,target.uid,2,currencies[6].uid,0,"cleanse-0")==cleanse_receipts[0] and store.receipt_replay and state()==exhausted,"replay works after the last currency was consumed")
+	for side: int in 2:
+		var retained: Array=full.affixes.slice(0,5) if side==0 else full.affixes.slice(1)
+		var extension_target:=ItemInstance.create(ItemDefinitions.IRON_SWORD,OWNER,retained)
+		extension_target.upgrade_level=6;extension_target.sockets=[{"definition_id":"kept-extension"}]
+		assert(db.begin() and Items.new(db).receive_item_in_transaction(extension_target).ok and db.commit())
+		var before_extension:=state()
+		var saved_before: Dictionary=before_extension.filter(func(i: Dictionary)->bool:return i.uid==extension_target.uid)[0]
+		var id: String="extend-"+str(side)
+		assert(db.execute("CREATE TRIGGER craft_fault BEFORE UPDATE OF affixes_json ON economy.item_instances FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+		assert(store.execute(OWNER,0,extension_target.uid,0,currencies[7].uid,side,id+"-write").error=="storage" and state()==before_extension)
+		assert(db.execute("DROP TRIGGER craft_fault ON economy.item_instances;").ok)
+		assert(db.execute("CREATE CONSTRAINT TRIGGER craft_fault AFTER INSERT ON economy.market_commands DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION economy.craft_fault();").ok)
+		assert(store.execute(OWNER,0,extension_target.uid,0,currencies[7].uid,side,id+"-unknown").get("outcome_unknown",false))
+		assert(db.open("postgresql",OS.get_environment("MANDATE_PG_FIXTURE_CONNECTION")) and state()==before_extension)
+		assert(db.execute("DROP TRIGGER craft_fault ON economy.market_commands;").ok)
+		store=Craft.new(db)
+		var extended:=store.execute(OWNER,0,extension_target.uid,0,currencies[7].uid,side,id)
+		assert(extended.ok and store.committed and extended.rarity=="rare" and extended.affixes.size()==6 and extended.affixes.slice(0,5)==retained)
+		assert(extended.affixes[-1].kind==("suffix" if side==0 else "prefix"))
+		var after_extension:=state()
+		var saved_after: Dictionary=after_extension.filter(func(i: Dictionary)->bool:return i.uid==extension_target.uid)[0]
+		assert(saved_after.revision==1 and saved_after.uid==extension_target.uid and saved_after.upgrade_level==6 and saved_after.sockets==extension_target.sockets and saved_after.bag_position==saved_before.bag_position)
+		assert(after_extension.filter(func(i: Dictionary)->bool:return i.uid==currencies[7].uid)[0].amount==19-side)
+		assert(store.execute(OWNER,0,extension_target.uid,0,currencies[7].uid,side,id)==extended and store.receipt_replay and state()==after_extension)
+		assert(store.execute(OWNER,0,extension_target.uid,1,currencies[7].uid,side+1,id+"-full").error=="affix_capacity" and state()==after_extension)
+		assert(store.execute(OWNER,0,extension_target.uid,0,currencies[7].uid,side,id+"-stale").error=="stale" and state()==after_extension)
+		assert(db.query("SELECT ordinal FROM economy.item_affix_index WHERE uid=:uid;",{"uid":extension_target.uid}).rows.size()==6)
 	db.close()
 	print("POSTGRES_CRAFTING_OK rollback, uncertain COMMIT, replay/conflict, stale race, UID/+level/sockets, migration and auction index")
 	get_tree().quit()

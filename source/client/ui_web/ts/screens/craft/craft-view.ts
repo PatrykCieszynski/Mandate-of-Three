@@ -39,6 +39,7 @@ export const CRAFT_CURRENCIES = [
   'renewal_prism',
   'awakening_seal',
   'cleansing_salt',
+  'completion_core',
 ];
 // Explicit currency-use mode, separate from ordinary item carrying/placement.
 export function mountCraft(
@@ -101,6 +102,12 @@ export function mountCraft(
     }
     if (currency === 'change_spark' || currency === 'ascension_ember')
       return rarity === 'normal' ? '' : 'Wymaga przedmiotu Normal';
+    if (currency === 'completion_core') {
+      if (rarity !== 'rare') return 'Wymaga przedmiotu Rare';
+      return (target.tooltip?.affixes?.length ?? 0) >= 6
+        ? 'Przedmiot ma już sześć affixów'
+        : '';
+    }
     if (currency === 'renewal_prism')
       return rarity === 'rare' ? '' : 'Wymaga przedmiotu Rare';
     if (rarity !== 'magic') return 'Wymaga przedmiotu Magic';
