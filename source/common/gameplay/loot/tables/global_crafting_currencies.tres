@@ -1,0 +1,77 @@
+[gd_resource type="Resource" script_class="LootTable" load_steps=23 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/loot/loot_table.gd" id="table"]
+[ext_resource type="Script" path="res://source/common/gameplay/loot/loot_entry.gd" id="entry"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/change_spark.tres" id="change_spark"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/renewal_dust.tres" id="renewal_dust"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/completion_shard.tres" id="completion_shard"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/ascension_ember.tres" id="ascension_ember"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/renewal_prism.tres" id="renewal_prism"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/awakening_seal.tres" id="awakening_seal"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/cleansing_salt.tres" id="cleansing_salt"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/completion_core.tres" id="completion_core"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/dispersal_chisel.tres" id="dispersal_chisel"]
+[ext_resource type="Resource" path="res://source/common/gameplay/items/domain/attunement_prism.tres" id="attunement_prism"]
+; Provisional alpha: absolute per-attempt basis points, one shared ordinary pool.
+[sub_resource type="Resource" id="drop_change_spark"]
+script = ExtResource("entry")
+item = ExtResource("change_spark")
+chance_bp = 100
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_renewal_dust"]
+script = ExtResource("entry")
+item = ExtResource("renewal_dust")
+chance_bp = 80
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_completion_shard"]
+script = ExtResource("entry")
+item = ExtResource("completion_shard")
+chance_bp = 50
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_ascension_ember"]
+script = ExtResource("entry")
+item = ExtResource("ascension_ember")
+chance_bp = 40
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_renewal_prism"]
+script = ExtResource("entry")
+item = ExtResource("renewal_prism")
+chance_bp = 30
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_awakening_seal"]
+script = ExtResource("entry")
+item = ExtResource("awakening_seal")
+chance_bp = 25
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_cleansing_salt"]
+script = ExtResource("entry")
+item = ExtResource("cleansing_salt")
+chance_bp = 40
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_completion_core"]
+script = ExtResource("entry")
+item = ExtResource("completion_core")
+chance_bp = 10
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_dispersal_chisel"]
+script = ExtResource("entry")
+item = ExtResource("dispersal_chisel")
+chance_bp = 15
+min_amount = 1
+max_amount = 1
+[sub_resource type="Resource" id="drop_attunement_prism"]
+script = ExtResource("entry")
+item = ExtResource("attunement_prism")
+chance_bp = 10
+min_amount = 1
+max_amount = 1
+[resource]
+script = ExtResource("table")
+entries = Array[ExtResource("entry")]([SubResource("drop_change_spark"), SubResource("drop_renewal_dust"), SubResource("drop_completion_shard"), SubResource("drop_ascension_ember"), SubResource("drop_renewal_prism"), SubResource("drop_awakening_seal"), SubResource("drop_cleansing_salt"), SubResource("drop_completion_core"), SubResource("drop_dispersal_chisel"), SubResource("drop_attunement_prism")])

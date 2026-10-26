@@ -2,6 +2,7 @@ class_name LootContent
 extends RefCounted
 ## Explicit content sources. Each table contributes entries, not an automatic roll.
 const GLOBAL: LootTable = preload("res://source/common/gameplay/loot/tables/global_upgrade_ore.tres")
+const CRAFTING: LootTable = preload("res://source/common/gameplay/loot/tables/global_crafting_currencies.tres")
 const FIRST_REGION: LootTable = preload("res://source/common/gameplay/loot/tables/first_region_resin.tres")
 const BEAST: LootTable = preload("res://source/common/gameplay/loot/tables/beast_hides.tres")
 const HUMANOID: LootTable = preload("res://source/common/gameplay/loot/tables/humanoid_tokens.tres")
@@ -20,4 +21,7 @@ static func tables_for(region_key: StringName, category: StringName, mob_key: St
 		&"wild_dog": result.append(WILD_DOG)
 		&"forest_wolf": result.append(FOREST_WOLF)
 		&"road_bandit": result.append(ROAD_BANDIT)
+	# Absolute chances share the same attempts; append into the unused remainder
+	# so existing item probability intervals are not shifted or normalized.
+	result.append(CRAFTING)
 	return result
