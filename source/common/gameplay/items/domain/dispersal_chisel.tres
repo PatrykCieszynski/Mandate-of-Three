@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://source/common/gameplay/items/domain/item_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+definition_id = &"dispersal_chisel"
+item_name = "Dłuto Rozproszenia"
+icon_id = &"dispersal_chisel"
+primary_action = 2
+stack_limit = 200
+inventory_height = 1

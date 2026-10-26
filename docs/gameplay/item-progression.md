@@ -110,6 +110,7 @@ The original currencies are stackable USE items:
 | Pieczęć Przebudzenia (`awakening_seal`) | Magic eligible equipment in bag | Preserves every existing roll and appends exactly one new affix; becomes Rare |
 | Sól Oczyszczenia (`cleansing_salt`) | Magic/Rare eligible equipment in bag with at least one valid affix | Removes every affix and becomes Normal; preserves +level and sockets |
 | Rdzeń Dopełnienia (`completion_core`) | Rare eligible equipment in bag with fewer than six affixes | Preserves all existing rolls and appends exactly one, respecting three of each kind |
+| Dłuto Rozproszenia (`dispersal_chisel`) | Magic/Rare eligible equipment in bag with at least one valid affix | Removes one random affix; preserves rarity and every other roll |
 
 Each action consumes exactly one selected currency, with no Yang surcharge.
 Transform/renew currently choose prefix-only, suffix-only or both with equal
@@ -159,6 +160,18 @@ is no fallback or redraw for insufficient compatible content. Full 3+3 rejects
 without spending currency, and Shift stops sending new uses for that full target
 after its authoritative snapshot. UID, +level, sockets and placement survive.
 This uses the existing receipts/recovery, without a schema or RPC change.
+
+Single-affix removal (build 0.43.0) selects one stored affix uniformly, regardless
+of kind, tier or value, and removes exactly that entry. Surviving entries retain
+their order, tiers and values. Magic/Rare stays Magic/Rare even when the last
+affix disappears; explicit rarity is independent of count. Empty items and Normal
+are rejected without spending, as are opaque legacy/invalid rolls under existing
+validation. UID, +level, sockets and placement remain unchanged. One currency
+is consumed with no Yang surcharge. Frozen receipts recover the original choice
+without removing another affix; another deliberate use needs a new command and
+current revisions. Shift can continue until the authoritative target is empty.
+No SQL schema, RPC or worker change is required; other crafting odds and currency
+sources remain unchanged.
 
 Right-click a currency in Inventory (or activate its USE hotbar binding) to arm
 its original symbol and remaining stack at the cursor. Left-click a bag target

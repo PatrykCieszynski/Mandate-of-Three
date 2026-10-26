@@ -26,12 +26,13 @@ const RENEWAL_PRISM: ItemDefinition=preload("res://source/common/gameplay/items/
 const AWAKENING_SEAL: ItemDefinition=preload("res://source/common/gameplay/items/domain/awakening_seal.tres")
 const CLEANSING_SALT: ItemDefinition=preload("res://source/common/gameplay/items/domain/cleansing_salt.tres")
 const COMPLETION_CORE: ItemDefinition=preload("res://source/common/gameplay/items/domain/completion_core.tres")
+const DISPERSAL_CHISEL: ItemDefinition=preload("res://source/common/gameplay/items/domain/dispersal_chisel.tres")
 
 ## Canonical authored definitions. The same source drives item lookup,
 ## Exchange's fungible ledger and Auction's searchable tradeable catalog.
 ## Never infer tradability from the presence of a resource alone.
 static func all_definitions() -> Array[ItemDefinition]:
-	return [CHANGE_SPARK, RENEWAL_DUST, COMPLETION_SHARD, ASCENSION_EMBER, RENEWAL_PRISM, AWAKENING_SEAL, CLEANSING_SALT, COMPLETION_CORE, IRON_SWORD, UPGRADE_ORE, DEV_TRACE_SWORD, FOREST_RESIN, BEAST_HIDE, WOLF_FANG, BANDIT_TOKEN, BOOK_AURA, BOOK_CHARGE, BOOK_WHIRLWIND, BOOK_BLESSING, BOOK_STRIKE]
+	return [CHANGE_SPARK, RENEWAL_DUST, COMPLETION_SHARD, ASCENSION_EMBER, RENEWAL_PRISM, AWAKENING_SEAL, CLEANSING_SALT, COMPLETION_CORE, DISPERSAL_CHISEL, IRON_SWORD, UPGRADE_ORE, DEV_TRACE_SWORD, FOREST_RESIN, BEAST_HIDE, WOLF_FANG, BANDIT_TOKEN, BOOK_AURA, BOOK_CHARGE, BOOK_WHIRLWIND, BOOK_BLESSING, BOOK_STRIKE]
 
 static func get_definition(id: StringName) -> ItemDefinition:
 	for definition: ItemDefinition in all_definitions():
