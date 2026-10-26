@@ -863,11 +863,32 @@ window.addEventListener('message', (event) => {
             y: 6,
             page: 0,
           });
+        const magic = {
+          ...target,
+          id: 'f'.repeat(32),
+          name: 'Magic Iron Sword +3',
+          tooltip: {
+            ...target.tooltip,
+            rarity: 'magic' as const,
+            affixes: [{ kind: 'prefix' as const, lines: ['+3 Attack'] }],
+          },
+        };
+        if (!state.craft.targets.some((i) => i.id === magic.id))
+          state.craft.targets.push(magic);
+        if (!state.inventory.items.some((i) => i.id === magic.id))
+          state.inventory.items.push({
+            ...magic,
+            primary_action: 'EQUIP',
+            x: 1,
+            y: 6,
+            page: 1,
+          });
         for (const [index, definition_id, name] of [
           [1, 'ascension_ember', 'Żar Wyniesienia'],
           [2, 'renewal_prism', 'Pryzmat Odnowy'],
+          [3, 'awakening_seal', 'Pieczęć Przebudzenia'],
         ] as const) {
-          const id = (index === 1 ? 'c' : 'd').repeat(32);
+          const id = (index === 1 ? 'c' : index === 2 ? 'd' : '9').repeat(32);
           if (!state.inventory.items.some((i) => i.id === id))
             state.inventory.items.push({
               id,
@@ -878,9 +899,9 @@ window.addEventListener('message', (event) => {
               quantity: 12,
               height: 1,
               primary_action: 'USE',
-              x: index,
+              x: index === 3 ? 0 : index,
               y: 6,
-              page: 0,
+              page: index === 3 ? 1 : 0,
             });
         }
         emit('inventory.updated', state.inventory);

@@ -7,7 +7,8 @@ const CURRENCIES: Dictionary={
 	"renewal_dust":{"action":"renew","name":"Pył Odnowy","effect":"Magic: replaces all affixes with one or two new rolls."},
 	"completion_shard":{"action":"complete","name":"Odłamek Dopełnienia","effect":"Magic with one affix: adds the missing prefix or suffix."},
 	"ascension_ember":{"action":"rarefy","name":"Żar Wyniesienia","effect":"Normal to Rare: rolls four to six affixes."},
-	"renewal_prism":{"action":"reforge","name":"Pryzmat Odnowy","effect":"Rare: replaces all affixes with four to six new rolls."}
+	"renewal_prism":{"action":"reforge","name":"Pryzmat Odnowy","effect":"Rare: replaces all affixes with four to six new rolls."},
+	"awakening_seal":{"action":"awaken","name":"Pieczęć Przebudzenia","effect":"Magic to Rare: preserves all existing affixes and adds exactly one new roll."}
 }
 static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGenerator, pool: Array=PROFILE.pool) -> Dictionary:
 	if item==null or rng==null or not CURRENCIES.has(currency): return {"ok":false,"error":"request"}
@@ -24,6 +25,11 @@ static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGener
 		var count: int=rng.randi_range(4,6)
 		var prefixes: int=rng.randi_range(maxi(1,count-3),mini(3,count-1))
 		rolled=Generator.generate(base,prefixes,count-prefixes,pool,rng)
+	elif action=="awaken":
+		# Retained rolls participate in the same kind-local conflict checks.
+		# Pick once; an exhausted chosen kind fails without fallback or consumption.
+		var prefix: bool=rng.randi_range(0,1)==0
+		rolled=Generator.generate(base,1 if prefix else 0,0 if prefix else 1,pool,rng,item.affixes)
 	elif action=="complete":
 		if item.affixes.size()!=1: return {"ok":false,"error":"affix_capacity"}
 		var prefix: bool=item.affixes[0].kind=="prefix"
@@ -32,5 +38,5 @@ static func resolve(item: ItemInstance, currency: String, rng: RandomNumberGener
 		# Provisional equal chance of prefix, suffix or both. No retries of RNG.
 		var layout: int=rng.randi_range(0,2)
 		rolled=Generator.generate(base,0 if layout==1 else 1,0 if layout==0 else 1,pool,rng)
-	if rolled.ok: rolled.rarity="rare" if action in ["rarefy","reforge"] else "magic"
+	if rolled.ok: rolled.rarity="rare" if action in ["rarefy","reforge","awaken"] else "magic"
 	return rolled

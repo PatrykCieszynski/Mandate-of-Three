@@ -107,6 +107,7 @@ The original currencies are stackable USE items:
 | Odłamek Dopełnienia (`completion_shard`) | Magic equipment with exactly one affix | Preserves that roll and adds the opposite kind |
 | Żar Wyniesienia (`ascension_ember`) | Normal eligible equipment in bag | Becomes Rare with four to six new affixes |
 | Pryzmat Odnowy (`renewal_prism`) | Rare eligible equipment in bag | Replaces all affixes with four to six new rolls; remains Rare |
+| Pieczęć Przebudzenia (`awakening_seal`) | Magic eligible equipment in bag | Preserves every existing roll and appends exactly one new affix; becomes Rare |
 
 Each action consumes exactly one selected currency, with no Yang surcharge.
 Transform/renew currently choose prefix-only, suffix-only or both with equal
@@ -120,11 +121,22 @@ affixes; each legal prefix/suffix split for that count is equally likely (4:
 1+3/2+2/3+1; 5: 2+3/3+2; 6: 3+3). There is no downgrade, fallback or reroll
 on an insufficient pool, and a legal random result may repeat existing rolls.
 The same kind-local group/exclusion and tier eligibility rules apply. Normal
-to Rare is deliberate; converting Magic to Rare or removing affixes is outside
-this slice. Opaque legacy Rare bonuses remain protected from crafting.
+to Rare and complete Rare rerolls use this count distribution. Opaque legacy
+Rare bonuses remain protected from crafting.
 The Rare extension changes content only, not RPC signatures or the SQL schema;
 client/server build 0.39.0 includes both currencies. No deployment migration
 beyond the C3 rarity schema is needed. Currency sources/drop rates remain deferred.
+
+Magic to Rare (build 0.40.0) is a separate preserving action: Pieczęć Przebudzenia
+keeps the original ordered rolls, tiers and values, then appends exactly one new
+affix. A one-affix Magic becomes two-affix Rare; a two-affix Magic becomes
+three-affix Rare. Explicit empty Magic is also legal and becomes one-affix Rare.
+Rarity is never inferred from the resulting count. The new kind is provisionally
+chosen prefix/suffix with equal chance, using the shared weighted affix/tier pool
+and conflict checks against retained rolls. Failure to supply the chosen kind
+rejects without fallback, promotion or currency consumption. There is no reroll
+of existing bonuses and no repeat on the same item once Rare. Removing affixes
+remains outside scope. This action also requires no RPC/schema change.
 
 Right-click a currency in Inventory (or activate its USE hotbar binding) to arm
 its original symbol and remaining stack at the cursor. Left-click a bag target
